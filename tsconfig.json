@@ -1,0 +1,22 @@
+{
+  "extends": "./tsconfig.base.json",
+  "compilerOptions": {
+    "plugins": [{ "name": "next" }]
+  },
+  "include": [
+    "packages/shared/src/**/*.ts",
+    "packages/db/src/**/*.ts",
+    "packages/db/drizzle.config.ts",
+    "packages/web/src/**/*.ts",
+    "packages/web/src/**/*.tsx",
+    "packages/web/next.config.ts",
+    "packages/web/tests/**/*.ts",
+    "packages/db/tests/**/*.ts",
+    "packages/worker/src/**/*.ts",
+    "tools/**/*.ts",
+    "tests/**/*.ts",
+    "vitest.config.ts",
+    "packages/web/.next/types/**/*.ts"
+  ],
+  "exclude": ["node_modules", "**/dist", "**/.next", "tests/fixtures/**"]
+}

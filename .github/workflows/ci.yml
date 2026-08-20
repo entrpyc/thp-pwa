@@ -1,0 +1,69 @@
+name: CI
+
+on:
+  push:
+  pull_request:
+
+concurrency:
+  group: ci-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  verify:
+    name: install, typecheck, migrate, test
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+
+    # PostgreSQL 17 with the `vector` extension installed as a package but NOT enabled — the exact
+    # state docs/steps/01-project-skeleton.md requires, and which the test suite asserts.
+    services:
+      postgres:
+        image: pgvector/pgvector:pg17
+        env:
+          POSTGRES_USER: thp
+          POSTGRES_PASSWORD: thp
+          POSTGRES_DB: thp
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd "pg_isready -U thp -d thp"
+          --health-interval 5s
+          --health-timeout 5s
+          --health-retries 20
+
+    env:
+      DATABASE_URL: postgres://thp:thp@127.0.0.1:5432/thp
+      NEXT_PUBLIC_API_ORIGIN: http://127.0.0.1:3000
+      NEXT_TELEMETRY_DISABLED: '1'
+
+    steps:
+      - uses: actions/checkout@v5
+
+      - uses: actions/setup-node@v5
+        with:
+          node-version-file: .nvmrc
+          cache: npm
+
+      # Exactly the documented sequence from a clean checkout — README.md, "Commands".
+      - name: Install
+        run: npm ci
+
+      - name: Typecheck (whole workspace, one program)
+        run: npm run typecheck
+
+      - name: Migrate
+        run: npm run migrate
+
+      - name: Test
+        run: npm test
+
+      - name: Build
+        run: npm run build
+
+      - name: Upload server logs on failure
+        if: failure()
+        uses: actions/upload-artifact@v4
+        with:
+          name: test-server-logs
+          path: .tmp/logs/
+          if-no-files-found: ignore

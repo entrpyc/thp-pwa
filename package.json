@@ -1,0 +1,32 @@
+{
+  "name": "teaching-hub",
+  "private": true,
+  "version": "0.0.0",
+  "type": "module",
+  "engines": {
+    "node": ">=22"
+  },
+  "workspaces": [
+    "packages/*"
+  ],
+  "scripts": {
+    "dev": "node scripts/with-env.mjs ./node_modules/next/dist/bin/next dev packages/web",
+    "build": "node scripts/with-env.mjs ./node_modules/next/dist/bin/next build packages/web",
+    "start": "node scripts/with-env.mjs ./node_modules/next/dist/bin/next start packages/web",
+    "worker": "node --import tsx scripts/with-env.mjs packages/worker/src/index.ts",
+    "typecheck": "tsc --noEmit -p tsconfig.json",
+    "migrate": "node --import tsx scripts/with-env.mjs packages/db/src/cli/migrate.ts",
+    "db:generate": "npm run generate --workspace @thp/db",
+    "test": "vitest run",
+    "test:watch": "vitest"
+  },
+  "devDependencies": {
+    "@types/node": "^22.15.0",
+    "@types/react": "^19.2.0",
+    "@types/react-dom": "^19.2.0",
+    "dotenv": "^17.0.0",
+    "tsx": "^4.20.0",
+    "typescript": "^7.0.2",
+    "vitest": "^4.1.11"
+  }
+}

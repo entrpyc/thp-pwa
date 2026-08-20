@@ -1,0 +1,24 @@
+# Development Postgres. `pgvector/pgvector:pg17` ships PostgreSQL 17 with the `vector` extension
+# installed as a package but NOT enabled — which is exactly the state slice 01 requires and asserts.
+# Enabling it (`CREATE EXTENSION vector`) belongs to a later slice.
+services:
+  postgres:
+    image: pgvector/pgvector:pg17
+    container_name: thp-postgres
+    restart: unless-stopped
+    environment:
+      POSTGRES_USER: thp
+      POSTGRES_PASSWORD: thp
+      POSTGRES_DB: thp
+    ports:
+      - '5432:5432'
+    volumes:
+      - thp-pgdata:/var/lib/postgresql/data
+    healthcheck:
+      test: ['CMD-SHELL', 'pg_isready -U thp -d thp']
+      interval: 5s
+      timeout: 5s
+      retries: 20
+
+volumes:
+  thp-pgdata:

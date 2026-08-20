@@ -334,7 +334,7 @@ this is the step that proves it rather than the incident that disproves it.
 topology paragraph, which is where worker concurrency 1 comes from;
 [slice-architecture.md § Overview](slice-architecture.md#L7);
 [slice-architecture.md § Primary datastore](slice-architecture.md#L177);
-[01-project-skeleton.md § Assumptions to confirm](steps/01-project-skeleton.md#L97) — items 1 and 9,
+[01-project-skeleton.md § Assumptions to confirm](steps/01-project-skeleton.md#L99) — items 1 and 9,
 both settled to this host; [§6](prd.md#L724) — *Storage* ("nothing expires") is what makes the
 restore drill part of the step rather than an afterthought, and *Security* ("media storage is not
 publicly addressable") is what the object-store configuration has to hold.
@@ -348,7 +348,7 @@ decision, not inheritance. Second, this step adds **no CDN and no broker**: sign
 straight at the object store, and the box runs exactly the two processes the slice already has
 ([slice-architecture.md § Deliberately deferred](slice-architecture.md#L330)). Third,
 `NEXT_PUBLIC_API_ORIGIN` moves from `http://localhost:3000` to the real origin here — the single
-value [01-project-skeleton.md](steps/01-project-skeleton.md#L110) assumption 2 exists to keep cheap.
+value [01-project-skeleton.md](steps/01-project-skeleton.md#L112) assumption 2 exists to keep cheap.
 
 ---
 

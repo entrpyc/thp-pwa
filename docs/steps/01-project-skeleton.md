@@ -55,7 +55,9 @@ exists at all
   and asserting the check reports it. A guard nobody has seen fail is not a guard.
 - Domain types (role enum, pipeline step enum, segment shape) live in a shared package imported by
   client, API and worker alike, with no duplicate local definition — verified by a source-level check
-  that each enum is declared exactly once in the repository.
+  that each enum is declared exactly once in the repository. The database layer's enum declarations
+  are **derived from** these, not restated alongside them, which is what keeps that check honest once
+  assumption 4's schema exists.
 
 **Database and migrations**
 
@@ -114,10 +116,26 @@ annoying later; assumption 2 is the hard-to-reverse one.
 3. **Monorepo tooling.** Assumed: npm workspaces, no Turborepo/Nx — three packages (`shared`, `web`,
    `worker`, the last a stub until step 7) do not need a build orchestrator. Adding one later is a
    config file.
-4. **Migration tool.** Assumed: plain SQL migration files applied by a small runner script, so the
-   schema stays readable and no ORM opinion is baked in at commit one. The alternative worth naming
-   is Drizzle, which would also give typed queries. **This is far easier to choose now than at
-   step 6.**
+4. **Migration tool and data-access layer.** *Settled.* **Drizzle ORM with `drizzle-kit`.** The
+   readable-schema property this assumption originally protected is kept rather than traded:
+   `drizzle-kit generate` emits plain, checked-in SQL migration files with an ordered journal, so the
+   schema is still read in a diff — and typed queries come *with* it rather than instead of it. Four
+   things in the architecture decided it against the alternatives. `SELECT … FOR UPDATE SKIP LOCKED`
+   is the dispatch mechanism for the job ledger
+   ([architecture.md § Key technology choices](../architecture.md#L209)), and Drizzle expresses it
+   directly instead of through a raw-SQL escape hatch. pgvector arrives in a later slice under a
+   single-datastore decision marked *expensive to reverse*, and Drizzle has first-class `vector`
+   columns and HNSW index DDL. Hybrid ANN-plus-full-text search is CTE work that composes into the
+   typed builder rather than around it. And Drizzle is a library, not a per-process query engine,
+   which matters on a host running the app, the worker and Postgres together on four shared vCPU
+   ([architecture.md § Estimated running costs](../architecture.md#L343)). It changes **no line in
+   that cost table**: `drizzle-orm` and `drizzle-kit` are MIT-licensed, and `drizzle-kit` runs at
+   migrate time, not inside either long-lived process. Two constraints this places on the step, both
+   already covered by requirements above — the Drizzle schema lives in a **server-only package, never
+   in `shared`**, so the import-boundary guard has nothing to catch; and the `pgEnum`s are **derived
+   from** the shared TypeScript enums rather than restated beside them, so "declared exactly once in
+   the repository" still holds. It does not touch the `vector`-available-but-unenabled requirement:
+   declaring a `vector` column in a later slice is independent of `CREATE EXTENSION`.
 5. **Test runner and integration-test database.** Assumed: Vitest, with integration tests running
    against a real Postgres (a local container or a scratch database), not a mock — the pgvector and
    migration requirements above are meaningless against a fake.
@@ -140,9 +158,9 @@ annoying later; assumption 2 is the hard-to-reverse one.
 **In:** the monorepo and its packages; the shared domain-types package with the role and
 pipeline-step enums; the Next.js App Router app; the `/api/v1` route-handler layer with its JSON
 error envelope, its `404`/`500` behaviour and its correlation-id middleware; structured logging
-carrying that id; the Postgres connection module; the migration runner plus an initial
-migration-table-only migration; the health route; the import-boundary guard; test setup; documented
-commands; CI running them.
+carrying that id; the Postgres connection module and the server-only Drizzle schema package it
+reads; `drizzle-kit` generating and applying an initial empty migration; the health route; the
+import-boundary guard; test setup; documented commands; CI running them.
 
 **Out:** every table in [slice-architecture.md § Data model](../slice-architecture.md#L193) — no
 `user`, no `recording`, no `job`, no `review_item`; each arrives with the step that uses it. No
