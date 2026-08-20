@@ -1,6 +1,6 @@
 # Step 1 — Project skeleton and the `/api/v1` boundary
 
-> Phase 6 artefact for [implementation-plan.md § Step 1](../implementation-plan.md#L59).
+> Phase 6 artefact for [implementation-plan.md § Step 1](../implementation-plan.md#L66).
 > Sections pulled: [slice-architecture.md § Overview](../slice-architecture.md#L7),
 > [slice-architecture.md § Next.js application — API half](../slice-architecture.md#L123),
 > [slice-architecture.md § Primary datastore](../slice-architecture.md#L177),
@@ -10,7 +10,7 @@
 
 This step ships no product behaviour. Its whole value is that two boundaries — the client/API
 contract and the single-datastore choice — are correct on the first commit, because
-[implementation-plan.md § Step 1](../implementation-plan.md#L59) marks both hard to walk back.
+[implementation-plan.md § Step 1](../implementation-plan.md#L66) marks both hard to walk back.
 
 ## Requirements (test-covered)
 
@@ -151,7 +151,7 @@ annoying later; assumption 2 is the hard-to-reverse one.
    holds: nothing in the code depends on a specific platform, so the box is a deploy target rather
    than an architectural input. What it does settle is assumption 1. Provisioning, TLS, process
    supervision and `pgBackRest` backups are deployment work and belong to
-   [implementation-plan.md § Step 21](../implementation-plan.md#L324), not here.
+   [implementation-plan.md § Step 21](../implementation-plan.md#L331), not here.
 
 ## Scope
 

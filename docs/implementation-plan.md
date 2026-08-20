@@ -40,8 +40,15 @@ These apply to every step and are not restated per step. A step that breaks one 
 - **The client holds no authorisation decision.** It hides what a Member cannot do; the API is what
   refuses it ([3.1.5](prd.md#L47),
   [slice-architecture.md § Next.js application — client half](slice-architecture.md#L109)).
-- **Every `/api/v1` route requires a session**, with no exceptions
-  ([3.1.2](prd.md#L44), [slice-architecture.md § Extension points](slice-architecture.md#L312)).
+- **Every `/api/v1` route requires a session** — with exactly one enumerated exception,
+  `GET /api/v1/health` ([3.1.2](prd.md#L44),
+  [slice-architecture.md § Extension points](slice-architecture.md#L312)). Health is outside the rule
+  because it must answer *while the database is down*, which is precisely when a session lookup
+  cannot — a probe that needs a session is no probe, and
+  [Step 21](#L331) depends on one. The exception is an **allowlist in the session middleware, not a
+  convention**: Step 2 ships it as an enumerated list plus a test asserting every route *not* on that
+  list refuses an anonymous request, so "no exceptions" can never quietly become "the exceptions
+  nobody wrote down".
 - **The original upload is never overwritten or deleted** — the one non-negotiable
   ([3.4.9](prd.md#L102), [slice-architecture.md § Media store](slice-architecture.md#L164)).
 - **Nothing publishes automatically** ([4.17.3](prd.md#L683)).

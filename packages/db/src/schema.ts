@@ -10,7 +10,7 @@ import { PIPELINE_STEPS, ROLES } from '@thp/shared';
  *
  * What does exist is the two domain enums, and they are **derived** from the shared TypeScript
  * constants rather than restated beside them. That is what keeps "each enum is declared exactly
- * once in the repository" true, and it is enforced by tests/guards/enum-uniqueness.test.ts.
+ * once in the repository" true, and it is enforced by tests/guards/domain-declarations.test.ts.
  */
 export const userRole = pgEnum('user_role', ROLES);
 

@@ -182,7 +182,7 @@ column exists** — but the `vector` extension must be *installed and available*
 *expensive to reverse* and the whole reason it is right is that vectors and ACL data share a
 database. Self-hosting makes that availability something we install rather than something we have to
 pick a provider for. The cost it carries instead is backups, which are a `pgBackRest` archive to the
-object store, proven by a restore — [implementation-plan.md § Step 21](implementation-plan.md#L324)
+object store, proven by a restore — [implementation-plan.md § Step 21](implementation-plan.md#L331)
 owns that, along with the rest of the deployment.
 
 ## Changes to existing structure
@@ -325,7 +325,7 @@ The seams this slice leaves. **This is the section slice 02 reads first.**
 | **Client-owned playback state** | Progress and speed are held client-side and pushed to a single-position endpoint | [§3.18](prd.md#L391) adds the append-only outbox and a batch sync endpoint alongside it, plus the delta manifest for the pull direction. An addition, not a rewrite, which is [slice-prd.md § Rationale](slice-prd.md#L241)'s stated check that this cut is not a dead end. |
 | **Absolute API origin over a versioned contract** | The client's only route to data | [§5.2](prd.md#L701) wraps the same build in Capacitor; the service worker and manifest layer over the same contract. |
 | **Queue port** | The interface the API enqueues through | Redis/BullMQ dispatch drops in behind it; the ledger and the dashboard query are untouched. |
-| **Unauthenticated surface — none yet** | Every `/api/v1` route requires a session, with no exceptions | [5.3.1](prd.md#L718)'s podcast RSS and [3.8.13](prd.md#L177)'s shared mind map arrive as the separate Feed service, so "everything requires auth" ([3.1.2](prd.md#L44)) stays true of the API *by construction* rather than by review. |
+| **Unauthenticated surface — `GET /api/v1/health` only** | The session middleware's allowlist — an enumerated list, not a convention | Health is the single route outside [3.1.2](prd.md#L44), because it answers while the database is down and a session lookup then cannot. Step 2 ships the allowlist with a test asserting every route *not* on it refuses an anonymous request, which is what keeps this seam **checkable** rather than reviewed — and what makes adding a second public route a deliberate edit to a named list. [5.3.1](prd.md#L718)'s podcast RSS and [3.8.13](prd.md#L177)'s shared mind map still arrive as the separate Feed service, so the API itself grows no further public surface. (`/api/v1/diagnostics/*` are not an exception: they `404` in a deployment.) |
 
 ## Deliberately deferred
 
