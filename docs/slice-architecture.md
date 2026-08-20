@@ -6,7 +6,10 @@
 
 ## Overview
 
-Two deploy units over one Postgres and one object store.
+Two deploy units over one Postgres and one object store — and, per
+[architecture.md § Estimated running costs](architecture.md#L343), all three run on a single host.
+The units stay separate processes with the boundaries below; co-location is a deployment fact, not a
+structural one.
 
 A **Next.js App Router application** serves the React client *and*, as route handlers under a
 versioned `/api/v1` prefix, the API — the single writer to Postgres and the single place any
@@ -113,7 +116,7 @@ management).
 - **Owns:** rendering, the `<audio>` element and its transport, the transcript-follows-playback
   binding, optimistic UI, and the local copy of playback speed and position before they are synced.
 - **Does not own:** any authorisation decision ([architecture.md § Client — PWA
-  shell](architecture.md#L115)). It hides what a Member cannot do; the API is what refuses it.
+  shell](architecture.md#L111)). It hides what a Member cannot do; the API is what refuses it.
 - **Not yet:** no service worker, no web app manifest, no offline cache, no Capacitor. Responsive
   only — the installable-PWA row of [§5.1](prd.md#L689) is deferred with offline.
 
@@ -136,7 +139,7 @@ Postgres and the single place `(actor, action, resource)` is evaluated.
 ### Worker process
 
 A separate Node process running the pipeline as independent, idempotent, individually re-runnable
-jobs against the ledger ([architecture.md § Worker pool](architecture.md#L151)).
+jobs against the ledger ([architecture.md § Worker pool](architecture.md#L147)).
 
 - **Steps in this slice, in order:** `transcribe` → `generate_draft`. That is it.
 - `transcribe` reads the original object, calls the ASR adapter, writes `transcript` + `segment`
@@ -155,7 +158,7 @@ jobs against the ledger ([architecture.md § Worker pool](architecture.md#L151))
 
 A `job` table polled with `FOR UPDATE SKIP LOCKED`. It is both the dispatch mechanism and the
 queryable pipeline state the admin dashboard reads ([3.19.4](prd.md#L432)) — which is the property
-[architecture.md § Key technology choices](architecture.md#L213) asks for; the north star simply
+[architecture.md § Key technology choices](architecture.md#L209) asks for; the north star simply
 also has Redis in front of it. See **Divergence**.
 
 ### Media store
@@ -173,10 +176,14 @@ after processing lands depends on it ([3.4.9](prd.md#L102)).
 
 ### Primary datastore
 
-A single managed PostgreSQL. **pgvector is not enabled and no embedding column exists** — but the
-instance must be one where the extension is available, because [architecture.md § Key technology
-choices](architecture.md#L213) marks the single-datastore decision *expensive to reverse* and the
-whole reason it is right is that vectors and ACL data share a database.
+A single self-hosted PostgreSQL on the application host. **pgvector is not enabled and no embedding
+column exists** — but the `vector` extension must be *installed and available*, because
+[architecture.md § Key technology choices](architecture.md#L209) marks the single-datastore decision
+*expensive to reverse* and the whole reason it is right is that vectors and ACL data share a
+database. Self-hosting makes that availability something we install rather than something we have to
+pick a provider for. The cost it carries instead is backups, which are a `pgBackRest` archive to the
+object store, proven by a restore — [implementation-plan.md § Step 21](implementation-plan.md#L324)
+owns that, along with the rest of the deployment.
 
 ## Changes to existing structure
 
@@ -188,7 +195,7 @@ is where the regressions live; for slice 01 an empty answer is the correct one.
 Conceptual; [§4](prd.md#L497) already defines the fields. **Every entity here is new.**
 
 **The spine** — `Series 1—* Recording 1—1 Transcript 1—* Segment`, exactly as [architecture.md §
-Data model](architecture.md#L175) draws it. A recording belongs to at most one series
+Data model](architecture.md#L171) draws it. A recording belongs to at most one series
 ([3.3.2](prd.md#L79)) and may have none ([3.3.9](prd.md#L86)). `Segment` carries `start_ms`,
 `end_ms`, `text`, and who corrected it when ([3.5.5](prd.md#L116)) — **no embedding column.**
 `Recording` carries `original_media_key`, `title`, `recorded_at`, `published_at` (nullable —
@@ -205,7 +212,7 @@ unpublish clears it without deleting, [3.2.11](prd.md#L72)), and `description`.
   table.
 - `status` is `draft | published | discarded`. **Pending Reviews is one query over this one column**
   ([3.19.2](prd.md#L430)) — which is precisely the property [architecture.md § Cross-cutting
-  concerns](architecture.md#L275) says must not degrade into a union of six.
+  concerns](architecture.md#L271) says must not degrade into a union of six.
 - `fields` holds the per-field values and `provenance` holds, per field, that it was AI-suggested
   and whether an admin changed it ([4.17.5](prd.md#L685)) — which is what makes per-field
   accept/edit/discard ([4.17.2](prd.md#L682)) a form over one row rather than a column per field
@@ -238,16 +245,16 @@ questionnaires, Flow Tracker sessions, SOS signals, notifications, notification 
 
 | Choice | Why, for this slice | Relation to the north star |
 | :---- | :---- | :---- |
-| **TypeScript monorepo; domain types shared between client, API and worker** | The segment shape, the pipeline step enum and the role enum are defined once. That is what keeps the API-first contract honest instead of hand-maintained. | Matches [architecture.md § Key technology choices](architecture.md#L213) directly. |
+| **TypeScript monorepo; domain types shared between client, API and worker** | The segment shape, the pipeline step enum and the role enum are defined once. That is what keeps the API-first contract honest instead of hand-maintained. | Matches [architecture.md § Key technology choices](architecture.md#L209) directly. |
 | **Next.js App Router, one codebase for UI and API** | The UI codebase choice is marked *expensive to reverse*, so it is taken as given. Serving `/api/v1` from the same app removes a deploy unit without touching the contract. | Matches on the UI; consolidates the deployment — see **Divergence**. |
-| **Postgres job ledger polled with `SKIP LOCKED`; no broker** | Two steps, ~4.3 recordings/month, seconds of dispatch latency is invisible. The ledger has to be in Postgres regardless, because [3.19.4](prd.md#L432) and [3.21.2.4](prd.md#L486) need pipeline state to be queryable data. Adding a broker now would add infrastructure that only changes *dispatch*. | Divergence, low reversal cost — the north star itself calls the queue "only a dispatcher". |
+| **Postgres job ledger polled with `SKIP LOCKED`; no broker** | Two steps, ~4.3 recordings/month, seconds of dispatch latency is invisible. The ledger has to be in Postgres regardless, because [3.19.4](prd.md#L432) and [3.21.2.4](prd.md#L486) need pipeline state to be queryable data. Adding a broker now would add infrastructure that only changes *dispatch*. | Matches — the north star makes the ledger itself the queue for the same reason, and names no broker. |
 | **Presigned direct-to-object-store upload and playback; no CDN** | Keeps bulk audio out of the application in both directions, which is the boundary that actually matters. Range requests from the object store give scrubbing for free. At ~11 GB/month a CDN buys latency nobody has complained about. | Keeps the zero-egress storage decision, which is the part with real reversal cost; defers the edge. |
-| **One `review_item` table with a `kind`, built generically for two kinds** | The only structure in this slice built past its immediate need, and it earns it: [slice-prd.md § Rationale](slice-prd.md#L241) names publishing-without-a-review-gate as one of three things that would make this slice throwaway, and the north star's single-query Pending Reviews only survives if kinds 3–6 are rows. | Matches [architecture.md § Cross-cutting concerns](architecture.md#L275). |
+| **One `review_item` table with a `kind`, built generically for two kinds** | The only structure in this slice built past its immediate need, and it earns it: [slice-prd.md § Rationale](slice-prd.md#L241) names publishing-without-a-review-gate as one of three things that would make this slice throwaway, and the north star's single-query Pending Reviews only survives if kinds 3–6 are rows. | Matches [architecture.md § Cross-cutting concerns](architecture.md#L271). |
 | **Managed ASR behind a `transcribe` adapter; Claude behind a `generate` adapter** | Both providers are named in [§7](prd.md#L742) as accuracy and cost risks. Two narrow interfaces cost almost nothing now and are what make provider swap and regeneration tractable. Model, version and prompt version are recorded on every output. | Matches exactly, including the deliberate low reversal cost. |
 | **Whole transcript in one LLM call, producing summary and description together** | A 90-minute transcript fits in long context, which is why the north star picked Claude. One call for both artefacts halves the cost and keeps them consistent with each other. | Matches. |
 | **Self-hosted email/password, HTTP-only cookie session, roles in our database** | No self-signup, invitation-only, ~100 users. A third-party IdP would complicate [3.1.3](prd.md#L45) and still leave the product-context permission checks with us. | Matches. |
-| **Single managed Postgres, single region, no read replica** | 100 members, one group, one publishing cadence. | Matches [architecture.md § Scalability](architecture.md#L321) "deliberately not built yet". |
-| **Correlation id spanning API request → job → provider call, plus error tracking** | Cheap now, and a pipeline that fails silently in slice 01 is a pipeline nobody trusts by slice 03. The dashboard reads the ledger, not the logs. | Matches [architecture.md § Cross-cutting concerns](architecture.md#L275). |
+| **Single self-hosted Postgres on the application host, single region, no read replica** | 100 members, one group, one publishing cadence. Co-locating it with the app is what makes the launch bill ~$20 rather than ~$85; the price is that backups and patching become ours. | Matches [architecture.md § Scalability](architecture.md#L317) "deliberately not built yet" and the topology in [§ Estimated running costs](architecture.md#L343). |
+| **Correlation id spanning API request → job → provider call, plus error tracking** | Cheap now, and a pipeline that fails silently in slice 01 is a pipeline nobody trusts by slice 03. The dashboard reads the ledger, not the logs. | Matches [architecture.md § Cross-cutting concerns](architecture.md#L271). |
 
 **Two inputs this slice needs and nothing defines** — carried from [slice-prd.md § Duplicate &
 reference audit](slice-prd.md#L289). Neither blocks starting; both are settled here so the build is
@@ -275,21 +282,23 @@ not ambiguous, and both are cheap to change *before* implementation and annoying
 
 ## Divergence from the north star
 
-Three, all *the slice bending*, none touching anything [architecture.md](architecture.md#L1) marks
+Two, both *the slice bending*, neither touching anything [architecture.md](architecture.md#L1) marks
 **expensive to reverse**.
 
-1. **No Redis; the Postgres ledger is also the dispatcher.** The north star pairs a Postgres ledger
-   with Redis/BullMQ dispatch. Reversal is swapping what is behind the queue port — the ledger,
-   which is the part everything else reads, is unchanged. Revisit when a pipeline step becomes
-   latency-sensitive or the back-catalogue burst ([3.21.3.3](prd.md#L492)) needs real concurrency
-   control.
-2. **The API is deployed inside the Next.js app rather than as its own service.** The *contract* is
+> **One divergence was resolved rather than reversed.** This slice previously diverged by running
+> the Postgres ledger as its own dispatcher against a north star that paired it with Redis/BullMQ.
+> The north star has since adopted the same position — the ledger *is* the queue, no broker — so
+> this is now a match and is recorded in **Key choices** above. Redis remains available behind the
+> queue port when a step becomes latency-sensitive or the back-catalogue burst
+> ([3.21.3.3](prd.md#L492)) needs real concurrency control.
+
+1. **The API is deployed inside the Next.js app rather than as its own service.** The *contract* is
    intact — versioned JSON, absolute origin, no server imports in the client — so the store-build
    requirement at [5.2.2](prd.md#L706) is unaffected. What is deferred is the independent scaling
    the north star draws, which matters when the worker pool and the API want different shapes.
    Splitting later is a deploy change, not a code change, precisely because the boundary is honoured
    now.
-3. **No CDN in front of object storage.** Signed URLs point at the object store directly. Adding the
+2. **No CDN in front of object storage.** Signed URLs point at the object store directly. Adding the
    edge later moves where the URL is signed and nothing else.
 
 Not divergence, just not-yet-built: the Feed service, pgvector, the service worker and the Capacitor
@@ -307,10 +316,10 @@ The seams this slice leaves. **This is the section slice 02 reads first.**
 | Seam | Where it is | How the deferred work attaches |
 | :---- | :---- | :---- |
 | **Pipeline step chain** | The ordered step list the worker walks, and the `step` column on `job` | [§3.4](prd.md#L88) inserts `process_audio` *before* `transcribe`; embeddings, scripture, tags and mind maps append after `generate_draft`. A new step is a list entry, a ledger value and a job handler. |
-| **Second media pointer** | `Recording` has `original_media_key` and no processed pointer | [§3.4](prd.md#L88) adds `processed_media_key` (plural renditions per [architecture.md § Open questions](architecture.md#L394) item 5) and switches signed-URL minting to prefer it, falling back to the original — which is what lets the back-fill run recording by recording. |
+| **Second media pointer** | `Recording` has `original_media_key` and no processed pointer | [§3.4](prd.md#L88) adds `processed_media_key` (plural renditions per [architecture.md § Open questions](architecture.md#L414) item 5) and switches signed-URL minting to prefer it, falling back to the original — which is what lets the back-fill run recording by recording. |
 | **Review-gate `kind`** | `review_item.kind` | Scripture references, tags, mind maps and video scripts each add a `kind` value and a generation step. The Pending Reviews query does not change. |
 | **Segment row** | `segment` has no embedding column | [§3.9](prd.md#L179)/[§3.10](prd.md#L194) enable pgvector, `ALTER TABLE segment ADD embedding`, add an HNSW index, add an `embed` step, and add the `cross_reference` edge table over segment pairs. No re-transcription. |
-| **`(recording_id, timestamp_ms)` offset** | Established by `segment` and `playback_progress` | Notes, highlights, mind-map nodes, search results and Flow Tracker recommendations all resolve through the same pair, which is what makes "open at the moment" one behaviour across six features ([architecture.md § Data model](architecture.md#L175)). |
+| **`(recording_id, timestamp_ms)` offset** | Established by `segment` and `playback_progress` | Notes, highlights, mind-map nodes, search results and Flow Tracker recommendations all resolve through the same pair, which is what makes "open at the moment" one behaviour across six features ([architecture.md § Data model](architecture.md#L171)). |
 | **Role enum + policy module** | `user.role` and the single `(actor, action, resource)` evaluation point | Contributor is one enum value plus four widened cases — upload ([3.2.1](prd.md#L62)), transcript correction ([3.5.5](prd.md#L116)), series management ([3.3.6](prd.md#L83)), dashboard gating ([3.19.1](prd.md#L429)). Cheap only because the check already exists server-side. |
 | **Domain events at job completion and at publish** | Emitted and logged; nothing subscribes | [§3.17](prd.md#L361) fans out `Notification` rows per recipient from these exact events — publish, transcription failure, summary ready ([3.6.3](prd.md#L129)). |
 | **Client-owned playback state** | Progress and speed are held client-side and pushed to a single-position endpoint | [§3.18](prd.md#L391) adds the append-only outbox and a batch sync endpoint alongside it, plus the delta manifest for the pull direction. An addition, not a rewrite, which is [slice-prd.md § Rationale](slice-prd.md#L241)'s stated check that this cut is not a dead end. |
@@ -339,7 +348,7 @@ Not built, and not to be added by reflex. Each has a home above.
 - **Tag taxonomy, scripture citations, mind maps, video, questionnaires, Flow Tracker, SOS,
   highlights, notes.**
 - **Read replicas, multi-region, sharding, CQRS, event sourcing, real-time transport.** Named in
-  [architecture.md § Scalability](architecture.md#L321) as not-yet, and nothing here changes that.
+  [architecture.md § Scalability](architecture.md#L317) as not-yet, and nothing here changes that.
 - **A generic plugin framework for pipeline steps.** An ordered list of two named steps is the right
   amount of structure for two steps; the seam above is the list, not a registry.
 - **A generic "reviewable entity" abstraction beyond `review_item.kind`.** One table with a kind

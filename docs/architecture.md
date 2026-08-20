@@ -46,10 +46,9 @@ flowchart TB
         API["API service<br/>auth, RBAC, member state,<br/>review gate, sync"]
         Feed["Public feed endpoints<br/>podcast RSS, shared mind map"]
         Workers["Worker pool<br/>pipeline steps, video render,<br/>external publish"]
-        Redis[("Queue + cache")]
     end
 
-    PG[("PostgreSQL + pgvector<br/>relational state, segments,<br/>embeddings, job ledger")]
+    PG[("PostgreSQL + pgvector<br/>relational state, segments,<br/>embeddings, job ledger + queue")]
     R2[("Object storage<br/>original + processed audio,<br/>video, artwork")]
 
     subgraph ext["External services"]
@@ -71,11 +70,8 @@ flowchart TB
     CDN --> API
     CDN --> Feed
     API --> PG
-    API --> Redis
     Feed --> PG
     Workers --> PG
-    Workers --> Redis
-    Redis --> Workers
 
     PWA <== "streaming + downloads" ==> CDN
     CDN <== "range requests" ==> R2
@@ -98,7 +94,7 @@ flowchart TB
     classDef x fill:#faece7,stroke:#993c1d,color:#712b13
     class PWA,SW,Native c
     class API,Feed,Workers,CDN s
-    class PG,R2,Redis,LocalDB i
+    class PG,R2,LocalDB i
     class ASR,LLM,Embed,Render,Bible,Push,Mail,Social,Spotify x
 ```
 
@@ -217,10 +213,10 @@ lets "open at the moment" work identically from six different features
 | **TypeScript end to end, monorepo** | One language across client, API and workers means the domain types — segment, pipeline status, role — are defined once and shared, which is what keeps the API-first contract in [§6](prd.md#L724) honest instead of hand-maintained. | Low early, high later |
 | **React PWA (Next.js App Router) as the only UI codebase** | [5.2.2](prd.md#L706) is explicit that a feature never exists in one delivery route and not another. One codebase is the mechanism, not a preference. | **Expensive to reverse** |
 | **Capacitor for store packaging** | Wraps the same web build, and specifically buys the three capabilities the PRD flags as risky: iOS push in a store build, reliable background audio, and non-evictable download storage. The alternative — pure web PWA — leaves [3.17.1](prd.md#L367) and [3.18.6](prd.md#L405) exposed to Safari's limits. | Moderate |
-| **PostgreSQL + pgvector as the single datastore** | The decisive constraint is [3.10.9](prd.md#L208): search must return published content *plus the searching member's own private notes and personal mind maps*, and never anyone else's. A separate vector service means either replicating the permission model into it or post-filtering results (which breaks top-k). Keeping vectors in the same database as the ACL data makes that a `WHERE` clause. At this corpus size — roughly 200k–250k segments after the back catalogue and several years of weekly teaching — a single Postgres with an HNSW index is comfortably within range. | **Expensive to reverse** |
+| **PostgreSQL + pgvector as the single datastore** | The decisive constraint is [3.10.9](prd.md#L208): search must return published content *plus the searching member's own private notes and personal mind maps*, and never anyone else's. A separate vector service means either replicating the permission model into it or post-filtering results (which breaks top-k). Keeping vectors in the same database as the ACL data makes that a `WHERE` clause. At this corpus size — roughly 200k–250k segments after the back catalogue and several years of weekly teaching — a single Postgres with an HNSW index is comfortably within range. Self-hosted on the application host rather than managed, which is what the cost table assumes; the operational cost of that is backups, and they are a `pgBackRest` archive to the object store. | **Expensive to reverse** |
 | **Hybrid search: pgvector ANN + Postgres full-text, fused** | [3.10.2](prd.md#L201) wants meaning; [3.10.5](prd.md#L204) wants an exact scripture citation to work. Those are different retrieval modes and one index does not serve both well. Fusing two rankings from one database is cheaper than running two systems. | Low |
 | **Object storage with zero-egress pricing (R2 or equivalent), CDN in front** | Storage is permanent and unbounded by requirement ([§6](prd.md#L724)), and audio streaming is the highest-volume path in the product. Egress-priced storage makes the one thing members do most the thing that scales worst. | Moderate |
-| **Durable job queue with a Postgres-backed job ledger (Redis/BullMQ for dispatch)** | [3.21.2.4](prd.md#L486) requires re-running one step of a pipeline, and [3.19.4](prd.md#L432) requires showing an admin exactly where each recording sits. Both need pipeline state to be queryable data, not queue internals — so the ledger lives in Postgres and the queue is only a dispatcher. | Low |
+| **The job ledger *is* the queue — `SKIP LOCKED` polling, no broker** | [3.21.2.4](prd.md#L486) requires re-running one step of a pipeline, and [3.19.4](prd.md#L432) requires showing an admin exactly where each recording sits. Both need pipeline state to be queryable data, not queue internals — so the ledger lives in Postgres, and once it does, a separate broker is carrying almost nothing. Polling the ledger directly rather than adopting a queue library keeps one job store instead of two: `pg-boss` and its equivalents bring their own schema, which would leave the dispatcher's state and the state [3.19.4](prd.md#L432) reads as different tables. At this cadence — roughly fifty jobs a month — `SELECT … FOR UPDATE SKIP LOCKED` has four orders of magnitude of headroom, and enqueue becomes transactional with the ledger write, which removes the dispatched-but-unrecorded failure class outright. Redis returns behind the same queue port when dispatch latency or fan-out concurrency actually demands it, not before. | Low |
 | **FFmpeg for the sound profile** (`afftdn` denoise → clarity EQ/compression → `loudnorm` two-pass to a fixed LUFS target) | [3.4.5](prd.md#L98) asks for one named profile applied library-wide, and [3.4.6](prd.md#L99) asks to preview it before saving. A parameterised FFmpeg filter chain stored as a versioned row gives both, and re-processing is just re-running it. Loudness normalisation to a broadcast target also satisfies [3.4.10](prd.md#L103) — podcast platforms expect it. | Low |
 | **Managed ASR with segment timestamps, behind an adapter** | [3.5.2](prd.md#L113) is the hinge of the product and [§7](prd.md#L742) names accuracy on ministry-specific vocabulary as a real risk. An adapter interface means the provider can be swapped, or a custom-vocabulary provider adopted, without touching anything downstream. | Low — deliberately |
 | **Claude (Anthropic API) for all text generation** | Summary, description, tags, scripture identification, mind-map extraction and video script segmentation are one capability used six ways ([3.6](prd.md#L121), [3.7.1](prd.md#L146), [3.8.1](prd.md#L162), [3.11.3.1](prd.md#L233), [4.17.1](prd.md#L681)). Long context matters: a 90-minute transcript is fed whole rather than chunked, which is what keeps a summary faithful to the teaching. | Low |
@@ -335,10 +331,14 @@ per-unit cost for the ability to change provider in a day. No real-time transpor
 signals refresh on poll and on push, not over a socket; if the SOS channel ([3.16](prd.md#L334))
 turns out to need live presence, that is a bounded addition.
 
-**Where it will bend first.** Two places. Vector search latency once segments pass roughly a million
-rows, which would push the index to a dedicated vector store or to partitioning by series — a change
-whose cost is entirely the permission-model replication described above. And video rendering, which is
-CPU-bound and bursty and will want its own scale-to-zero pool before anything else does.
+**Where it will bend first.** Three places, in the order they are likely to arrive. Video rendering,
+which is CPU-bound and bursty and shares a host with the API and the database — it is the first thing
+that should be moved to its own box, and the topology note below says how. Then the HNSW index, once it
+no longer fits in the host's page cache: on shared-vCPU hardware that turns every ANN query into
+contended disk I/O, which is why the embedding dimension is a live question rather than a detail
+(see **Open questions**, item 7). Then vector search latency once segments pass roughly a million rows,
+which would push the index to a dedicated vector store or to partitioning by series — a change whose
+cost is entirely the permission-model replication described above.
 
 ## Estimated running costs
 
@@ -346,27 +346,44 @@ Launch = 100 members, ~4.3 recordings/month at ~90 min each, ~8 reels + 2 summar
 listening per member per month. Target = 1,000 members at the same publishing cadence and ~4× the video
 output. Excludes the one-time back-catalogue run, listed separately.
 
+**Deployment topology.** The three runtime roles remain three separate processes with the boundaries
+described in **Components & responsibilities** — but at launch they are *co-located on one host*
+alongside Postgres: API, feed, worker pool and database on a single European VPS. This is a deployment
+decision, not a structural one. Nothing above changes, and moving a role onto its own box later is a
+deploy-target change rather than a rewrite. It is also what makes the launch bill fall from roughly $85
+to roughly $20, and the reason is duty cycle: ~40 worker machine-hours a month against 730 is about 5%,
+so per-second billing charges for exactly those hours while a fixed-price host absorbs them at zero
+marginal cost — the other 690 hours are already bought. The constraint it introduces is contention.
+FFmpeg's two-pass `loudnorm` and a Remotion render are both CPU-bound and bursty, and they share four
+vCPU with a database that every API call touches; worker concurrency is therefore pinned to 1 and the
+render step capped in threads. If steal time measurably hurts API latency, the first escape hatch is a
+like-for-like swap to a dedicated-core host (netcup RS 1000 G12 — identical RAM and disk, ~€2.40/month
+more) before any topology change is considered.
+
 | Item | Usage assumption | Launch / month | Target / month |
 | :---- | :---- | :---- | :---- |
-| API + feed hosting | 2 small always-on instances | $25 | $50 |
-| Worker pool | ~40 machine-hrs launch, ~120 target; scale-to-zero between jobs | $20 | $60 |
-| PostgreSQL + pgvector | ~90k segments launch → ~250k target; managed, with backups | $19 | $69 |
-| Redis (queue + cache) | ~1–4 M commands/month | $10 | $25 |
+| Application host | Launch: one netcup VPS 1000 G12 (4 vCPU, 8 GB DDR5 ECC, 256 GB NVMe, EU) running API, feed, workers and Postgres. Target: VPS 2000 G12 for app + workers, VPS 1000 G12 for Postgres. | $11 | $32 |
+| Queue | `SKIP LOCKED` polling over the job ledger — no broker, no separate spend | $0 | $0 |
+| Database backups | `pgBackRest` nightly base + WAL archive to the object store | $1 | $3 |
 | Object storage | ~95 GB after back catalogue, +~1.4 GB/month; zero-egress tier | $2 | $6 |
 | Media egress | ~11 GB/month launch → ~130 GB/month target (streaming + downloads) | $0 | $0 |
 | Transcription | 6.5 hrs of audio/month @ ~$0.26/hr | $2 | $2 |
-| LLM generation | 4.3 recordings/month × ~80k input tokens across 5 passes, plus regenerations | $2 | $3 |
+| LLM generation | 4.3 recordings/month × ~80k input tokens across 5 passes; the transcript is cached once per recording and read by the remaining four | $2 | $3 |
 | Embeddings | 4.3 recordings/month × ~16k tokens, plus query embeddings | <$1 | $1 |
-| **Video generation — template path** | 10 videos/month: render compute + TTS @ ~$0.15 each | **$2** | **$6** |
+| **Video generation — template path** | 10 videos/month launch, 40 target; render compute absorbed by the host, TTS billed | **$1** | **$4** |
 | **Video generation — generative path** | 10 videos/month × 45s, ~2 takes each at $0.10–0.50/generated second | **$80–360** | **$320–1,440** |
 | Text-to-speech | ~1,500 words/month of AI voiceover | <$1 | $2 |
 | Bible text API | ~500 verse lookups/month, cached | $0 | $0–10 |
 | Transactional email | Invitations and password resets only — a few dozen/month | $0 | $15 |
 | Error tracking + logs | Single project, moderate volume | $0 | $26 |
 | Push (APNs / FCM / Web Push) | All notification volume | $0 | $0 |
-| CDN + DNS | ~130 GB/month peak, standard tier | $0 | $5 |
-| **Total — template video path** | | **~$85** | **~$270** |
-| **Total — generative video path** | | **~$165–445** | **~$585–1,700** |
+| CDN + DNS | Cloudflare free tier at launch; standard tier at target | $0 | $5 |
+| **Total — template video path** | | **~$20** | **~$110** |
+| **Total — generative video path** | | **~$100–380** | **~$430–1,550** |
+
+Host prices are VAT-inclusive euro list rates converted at ~1.08 USD/EUR; net-of-VAT they are roughly
+16% lower. The launch host is a shared-vCPU plan, so its cost is fixed but its CPU throughput is not
+guaranteed — see the topology note above.
 
 **One-time costs**
 
@@ -375,16 +392,19 @@ output. Excludes the one-time back-catalogue run, listed separately.
 | Back-catalogue transcription | ~300 recordings × ~1.5 hrs = 450 hrs @ ~$0.26/hr | ~$120 |
 | Back-catalogue LLM fan-out | 300 recordings × 5 passes | ~$110 |
 | Back-catalogue embedding | ~5 M tokens | <$5 |
-| Back-catalogue audio processing | ~45 worker-hrs of FFmpeg | ~$25 |
+| Back-catalogue audio processing | ~45 worker-hrs of FFmpeg, absorbed by the host — wall-clock, not spend | $0 |
 | Apple Developer Program | Annual, not monthly | $99/yr |
 | Google Play developer account | One-time | $25 |
 
 **The line that dominates, and the decision it forces.** Every line in this table except one is
-essentially flat between 100 and 1,000 members — this product's infrastructure cost is driven by
-content volume, and content volume is set by a weekly cadence, not by audience. The exception is video
-generation, which is 2% of the bill on the template path and 60–85% of it on the generative path, and
+essentially flat between 100 and 1,000 members — this product's cost is driven by content volume, and
+content volume is set by a weekly cadence, not by audience. Co-locating the runtime roles has made that
+starker rather than changing it: infrastructure is now about $14 of a ~$20 launch bill and has stopped
+being the interesting number. The exception is video
+generation, which is ~5% of the bill on the template path and 80–95% of it on the generative path, and
 which scales with publishing cadence rather than membership. If the generative path is chosen, video
-becomes the single largest operating expense at every scale, and the approve-or-discard workflow at
+becomes the single largest operating expense at every scale by a wide margin — it would multiply the
+launch bill roughly five- to nineteen-fold — and the approve-or-discard workflow at
 [3.11.4.6](prd.md#L246) — which bins a full-cost generation on rejection — becomes an expensive
 design. That is why the renderer is specified as an interface with the template path as the default:
 the choice can be deferred and measured on real output rather than committed to now. It is worth
@@ -420,3 +440,11 @@ before the relevant slice.
    browser eviction risk in store builds but not on the browser-delivered PWA, where "Download all"
    for a long series can still exceed the available quota. The browser route needs a stated cap and a
    clear message; the product does not currently describe one.
+7. **Embedding dimension** ([3.9](prd.md#L179), [3.10](prd.md#L194)). At 1536 dimensions, 250k
+   segments is ~1.5 GB of raw vectors before the HNSW index roughly doubles it — on an 8 GB host that
+   already runs Node, Chromium and Postgres, the index stops fitting in page cache and every ANN query
+   falls through to contended shared-vCPU disk. Truncating to 512 dimensions (Matryoshka) or choosing a
+   512/768-dimension model puts the whole index near 1 GB and makes queries faster. It is a retrieval-
+   quality decision, so it is not purely technical — but it is free today and a 250k-row backfill once
+   [§3.9](prd.md#L179) has shipped. [slice-architecture.md](slice-architecture.md#L321) confirms
+   `segment` has no embedding column yet, which is the window.

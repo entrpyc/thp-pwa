@@ -3,8 +3,7 @@
 ## Do not build what is deferred
 
 This project runs one vertical slice at a time. Before
-adding any infrastructure, dependency or capability, check
-[slice-architecture.md § Deliberately deferred](docs/slice-architecture.md#L321).
+adding any infrastructure, dependency or capability, check deliberately deferred section from the slice.
 
 Each one has a named home in a later slice. If you believe a step genuinely cannot be built without
 one, say so and stop — that is a scope decision for the user, not something to solve in passing.

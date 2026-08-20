@@ -52,7 +52,7 @@ no version of this app without auth.*
 ### 2. Upload and the automated pipeline to draft
 
 *The engine room. [3.5.2](prd.md#L113) is named in the PRD as the hinge of the whole product and in
-[architecture.md § Data model](architecture.md#L175) as the atom of the data model — building it
+[architecture.md § Data model](architecture.md#L171) as the atom of the data model — building it
 later would mean rebuilding everything attached to it.*
 
 - Audio upload, Admin-only in this slice — the Contributor half of [3.2.1](prd.md#L62) arrives with
@@ -177,7 +177,7 @@ each later slice adds its own panel.*
 | [§3.4](prd.md#L88) Audio processing & quality | A worker job reading the retained originals ([3.4.9](prd.md#L102)) and writing a processed rendition that becomes the streamed file, plus the sound profile and its admin UI ([3.4.5](prd.md#L98)–[3.4.8](prd.md#L101)) and the processing-failure flag ([3.4.11](prd.md#L104)). Slot it before podcast distribution, which depends on [3.4.10](prd.md#L103). Existing recordings are back-filled by running the job over the library, and are worth re-transcribing afterwards since [§3.5](prd.md#L106) reads cleaner audio more accurately. |
 | [§3.7](prd.md#L140) Scripture references | A third derived artefact through the same pipeline fan-out and the same review gate this slice builds; structured citations hang off the recording. |
 | [§3.8](prd.md#L154) Mind maps | Recording maps are another pipeline artefact behind the same gate; personal maps are a new member-owned entity generated from the segments this slice already stores. |
-| [§3.9](prd.md#L179) Intelligent cross-referencing | Adds an embedding column and an edge table over segments that already exist — no re-transcription. Ships with search, since [architecture.md § Key technology choices](architecture.md#L213) makes them one capability. |
+| [§3.9](prd.md#L179) Intelligent cross-referencing | Adds an embedding column and an edge table over segments that already exist — no re-transcription. Ships with search, since [architecture.md § Key technology choices](architecture.md#L209) makes them one capability. |
 | [§3.10](prd.md#L194) Semantic search | The same vector index as cross-referencing, plus full-text over the transcripts, summaries and titles this slice populates. |
 | [§3.11](prd.md#L212) AI video generation | Reads the segmented transcript this slice produces and reuses the draft/approve pattern of [3.6.6](prd.md#L132). |
 | [§3.12](prd.md#L257) Timestamp notes | Anchors to the playback position the player already tracks; markers hang on the progress bar built here. |
@@ -200,7 +200,7 @@ each later slice adds its own panel.*
 | Listening history ([3.2.7](prd.md#L68)) and the completed marker ([3.2.8](prd.md#L69)) | Both are reads over per-user playback state this slice already writes ([3.2.5](prd.md#L66)) — history adds an append-only play log, the marker adds a completion threshold and a badge in the browse list. Listening history is a prerequisite for the Flow Tracker ([§3.14](prd.md#L300)), so it should land no later than that. |
 | Account self-deletion and private-content cascade ([3.1.8](prd.md#L50)–[3.1.10](prd.md#L52)) | Becomes a store compliance requirement at [5.2.6](prd.md#L710); the cascade needs private content to exist, and none does yet. |
 | Avatar ([3.1.12](prd.md#L54)) | Cosmetic until notes and SOS give it somewhere to show. |
-| Background audio and lock-screen transport ([3.2.6](prd.md#L67)) | Deliberately held for the Capacitor shell, which [architecture.md § Client](architecture.md#L115) names as the only reliable route to it. |
+| Background audio and lock-screen transport ([3.2.6](prd.md#L67)) | Deliberately held for the Capacitor shell, which [architecture.md § Client](architecture.md#L111) names as the only reliable route to it. |
 | Replace audio on an existing recording ([3.2.10](prd.md#L71)) | Per-step re-run ([3.21.2.4](prd.md#L486)) covers failure recovery in the meantime. |
 | Series cover artwork ([3.3.3](prd.md#L80)), reorder and merge ([3.3.6](prd.md#L83)), podcast-shaped metadata ([3.3.7](prd.md#L84)), videos in the series view ([3.3.8](prd.md#L85)) | Artwork and podcast shape land together with distribution, which is what drives their real requirements. |
 | Summary-ready notification ([3.6.3](prd.md#L129)) | Arrives with [§3.17](prd.md#L361); until then the queue is the signal. |
