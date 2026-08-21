@@ -515,14 +515,11 @@ describe('the transcript and its segments, and nothing beside them', () => {
   });
 
   it('gives the segment exactly these columns, and no embedding', () => {
-    // `speaker` arrived in Ticket 04–05, as its own migration over this table — see the block
-    // below, which is what proves nothing was written into the rows already there.
     expect(after.get('segment')).toEqual([
       'corrected_at',
       'corrected_by_user_id',
       'end_ms',
       'id',
-      'speaker',
       'start_ms',
       'text',
       'transcript_id',
@@ -530,7 +527,7 @@ describe('the transcript and its segments, and nothing beside them', () => {
 
     // The one that matters: docs/epics/epic-core-listening/architecture.md § Extension points has
     // pgvector, the embedding column and the HNSW index arriving in a later epic, together.
-    for (const deferred of ['embedding', 'confidence', 'words']) {
+    for (const deferred of ['embedding', 'speaker', 'confidence', 'words']) {
       expect(after.get('segment'), `${deferred} is deferred and must not exist`).not.toContain(
         deferred,
       );
@@ -628,90 +625,5 @@ describe('the transcript and its segments, and nothing beside them', () => {
       'session',
       'user',
     ]);
-  });
-});
-
-/**
- * `segment.speaker` — one column, added by its own migration (Story 2 Ticket 04–05).
- *
- * Asserted before and after, like every migration since `recording`, and for one property this
- * one has that the others do not: **nothing is written into the rows that already exist.** A
- * recording transcribed before this migration gains speakers only when somebody re-runs
- * `transcribe` for it, and this block is what makes that a fact about the database rather than a
- * claim in a comment — a segment inserted before the migration is still null after it.
- */
-describe('the speaker column, and nothing beside it', () => {
-  let target: ThrowawayDatabase;
-  let before: Map<string, string[]>;
-  let after: Map<string, string[]>;
-  let sql: ReturnType<typeof postgres>;
-  /** A segment written before the column existed, to read back afterwards. */
-  let existingSegmentId: string;
-
-  beforeAll(async () => {
-    target = await createThrowawayDatabase(inject('databaseUrl'), 'speaker_migration');
-
-    const priorCount = journalCountBefore('0007_segment_speaker');
-    await runMigrations({ url: target.url, migrationsFolder: migrationsFolderUpTo(priorCount) });
-    before = await readColumnSets(target.url);
-
-    sql = postgres(target.url, { max: 2, onnotice: () => {} });
-    const [recording] = await sql<{ id: string }[]>`
-      insert into recording (original_media_key, title, recorded_at)
-      values ('originals/before-the-speaker-column.mp3', 'An older teaching', '2026-01-11')
-      returning id
-    `;
-    const [transcript] = await sql<{ id: string }[]>`
-      insert into transcript (recording_id, language, confidence)
-      values (${recording?.id as string}, 'en', 0.93) returning id
-    `;
-    const [segment] = await sql<{ id: string }[]>`
-      insert into segment (transcript_id, start_ms, end_ms, text)
-      values (${transcript?.id as string}, 0, 4000, 'Written before the column existed.')
-      returning id
-    `;
-    existingSegmentId = segment?.id as string;
-
-    await runMigrations({ url: target.url });
-    after = await readColumnSets(target.url);
-  }, 120_000);
-
-  afterAll(async () => {
-    await sql?.end({ timeout: 5 });
-    await target?.drop();
-  }, 60_000);
-
-  it('did not exist before this migration and does after — otherwise the comparison is vacuous', () => {
-    expect(before.get('segment')).not.toContain('speaker');
-    expect(after.get('segment')).toContain('speaker');
-  });
-
-  it('adds exactly one column to segment and nothing anywhere else', () => {
-    // The whole of the schema change: one nullable integer. No index, no constraint, no second
-    // column "for later", and no table but this one touched.
-    for (const [table, columns] of before) {
-      const expected = table === 'segment' ? [...columns, 'speaker'].sort() : columns;
-      expect(after.get(table), `${table} changed`).toEqual(expected);
-    }
-    expect([...after.keys()].sort()).toEqual([...before.keys()].sort());
-  });
-
-  it('is a nullable integer', async () => {
-    const rows = await sql<{ data_type: string; is_nullable: string }[]>`
-      select data_type, is_nullable from information_schema.columns
-      where table_schema = 'public' and table_name = 'segment' and column_name = 'speaker'
-    `;
-    // Nullable because a sentence the provider attributes to nobody is a real answer rather than a
-    // defect — and because every row already written has no answer at all.
-    expect(rows.map((row) => [row.data_type, row.is_nullable])).toEqual([['integer', 'YES']]);
-  });
-
-  it('writes nothing into the segments that were already there', async () => {
-    const rows = await sql<{ speaker: number | null }[]>`
-      select speaker from segment where id = ${existingSegmentId}
-    `;
-    // No back-fill, by design: a recording already transcribed gains speakers only when somebody
-    // re-runs `transcribe`, and doing that discards any corrections Story 5 will let an admin make.
-    expect(rows.map((row) => row.speaker)).toEqual([null]);
   });
 });

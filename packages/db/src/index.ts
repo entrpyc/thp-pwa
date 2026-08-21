@@ -57,11 +57,6 @@ export {
 } from './jobs';
 export { MIGRATIONS_DIR, runMigrations, type RunMigrationsOptions } from './migrate';
 export {
-  readPipeline,
-  type PipelineStepRow,
-  type RecordingPipelineRow,
-} from './pipeline';
-export {
   completePasswordReset,
   findLivePasswordResetForUser,
   findPasswordResetWithUser,

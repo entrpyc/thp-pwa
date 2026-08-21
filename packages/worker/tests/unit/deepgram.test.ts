@@ -28,17 +28,6 @@ const FIXTURE = readFileSync(
   'utf8',
 );
 
-/**
- * A captured response with diarisation on: two voices over four paragraphs, one of which the
- * provider attributed to nobody. Kept beside the non-diarised one rather than replacing it,
- * because "a response with no speaker information still maps" is a property that needs a response
- * with no speaker information in it.
- */
-const DIARISED_FIXTURE = readFileSync(
-  resolve(import.meta.dirname, '..', 'fixtures', 'deepgram-diarised-response.json'),
-  'utf8',
-);
-
 /** A transport that records what it was asked and answers with what it was given. */
 function stub(answer: { status?: number; body?: string; throws?: Error } = {}) {
   const calls: { url: string; headers: Record<string, string>; body: string }[] = [];
@@ -73,19 +62,6 @@ describe('what the adapter asks the provider for', () => {
     expect(DEEPGRAM_MODEL).toBe('nova-3');
     // Without smart formatting the response carries words and nothing to group them into sentences.
     expect(query.get('smart_format')).toBe('true');
-  });
-
-  it('asks for diarisation, every time', async () => {
-    const { calls, transport } = stub();
-    await deepgramTranscriber({ apiKey: 'a-key', transport }).transcribe({
-      audioUrl: AUDIO_URL,
-      language: 'en',
-    });
-
-    // Unconditional rather than behind a setting: a knob with one caller is a knob nobody needs,
-    // and a transcript that records who was speaking is not something one deployment would want
-    // and another would not.
-    expect(new URL(calls[0]?.url ?? '').searchParams.get('diarize')).toBe('true');
   });
 
   it('carries the language it is given rather than one written into the adapter', async () => {
@@ -131,49 +107,18 @@ describe('what the adapter makes of the answer', () => {
         startMs: 80,
         endMs: 4123,
         text: "Good morning, and welcome to this morning's teaching.",
-        // Not diarised, so nobody is attributed anything — which is a real answer rather than a
-        // failure, and is what every segment written before this column existed says.
-        speaker: null,
       },
       {
         startMs: 4123,
         endMs: 9880,
         text: 'We are picking up where we left off last week, in the second chapter.',
-        speaker: null,
       },
       {
         startMs: 10_400,
         endMs: 15_340,
         text: 'Before we read, I want to say a word about why this passage matters.',
-        speaker: null,
       },
     ]);
-  });
-
-  it('gives every sentence the speaker of the paragraph it came from', () => {
-    const result = mapDeepgramResponse(DIARISED_FIXTURE, 'en');
-
-    // The provider attributes at paragraph level and a segment is a sentence, so the paragraph is
-    // the only place the answer exists — both sentences of the opening paragraph are speaker 0.
-    // An index, never a name: `0` and `1` stay `0` and `1`, and nothing turns either into a person.
-    expect(result.segments.map((one) => [one.text, one.speaker])).toEqual([
-      ["Good morning, and welcome to this morning's teaching.", 0],
-      ['We are picking up where we left off last week.', 0],
-      ['Can I ask something about the second verse?', 1],
-      ['Yes, of course — go ahead.', 0],
-      // The provider attributed this paragraph to nobody. Null rather than a guess, and rather
-      // than an error.
-      ['It reads differently in the older translation.', null],
-    ]);
-  });
-
-  it('maps a response with no speaker information rather than failing on it', () => {
-    // The non-diarised fixture must still map — a response that carries no speaker at all is the
-    // shape every recording transcribed before this ticket was answered with.
-    const result = mapDeepgramResponse(FIXTURE, 'en');
-
-    expect(result.segments).toHaveLength(3);
-    expect(result.segments.every((one) => one.speaker === null)).toBe(true);
   });
 
   it('reads the model, its version, the billed duration and the cost off the metadata', async () => {
@@ -200,7 +145,7 @@ describe('what the adapter makes of the answer', () => {
     // Channels, alternatives and words are the provider's vocabulary and stop at this file.
     expect(Object.keys(result).sort()).toEqual(['confidence', 'language', 'segments', 'spend']);
     for (const segment of result.segments) {
-      expect(Object.keys(segment).sort()).toEqual(['endMs', 'speaker', 'startMs', 'text']);
+      expect(Object.keys(segment).sort()).toEqual(['endMs', 'startMs', 'text']);
     }
   });
 });

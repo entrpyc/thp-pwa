@@ -9,8 +9,7 @@ import type { PolicyRules } from '@/server/auth/policy';
  * being pinned ("a new role stops the build until every action answers for it") is demonstrated
  * working in the opposite direction too. Ticket 4 added five actions and the ownership flag, and this
  * file needing an edit for both is that mechanism doing its job. Story 2 Ticket 01 adds the two
- * recording actions, and Ticket 04–05 the two pipeline actions; the same edit was required each
- * time.
+ * recording actions, and the same edit was required again.
  */
 export const rules: PolicyRules = {
   'session.read': { roles: { admin: true, member: true } },
@@ -27,6 +26,4 @@ export const rules: PolicyRules = {
   'profile.update': { roles: { admin: true, member: true }, requiresOwnership: true },
   'recording.upload': { roles: { admin: true, member: false } },
   'recording.list': { roles: { admin: true, member: false } },
-  'pipeline.read': { roles: { admin: true, member: false } },
-  'pipeline.rerun': { roles: { admin: true, member: false } },
 };

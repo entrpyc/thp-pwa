@@ -125,9 +125,6 @@ export function createTranscribeHandler(deps: TranscribeDependencies = {}): JobH
           startMs: one.startMs,
           endMs: one.endMs,
           text: one.text.trim(),
-          // What the port answered, persisted as it came. Nothing here turns an index into a name,
-          // and nothing reads the column yet — the data exists before the surface that would.
-          speaker: one.speaker,
         })),
       },
       deps.executor,
@@ -151,11 +148,6 @@ export function createTranscribeHandler(deps: TranscribeDependencies = {}): JobH
       language: result.language,
       confidence: result.confidence,
       segments: result.segments.length,
-      // **The count, not the labels.** The named accuracy risk on real material is
-      // over-segmentation of one teaching voice into several speakers, and a count is what makes
-      // that visible without reading nine hundred rows. Sentences the provider attributed to
-      // nobody are not a speaker and are not counted.
-      speakers: distinctSpeakers(result.segments),
       ...providerMeta,
     };
 
@@ -174,11 +166,6 @@ export function createTranscribeHandler(deps: TranscribeDependencies = {}): JobH
     logger.info('transcribe.succeeded', measured);
     return providerMeta;
   };
-}
-
-/** How many speakers the provider heard. Sentences it attributed to nobody are not one. */
-export function distinctSpeakers(segments: readonly { readonly speaker: number | null }[]): number {
-  return new Set(segments.map((one) => one.speaker).filter((one) => one !== null)).size;
 }
 
 /** Log the failure with the whole of it, and hand back the sentence the job row will carry. */

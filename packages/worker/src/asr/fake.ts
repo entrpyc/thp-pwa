@@ -3,6 +3,7 @@ import { readFakeScriptPath, type EnvSource } from './env';
 import {
   TranscriptionError,
   type Transcriber,
+  type TranscribedSegment,
   type TranscriptionRequest,
   type TranscriptionResult,
 } from './transcriber';
@@ -25,23 +26,11 @@ export interface FakeTranscriberCalls {
   readonly requests: readonly TranscriptionRequest[];
 }
 
-/**
- * One segment of a script. `speaker` is **optional**, so a script written before diarisation
- * existed still parses and still produces the null speakers every segment already written has —
- * which is what lets the suite drive both answers without a provider.
- */
-export interface FakeScriptSegment {
-  readonly startMs: number;
-  readonly endMs: number;
-  readonly text: string;
-  readonly speaker?: number | null;
-}
-
 export interface FakeScript {
   readonly language: string;
   readonly confidence: number;
   readonly durationSeconds: number;
-  readonly segments: readonly FakeScriptSegment[];
+  readonly segments: readonly TranscribedSegment[];
 }
 
 export interface FakeTranscriber extends Transcriber, FakeTranscriberCalls {}
@@ -57,12 +46,7 @@ export function fakeTranscriber(script: FakeScript): FakeTranscriber {
       return {
         language: script.language,
         confidence: script.confidence,
-        segments: script.segments.map((one) => ({
-          startMs: one.startMs,
-          endMs: one.endMs,
-          text: one.text,
-          speaker: one.speaker ?? null,
-        })),
+        segments: script.segments,
         spend: {
           model: 'fake',
           modelVersion: 'fake-1',

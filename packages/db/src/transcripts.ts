@@ -30,8 +30,6 @@ export interface SegmentRow {
   /** Exclusive end offset from the beginning of the recording, in milliseconds. */
   readonly endMs: number;
   readonly text: string;
-  /** The provider's anonymous speaker index, or `null` when it attributed the sentence to nobody. */
-  readonly speaker: number | null;
   readonly correctedAt: Date | null;
   readonly correctedByUserId: string | null;
 }
@@ -41,12 +39,6 @@ export interface NewSegmentText {
   readonly startMs: number;
   readonly endMs: number;
   readonly text: string;
-  /**
-   * The provider's speaker index. `null` — and a writer that omits it entirely — is what a
-   * transcript with no speaker information reads as, which is what every segment already written
-   * says.
-   */
-  readonly speaker?: number | null;
 }
 
 export interface NewTranscript {
@@ -97,7 +89,6 @@ export async function replaceTranscript(
           startMs: one.startMs,
           endMs: one.endMs,
           text: one.text,
-          speaker: one.speaker ?? null,
         })),
       );
     }

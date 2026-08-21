@@ -1,5 +1,5 @@
 import type { JobRow, ProviderMeta } from '@thp/db';
-import { STUB_PROVIDER_META_KEY, type PipelineStep } from '@thp/shared';
+import type { PipelineStep } from '@thp/shared';
 import { createTranscribeHandler, type TranscribeDependencies } from './transcribe';
 
 /**
@@ -40,13 +40,8 @@ export type HandlerRegistry = Readonly<Partial<Record<PipelineStep, JobHandler>>
  * yet" would otherwise be invisible — a row that succeeded looks the same either way. The marker
  * makes it a query. Ticket 03 replaced the `transcribe` stub and its marker went with it; Story 3
  * does the same for `generate_draft`, which is the last one left.
- *
- * Ticket 04–05 is the reader. The **key** moved to `@thp/shared` when the pipeline panel started
- * reading it, so the process that writes the marker and the screen that renders *not built yet*
- * state it once rather than twice; the marker itself stays here, because what a stub records is
- * the worker's business.
  */
-export const STUB_PROVIDER_META: ProviderMeta = { [STUB_PROVIDER_META_KEY]: true };
+export const STUB_PROVIDER_META: ProviderMeta = { stub: true };
 
 /**
  * The steps this worker runs: `transcribe` for real, `generate_draft` still a stub.

@@ -138,18 +138,12 @@ export function deepgramTranscriber(options: DeepgramOptions = {}): Transcriber 
  * carries words and nothing to group them by. The language is the request's, sent explicitly —
  * which is the difference between "the transcript says `en`" and "the transcript was transcribed as
  * English".
- *
- * `diarize` is asked for **unconditionally** rather than behind a setting: a knob with one caller
- * is a knob nobody needs, and a transcript that records who was speaking is not something one
- * deployment would want and another would not. It does not change the pre-recorded rate, which is
- * what keeps docs/project/architecture.md § Estimated running costs standing as written.
  */
 function requestUrl(request: TranscriptionRequest): string {
   const query = new URLSearchParams({
     model: DEEPGRAM_MODEL,
     language: request.language,
     smart_format: 'true',
-    diarize: 'true',
   });
   for (const term of DEEPGRAM_KEYTERMS) query.append('keyterm', term);
   return `${DEEPGRAM_ENDPOINT}?${query.toString()}`;
@@ -162,11 +156,6 @@ function requestUrl(request: TranscriptionRequest): string {
  * paragraphs; a segment is a *sentence*, and the words inside it are not persisted. Sentence
  * offsets come back in seconds as floats and are rounded to milliseconds, because a seek lands on
  * an integer or it lands on whatever the last rounding chose.
- *
- * **A sentence takes its paragraph's speaker.** Diarisation is attributed at paragraph level and a
- * segment is a sentence, so the paragraph is the only place the answer exists; a paragraph with no
- * speaker on it — which is every paragraph of a response that was not diarised — gives its
- * sentences `null` rather than failing the mapping.
  *
  * Exported so the mapping is unit-testable against a captured response without a transport in the
  * way — the shape of what comes back is the part most likely to change under us.
@@ -187,7 +176,6 @@ export function mapDeepgramResponse(body: string, language: string): Transcripti
 
   const segments: TranscribedSegment[] = [];
   for (const paragraph of alternative.paragraphs?.paragraphs ?? []) {
-    const speaker = typeof paragraph.speaker === 'number' ? paragraph.speaker : null;
     for (const sentence of paragraph.sentences ?? []) {
       const text = (sentence.text ?? '').trim();
       if (text === '') continue;
@@ -195,7 +183,6 @@ export function mapDeepgramResponse(body: string, language: string): Transcripti
         startMs: Math.round((sentence.start ?? 0) * 1000),
         endMs: Math.round((sentence.end ?? 0) * 1000),
         text,
-        speaker,
       });
     }
   }
@@ -238,8 +225,6 @@ interface DeepgramResponse {
         readonly confidence?: number;
         readonly paragraphs?: {
           readonly paragraphs?: readonly {
-            /** The anonymous speaker index, present only when diarisation was asked for. */
-            readonly speaker?: number;
             readonly sentences?: readonly {
               readonly text?: string;
               readonly start?: number;

@@ -20,12 +20,7 @@ export {
   type TranscriptionResult,
   type TranscriptionSpend,
 } from './transcriber';
-export {
-  fakeTranscriber,
-  type FakeScript,
-  type FakeScriptSegment,
-  type FakeTranscriber,
-} from './fake';
+export { fakeTranscriber, type FakeScript, type FakeTranscriber } from './fake';
 
 /**
  * The transcriber this process is configured with, built once and cached.

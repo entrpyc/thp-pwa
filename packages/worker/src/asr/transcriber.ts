@@ -33,14 +33,6 @@ export interface TranscribedSegment {
   readonly startMs: number;
   readonly endMs: number;
   readonly text: string;
-  /**
-   * Who the provider heard, as **its own anonymous index** — `0`, `1`, `2`. Not a name, not a
-   * person, and not stable across recordings; nothing downstream turns it into any of those.
-   *
-   * `null` when the provider attributed the sentence to nobody, which is a real answer and not a
-   * failure: a response with no speaker information at all maps to segments that are all null.
-   */
-  readonly speaker: number | null;
 }
 
 /**
