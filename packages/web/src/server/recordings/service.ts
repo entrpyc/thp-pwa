@@ -21,7 +21,7 @@ import {
 import { ApiError } from '@/server/api/errors';
 import type { Actor } from '@/server/auth/policy';
 import { queue } from '@/server/jobs/queue';
-import { UPLOAD_GRANT_SECONDS, mediaStore, mintOriginalKey } from '@thp/media';
+import { UPLOAD_GRANT_SECONDS, mediaStore, mintOriginalKey } from '@/server/media/store';
 import { logger } from '@/server/observability/logger';
 
 /**
@@ -40,7 +40,7 @@ import { logger } from '@/server/observability/logger';
  * step 1 gets a grant it cannot finalise.
  *
  * **A refusal never deletes the object.** There is nothing on the port to delete with
- * (), so a refused finalisation leaves an orphan in the bucket, invisible
+ * (server/media/store.ts), so a refused finalisation leaves an orphan in the bucket, invisible
  * because the list reads `recording` rows. That is the deliberate price of the one non-negotiable
  * (docs/project/prd.md, 3.4.9), and it is the cheap side of the trade.
  */

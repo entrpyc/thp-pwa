@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { MEDIA_VARIABLES, readMediaSettings } from '@thp/media/env';
+import { MEDIA_VARIABLES, readMediaSettings } from '@/server/media/env';
 
 /**
  * The media configuration reader, held to the same rule as `requireDatabaseUrl` and the mail

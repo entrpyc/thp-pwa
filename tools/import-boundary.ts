@@ -9,7 +9,6 @@ export interface BoundaryViolation {
   readonly detail: string;
   readonly rule:
     | 'no-database-package'
-    | 'no-server-package'
     | 'no-database-driver'
     | 'no-server-module'
     | 'no-node-builtin'
@@ -17,16 +16,6 @@ export interface BoundaryViolation {
 }
 
 const DATABASE_PACKAGES = ['@thp/db'];
-
-/**
- * Packages that exist only on the server, other than the database one.
- *
- * `@thp/media` joined the list in Story 2 Ticket 03, when the media port moved out of
- * `packages/web` so the worker could read the original. Moving it made it nameable by a client, so
- * it has to be named here: it holds bucket credentials and mints signed grants, and a client that
- * imported it would be a client bundling both.
- */
-const SERVER_ONLY_PACKAGES = ['@thp/media'];
 const DATABASE_DRIVERS = ['postgres', 'pg', 'pg-native', 'drizzle-orm', 'drizzle-kit'];
 
 /** `import x from 'y'`, `export * from 'y'`, `import('y')`, `require('y')` — specifier in group 1 or 2. */
@@ -116,7 +105,6 @@ function classify(
   root: string,
 ): BoundaryViolation['rule'] | null {
   if (DATABASE_PACKAGES.some((name) => isPackage(specifier, name))) return 'no-database-package';
-  if (SERVER_ONLY_PACKAGES.some((name) => isPackage(specifier, name))) return 'no-server-package';
   if (DATABASE_DRIVERS.some((name) => isPackage(specifier, name))) return 'no-database-driver';
   if (specifier.startsWith('node:')) return 'no-node-builtin';
   if (specifier === '@/server' || specifier.startsWith('@/server/')) return 'no-server-module';
@@ -141,12 +129,7 @@ function classify(
  */
 export function checkSingleDatabaseModule(
   repoRoot: string,
-  sourceDirs: readonly string[] = [
-    'packages/web/src',
-    'packages/worker/src',
-    'packages/shared/src',
-    'packages/media/src',
-  ],
+  sourceDirs: readonly string[] = ['packages/web/src', 'packages/worker/src', 'packages/shared/src'],
 ): BoundaryViolation[] {
   const root = resolve(repoRoot);
   const violations: BoundaryViolation[] = [];

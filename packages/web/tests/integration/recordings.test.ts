@@ -12,7 +12,7 @@ import {
   type RecordingSummary,
   type UploadGrantPayload,
 } from '@thp/shared';
-import { mediaStore, type MediaStore } from '@thp/media';
+import { mediaStore, type MediaStore } from '@/server/media/store';
 import { closeTestDatabase, signedInAccount, type TestAccount } from '../support/accounts';
 import { logOffset, waitForLogLines } from '../support/log-reader';
 

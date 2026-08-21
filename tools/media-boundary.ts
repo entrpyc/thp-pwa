@@ -15,11 +15,6 @@ import { walkFiles } from './fs-walk';
  *
  * One file is allowed to import the SDK, and it is the adapter. The port sits in front of it and is
  * what the rest of the application calls.
- *
- * **Amended in Story 2 Ticket 03.** The port and its adapter moved out of `packages/web` and into
- * `@thp/media`, because the worker has to read the original in order to transcribe it and cannot
- * import from the web app. Only the two paths below changed — the rule, and everything it holds,
- * is the same one.
  */
 
 export interface MediaBoundaryViolation {
@@ -44,17 +39,16 @@ const OBJECT_STORE_LIBRARIES = [
 
 /** The one file permitted to build a client, repo-relative and posix. */
 export const MEDIA_ADAPTER_FILES: readonly string[] = [
-  'packages/media/src/s3-store.ts',
+  'packages/web/src/server/media/s3-store.ts',
 ];
 
 /** The port. Read by {@link findDeleteOperations}, which is the other half of this guard. */
-export const MEDIA_PORT_FILE = 'packages/media/src/store.ts';
+export const MEDIA_PORT_FILE = 'packages/web/src/server/media/store.ts';
 
 const SPECIFIER_PATTERN =
   /(?:\bfrom\s*|\bimport\s*\(\s*|\brequire\s*\(\s*|\bimport\s+)['"]([^'"]+)['"]/g;
 
 const SOURCE_DIRS: readonly string[] = [
-  'packages/media/src',
   'packages/web/src',
   'packages/worker/src',
   'packages/shared/src',

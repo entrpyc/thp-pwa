@@ -29,9 +29,6 @@ describe('client/API import boundary', () => {
     const rules = new Set(violations.map((violation) => violation.rule));
 
     expect(rules).toContain('no-database-package');
-    // `@thp/media` became nameable by a client the moment it stopped being a folder inside the
-    // server tree (Story 2 Ticket 03) — it holds bucket credentials and mints signed grants.
-    expect(rules).toContain('no-server-package');
     expect(rules).toContain('no-database-driver');
     expect(rules).toContain('no-server-module');
     expect(rules).toContain('no-node-builtin');
@@ -54,14 +51,6 @@ describe('one database module', () => {
   it('would report it if one did', () => {
     const violations = checkSingleDatabaseModule(REPO_ROOT, ['tests/fixtures/bad-client/src']);
     expect(violations.map((violation) => violation.detail)).toContain('postgres');
-  });
-
-  it('covers the media package, which is no longer inside the web app', () => {
-    // The move in Story 2 Ticket 03 took `packages/web/src/server/media` out of every source dir
-    // this guard walks. A rule that silently stops covering a package is worse than no rule, so the
-    // package is named and asserted to be non-empty.
-    expect(walkFiles(resolve(REPO_ROOT, 'packages/media/src')).length).toBeGreaterThan(0);
-    expect(formatViolations(checkSingleDatabaseModule(REPO_ROOT, ['packages/media/src']))).toBe('');
   });
 });
 

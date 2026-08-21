@@ -9,7 +9,6 @@
   },
   "dependencies": {
     "@thp/db": "*",
-    "@thp/media": "*",
     "@thp/shared": "*"
   }
 }

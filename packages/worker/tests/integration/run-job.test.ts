@@ -11,7 +11,7 @@ import {
 } from '@thp/db';
 import { setLogSink, type LogLine } from '@thp/shared/observability/logger';
 import { PIPELINE_STEPS, type PipelineStep } from '@thp/shared';
-import { STUB_PROVIDER_META, createHandlers, type HandlerRegistry } from '../../src/handlers';
+import { STUB_HANDLERS, STUB_PROVIDER_META, type HandlerRegistry } from '../../src/handlers';
 import { runJob } from '../../src/run-job';
 import { createThrowawayDatabase, type ThrowawayDatabase } from '../../../../tests/setup/throwaway-db';
 
@@ -186,29 +186,24 @@ describe('running a claimed job', () => {
 });
 
 /**
- * The registry the worker actually runs with.
+ * The two stub handlers, on their own terms.
  *
- * `transcribe` does real work from Story 2 Ticket 03 and is asserted in its own suite; what is
- * worth asserting here is that **every step still has a handler**, and that the one that is still a
- * stub says so. The marker is what tells a reader of the ledger a step *exists* rather than *ran* —
- * with it gone from `transcribe`, a succeeded row there means a transcript was written.
+ * They do no work, so what is worth asserting is the one thing that makes them honest: the marker
+ * that tells a reader of the ledger this step *exists* rather than *ran*.
  */
-describe('the handlers this worker registers', () => {
+describe('the stub handlers this ticket ships', () => {
   it('registers every step of the pipeline', () => {
     // Against the ordered list rather than against two names typed out here — the successor rule
     // reads that list too, and a step added to it with no handler is a job that fails.
-    expect(Object.keys(createHandlers()).sort()).toEqual([...PIPELINE_STEPS].sort());
+    expect(Object.keys(STUB_HANDLERS).sort()).toEqual([...PIPELINE_STEPS].sort());
   });
 
-  it('still marks the one step that has no implementation behind it', () => {
-    const handlers = createHandlers();
-    expect(handlers.generate_draft?.({} as JobRow)).toEqual(STUB_PROVIDER_META);
+  it('marks itself, so a succeeded row is not mistaken for work done', () => {
+    for (const step of PIPELINE_STEPS) {
+      const handler = STUB_HANDLERS[step];
+      expect(handler).toBeDefined();
+      expect(handler?.({} as JobRow)).toEqual(STUB_PROVIDER_META);
+    }
     expect(STUB_PROVIDER_META).toEqual({ stub: true });
-  });
-
-  it('builds without reading a provider key, so a worker starts before one is configured', () => {
-    // A module-level registry would have read the environment at import time, and a deployment with
-    // nothing but drafts to run would refuse to start over a key it never uses.
-    expect(() => createHandlers()).not.toThrow();
   });
 });

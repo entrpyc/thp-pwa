@@ -131,8 +131,8 @@ describe('migrations apply to an empty database by one command', () => {
       expect(types.map((row) => row.typname)).toEqual(['job_status', 'pipeline_step', 'user_role']);
 
       // Tables arrive with the ticket that uses them. Ticket 2 added accounts and sessions, ticket 3
-      // invitations, ticket 4 password resets, Story 2 Ticket 01 `recording`, Ticket 02 `job` and
-      // Ticket 03 `transcript` and `segment` — `review_item` and the rest are still ahead.
+      // invitations, ticket 4 password resets, Story 2 Ticket 01 `recording` and Ticket 02 `job` —
+      // `transcript`, `segment` and the rest are still ahead.
       const tables = await sql<{ tablename: string }[]>`
         select tablename from pg_tables where schemaname = 'public' order by tablename
       `;
@@ -141,9 +141,7 @@ describe('migrations apply to an empty database by one command', () => {
         'job',
         'password_reset',
         'recording',
-        'segment',
         'session',
-        'transcript',
         'user',
       ]);
     } finally {
@@ -414,212 +412,6 @@ describe('the job ledger, and nothing beside it', () => {
     }
     expect([...before.keys()].sort()).toEqual([
       'invitation',
-      'password_reset',
-      'recording',
-      'session',
-      'user',
-    ]);
-  });
-});
-
-/**
- * `transcript` and `segment` — the spine's third and fourth rows (Story 2 Ticket 03).
- *
- * Asserted the way `recording` and `job` are, and for the same reason: by their **exact column
- * sets**, before and after, so a column added "for later" is a failing test rather than a comment
- * nobody reads. The one that matters most is an embedding on `segment`, which
- * docs/epics/epic-core-listening/architecture.md § Extension points names as a later epic's
- * `ALTER TABLE` — a nullable vector column arriving here would be deferral quietly stopping being
- * deferral, and no reader of the schema would notice.
- *
- * Three properties beyond the columns are asserted here rather than in the query layer, because
- * they are properties of the *database*: one transcript per recording, a confidence that has to be
- * a score, and segments that come back in playback order however they went in.
- */
-describe('the transcript and its segments, and nothing beside them', () => {
-  let target: ThrowawayDatabase;
-  /** Column sets as of the migration *before* this one, and after it. */
-  let before: Map<string, string[]>;
-  let after: Map<string, string[]>;
-  let sql: ReturnType<typeof postgres>;
-  let recordings = 0;
-
-  async function newRecording(): Promise<string> {
-    recordings += 1;
-    const key = `originals/transcripts-${recordings}.mp3`;
-    const [row] = await sql<{ id: string }[]>`
-      insert into recording (original_media_key, title, recorded_at)
-      values (${key}, 'A teaching', '2026-02-08')
-      returning id
-    `;
-    return row?.id as string;
-  }
-
-  /** Insert by hand. What the query layer does with these tables is its own suite. */
-  async function insertTranscript(recordingId: string, confidence = 0.9): Promise<string> {
-    const [row] = await sql<{ id: string }[]>`
-      insert into transcript (recording_id, language, confidence)
-      values (${recordingId}, 'en', ${confidence})
-      returning id
-    `;
-    return row?.id as string;
-  }
-
-  async function insertSegment(transcriptId: string, startMs: number, endMs: number): Promise<void> {
-    await sql`
-      insert into segment (transcript_id, start_ms, end_ms, text)
-      values (${transcriptId}, ${startMs}, ${endMs}, ${`at ${startMs}`})
-    `;
-  }
-
-  beforeAll(async () => {
-    target = await createThrowawayDatabase(inject('databaseUrl'), 'transcript_migration');
-
-    const priorCount = journalCountBefore('0006_transcripts');
-    await runMigrations({ url: target.url, migrationsFolder: migrationsFolderUpTo(priorCount) });
-    before = await readColumnSets(target.url);
-
-    await runMigrations({ url: target.url });
-    after = await readColumnSets(target.url);
-
-    sql = postgres(target.url, { max: 2, onnotice: () => {} });
-  }, 120_000);
-
-  afterAll(async () => {
-    await sql?.end({ timeout: 5 });
-    await target?.drop();
-  }, 60_000);
-
-  it('did not exist before this migration and do after — otherwise the comparison is vacuous', () => {
-    expect(before.has('transcript')).toBe(false);
-    expect(before.has('segment')).toBe(false);
-    expect(after.has('transcript')).toBe(true);
-    expect(after.has('segment')).toBe(true);
-  });
-
-  it('gives the transcript exactly these columns, and no text column beside its segments', () => {
-    expect(after.get('transcript')).toEqual([
-      'confidence',
-      'created_at',
-      'id',
-      'language',
-      'recording_id',
-    ]);
-
-    // A `text` column would be a concatenated second copy of the segments that Story 5's correction
-    // would have to keep in step. `duration`, `provider` and `model` belong to the job that produced
-    // it, and `status` would be a second reading of whether that job succeeded.
-    for (const deferred of ['text', 'duration', 'provider', 'model', 'status']) {
-      expect(after.get('transcript'), `${deferred} must not exist`).not.toContain(deferred);
-    }
-  });
-
-  it('gives the segment exactly these columns, and no embedding', () => {
-    expect(after.get('segment')).toEqual([
-      'corrected_at',
-      'corrected_by_user_id',
-      'end_ms',
-      'id',
-      'start_ms',
-      'text',
-      'transcript_id',
-    ]);
-
-    // The one that matters: docs/epics/epic-core-listening/architecture.md § Extension points has
-    // pgvector, the embedding column and the HNSW index arriving in a later epic, together.
-    for (const deferred of ['embedding', 'speaker', 'confidence', 'words']) {
-      expect(after.get('segment'), `${deferred} is deferred and must not exist`).not.toContain(
-        deferred,
-      );
-    }
-  });
-
-  it('records offsets as integer milliseconds and confidence as a real', async () => {
-    const rows = await sql<{ table_name: string; column_name: string; data_type: string }[]>`
-      select table_name, column_name, data_type from information_schema.columns
-      where table_schema = 'public'
-        and (table_name, column_name) in
-            (('segment', 'start_ms'), ('segment', 'end_ms'), ('transcript', 'confidence'))
-      order by table_name, column_name
-    `;
-    expect(rows.map((row) => [row.table_name, row.column_name, row.data_type])).toEqual([
-      ['segment', 'end_ms', 'integer'],
-      ['segment', 'start_ms', 'integer'],
-      ['transcript', 'confidence', 'real'],
-    ]);
-  });
-
-  it('refuses a transcript that belongs to no recording', async () => {
-    await expect(
-      sql`insert into transcript (recording_id, language, confidence) values (null, 'en', 0.9)`,
-    ).rejects.toThrow();
-    await expect(
-      insertTranscript('00000000-0000-0000-0000-000000000000'),
-    ).rejects.toThrow();
-  });
-
-  it('refuses a second transcript for the same recording', async () => {
-    // docs/project/prd.md 4.4 says one transcript per recording, so the database says it too — a
-    // re-run replaces rather than accumulates, and this is what leaves no other option.
-    const recordingId = await newRecording();
-    await insertTranscript(recordingId);
-    await expect(insertTranscript(recordingId)).rejects.toThrow();
-  });
-
-  it('refuses a confidence that is not a score', async () => {
-    const recordingId = await newRecording();
-    await expect(insertTranscript(recordingId, 1.4)).rejects.toThrow();
-    await expect(insertTranscript(recordingId, -0.2)).rejects.toThrow();
-    // The ends of the range are inside it: a provider that answered 0 has answered a score.
-    await expect(insertTranscript(recordingId, 0)).resolves.toBeTruthy();
-  });
-
-  it('reads a transcript back in playback order, whatever order it went in', async () => {
-    const transcriptId = await insertTranscript(await newRecording());
-    // Deliberately out of order: the read is what has to be ordered, not the write.
-    for (const [start, end] of [
-      [9000, 12000],
-      [0, 4000],
-      [4000, 9000],
-    ] as const) {
-      await insertSegment(transcriptId, start, end);
-    }
-
-    const rows = await sql<{ start_ms: number }[]>`
-      select start_ms from segment where transcript_id = ${transcriptId} order by start_ms
-    `;
-    expect(rows.map((row) => row.start_ms)).toEqual([0, 4000, 9000]);
-  });
-
-  it('indexes the pair Story 5 follows along on', async () => {
-    const rows = await sql<{ indexname: string }[]>`
-      select indexname from pg_indexes where schemaname = 'public' and tablename = 'segment'
-      order by indexname
-    `;
-    expect(rows.map((row) => row.indexname)).toContain('segment_transcript_start_idx');
-  });
-
-  it('takes the segments with the transcript, and the transcript with the recording', async () => {
-    const recordingId = await newRecording();
-    const transcriptId = await insertTranscript(recordingId);
-    await insertSegment(transcriptId, 0, 1000);
-
-    // Both cascades, because replacing a transcript has to leave no orphan behind and a deleted
-    // recording has to leave no transcript behind.
-    await sql`delete from recording where id = ${recordingId}`;
-    const [remaining] = await sql<{ count: string }[]>`
-      select count(*)::text as count from segment where transcript_id = ${transcriptId}
-    `;
-    expect(remaining?.count).toBe('0');
-  });
-
-  it('leaves every table that already existed exactly as it was', () => {
-    for (const [table, columns] of before) {
-      expect(after.get(table), `${table} changed`).toEqual(columns);
-    }
-    expect([...before.keys()].sort()).toEqual([
-      'invitation',
-      'job',
       'password_reset',
       'recording',
       'session',

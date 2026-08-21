@@ -19,22 +19,12 @@ import { buildMediaStore } from './s3-store';
  * price — it is invisible, the list reads `recording` rows, and it is cheaper than any mechanism
  * capable of removing the input Story 3 and every re-transcription afterwards depend on.
  *
- * **This is a package beside `@thp/db` and `@thp/shared`, not a folder in the web app.** It lived
- * under `packages/web/src/server/media/` while the API was the only thing that read the store;
- * Story 2 Ticket 03's worker has to read the original in order to transcribe it, and the
- * import-boundary guard refuses a worker that reaches into `packages/web`. So the port moved to
- * where both processes can name it, and it is server-only by the same rule `@thp/db` is. Nothing
- * else about it changed — the guard, the missing delete and the call sites all survived the move.
- *
- * Three operations, because three is what the application does:
+ * Two operations, because two is what the application does:
  *
  * 1. **Mint a presigned `PUT`**, so the browser sends the bytes and they never pass through us.
  * 2. **Ask what actually landed**, so finalisation re-checks size and content type against the
  *    store's own metadata rather than against anything the client says. That is the only thing
  *    "re-checked server-side" can mean when the API never sees the file.
- * 3. **Mint a presigned `GET`**, so a reader we have authorised gets a short-lived grant to the
- *    object rather than the bytes travelling through us. The transcription handler hands one to the
- *    ASR provider; Story 4's playback hands one to the browser.
  */
 
 /** What the store reports about an object that exists. */
@@ -70,20 +60,6 @@ export interface MediaStore {
 
   /** The object's size and content type, or `null` when nothing is behind the key. */
   head(key: string): Promise<StoredObject | null>;
-
-  /**
-   * A `GET` for this key, expiring after `expiresInSeconds`.
-   *
-   * **The presigned `PUT`'s counterpart, and the same boundary in the other direction.** The bucket
-   * is never publicly readable, so a signature is the only way anything reads an object — and what
-   * is handed out is a grant with an expiry on it rather than the bytes, so neither process ever
-   * carries the audio.
-   *
-   * The expiry is the caller's, not the port's: what a browser needs for one sitting and what a
-   * transcription provider needs to fetch a 200 MB file are different numbers, and each belongs
-   * beside the reason for it.
-   */
-  presignGet(input: { readonly key: string; readonly expiresInSeconds: number }): Promise<string>;
 }
 
 /**

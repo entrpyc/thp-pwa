@@ -67,7 +67,6 @@ export {
   type PasswordResetRow,
 } from './password-resets';
 export {
-  findRecordingById,
   insertRecording,
   listRecordings,
   type NewRecording,
@@ -83,13 +82,4 @@ export {
   type NewSession,
   type SessionRow,
 } from './sessions';
-export {
-  findTranscriptByRecording,
-  listSegments,
-  replaceTranscript,
-  type NewSegmentText,
-  type NewTranscript,
-  type SegmentRow,
-  type TranscriptRow,
-} from './transcripts';
 export * as schema from './schema';

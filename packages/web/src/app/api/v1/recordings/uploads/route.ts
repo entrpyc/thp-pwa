@@ -15,7 +15,7 @@ export const dynamic = 'force-dynamic';
  *
  * This is not a recording. Nothing is written to the database here, and an upload whose
  * finalisation never arrives is an orphan object nobody can see — the deliberate cost of a store
- * with no delete on it ().
+ * with no delete on it (server/media/store.ts).
  */
 export const POST = apiRoute(permits('recording.upload'), async (request, context) => {
   const body: unknown = await request.json().catch(() => null);
