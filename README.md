@@ -65,8 +65,9 @@ too: the integration suite starts real Next.js servers and talks to them over HT
 | :----------------------------------- | :--------------------------------------------------------------------------- |
 | [packages/shared](packages/shared)   | Domain vocabulary — role enum, pipeline-step enum, segment shape, the `/api/v1` wire contract. Imported by client, API, worker and database layer alike. |
 | [packages/db](packages/db)           | **Server-only.** Drizzle schema, migrations, and the single module the API reaches Postgres through. |
+| [packages/media](packages/media)     | **Server-only.** The object-store port and its S3 adapter. Depended on by both the API and the worker, which is why it is not a folder inside either. |
 | [packages/web](packages/web)         | Next.js App Router — the React client *and* the `/api/v1` route handlers.     |
-| [packages/worker](packages/worker)   | The pipeline worker. A stub polling nothing until the job ledger arrives.     |
+| [packages/worker](packages/worker)   | The pipeline worker — polls the job ledger, transcribes, and will generate drafts. Holds the ASR port and its one adapter. |
 
 ## The `/api/v1` contract
 
@@ -265,7 +266,7 @@ it talks only to the container, with the container's own credentials held in
 and a bucket this product can never delete from is not somewhere a test run may write. **Nothing in the
 source names a vendor**: the adapter speaks plain S3, and
 [tools/media-boundary.ts](tools/media-boundary.ts) fails the build if anything outside
-[packages/web/src/server/media/s3-store.ts](packages/web/src/server/media/s3-store.ts) imports the
+[packages/media/src/s3-store.ts](packages/media/src/s3-store.ts) imports the
 SDK.
 
 Three properties, none of them optional:
@@ -288,6 +289,41 @@ actually arrived — which is what "re-checked server-side" means when the API n
 
 **200 MB, as MP3, M4A, AAC, WAV or FLAC.** A 90-minute teaching fits comfortably as MP3 or M4A and
 does **not** fit as WAV or FLAC; the upload screen says so before a file is chosen.
+
+## Transcription
+
+The worker's `transcribe` step reads the original object, calls a speech-to-text provider, and
+writes a `transcript` row plus one `segment` row per sentence, each carrying `start_ms`, `end_ms`
+and `text`. **The timestamped segment is the atom of the whole system** — notes, highlights, search
+and everything later resolves through `(recording_id, timestamp_ms)`.
+
+**The bytes never pass through the worker.** It mints a short-lived signed `GET` and hands the
+provider that URL; the provider fetches the object itself, which is the same boundary the presigned
+`PUT` holds on the way in. The grant expires after two hours.
+
+**Nothing in the source names a vendor** outside one file:
+[tools/asr-boundary.ts](tools/asr-boundary.ts) fails the build if anything but
+[packages/worker/src/asr/deepgram.ts](packages/worker/src/asr/deepgram.ts) imports a provider SDK
+*or names its API host*. Swapping providers is that file and the `ASR_` block in `.env`.
+
+- `ASR_PROVIDER=deepgram` is the real one — Nova-3 pre-recorded, monolingual English, $0.0043/min
+  ($0.258/hr; a 90-minute teaching is ~$0.39). Needs `ASR_API_KEY`.
+- `ASR_PROVIDER=fake` reads a fixed script off `ASR_FAKE_SCRIPT` and returns it, spending nothing
+  and reaching no network. **That is what the test suite runs against** — the provider is
+  configuration, so the test double is a value of the same setting rather than a mock.
+
+Three things worth knowing before the first real recording:
+
+1. **English is pinned, not detected.** The monolingual model is both the more accurate one and the
+   one the cost table is built on. `transcript.language` is still written and reads `en`, so a
+   second language later is an adapter change rather than a migration. A recording in another
+   language is transcribed badly as English and still reads `en`.
+2. **A transcript the provider is not confident in fails the job.** Below 0.6 the transcript is
+   *written* — so an admin can read it and judge it — and then the job fails, so nothing downstream
+   is generated from it. 0.6 is a first setting, not a measured one.
+3. **Re-running the step replaces the transcript**, deleting the old one and its segments. That is
+   what makes the handler safe under at-least-once dispatch, and it means a re-run will discard any
+   corrections a later story lets an admin make.
 
 ## Tests
 

@@ -1,7 +1,7 @@
 import { pathToFileURL } from 'node:url';
 import { closeDatabase, requireDatabaseUrl, type EnvSource } from '@thp/db';
 import { logger } from '@thp/shared/observability/logger';
-import { STUB_HANDLERS } from './handlers';
+import { createHandlers } from './handlers';
 import { startWorkerLoop } from './loop';
 import { sweepAbandonedJobs } from './sweep';
 
@@ -61,7 +61,7 @@ export async function main(): Promise<void> {
   checkEnvironment();
   await sweepAbandonedJobs();
 
-  const loop = startWorkerLoop({ handlers: STUB_HANDLERS });
+  const loop = startWorkerLoop({ handlers: createHandlers() });
   installSignalHandlers(loop.stop);
 
   await loop.done;

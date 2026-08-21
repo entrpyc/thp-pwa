@@ -1,0 +1,9 @@
+{
+  "language": "en",
+  "confidence": 0.31,
+  "durationSeconds": 61.0,
+  "segments": [
+    { "startMs": 0, "endMs": 3200, "text": "the the and then it was" },
+    { "startMs": 3200, "endMs": 7400, "text": "something about a a a river maybe" }
+  ]
+}

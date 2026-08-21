@@ -26,6 +26,8 @@
       "@thp/shared/*": ["./packages/shared/src/*"],
       "@thp/db": ["./packages/db/src/index.ts"],
       "@thp/db/*": ["./packages/db/src/*"],
+      "@thp/media": ["./packages/media/src/index.ts"],
+      "@thp/media/*": ["./packages/media/src/*"],
       "@/*": ["./packages/web/src/*"]
     }
   }

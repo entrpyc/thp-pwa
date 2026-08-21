@@ -10,7 +10,7 @@ import {
 } from '@thp/db';
 import { PIPELINE_STEPS, type PipelineStep } from '@thp/shared';
 import { setLogSink, type LogLine } from '@thp/shared/observability/logger';
-import { STUB_PROVIDER_META } from '../../src/handlers';
+import { STUB_PROVIDER_META, type HandlerRegistry } from '../../src/handlers';
 import { startWorkerLoop, type WorkerLoop } from '../../src/loop';
 import { createThrowawayDatabase, type ThrowawayDatabase } from '../../../../tests/setup/throwaway-db';
 
@@ -19,8 +19,8 @@ import { createThrowawayDatabase, type ThrowawayDatabase } from '../../../../tes
  *
  * Everything here is about the loop's *shape* rather than about any step: that an empty queue is
  * the normal case and not a stopping condition, that work is taken one job at a time, and that
- * asking it to stop does not abandon the job in flight. The handlers are fakes, because a loop that
- * only behaved this way for real steps would not be a loop worth having.
+ * asking it to stop does not abandon the job in flight. The handlers are fakes throughout, because a
+ * loop that only behaved this way for real steps would not be a loop worth having.
  */
 describe('the worker loop', () => {
   let target: ThrowawayDatabase;
@@ -32,6 +32,20 @@ describe('the worker loop', () => {
 
   /** A poll interval short enough that the suite does not wait on it. */
   const POLL_MS = 20;
+
+  /**
+   * Both steps, doing nothing, succeeding — and marking themselves so the ledger stays readable.
+   *
+   * Passed explicitly rather than left to the loop's default. From Story 2 Ticket 03 the default is
+   * the real registry, and `transcribe` in it needs a bucket and a provider — which this suite has
+   * nothing to say about. What the loop does with a handler is what is under test here; that the
+   * default registry is the right one is asserted in run-job.test.ts, and that it works end to end
+   * in packages/web/tests/integration/upload-starts-the-pipeline.test.ts.
+   */
+  const succeeds: HandlerRegistry = {
+    transcribe: () => STUB_PROVIDER_META,
+    generate_draft: () => STUB_PROVIDER_META,
+  };
 
   async function queueJob(step: PipelineStep = 'transcribe'): Promise<JobRow> {
     recordings += 1;
@@ -100,7 +114,7 @@ describe('the worker loop', () => {
   });
 
   it('survives an empty queue and picks up work enqueued afterwards', async () => {
-    const loop = start();
+    const loop = start({ handlers: succeeds });
 
     // Several polls with nothing there. A loop that treated this as a stopping condition — or as an
     // error — would be dead by now, which is what the enqueue below detects.
@@ -199,13 +213,13 @@ describe('the worker loop', () => {
     expect(await statusOf(waiting.id)).toBe('pending');
   });
 
-  it('logs the claim, and runs the stubs it ships with by default', async () => {
+  it('logs the claim, and drains the whole chain rather than one step of it', async () => {
     const captured: LogLine[] = [];
     restoreSink();
     restoreSink = setLogSink((line) => captured.push(line));
 
     const job = await queueJob();
-    const loop = start(); // no handlers: the stubs this ticket ships
+    const loop = start({ handlers: succeeds });
 
     await waitFor('the chain to reach a draft', async () => {
       const rows = await sql<{ count: string }[]>`
@@ -217,7 +231,7 @@ describe('the worker loop', () => {
     loop.stop();
     await loop.done;
 
-    // Claimed, run, chained, run again — and both rows say they were stubs rather than work.
+    // Claimed, run, chained, run again — one claim per step, from one enqueue.
     const rows = await sql<{ step: string; provider_meta: unknown }[]>`
       select step::text as step, provider_meta from job
       where recording_id = ${job.recordingId} order by enqueued_at, id

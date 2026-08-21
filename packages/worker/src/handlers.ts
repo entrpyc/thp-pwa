@@ -1,5 +1,6 @@
 import type { JobRow, ProviderMeta } from '@thp/db';
 import type { PipelineStep } from '@thp/shared';
+import { createTranscribeHandler, type TranscribeDependencies } from './transcribe';
 
 /**
  * **What a pipeline step is, as far as the worker is concerned.**
@@ -34,23 +35,29 @@ export type HandlerRegistry = Readonly<Partial<Record<PipelineStep, JobHandler>>
 /**
  * The marker a stub handler leaves behind.
  *
- * **This is what keeps the ledger honest.** With stubs in place a recording reads as fully
- * processed while having no transcript and no draft, and the difference between "this step ran" and
- * "this step exists yet" would otherwise be invisible — a row that succeeded looks the same either
- * way. The marker makes it a query. Ticket 03 replaces the `transcribe` stub and the marker goes
- * with it; Story 3 does the same for `generate_draft`.
+ * **This is what keeps the ledger honest.** With a stub in place a recording reads as fully
+ * processed while having no draft, and the difference between "this step ran" and "this step exists
+ * yet" would otherwise be invisible — a row that succeeded looks the same either way. The marker
+ * makes it a query. Ticket 03 replaced the `transcribe` stub and its marker went with it; Story 3
+ * does the same for `generate_draft`, which is the last one left.
  */
 export const STUB_PROVIDER_META: ProviderMeta = { stub: true };
 
 /**
- * The handlers this ticket ships: both steps, doing nothing, succeeding.
+ * The steps this worker runs: `transcribe` for real, `generate_draft` still a stub.
  *
- * They exist so the chain runs green end to end today — an upload reaches `generate_draft`
- * succeeded, and the dispatch mechanism is provable without a provider behind it. Listed one by one
- * rather than generated from `PIPELINE_STEPS`, because a step silently acquiring a stub the day it
- * is added to the list is exactly the failure the "no handler" case exists to make loud.
+ * A function rather than a constant, because the real handler has dependencies — a provider, a
+ * bucket — and a module-level value would read the environment at import time. So a worker with
+ * nothing but drafts to run would refuse to start over an ASR key it never uses, and every test
+ * importing this module would need one.
+ *
+ * Listed one by one rather than generated from `PIPELINE_STEPS`, because a step silently acquiring
+ * a stub the day it is added to the list is exactly the failure the "no handler" case exists to
+ * make loud.
  */
-export const STUB_HANDLERS: HandlerRegistry = {
-  transcribe: () => STUB_PROVIDER_META,
-  generate_draft: () => STUB_PROVIDER_META,
-};
+export function createHandlers(deps: TranscribeDependencies = {}): HandlerRegistry {
+  return {
+    transcribe: createTranscribeHandler(deps),
+    generate_draft: () => STUB_PROVIDER_META,
+  };
+}

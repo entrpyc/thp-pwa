@@ -14,12 +14,20 @@ import {
   type UploadGrantPayload,
 } from '@thp/shared';
 import { setLogSink, type LogLine } from '@thp/shared/observability/logger';
-import { closeDatabase, createDatabase, type DatabaseHandle } from '@thp/db';
+import {
+  closeDatabase,
+  createDatabase,
+  findTranscriptByRecording,
+  listSegments,
+  type DatabaseHandle,
+} from '@thp/db';
 import { setQueue, type EnqueuedJob, type Queue } from '@/server/jobs/queue';
 import { finaliseUpload } from '@/server/recordings/service';
-import { mediaStore, mintOriginalKey, UPLOAD_GRANT_SECONDS } from '@/server/media/store';
+import { mediaStore, mintOriginalKey, UPLOAD_GRANT_SECONDS } from '@thp/media';
 import type { Actor } from '@/server/auth/policy';
 import { startWorkerLoop } from '../../../worker/src/loop';
+import { createHandlers } from '../../../worker/src/handlers';
+import { fakeTranscriber, type FakeScript } from '../../../worker/src/asr';
 import { closeTestDatabase, signedInAccount, type TestAccount } from '../support/accounts';
 
 /**
@@ -262,8 +270,20 @@ describe('finalising an upload', () => {
   }, 120_000);
 });
 
+/** What the provider would have said. The only thing in this suite that is not real. */
+const SCRIPT: FakeScript = {
+  language: 'en',
+  confidence: 0.94,
+  durationSeconds: 372.5,
+  segments: [
+    { startMs: 0, endMs: 4120, text: "Good morning, and welcome to this morning's teaching." },
+    { startMs: 4120, endMs: 9880, text: 'We are picking up where we left off last week.' },
+    { startMs: 9880, endMs: 15_340, text: 'Before we read, a word about why this matters.' },
+  ],
+};
+
 describe('presign, PUT, finalise, worker', () => {
-  it('leaves both steps succeeded, both marked as stubs', async () => {
+  it('leaves a recording with a transcript, its segments, and both steps succeeded', async () => {
     const captured: LogLine[] = [];
     const restoreSink = setLogSink((line) => captured.push(line));
 
@@ -276,8 +296,14 @@ describe('presign, PUT, finalise, worker', () => {
     );
     expect(created.status).toBe(201);
 
-    // The real loop, against the real ledger. Nothing told it about this upload.
-    const loop = startWorkerLoop({ executor: handle, pollIntervalMs: 20 });
+    // The real loop, against the real ledger and the real object store. Nothing told it about this
+    // upload. The transcriber is the fake, selected the way a deployment selects one — every other
+    // moving part is the one that ships.
+    const loop = startWorkerLoop({
+      executor: handle,
+      pollIntervalMs: 20,
+      handlers: createHandlers({ transcriber: fakeTranscriber(SCRIPT), executor: handle }),
+    });
     try {
       await waitFor('the pipeline to finish', async () => {
         const rows = await ledger(created.body.id);
@@ -293,15 +319,25 @@ describe('presign, PUT, finalise, worker', () => {
     expect(rows.map((row) => row.step)).toEqual([...PIPELINE_STEPS]);
     for (const row of rows) {
       expect(row.status).toBe('succeeded');
-      // Nothing was transcribed and nothing was drafted. The marker is what keeps the ledger honest
-      // about the difference between "this step ran" and "this step exists yet".
-      expect(row.provider_meta).toEqual({ stub: true });
       // One id, from the request that uploaded the file to the last step of its pipeline.
       expect(row.correlation_id).toBe(correlationId);
     }
 
+    // `transcribe` did real work and says what it cost; `generate_draft` is still a stub and says
+    // so, which is what keeps the ledger honest about which steps exist yet.
+    expect(rows[0]?.provider_meta).toMatchObject({ model: 'fake', durationSeconds: 372.5 });
+    expect(rows[1]?.provider_meta).toEqual({ stub: true });
+
+    // And the point of the whole chain: the recording has a transcript.
+    const transcript = await findTranscriptByRecording(created.body.id, handle);
+    expect(transcript?.language).toBe('en');
+    expect((await listSegments(transcript?.id ?? '', handle)).map((one) => one.text)).toEqual(
+      SCRIPT.segments.map((one) => one.text),
+    );
+
     const mine = captured.filter((line) => line['correlationId'] === correlationId);
     expect(mine.filter((line) => line.message === 'job.claimed')).toHaveLength(PIPELINE_STEPS.length);
     expect(mine.filter((line) => line.message === 'job.succeeded')).toHaveLength(PIPELINE_STEPS.length);
+    expect(mine.filter((line) => line.message === 'transcribe.succeeded')).toHaveLength(1);
   }, 180_000);
 });

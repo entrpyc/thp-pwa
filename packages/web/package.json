@@ -9,10 +9,9 @@
     "start": "next start"
   },
   "dependencies": {
-    "@aws-sdk/client-s3": "^3.1115.0",
-    "@aws-sdk/s3-request-presigner": "^3.1115.0",
     "@node-rs/argon2": "^2.1.0",
     "@thp/db": "*",
+    "@thp/media": "*",
     "@thp/shared": "*",
     "next": "^16.3.1",
     "nodemailer": "^7.0.13",

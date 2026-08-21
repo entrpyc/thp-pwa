@@ -1,4 +1,4 @@
-import { HeadObjectCommand, PutObjectCommand, S3Client } from '@aws-sdk/client-s3';
+import { GetObjectCommand, HeadObjectCommand, PutObjectCommand, S3Client } from '@aws-sdk/client-s3';
 import { getSignedUrl } from '@aws-sdk/s3-request-presigner';
 import { readMediaSettings } from './env';
 import type { MediaStore, StoredObject } from './store';
@@ -46,6 +46,15 @@ export function buildMediaStore(): MediaStore {
           signableHeaders: new Set(['content-type']),
         },
       );
+    },
+
+    async presignGet({ key, expiresInSeconds }) {
+      // No signable-headers set, unlike the `PUT`: a reader sends no headers worth binding, and the
+      // signature already covers the bucket, the key and the expiry — which is the whole of what a
+      // read grant is allowed to be.
+      return getSignedUrl(client, new GetObjectCommand({ Bucket: settings.bucket, Key: key }), {
+        expiresIn: expiresInSeconds,
+      });
     },
 
     async head(key: string): Promise<StoredObject | null> {

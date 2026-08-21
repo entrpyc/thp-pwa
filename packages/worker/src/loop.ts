@@ -2,7 +2,7 @@ import { claimNextJob, type Executor } from '@thp/db';
 import { PIPELINE_STEPS, type PipelineStep } from '@thp/shared';
 import { withCorrelationId } from '@thp/shared/observability/correlation';
 import { logger } from '@thp/shared/observability/logger';
-import { STUB_HANDLERS, type HandlerRegistry } from './handlers';
+import { createHandlers, type HandlerRegistry } from './handlers';
 import { runJob } from './run-job';
 
 /**
@@ -16,7 +16,7 @@ import { runJob } from './run-job';
 export const POLL_INTERVAL_MS = 2_000;
 
 export interface WorkerLoopOptions {
-  /** The steps this worker knows how to run. Defaults to the stubs this ticket ships. */
+  /** The steps this worker knows how to run. Defaults to the configured ones. */
   readonly handlers?: HandlerRegistry;
   /** The ordered pipeline the chain rule reads. */
   readonly steps?: readonly PipelineStep[];
@@ -51,7 +51,7 @@ export interface WorkerLoop {
  */
 export function startWorkerLoop(options: WorkerLoopOptions = {}): WorkerLoop {
   const {
-    handlers = STUB_HANDLERS,
+    handlers = createHandlers(),
     steps = PIPELINE_STEPS,
     executor,
     pollIntervalMs = POLL_INTERVAL_MS,

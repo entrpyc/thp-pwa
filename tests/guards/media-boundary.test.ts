@@ -42,7 +42,7 @@ describe('one media store module', () => {
     // file fail, which is what "one file, deliberately" has to mean.
     const violations = checkMediaBoundary(REPO_ROOT, []);
     expect(violations.map((violation) => violation.file)).toContain(
-      'packages/web/src/server/media/s3-store.ts',
+      'packages/media/src/s3-store.ts',
     );
   });
 });

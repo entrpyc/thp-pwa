@@ -1,10 +1,13 @@
 import { sql } from 'drizzle-orm';
 import {
+  check,
   date,
+  index,
   integer,
   jsonb,
   pgEnum,
   pgTable,
+  real,
   text,
   timestamp,
   uniqueIndex,
@@ -18,8 +21,8 @@ import { JOB_STATUSES, PIPELINE_STEPS, ROLES, UNFINISHED_JOB_STATUSES } from '@t
  *
  * **Tables arrive with the ticket that uses them.** Ticket 1 shipped the migration mechanism and the
  * two domain enums; ticket 2 added `user` and `session`; ticket 3 added `invitation`; ticket 4 added
- * `password_reset`. Story 2 Ticket 01 adds `recording`, and Ticket 02 the `job` ledger beneath it —
- * `transcript`, `segment`, `review_item` and the rest are still absent.
+ * `password_reset`. Story 2 Ticket 01 adds `recording`, Ticket 02 the `job` ledger beneath it, and
+ * Ticket 03 `transcript` and `segment` — `review_item` and the rest are still absent.
  *
  * The enums are **derived** from the shared TypeScript constants rather than restated beside them.
  * That is what keeps "each enum is declared exactly once in the repository" true, and it is
@@ -306,5 +309,99 @@ export const job = pgTable(
           UNFINISHED_JOB_STATUSES.map((status) => `'${status}'`).join(', '),
         )})`,
       ),
+  ],
+);
+
+/**
+ * What the machine heard (Story 2 Ticket 03) — one row per recording, and the parent of the
+ * segments that are the text.
+ *
+ * **One transcript per recording**, said by the database rather than by the handler that writes it:
+ * `recording_id` is unique, so docs/project/prd.md 4.4's one-to-one is a property of the table.
+ * Re-running `transcribe` deletes this row and writes a fresh one, which is what makes the handler
+ * survive the at-least-once dispatch it runs under.
+ *
+ * **There is no `text` column.** The segments are the text. A concatenated copy beside them would
+ * be a second source of truth that Story 5's per-segment correction would have to keep in step, and
+ * the only reader that wants the whole thing — Story 3's one call to Claude — can join the segments
+ * in the order they are already indexed by.
+ *
+ * `language` is a BCP-47 code and always reads `en` in this epic: English is pinned rather than
+ * detected (docs/project/prd.md 3.5.7). The column exists anyway, so a second language later is an
+ * adapter change rather than a migration and a back-fill over every transcript already written.
+ *
+ * `confidence` is what the provider says about the whole transcript, and it is `real` rather than
+ * `numeric` because it is a score compared against a threshold, not money. The check constraint is
+ * the range the gate assumes; a provider that answered outside it would otherwise pass the gate by
+ * accident.
+ */
+export const transcript = pgTable(
+  'transcript',
+  {
+    id: uuid('id').primaryKey().defaultRandom(),
+    /** Unique: one recording has at most one transcript, and the database is what says so. */
+    recordingId: uuid('recording_id')
+      .notNull()
+      .references(() => recording.id, { onDelete: 'cascade' }),
+    /** BCP-47. `en` throughout this epic — pinned, not detected. */
+    language: text('language').notNull(),
+    /** The provider's confidence in the whole transcript, 0..1. What the gate reads. */
+    confidence: real('confidence').notNull(),
+    createdAt: timestamp('created_at', { withTimezone: true }).notNull().defaultNow(),
+  },
+  (table) => [
+    uniqueIndex('transcript_recording_unique').on(table.recordingId),
+    check('transcript_confidence_range', sql`${table.confidence} between 0 and 1`),
+  ],
+);
+
+/**
+ * A timestamped segment — **the atom of the whole system**
+ * (docs/epics/epic-core-listening/architecture.md § Extension points).
+ *
+ * The columns are the fields of the `Segment` type in `@thp/shared`, matched rather than
+ * re-invented; tests/guards/segment-shape.test.ts fails the build if the two ever disagree. Notes,
+ * highlights, mind maps, search and Flow Tracker all resolve through `(recording_id, timestamp_ms)`
+ * in later epics, and this row is where that pair becomes real.
+ *
+ * `start_ms` is inclusive and `end_ms` exclusive, as the shared type's documentation already says.
+ * Milliseconds as integers, not seconds as floats: a seek lands on an integer or it lands on
+ * whatever the last rounding chose.
+ *
+ * **No embedding column.** [§3.9](docs/project/prd.md)/[§3.10](docs/project/prd.md) enable pgvector
+ * and `ALTER TABLE segment ADD embedding` in a later epic; adding it now is deferral quietly
+ * stopping being deferral, and the migration test asserts the exact column set rather than trusting
+ * this comment.
+ *
+ * `corrected_at` and `corrected_by_user_id` ship unwritten. They are here because the shared type
+ * has them — what a segment *is* includes who corrected it (docs/project/prd.md 3.5.5) — and Story
+ * 5 is what fills them in.
+ */
+export const segment = pgTable(
+  'segment',
+  {
+    id: uuid('id').primaryKey().defaultRandom(),
+    /** Cascades: replacing a transcript takes its segments with it, which is what a re-run does. */
+    transcriptId: uuid('transcript_id')
+      .notNull()
+      .references(() => transcript.id, { onDelete: 'cascade' }),
+    /** Inclusive start offset from the beginning of the recording, in milliseconds. */
+    startMs: integer('start_ms').notNull(),
+    /** Exclusive end offset from the beginning of the recording, in milliseconds. */
+    endMs: integer('end_ms').notNull(),
+    text: text('text').notNull(),
+    /** Set when a human has corrected the machine output. Story 5; nothing writes it yet. */
+    correctedAt: timestamp('corrected_at', { withTimezone: true }),
+    correctedByUserId: uuid('corrected_by_user_id').references(() => user.id, {
+      onDelete: 'set null',
+    }),
+  },
+  (table) => [
+    /**
+     * Playback order, and the lookup Story 5's follow-along makes on every tick: "which segment
+     * covers this offset". One index answers both, which is why the order is `(transcript, start)`
+     * rather than the other way round.
+     */
+    index('segment_transcript_start_idx').on(table.transcriptId, table.startMs),
   ],
 );

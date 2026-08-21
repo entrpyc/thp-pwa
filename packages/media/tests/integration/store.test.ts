@@ -1,5 +1,5 @@
 import { beforeAll, describe, expect, it, inject } from 'vitest';
-import { UPLOAD_GRANT_SECONDS, mediaStore, mintOriginalKey, type MediaStore } from '@/server/media/store';
+import { UPLOAD_GRANT_SECONDS, mediaStore, mintOriginalKey, type MediaStore } from '@thp/media';
 
 /**
  * The media store, driven against the **real** MinIO container rather than a stub.
@@ -128,6 +128,72 @@ describe('the bucket is never publicly readable', () => {
   it('refuses a listing of the bucket to an unsigned caller', async () => {
     const listing = await fetch(`${settings.MEDIA_ENDPOINT}/${settings.MEDIA_BUCKET}`);
     expect(listing.ok).toBe(false);
+  });
+});
+
+/**
+ * The presigned `GET` (Story 2 Ticket 03).
+ *
+ * The `PUT`'s counterpart, and the only way anything reads an object out of a bucket that is never
+ * publicly readable. The transcription handler hands one to the ASR provider; Story 4's playback
+ * hands one to the browser. Both properties that matter are properties of the store — that the URL
+ * genuinely fetches the bytes, and that it genuinely stops doing so — so both are driven against
+ * MinIO rather than asserted about a query string.
+ */
+describe('a presigned GET', () => {
+  /** Put an object there and hand back its key, so a read has something to read. */
+  async function stored(size = 48): Promise<{ key: string; body: Uint8Array }> {
+    const key = mintOriginalKey(AUDIO);
+    const body = bytes(size);
+    const url = await store.presignPut({ key, contentType: AUDIO, expiresInSeconds: 3600 });
+    const put = await fetch(url, { method: 'PUT', headers: { 'content-type': AUDIO }, body });
+    expect(put.status).toBe(200);
+    return { key, body };
+  }
+
+  it('fetches the object it was minted for, byte for byte', async () => {
+    const { key, body } = await stored(96);
+
+    const url = await store.presignGet({ key, expiresInSeconds: 3600 });
+    const response = await fetch(url);
+
+    expect(response.status).toBe(200);
+    expect(new Uint8Array(await response.arrayBuffer())).toEqual(body);
+  });
+
+  it('is refused once it has expired', async () => {
+    const { key } = await stored();
+    const url = await store.presignGet({ key, expiresInSeconds: 1 });
+    // It works while it is alive — otherwise the refusal below would prove nothing about expiry.
+    expect((await fetch(url)).status).toBe(200);
+
+    await new Promise((done) => setTimeout(done, 2_500));
+
+    const response = await fetch(url);
+    expect(response.ok).toBe(false);
+    expect(response.status).toBe(403);
+  }, 30_000);
+
+  it('carries the expiry it was asked for, on the wire', async () => {
+    const { key } = await stored();
+    const url = await store.presignGet({ key, expiresInSeconds: 7_200 });
+    // The store enforces this number, not us.
+    expect(new URL(url).searchParams.get('X-Amz-Expires')).toBe('7200');
+  });
+
+  it('authorises that key and no other', async () => {
+    const first = await stored();
+    const second = await stored();
+
+    const url = await store.presignGet({ key: first.key, expiresInSeconds: 3600 });
+    const swapped = url.replace(first.key.split('/')[1] ?? '', second.key.split('/')[1] ?? '');
+
+    // The key is part of what was signed, so pointing a grant at a neighbour fails the signature
+    // rather than handing over the neighbour.
+    expect(swapped).not.toBe(url);
+    const response = await fetch(swapped);
+    expect(response.ok).toBe(false);
+    expect(response.status).toBe(403);
   });
 });
 

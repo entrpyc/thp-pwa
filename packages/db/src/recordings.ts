@@ -1,4 +1,4 @@
-import { desc } from 'drizzle-orm';
+import { desc, eq } from 'drizzle-orm';
 import { getDatabase, queryable, type Executor } from './client';
 import { recording } from './schema';
 
@@ -48,6 +48,25 @@ export async function insertRecording(
   const row = rows[0] as RecordingRow | undefined;
   if (!row) throw new Error('insertRecording returned no row');
   return row;
+}
+
+/**
+ * One recording, or `null`.
+ *
+ * The worker's way in: a job names a recording and nothing else, so a handler's first question is
+ * always "which object is this". `null` rather than a throw, because a job whose recording is gone
+ * is a case the handler refuses in its own words.
+ */
+export async function findRecordingById(
+  id: string,
+  executor: Executor = getDatabase(),
+): Promise<RecordingRow | null> {
+  const rows = await queryable(executor)
+    .select()
+    .from(recording)
+    .where(eq(recording.id, id))
+    .limit(1);
+  return (rows[0] as RecordingRow | undefined) ?? null;
 }
 
 /**
