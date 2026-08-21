@@ -10,9 +10,9 @@ export const dynamic = 'force-dynamic';
  * `POST /api/v1/users/:id/deactivate`.
  *
  * `POST` to a named sub-resource rather than `DELETE /users/:id`, because **deactivation is not
- * deletion** (docs/prd.md, 3.1.7): the account, its password and everything it authored stay
+ * deletion** (docs/project/prd.md, 3.1.7): the account, its password and everything it authored stay
  * exactly where they are. A `DELETE` would name the wrong thing, and self-service deletion
- * ([3.1.8](../../../../../../../docs/prd.md)) is a different requirement in a later slice.
+ * ([3.1.8](docs/project/prd.md)) is a different requirement in a later epic.
  *
  * Refused when it would leave no active admin — by the write, not by this route.
  */

@@ -11,7 +11,7 @@ export const dynamic = 'force-dynamic';
  *
  * Admin-only through the policy module, which is what makes "a member cannot read the member list"
  * a refusal the API issues rather than a control the interface happens not to render. There is no
- * interface yet; docs/implementation-plan.md § Step 5 builds it over this.
+ * interface yet; docs/epics/epic-core-listening/implementation-plan.md § Ticket 5 builds it over this.
  *
  * **No password hash and no token of any kind**, which is a property of `AccountSummary` rather than
  * of this handler remembering to strip one.

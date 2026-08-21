@@ -153,7 +153,7 @@ export function formatStyleViolations(violations: readonly StyleViolation[]): st
 /**
  * The same rule, applied to TypeScript.
  *
- * Step 3 introduced a surface no stylesheet can reach: **the invitation email**. Mail clients do
+ * Ticket 3 introduced a surface no stylesheet can reach: **the invitation email**. Mail clients do
  * not support CSS custom properties and several strip `<style>` blocks entirely, so the template
  * has to inline literal values — which means the guard above, scanning only `.css`, would not see
  * the one place in the codebase where a raw colour actually appears.

@@ -1,8 +1,8 @@
 /*
  * The authenticated landing.
  *
- * Deliberately almost nothing: step 2 owns sign-in and sign-out, and every other screen has a
- * design reference and arrives with the step that owns it. This exists so there is somewhere for a
+ * Deliberately almost nothing: ticket 2 owns sign-in and sign-out, and every other screen has a
+ * design reference and arrives with the ticket that owns it. This exists so there is somewhere for a
  * signed-in person to *be*, and somewhere for the sign-out control to live. `pages/dashboard.png`
  * replaces it wholesale.
  *

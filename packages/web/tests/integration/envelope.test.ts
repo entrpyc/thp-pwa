@@ -8,10 +8,10 @@ const databaseUrl = inject('databaseUrl');
 const api = (path: string) => `${baseUrl}${API_PREFIX}${path}`;
 
 /**
- * From step 2 the diagnostics routes require a session like everything else, so this suite signs in
+ * From ticket 2 the diagnostics routes require a session like everything else, so this suite signs in
  * first and carries the cookie. A request without one never reaches the envelope behaviour being
- * tested, because it is refused before the handler runs — which is step 2 working, not a regression
- * in step 1. Health stays anonymous: it is on the allowlist.
+ * tested, because it is refused before the handler runs — which is ticket 2 working, not a regression
+ * in ticket 1. Health stays anonymous: it is on the allowlist.
  */
 let cookie = '';
 const withSession = (init: RequestInit = {}): RequestInit => ({

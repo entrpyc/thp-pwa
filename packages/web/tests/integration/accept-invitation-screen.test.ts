@@ -17,7 +17,7 @@ import { mailOffset, tokenFromMail, waitForMail } from '../support/mail';
  * The accept-invitation screen, driven in a real browser.
  *
  * There is no `pages/accept-invitation.png`; by operator decision it is composed from the style
- * guide, on step 2's token layer. What a PNG cannot answer anyway is what this file asks: whether a
+ * guide, on ticket 2's token layer. What a PNG cannot answer anyway is what this file asks: whether a
  * dead invitation shows a password field, whether the form submits without reloading, whether it
  * fits a phone, and whether it is operable by keyboard alone.
  */

@@ -8,7 +8,7 @@ import { can, type Actor, type PolicyAction, type PolicyResource } from './polic
  *
  * `apiRoute(permits(action), …)` is still the normal way, and it covers every role-only action.
  * What it cannot cover is an **owned** one: `permits` is evaluated when the module loads, so the
- * resource it carries is a constant, and ownership is a fact about the request. Step 4's
+ * resource it carries is a constant, and ownership is a fact about the request. Ticket 4's
  * `profile.update` is the first action of that kind.
  *
  * So the decision still happens in exactly one place — {@link can} — and the only thing that moves

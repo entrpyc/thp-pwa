@@ -2,22 +2,33 @@
 
 ## Do not build what is deferred
 
-This project runs one vertical slice at a time. Before
-adding any infrastructure, dependency or capability, check deliberately deferred section from the slice.
+This project runs one epic at a time. Before
+adding any infrastructure, dependency or capability, check the deliberately deferred section of the epic.
 
-Each one has a named home in a later slice. If you believe a step genuinely cannot be built without
+Each one has a named home in a later epic. If you believe a ticket genuinely cannot be built without
 one, say so and stop — that is a scope decision for the user, not something to solve in passing.
 
 ## Finish the phase, then stop
 
-Development follows the dev system — full-scope PRD → architecture → slice PRD → slice architecture
-→ implementation plan → per-step planning → implementation → validation. **Every phase ends by
-handing control back.** Present the work, name the open questions and assumptions, close with one
-sentence saying what runs next, and stop there.
+Development follows the dev system — full-scope PRD → full-scope architecture → epic PRD → epic
+architecture → implementation plan → per-ticket planning → implementation → story validation.
+**Every phase ends by handing control back.** Present the work, name the open questions and
+assumptions, close with one sentence saying what runs next, and stop there.
 
-Do not roll from one phase into the next unprompted — do not start coding a step you just planned,
-and do not plan the next step after validating one. Advancing is the user's call; auto-advancing is
-exactly the skimming risk the checkpoints exist to prevent.
+Do not roll from one phase into the next unprompted — do not start coding a ticket you just
+planned, and do not plan the next ticket after validating a story. Advancing is the user's call;
+auto-advancing is exactly the skimming risk the checkpoints exist to prevent.
+
+## Where the docs live
+
+- `docs/project/` — `prd.md`, `architecture.md`. Full scope, written once, permanent.
+- `docs/epics/epic-<name>/` — one folder per epic, kept forever: `prd.md`, `architecture.md`,
+  `implementation-plan.md`, and `stories/<story>/<NN>-<ticket>.md` for the ticket docs. Nothing
+  moves when an epic finishes; the next epic is a new folder beside it.
+- Current epic: [docs/epics/epic-core-listening/](docs/epics/epic-core-listening/).
+
+Cross-document links are repo-root-relative with a line anchor — `[3.2.4](docs/project/prd.md#L65)`
+— and are resolved by locating the heading, never guessed.
 
 ## Designing pages
 

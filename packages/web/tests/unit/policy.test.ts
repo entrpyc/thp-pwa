@@ -76,7 +76,7 @@ describe('the policy module answers (actor, action, resource)', () => {
 });
 
 /**
- * Step 4's addition: the resource parameter, which step 2 shipped and nothing read until now.
+ * Ticket 4's addition: the resource parameter, which ticket 2 shipped and nothing read until now.
  *
  * These assertions are deliberately made against the policy module alone, with no route and no
  * request involved. The claim being pinned is not "the profile route refuses" — it is that the

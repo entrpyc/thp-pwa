@@ -38,7 +38,7 @@ import {
  * invitation resendable — are all properties of the deployed thing, and importing a handler would
  * prove none of them.
  *
- * There is no admin interface yet ([Step 5] builds it), so the admin half is exercised over the API
+ * There is no admin interface yet ([Ticket 5] builds it), so the admin half is exercised over the API
  * alone. The invitee half has a screen, and it has its own file.
  */
 

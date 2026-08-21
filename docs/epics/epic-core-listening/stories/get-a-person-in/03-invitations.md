@@ -1,30 +1,30 @@
-# Step 3 — Invitations: issue, accept, revoke, resend
+# Ticket 3 — Invitations: issue, accept, revoke, resend
 
-> Phase 6 artefact for [implementation-plan.md § Step 3](../implementation-plan.md#L111).
-> Sections pulled: [3.1.3](../prd.md#L45); [3.1.4](../prd.md#L46);
-> [slice-prd.md § Slice flows → A](../slice-prd.md#L212);
-> [slice-architecture.md § Data model (slice) → Accounts](../slice-architecture.md#L229);
-> [slice-architecture.md § Key choices → Two inputs](../slice-architecture.md#L270), item 1.
-> Carried from step 2 because this step edits them:
-> [slice-architecture.md § Extension points](../slice-architecture.md#L323) (the allowlist) and
-> [architecture.md § Cross-cutting concerns](../architecture.md#L271) (gate logging).
+> Phase 6 artefact for [implementation plan § Ticket 3](docs/epics/epic-core-listening/implementation-plan.md#L111).
+> Sections pulled: [3.1.3](docs/project/prd.md#L45); [3.1.4](docs/project/prd.md#L46);
+> [epic prd § Epic flows → A](docs/epics/epic-core-listening/prd.md#L212);
+> [epic architecture § Data model (epic) → Accounts](docs/epics/epic-core-listening/architecture.md#L229);
+> [epic architecture § Key choices → Two inputs](docs/epics/epic-core-listening/architecture.md#L270), item 1.
+> Carried from ticket 2 because this ticket edits them:
+> [epic architecture § Extension points](docs/epics/epic-core-listening/architecture.md#L323) (the allowlist) and
+> [project architecture § Cross-cutting concerns](docs/project/architecture.md#L271) (gate logging).
 
-This is the first step that hands a token to someone who is not signed in, and the first that
+This is the first ticket that hands a token to someone who is not signed in, and the first that
 depends on a third party for a flow to complete at all. Two things follow. **The unauthenticated
 surface grows** — deliberately, by editing the named list, which is the seam
-[step 2](02-sessions-and-authorisation.md) built for exactly this. And **the mail adapter is a port
-before it is a provider**, because [architecture.md § Estimated running
-costs](../architecture.md#L343) budgets "a few dozen/month" and names no vendor — see assumption 1.
+[ticket 2](docs/epics/epic-core-listening/stories/get-a-person-in/02-sessions-and-authorisation.md) built for exactly this. And **the mail adapter is a port
+before it is a provider**, because [project architecture § Estimated running
+costs](docs/project/architecture.md#L343) budgets "a few dozen/month" and names no vendor — see assumption 1.
 
 Everything else here is ordinary: a table, a hashed token, four routes and one screen.
 
 ## The accept screen has no design reference
 
-Step 3's only user-facing screen is where an invitee sets a password. There is no
+Ticket 3's only user-facing screen is where an invitee sets a password. There is no
 `docs/design referencess png/pages/accept-invitation.png`, and none of the existing PNGs show it.
-Under [CLAUDE.md § Designing pages](../../CLAUDE.md) that is a stop-and-ask — so it is
-**assumption 8**, proposing the same carve-out step 2 already received: auth screens are composed
-from [the style guide](../design%20referencess%20png/style-guide.md), on the token layer step 2
+Under [CLAUDE.md § Designing pages](CLAUDE.md) that is a stop-and-ask — so it is
+**assumption 8**, proposing the same carve-out ticket 2 already received: auth screens are composed
+from [the style guide](docs/design%20referencess%20png/style-guide.md), on the token layer ticket 2
 landed. The invitation **email** is a second designed surface with no reference and its own
 constraint (assumption 9): email clients cannot read CSS custom properties, so it is the one place
 the style-token guard has to be answered rather than obeyed.
@@ -45,7 +45,7 @@ the style-token guard has to be answered rather than obeyed.
 - An invitation to an address that already has an account is refused — verified by seeding a user
   and asserting the issue route refuses with a distinct error code rather than creating a row.
 
-**Issuing** — [3.1.3](../prd.md#L45)
+**Issuing** — [3.1.3](docs/project/prd.md#L45)
 
 - An admin can invite an email with a role, and the response reports the pending invitation without
   the token — verified by an integration test asserting the payload carries `email`, `role`,
@@ -61,11 +61,11 @@ the style-token guard has to be answered rather than obeyed.
   `contributor` is refused as invalid input.
 - Issue, accept, revoke and resend are each logged with actor, action, target and timestamp under
   the request's correlation id — verified by capturing logs across one of each, per
-  [architecture.md § Cross-cutting concerns](../architecture.md#L271).
+  [project architecture § Cross-cutting concerns](docs/project/architecture.md#L271).
 - No log line, error message or API payload contains a raw invitation token — verified by a
   log-capture assertion across the full issue → accept path.
 
-**Accepting** — [3.1.3](../prd.md#L45), and the two allowlist entries
+**Accepting** — [3.1.3](docs/project/prd.md#L45), and the two allowlist entries
 
 - A held token previews the invitation without a session, returning the invited email and role and
   nothing else — verified anonymously against the preview route, asserting the payload has no other
@@ -82,14 +82,14 @@ the style-token guard has to be answered rather than obeyed.
   than "wrong".
 - A revoked token is refused — verified by revoking then accepting.
 - An unknown, malformed or empty token is refused cleanly rather than throwing — verified by sending
-  each and asserting the error envelope, not a `500` (the same defect class step 2's cookie decoding
+  each and asserting the error envelope, not a `500` (the same defect class ticket 2's cookie decoding
   produced).
 - A password below the shipped minimum is refused and no account is created — verified by asserting
   the refusal and an empty `user` table for that email.
 - Accepting when the address has since gained an account is refused — verified by seeding a user
   between issue and accept.
 
-**Revoke and resend** — [3.1.4](../prd.md#L46)
+**Revoke and resend** — [3.1.4](docs/project/prd.md#L46)
 
 - An admin can revoke a pending invitation, after which its token no longer accepts — verified by
   revoking and then attempting to accept.
@@ -104,7 +104,7 @@ the style-token guard has to be answered rather than obeyed.
 **The mail port**
 
 - Every outbound message goes through one module — verified by a source-level check that nothing
-  outside it imports the mail transport, in the same style as step 1's import-boundary guard.
+  outside it imports the mail transport, in the same style as ticket 1's import-boundary guard.
 - A send failure leaves the invitation in place and reports a distinct, retryable failure — verified
   by a transport stubbed to fail, asserting the row exists, the caller sees the retryable code, and
   a resend then succeeds.
@@ -122,9 +122,9 @@ the style-token guard has to be answered rather than obeyed.
   same test.
 - The screen works at phone, tablet and desktop widths with no horizontal scroll — verified at three
   viewport widths, per
-  [implementation-plan.md § Standing constraints](../implementation-plan.md#L32).
+  [implementation plan § Standing constraints](docs/epics/epic-core-listening/implementation-plan.md#L32).
 - The form is operable by keyboard alone and every field has a programmatic label — verified as in
-  step 2.
+  ticket 2.
 - No component declares a raw hex colour, pixel radius or ad-hoc spacing — the existing style-token
   guard, extended to the new stylesheets and answered for the email template per assumption 9.
 
@@ -138,7 +138,7 @@ the style-token guard has to be answered rather than obeyed.
 
 ## Feel requirements (manual-only) — approved before work starts
 
-The admin half of this step has no interface yet ([Step 5](../implementation-plan.md#L134) builds
+The admin half of this ticket has no interface yet ([Ticket 5](docs/epics/epic-core-listening/implementation-plan.md#L134) builds
 it), so these are the invitee's path and the email — which is the first thing this product ever
 sends to a person.
 
@@ -167,7 +167,7 @@ Confirmed by the operator at the start of the build. The rest were taken as writ
 | :-- | :--- |
 | 1 | **Resend, over SMTP.** The adapter names no vendor; `.env.example` ships `smtp.resend.com:465`, user `resend`, password an API key. The README carries the deliverability caveat: the `MAIL_FROM` domain must be verified with SPF and DKIM, and nothing in the application can detect that it is not. |
 | 3 | **Two allowlist entries**, as proposed — `GET` and `POST /api/v1/invitations/accept`. The preview is what lets a dead link say "expired" before anybody chooses a password. |
-| 8 | **The step-2 carve-out extends to the accept screen.** Composed from the style guide; its card, field, button and error line `composes` from `sign-in.module.css` rather than restating them, so the four extrapolations documented there are stated once. |
+| 8 | **The ticket-2 carve-out extends to the accept screen.** Composed from the style guide; its card, field, button and error line `composes` from `sign-in.module.css` rather than restating them, so the four extrapolations documented there are stated once. |
 | 9 | **The email template inlines literal token values** from `server/mail/theme.ts`, the only file allowed to spell a colour out. A unit test asserts every value equals the token it copies, and the source-colour guard exempts that one path **by name**. |
 
 ## Assumptions to confirm
@@ -175,14 +175,14 @@ Confirmed by the operator at the start of the build. The rest were taken as writ
 Implementation does not start until these are settled. **1, 3, 8 and 9 are the ones that matter;**
 the rest are cheap defaults.
 
-1. **The email provider — the one genuine vendor decision in this step.** Nothing in the PRD or
-   either architecture names one; [architecture.md § Estimated running
-   costs](../architecture.md#L343) budgets $0 at launch, $15 at scale for "a few dozen/month".
+1. **The email provider — the one genuine vendor decision in this ticket.** Nothing in the PRD or
+   either architecture names one; [project architecture § Estimated running
+   costs](docs/project/architecture.md#L343) budgets $0 at launch, $15 at scale for "a few dozen/month".
    Assumed: **a `Mailer` port with one SMTP adapter (`nodemailer`)**, configured by `MAIL_*`
    environment variables, on the reasoning that SMTP is the one interface every candidate speaks —
    so choosing between Resend, Postmark, Fastmail or a self-hosted relay becomes a change of four
    env values rather than a change of code, and it matches the self-hosting posture the rest of this
-   slice took. The alternative is committing now to one vendor's HTTP API. **Say which provider you
+   epic took. The alternative is committing now to one vendor's HTTP API. **Say which provider you
    intend to actually use** even if the adapter stays SMTP, because it decides what goes in
    `.env.example` and what the deliverability caveat in the README says.
 2. **How tests and development observe an outgoing mail.** Assumed: a second transport, `capture`,
@@ -191,8 +191,8 @@ the rest are cheap defaults.
    in a browser, which is what makes feel requirement 1 checkable. **No Mailpit container** — that
    is infrastructure for something a file already does, and this project does not add infrastructure
    by reflex. Overrule it if you want to eyeball real rendering in a real client during development.
-3. **The allowlist gains two entries this step, not one.**
-   [slice-architecture.md § Extension points](../slice-architecture.md#L323) anticipates step 3
+3. **The allowlist gains two entries this ticket, not one.**
+   [epic architecture § Extension points](docs/epics/epic-core-listening/architecture.md#L323) anticipates ticket 3
    adding *one*. Assumed: **two** — `GET /api/v1/invitations/accept` (preview) and
    `POST /api/v1/invitations/accept`. The preview is what lets an expired link say "expired" before
    someone chooses a password, and it discloses only the address the token was mailed to. Neither
@@ -205,34 +205,34 @@ the rest are cheap defaults.
    index on `lower(email)` where `revoked_at is null and accepted_at is null`, mirroring the
    `user.email` precedent. Consequence: inviting an address that already has a pending invitation is
    refused with a message pointing at resend, rather than quietly creating a second live token.
-6. **Accepting signs you in.** [slice-prd.md § Slice flows → A](../slice-prd.md#L212) says the
+6. **Accepting signs you in.** [epic prd § Epic flows → A](docs/epics/epic-core-listening/prd.md#L212) says the
    invitee "sets a password → signs in and lands on the library". Assumed: accept issues a session
    in the same response, so there is no sign-in form between the two. (The library does not exist
-   yet; the landing is step 2's authenticated placeholder.)
+   yet; the landing is ticket 2's authenticated placeholder.)
 7. **A send failure does not destroy the invitation.** Assumed: the row is written, then the message
    is sent; a transport failure returns `service_unavailable` and leaves the invitation pending and
    resendable. The alternative — roll back on send failure — loses the record of an intent the admin
    already expressed, and resend exists precisely for this.
-8. **The accept screen is composed from the style guide, not from a PNG.** Assumed: the step-2
+8. **The accept screen is composed from the style guide, not from a PNG.** Assumed: the ticket-2
    carve-out extends to it, since it is an auth screen and the token layer already exists. The file
    I would otherwise be asking for is
-   `docs/design referencess png/pages/accept-invitation.png`. It reuses step 2's field, button,
-   error line and centred-card recipes unchanged — this step invents no new component.
+   `docs/design referencess png/pages/accept-invitation.png`. It reuses ticket 2's field, button,
+   error line and centred-card recipes unchanged — this ticket invents no new component.
 9. **The email template cannot use tokens, so it uses their values.** Email clients do not support
    CSS custom properties, and several strip `<style>` blocks entirely. Assumed: the template is
    mostly-text, inline-styled with the *literal values* from the guide's *Quick token block*,
    generated from the same source the token layer reads so the two cannot drift — and the
    style-token guard exempts that one file by name rather than by pattern. This is the only place in
    the codebase allowed a literal colour, and it should be the only one.
-10. **Password rules are set here and reused by step 4.** Nothing in [§3.1](../prd.md#L31) states
+10. **Password rules are set here and reused by ticket 4.** Nothing in [§3.1](docs/project/prd.md#L31) states
     one. Assumed: the same minimum the seed-admin command already enforces, extracted into one
-    shared module so the invite-accept screen, the seed command and step 4's reset cannot disagree.
-11. **The listing route lands here, not in step 5.**
-    [implementation-plan.md § Step 5](../implementation-plan.md#L134) is described as "the UI over
-    steps 3 and 4", so the pending-invitations *query* belongs to this step and step 5 renders it.
-12. **No rate limiting, still.** Carried from step 2's assumption 10 — neither the accept routes nor
+    shared module so the invite-accept screen, the seed command and ticket 4's reset cannot disagree.
+11. **The listing route lands here, not in ticket 5.**
+    [implementation plan § Ticket 5](docs/epics/epic-core-listening/implementation-plan.md#L134) is described as "the UI over
+    tickets 3 and 4", so the pending-invitations *query* belongs to this ticket and ticket 5 renders it.
+12. **No rate limiting, still.** Carried from ticket 2's assumption 10 — neither the accept routes nor
     the issue route are throttled, and no lockout exists. Constant-time comparison and uniform
-    failures are kept. This is the second step where it is worth a deliberate "still no", because
+    failures are kept. This is the second ticket where it is worth a deliberate "still no", because
     accept is now an unauthenticated route that takes a guess.
 
 ## Scope
@@ -245,12 +245,12 @@ accept-invitation screen and its expired/revoked/unknown dead ends; gate logging
 transitions; `.env.example` and README entries for the mail configuration.
 
 **Out:** the admin console and any interface for issuing, listing, revoking or resending
-([Step 5](../implementation-plan.md#L134)) — the admin half of this step is exercised over the API
-only. Password reset ([3.1.6](../prd.md#L48)), deactivation, the last-admin guard
-([3.1.11](../prd.md#L53)) and profile editing ([Step 4](../implementation-plan.md#L123)). Changing
-an existing user's role ([3.1.5](../prd.md#L47)) — an invitation is for an address with no account.
-Any email other than the invitation: no reset mail until step 4, no summary-ready notification
-([§3.17](../prd.md#L361) is deferred), no digests. Bounce, complaint or delivery-status handling.
+([Ticket 5](docs/epics/epic-core-listening/implementation-plan.md#L134)) — the admin half of this ticket is exercised over the API
+only. Password reset ([3.1.6](docs/project/prd.md#L48)), deactivation, the last-admin guard
+([3.1.11](docs/project/prd.md#L53)) and profile editing ([Ticket 4](docs/epics/epic-core-listening/implementation-plan.md#L123)). Changing
+an existing user's role ([3.1.5](docs/project/prd.md#L47)) — an invitation is for an address with no account.
+Any email other than the invitation: no reset mail until ticket 4, no summary-ready notification
+([§3.17](docs/project/prd.md#L361) is deferred), no digests. Bounce, complaint or delivery-status handling.
 Magic-link or passwordless sign-in. Bulk or CSV invitation. `contributor` in any form. Rate
 limiting, lockout, 2FA. Anything in
-[slice-architecture.md § Deliberately deferred](../slice-architecture.md#L341).
+[epic architecture § Deliberately deferred](docs/epics/epic-core-listening/architecture.md#L341).

@@ -9,7 +9,7 @@ const logPath = inject('apiLogPath');
 const api = (path: string) => `${baseUrl}${API_PREFIX}${path}`;
 
 /**
- * From step 2 the diagnostics routes require a session, so this suite signs in first and sends the
+ * From ticket 2 the diagnostics routes require a session, so this suite signs in first and sends the
  * cookie with every request that is not the (allowlisted) health check.
  */
 let cookie = '';

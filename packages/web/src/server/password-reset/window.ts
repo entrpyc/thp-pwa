@@ -8,7 +8,7 @@
  * usable.
  *
  * **Sixty seconds between requests.** Not a rate limiter, and it does not pretend to be — there is
- * still no general rate limiting in this slice (carried from step 2's assumption 10 and step 3's
+ * still no general rate limiting in this epic (carried from ticket 2's assumption 10 and ticket 3's
  * assumption 12). But reset is a different exposure from accept: it is an unauthenticated route
  * that causes **mail to be sent to an arbitrary address**, which is a nuisance vector and a billed
  * one. A database check on the outstanding reset's age removes the cheapest version of that abuse

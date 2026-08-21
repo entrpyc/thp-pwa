@@ -1,7 +1,7 @@
 # Teaching Hub
 
-A TypeScript monorepo. Slice 01, step 2 — **a person can sign in, and can be refused.** On top of
-step 1's versioned `/api/v1` boundary (one JSON envelope, a correlation id on every request and log
+A TypeScript monorepo. Epic core-listening, ticket 2 — **a person can sign in, and can be refused.** On top of
+ticket 1's versioned `/api/v1` boundary (one JSON envelope, a correlation id on every request and log
 line, migrations applied by command, a health route) there is now an account, an HTTP-only session,
 a sign-in screen, and a single place where `(actor, action, resource)` is decided. Nothing else
 exists yet — no invitations, no uploads, no library.
@@ -179,7 +179,7 @@ signed in by the same response that creates the account — there is no sign-in 
   request's correlation id. No log line, error message or payload ever carries a raw token.
 
 There is no interface for issuing or managing them yet; that is the admin console, and it is the
-next step. Until then it is the API.
+next ticket. Until then it is the API.
 
 ### Email
 
@@ -243,7 +243,7 @@ guard that forbids colour literals in source exempts that one path **by name**, 
 
 The development database is [docker-compose.yml](docker-compose.yml): `pgvector/pgvector:pg17`,
 which ships PostgreSQL 17 with the `vector` extension installed as a package but **not enabled**.
-That is the required state — enabling it (`CREATE EXTENSION vector`) belongs to a later slice, and
+That is the required state — enabling it (`CREATE EXTENSION vector`) belongs to a later epic, and
 `packages/db/tests/integration/pgvector.test.ts` fails if either half of that is wrong.
 
 Any Postgres 17 works as long as pgvector is installed on the instance. On Debian/Ubuntu:

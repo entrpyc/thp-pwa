@@ -3,7 +3,7 @@
  *
  * There is no `pages/admin.png`; by operator decision the console takes the same carve-out steps
  * 2, 3 and 4 received, so it is composed from docs/design referencess png/style-guide.md and the
- * token layer. `pages/dashboard.png` is the *member* dashboard and belongs to a later step, and the
+ * token layer. `pages/dashboard.png` is the *member* dashboard and belongs to a later ticket, and the
  * top-navigation references carry no admin entry — so neither describes this screen.
  *
  * **It invents no component.** The field, the label, the solid submit and the error line are

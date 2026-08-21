@@ -3,7 +3,7 @@ import type { Role } from './roles';
 /**
  * The auth wire contract. The client and the API read the cookie name and the session payload
  * shape from here so neither can drift; nothing about *deciding* anything lives in this file —
- * authorisation is evaluated server-side only (docs/prd.md, 3.1.5).
+ * authorisation is evaluated server-side only (docs/project/prd.md, 3.1.5).
  */
 
 /** Name of the session cookie. Its value is an opaque token, never anything about the user. */

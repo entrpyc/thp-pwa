@@ -3,7 +3,7 @@ import { PIPELINE_STEPS } from '@thp/shared';
 
 /**
  * The worker process — a stub. It polls nothing: the job ledger arrives with
- * docs/implementation-plan.md Step 7, and until then this package exists only so the pipeline-step
+ * docs/epics/epic-core-listening/implementation-plan.md Ticket 7, and until then this package exists only so the pipeline-step
  * vocabulary has a third consumer and the monorepo boundaries are exercised from day one.
  */
 export function plannedSteps(): readonly string[] {

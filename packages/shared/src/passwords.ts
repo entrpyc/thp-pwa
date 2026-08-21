@@ -1,6 +1,6 @@
 /**
  * The password rules. **One statement of them for the whole product** — the seed-admin command,
- * the invitation-accept screen and (from step 4) password reset all read this module, so the three
+ * the invitation-accept screen and (from ticket 4) password reset all read this module, so the three
  * cannot disagree about what a usable password is.
  *
  * It lives in `shared` rather than in the API because the accept screen has to be able to *show*

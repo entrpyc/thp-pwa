@@ -43,7 +43,7 @@ export default async function setup(project: TestProject): Promise<() => Promise
   }
 
   // The servers get a database of their own, created on the same instance and dropped afterwards.
-  // From step 2 the suite writes rows — accounts, sessions — and it must not leave them in the
+  // From ticket 2 the suite writes rows — accounts, sessions — and it must not leave them in the
   // database the developer signs into. It also means every run starts from an empty `user` table,
   // so no test can quietly depend on what a previous run left behind.
   let appDatabase: ThrowawayDatabase | undefined;
@@ -60,7 +60,7 @@ export default async function setup(project: TestProject): Promise<() => Promise
 
     // The primary server's port is chosen **before** the build, because `NEXT_PUBLIC_API_ORIGIN` is
     // inlined into the client bundle at build time and the browser suite drives that bundle for
-    // real. The client has no same-host fallback by design (docs/prd.md, 5.2.2), so it has to be
+    // real. The client has no same-host fallback by design (docs/project/prd.md, 5.2.2), so it has to be
     // right.
     const primaryPort = await freePort();
     await buildNextApp(`http://127.0.0.1:${primaryPort}`);

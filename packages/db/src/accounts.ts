@@ -17,7 +17,7 @@ export interface UserRow {
   readonly role: Role;
   readonly createdAt: Date;
   readonly updatedAt: Date;
-  /** `null` while the account is active. Step 4's deactivation is this column and nothing else. */
+  /** `null` while the account is active. Ticket 4's deactivation is this column and nothing else. */
   readonly deactivatedAt: Date | null;
 }
 
@@ -71,7 +71,7 @@ export async function insertUser(
 }
 
 // ---------------------------------------------------------------------------------------------
-// The account lifecycle (step 4)
+// The account lifecycle (ticket 4)
 
 /**
  * The role column, bound once.
@@ -84,7 +84,7 @@ export async function insertUser(
 const { role: roleColumn } = user;
 
 /**
- * Every account, oldest first. Step 5 renders this; step 4 only has to be able to answer it.
+ * Every account, oldest first. Ticket 5 renders this; ticket 4 only has to be able to answer it.
  *
  * Selects the whole row: the caller turns it into a payload, and the payload type is what
  * guarantees no hash travels — not this function remembering to leave a column out.
@@ -139,7 +139,7 @@ function isAdmin(row: UserRow): boolean {
 }
 
 /**
- * **The last-admin invariant, enforced in the write rather than around it** (docs/prd.md, 3.1.11).
+ * **The last-admin invariant, enforced in the write rather than around it** (docs/project/prd.md, 3.1.11).
  *
  * Every write that could reduce the number of active admins — deactivating one, demoting one —
  * goes through here. Inside one transaction it
@@ -237,7 +237,7 @@ export async function reactivateUser(
 
 /**
  * Change a role. Guarded, because demoting the last active admin is the other half of
- * docs/prd.md 3.1.11, and a guard covering only deactivation would be a guard with a door in it.
+ * docs/project/prd.md 3.1.11, and a guard covering only deactivation would be a guard with a door in it.
  *
  * Setting an account to the role it already holds writes nothing and reports `unchanged`.
  */

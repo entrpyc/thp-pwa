@@ -3,8 +3,8 @@ import { MINIMUM_PASSWORD_LENGTH, PASSWORD_RULE_TEXT, checkPassword } from '@thp
 import { MINIMUM_PASSWORD_LENGTH as SEEDER_MINIMUM } from '@/server/auth/seed-admin';
 
 /**
- * Assumption 10 of the step plan: the password rules are set once and read by everything that
- * applies them. Step 4's reset joins the list; until then the seed command and the invitation
+ * Assumption 10 of the ticket plan: the password rules are set once and read by everything that
+ * applies them. Ticket 4's reset joins the list; until then the seed command and the invitation
  * accept route are the two, and this file is what stops them coming apart.
  */
 

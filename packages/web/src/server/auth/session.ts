@@ -13,7 +13,7 @@ import { toActor, type Actor } from './policy';
  *
  * The cookie value is 32 random bytes and says nothing — not the user id, not the email, not the
  * role. Everything about the caller is re-read from the database on every request, which is what
- * makes a role change (and, from step 4, a deactivation) take effect immediately rather than at
+ * makes a role change (and, from ticket 4, a deactivation) take effect immediately rather than at
  * the next sign-in.
  */
 
@@ -31,7 +31,7 @@ export const SESSION_LIFETIME_MS = 30 * 24 * 60 * 60 * 1000;
 const REFRESH_AFTER_MS = 60 * 60 * 1000;
 
 /**
- * The cookie value, and its digest. Both are the shared helpers in `./tokens`, which step 3's
+ * The cookie value, and its digest. Both are the shared helpers in `./tokens`, which ticket 3's
  * invitation tokens also read — same shape, same storage rule, one implementation.
  */
 export const generateSessionToken = generateToken;

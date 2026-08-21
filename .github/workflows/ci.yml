@@ -15,7 +15,7 @@ jobs:
     timeout-minutes: 20
 
     # PostgreSQL 17 with the `vector` extension installed as a package but NOT enabled — the exact
-    # state docs/steps/01-project-skeleton.md requires, and which the test suite asserts.
+    # state docs/epics/epic-core-listening/stories/get-a-person-in/01-project-skeleton.md requires, and which the test suite asserts.
     services:
       postgres:
         image: pgvector/pgvector:pg17

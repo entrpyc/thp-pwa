@@ -25,14 +25,14 @@ import { logger } from '@/server/observability/logger';
  * The admin half of the account lifecycle — listing, deactivating, reactivating, changing a role —
  * and the one self-service half, editing your own display name.
  *
- * There is no interface for any of it yet; docs/implementation-plan.md § Step 5 builds the console
- * over exactly these calls, exactly as it will over step 3's. Every rule below is therefore
+ * There is no interface for any of it yet; docs/epics/epic-core-listening/implementation-plan.md § Ticket 5 builds the console
+ * over exactly these calls, exactly as it will over ticket 3's. Every rule below is therefore
  * asserted against the **API**, because that is what has to hold against a direct request.
  *
  * Three things this module is careful about:
  *
  * 1. **Deactivation is not deletion.** The row, its password hash and everything it authored stay
- *    where they are (docs/prd.md, 3.1.7). What changes is that no session resolves to it, no
+ *    where they are (docs/project/prd.md, 3.1.7). What changes is that no session resolves to it, no
  *    password signs it in, and any reset it had in flight stops working.
  * 2. **The last-admin invariant belongs to the write.** This module reports the refusal; it does
  *    not decide it. The decision is a conditional write in `@thp/db`, because a count taken here and
@@ -129,10 +129,10 @@ function settle(
 }
 
 /**
- * End an account's access (docs/prd.md, 3.1.7).
+ * End an account's access (docs/project/prd.md, 3.1.7).
  *
  * The sessions are revoked **immediately**, not at the next expiry — that is the behaviour
- * docs/slice-architecture.md § Data model says server-side sessions exist to make possible, and
+ * docs/epics/epic-core-listening/architecture.md § Data model says server-side sessions exist to make possible, and
  * with a 30-day rolling window the difference between the two is a month. Any reset in flight is
  * revoked with them, so a link mailed a minute ago cannot be used to walk back in.
  */
@@ -161,7 +161,7 @@ export async function deactivateAccount(actor: Actor, id: string): Promise<Accou
 /**
  * Restore an account, after which it signs in again with the password it already had.
  *
- * docs/prd.md 3.1.7 names only deactivation. Reactivation is here because deactivation is a nullable
+ * docs/project/prd.md 3.1.7 names only deactivation. Reactivation is here because deactivation is a nullable
  * timestamp and the inverse is the same write, and because a console that can only ever disable
  * accounts is one mis-click away from a support ticket nobody can close.
  */

@@ -2,8 +2,8 @@
  * The role enum. Declared here exactly once for the whole repository: the client, the API, the
  * worker and the database layer all read it from this module rather than restating it.
  *
- * `contributor` is deliberately absent — slice 01 has two roles only
- * (docs/implementation-plan.md, Step 2).
+ * `contributor` is deliberately absent — this epic has two roles only
+ * (docs/epics/epic-core-listening/implementation-plan.md, Ticket 2).
  */
 export const ROLES = ['admin', 'member'] as const;
 

@@ -27,8 +27,8 @@ import { mailOffset, waitForMail } from '../support/mail';
  * Deactivation, reactivation, role change, the last-admin guard and profile editing — driven over
  * HTTP against the running server.
  *
- * **There is no interface for any of this yet** (docs/implementation-plan.md § Step 5 builds it),
- * which is not a gap in this file: docs/prd.md 3.1.11 says the invariant is enforced in the API, so
+ * **There is no interface for any of this yet** (docs/epics/epic-core-listening/implementation-plan.md § Ticket 5 builds it),
+ * which is not a gap in this file: docs/project/prd.md 3.1.11 says the invariant is enforced in the API, so
  * every assertion here is deliberately a direct request. A greyed-out button would satisfy none of
  * them.
  */
@@ -313,7 +313,7 @@ describe('reactivating an account', () => {
 
 describe('changing a role', () => {
   it('takes effect on the account’s next request, with no re-sign-in', async () => {
-    // This is what step 2's per-request re-read bought, asserted rather than assumed.
+    // This is what ticket 2's per-request re-read bought, asserted rather than assumed.
     const target = await signedInAccount(baseUrl, databaseUrl, ROLE.member, 'promoted');
     const adminOnly = `${baseUrl}${API_PREFIX}/diagnostics/admin-only`;
     expect((await call(adminOnly, { cookie: target.cookie })).status).toBe(403);

@@ -35,7 +35,7 @@ import {
 } from './window';
 
 /**
- * Requesting, previewing and completing a password reset (docs/prd.md, 3.1.6).
+ * Requesting, previewing and completing a password reset (docs/project/prd.md, 3.1.6).
  *
  * **The request route answers one payload, always.** Sent, unknown address, deactivated account,
  * malformed input, transport down — every one of them produces the same status, the same body and

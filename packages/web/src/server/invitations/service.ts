@@ -48,7 +48,7 @@ import { invitationExpiryFrom } from './window';
  *
  * Every transition logs actor, action and target. The logger supplies the timestamp and the
  * request's correlation id, so one search on that id returns the whole story
- * (docs/architecture.md § Cross-cutting concerns).
+ * (docs/project/architecture.md § Cross-cutting concerns).
  *
  * **Nothing here logs or returns a raw token**; the only place one appears is the accept URL handed
  * to the mailer.
@@ -100,7 +100,7 @@ export function acceptUrlFor(token: string): string {
 /**
  * A display name for an account created by accepting. The accept screen asks for a password and
  * nothing else — one field is the whole point — so the local part of the invited address stands in
- * until step 4 ships profile editing.
+ * until ticket 4 ships profile editing.
  */
 export function displayNameFor(email: string): string {
   const local = email.split('@')[0] ?? email;
@@ -334,7 +334,7 @@ export interface AcceptedInvitationResult {
 /**
  * Set a password, get an account and a session in the same response.
  *
- * There is no sign-in form between the two — docs/slice-prd.md § Slice flows → A says the invitee
+ * There is no sign-in form between the two — docs/epics/epic-core-listening/prd.md § Epic flows → A says the invitee
  * "sets a password → signs in", and a screen that hands somebody an account and then asks them to
  * authenticate against it has made them do the same thing twice.
  */

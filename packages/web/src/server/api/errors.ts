@@ -141,7 +141,7 @@ export class ApiError extends Error {
   }
 
   /**
-   * Refused because it would leave the product with no active admin (docs/prd.md, 3.1.11).
+   * Refused because it would leave the product with no active admin (docs/project/prd.md, 3.1.11).
    *
    * Its own code rather than `forbidden`, because the caller *was* permitted: what refused is an
    * invariant, not a permission. The message says which invariant, so an operator reads a guardrail

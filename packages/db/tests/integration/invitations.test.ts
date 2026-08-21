@@ -49,7 +49,7 @@ describe('the invitation schema', () => {
     await target?.drop();
   }, 60_000);
 
-  it('gives `invitation` exactly the columns step 3 owns', async () => {
+  it('gives `invitation` exactly the columns ticket 3 owns', async () => {
     const columns = await sql<{ column_name: string; is_nullable: string }[]>`
       select column_name, is_nullable
       from information_schema.columns

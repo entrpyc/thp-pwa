@@ -16,7 +16,7 @@ import { hashPassword } from './password';
 
 /**
  * The password rules are **not** stated here. They live in `@thp/shared` (`checkPassword`), which
- * step 3's invitation-accept screen and step 4's reset both read, so the three cannot disagree
+ * ticket 3's invitation-accept screen and ticket 4's reset both read, so the three cannot disagree
  * about what a usable password is. Re-exported for the callers that already named it here.
  */
 export { MINIMUM_PASSWORD_LENGTH } from '@thp/shared';

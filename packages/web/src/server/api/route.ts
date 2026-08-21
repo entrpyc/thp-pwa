@@ -44,7 +44,7 @@ const GENERIC_INTERNAL_MESSAGE =
  * permitted to tell the client, and **whether the caller is allowed in at all**.
  *
  * Access is the first argument and is not optional. That is the whole mechanism behind
- * docs/prd.md 3.1.2 — a route cannot be written without saying who may call it, so "every route
+ * docs/project/prd.md 3.1.2 — a route cannot be written without saying who may call it, so "every route
  * requires a session" is a property of the type system rather than of code review.
  */
 export function apiRoute<TAccess extends RouteAccess>(

@@ -1,50 +1,50 @@
-# Step 4 — Account lifecycle: reset, deactivation, last-admin guard, profile
+# Ticket 4 — Account lifecycle: reset, deactivation, last-admin guard, profile
 
-> Phase 6 artefact for [implementation-plan.md § Step 4](../implementation-plan.md#L123).
-> Sections pulled: [3.1.6](../prd.md#L48); [3.1.7](../prd.md#L49); [3.1.11](../prd.md#L53);
-> [3.1.12](../prd.md#L54) — display name only, avatar deferred;
-> [slice-prd.md § In scope → 1](../slice-prd.md#L35).
-> Carried in because this step edits them: [3.1.5](../prd.md#L47) (role change — see the scope note
-> below), [slice-architecture.md § Data model (slice) → Accounts](../slice-architecture.md#L229),
-> [slice-architecture.md § Extension points](../slice-architecture.md#L323) (the allowlist), and
-> [architecture.md § Cross-cutting concerns](../architecture.md#L271) (gate logging).
+> Phase 6 artefact for [implementation plan § Ticket 4](docs/epics/epic-core-listening/implementation-plan.md#L123).
+> Sections pulled: [3.1.6](docs/project/prd.md#L48); [3.1.7](docs/project/prd.md#L49); [3.1.11](docs/project/prd.md#L53);
+> [3.1.12](docs/project/prd.md#L54) — display name only, avatar deferred;
+> [epic prd § In scope → 1](docs/epics/epic-core-listening/prd.md#L35).
+> Carried in because this ticket edits them: [3.1.5](docs/project/prd.md#L47) (role change — see the scope note
+> below), [epic architecture § Data model (epic) → Accounts](docs/epics/epic-core-listening/architecture.md#L229),
+> [epic architecture § Extension points](docs/epics/epic-core-listening/architecture.md#L323) (the allowlist), and
+> [project architecture § Cross-cutting concerns](docs/project/architecture.md#L271) (gate logging).
 
 Four things that look unrelated and are not. Each one is a way an account **stops being what it
 was** — its password, its ability to sign in, its role, its name — and all four have to hold against
-a live session issued before the change. That is the property this step is really about, and it is
-cheap only because step 2 made sessions server-side records and re-reads the account row on every
+a live session issued before the change. That is the property this ticket is really about, and it is
+cheap only because ticket 2 made sessions server-side records and re-reads the account row on every
 request.
 
 Three seams built ahead get their first real use here:
 
-- **`PolicyResource`.** Step 2 shipped `can(actor, action, resource)` with the resource ignored
+- **`PolicyResource`.** Ticket 2 shipped `can(actor, action, resource)` with the resource ignored
   (`_resource`). Editing your own display name is the first **owned** resource in the product, so
   `can` starts reading it. Every later owned thing — a note, a highlight, a progress row — is that
   same shape.
 - **The allowlist.** Reset is the second unauthenticated flow, and it grows the named list
   deliberately ([assumption 3](#assumptions-to-confirm)).
-- **The `Mailer` port.** Reset is the second message, and the first proof that step 3 built a mail
+- **The `Mailer` port.** Reset is the second message, and the first proof that ticket 3 built a mail
   *port* rather than an invitation mailer with a general-sounding name.
 
-## One thing this step has to absorb from step 3's scope edge
+## One thing this ticket has to absorb from ticket 3's scope edge
 
-[03-invitations.md](03-invitations.md) puts *"changing an existing user's role
-([3.1.5](../prd.md#L47))"* out of step 3, and [Step 5](../implementation-plan.md#L134) is described
-as *"the UI over steps 3 and 4"* — a renderer, not a place new API behaviour lands. So **no route
-that changes a role exists yet**, and [3.1.11](../prd.md#L53) says the system *"prevents removal or
+[03-invitations.md](docs/epics/epic-core-listening/stories/get-a-person-in/03-invitations.md) puts *"changing an existing user's role
+([3.1.5](docs/project/prd.md#L47))"* out of ticket 3, and [Ticket 5](docs/epics/epic-core-listening/implementation-plan.md#L134) is described
+as *"the UI over tickets 3 and 4"* — a renderer, not a place new API behaviour lands. So **no route
+that changes a role exists yet**, and [3.1.11](docs/project/prd.md#L53) says the system *"prevents removal or
 demotion of the last remaining admin"*. A guard against demotion with nothing that demotes is
-untestable, and shipping demotion in step 5 would mean shipping it unguarded for one step.
+untestable, and shipping demotion in ticket 5 would mean shipping it unguarded for one ticket.
 
-**This step therefore ships the role-change route** and guards it. That is a deliberate widening of
-Step 4 as written in the plan, and it is [assumption 7](#assumptions-to-confirm).
+**This ticket therefore ships the role-change route** and guards it. That is a deliberate widening of
+Ticket 4 as written in the plan, and it is [assumption 7](#assumptions-to-confirm).
 
 ## Two screens with no design reference
 
 `/forgot-password` and `/reset-password` have no PNG under
-[docs/design referencess png/](../design%20referencess%20png/), and none of the existing references
-show them. Under [CLAUDE.md § Designing pages](../../CLAUDE.md) that is a stop-and-ask — so it is
-[assumption 9](#assumptions-to-confirm), proposing the same carve-out steps 2 and 3 already
-received. The **reset email** is the second designed mail surface and inherits step 3's settled
+[docs/design referencess png/](docs/design%20referencess%20png/), and none of the existing references
+show them. Under [CLAUDE.md § Designing pages](CLAUDE.md) that is a stop-and-ask — so it is
+[assumption 9](#assumptions-to-confirm), proposing the same carve-out tickets 2 and 3 already
+received. The **reset email** is the second designed mail surface and inherits ticket 3's settled
 answer for it (`theme.ts`, literal token values, the style guard's one exemption by name).
 
 ---
@@ -55,7 +55,7 @@ answer for it (`theme.ts`, literal token values, the style guard's one exemption
 
 - `user` gains `deactivated_at` (nullable, timestamptz) and nothing else — verified by a migration
   test asserting the new column set, that existing rows migrate to `null`, and that
-  `preferred_playback_speed` is still absent (it is step 15's).
+  `preferred_playback_speed` is still absent (it is ticket 15's).
 - `password_reset` exists with `user_id`, `token_hash`, `expires_at`, `used_at`, `revoked_at`, plus
   `id` and `created_at` — verified by a migration test asserting the column set and the cascade on
   `user_id`.
@@ -66,10 +66,10 @@ answer for it (`theme.ts`, literal token values, the style guard's one exemption
   pending / expired / used / revoked, mirroring `invitationStatus`.
 - Deactivation is a timestamp, not a deleted row — verified by asserting the `user` row, its
   `password_hash` and every `invitation` it issued (`invited_by`) survive deactivation intact, which
-  is [3.1.7](../prd.md#L49)'s "its authored content is retained" with the only authored content this
-  slice yet has.
+  is [3.1.7](docs/project/prd.md#L49)'s "its authored content is retained" with the only authored content this
+  epic yet has.
 
-### Password reset — [3.1.6](../prd.md#L48)
+### Password reset — [3.1.6](docs/project/prd.md#L48)
 
 **Requesting**
 
@@ -117,19 +117,19 @@ answer for it (`theme.ts`, literal token values, the style guard's one exemption
 - A reset for an account deactivated between request and completion is refused — verified by
   deactivating in between, asserting the refusal and that no session is issued.
 - No log line, error message or API payload contains a raw reset token — verified by a log-capture
-  assertion across the full request → complete path, as step 3 does for invitations.
+  assertion across the full request → complete path, as ticket 3 does for invitations.
 - Request and completion are each logged with actor, action, target and timestamp under the
   request's correlation id — verified by capturing logs across one of each, per
-  [architecture.md § Cross-cutting concerns](../architecture.md#L271).
+  [project architecture § Cross-cutting concerns](docs/project/architecture.md#L271).
 - The reset reads the *same* password-rules module the accept screen and the seed command read —
   verified by a test asserting an identical refusal sentence for the same input across all three
   paths, so the three cannot disagree about what a usable password is.
 
-### Deactivation — [3.1.7](../prd.md#L49)
+### Deactivation — [3.1.7](docs/project/prd.md#L49)
 
 - An admin can deactivate an account and a member cannot — verified by exercising the route with a
   member session and asserting `forbidden`, per
-  [implementation-plan.md § Standing constraints](../implementation-plan.md#L32).
+  [implementation plan § Standing constraints](docs/epics/epic-core-listening/implementation-plan.md#L32).
 - A deactivated account cannot sign in — verified by deactivating and then signing in with the
   correct password.
 - The sign-in refusal for a deactivated account is a distinct code returned **only after the
@@ -139,7 +139,7 @@ answer for it (`theme.ts`, literal token values, the style guard's one exemption
 - Deactivating revokes every live session for that account immediately — verified by opening a
   session, deactivating, and asserting the next request with that cookie is refused. Not at the next
   expiry: this is the behaviour
-  [slice-architecture.md § Data model (slice)](../slice-architecture.md#L229) says server-side
+  [epic architecture § Data model (epic)](docs/epics/epic-core-listening/architecture.md#L229) says server-side
   sessions exist to make possible.
 - A session that survives revocation by any route still cannot act — verified by leaving a `session`
   row live in the database and asserting `actorForToken` refuses because the account is deactivated.
@@ -154,11 +154,11 @@ answer for it (`theme.ts`, literal token values, the style guard's one exemption
 - Deactivation and reactivation are each logged with actor, action, target and timestamp — verified
   by log capture.
 
-### The last-admin guard — [3.1.11](../prd.md#L53)
+### The last-admin guard — [3.1.11](docs/project/prd.md#L53)
 
 The invariant is **at least one active admin exists at all times**, and every requirement below is
 asserted against the **API**, not an interface — it has to hold against a direct request
-([slice-architecture.md § Next.js application — API half](../slice-architecture.md#L123)).
+([epic architecture § Next.js application — API half](docs/epics/epic-core-listening/architecture.md#L123)).
 
 - Deactivating the last active admin is refused and the account stays active — verified with exactly
   one admin in the fixture, asserting the refusal code and re-reading the row.
@@ -177,11 +177,11 @@ asserted against the **API**, not an interface — it has to hold against a dire
 - A refused deactivation or demotion is logged as a refusal with actor, action and target — verified
   by log capture.
 
-### Role change — [3.1.5](../prd.md#L47), and see [assumption 7](#assumptions-to-confirm)
+### Role change — [3.1.5](docs/project/prd.md#L47), and see [assumption 7](#assumptions-to-confirm)
 
 - An admin can change another account's role, and the change takes effect on that account's **next
   request** without a re-sign-in — verified by promoting a member holding a live session and
-  asserting an admin-only route then admits it. This is what step 2's per-request re-read bought.
+  asserting an admin-only route then admits it. This is what ticket 2's per-request re-read bought.
 - A member cannot change any role, including their own — verified with a member session against
   their own id and against another's.
 - Only roles this product has are acceptable — verified by asserting `contributor` is refused as
@@ -189,7 +189,7 @@ asserted against the **API**, not an interface — it has to hold against a dire
 - Setting an account to the role it already holds is a no-op reporting the current state rather than
   an error — verified by repeating a promotion.
 
-### Profile: display name — [3.1.12](../prd.md#L54)
+### Profile: display name — [3.1.12](docs/project/prd.md#L54)
 
 - A signed-in user can change their own display name, and the new name appears in the session
   payload on the next request — verified end to end.
@@ -205,7 +205,7 @@ asserted against the **API**, not an interface — it has to hold against a dire
 - A display name is stored as typed apart from trimming — verified by round-tripping a name with
   internal spacing and non-ASCII characters.
 - No avatar field exists anywhere in the schema, the payloads or the screens — verified by asserting
-  the column set and a source-level check, because [3.1.12](../prd.md#L54)'s avatar is deferred and
+  the column set and a source-level check, because [3.1.12](docs/project/prd.md#L54)'s avatar is deferred and
   a nullable column "for later" is how deferral quietly stops being deferral.
 
 ### The account listing — see [assumption 11](#assumptions-to-confirm)
@@ -239,13 +239,13 @@ asserted against the **API**, not an interface — it has to hold against a dire
   same test.
 - Both screens work at phone, tablet and desktop widths with no horizontal scroll — verified at
   three viewport widths, per
-  [implementation-plan.md § Standing constraints](../implementation-plan.md#L32).
+  [implementation plan § Standing constraints](docs/epics/epic-core-listening/implementation-plan.md#L32).
 - Both forms are operable by keyboard alone and every field has a programmatic label — verified as
-  in steps 2 and 3.
+  in tickets 2 and 3.
 - The sign-in screen offers a route to `/forgot-password` — verified by the sign-in screen test,
   because a reset flow nobody can reach from where they failed is a flow that does not exist.
 - No component declares a raw hex colour, pixel radius or ad-hoc spacing — the existing style-token
-  guard, extended to the new stylesheets, with the reset email answered exactly as step 3's settled
+  guard, extended to the new stylesheets, with the reset email answered exactly as ticket 3's settled
   decision 9 answers the invitation email.
 
 ### The reset email
@@ -255,7 +255,7 @@ asserted against the **API**, not an interface — it has to hold against a dire
 - It is sent as HTML with a plain-text alternative, and the plain-text part contains the same reset
   link — verified by asserting both parts and extracting the link from the text part.
 - Every literal colour in the template equals the token it copies — verified by the unit-test
-  pattern step 3 established for `theme.ts`.
+  pattern ticket 3 established for `theme.ts`.
 - It names no role and discloses nothing about the account beyond that a reset was requested —
   verified by asserting the rendered parts against a denylist of account fields.
 
@@ -263,7 +263,7 @@ asserted against the **API**, not an interface — it has to hold against a dire
 
 ## Feel requirements (manual-only) — approved before work starts
 
-The admin half of this step has no interface again ([Step 5](../implementation-plan.md#L134) builds
+The admin half of this ticket has no interface again ([Ticket 5](docs/epics/epic-core-listening/implementation-plan.md#L134) builds
 it), so these are the reset journey, the reset mail, and the one moment a deactivated person meets
 the product.
 
@@ -306,30 +306,30 @@ matter;** the rest are cheap defaults.
    keyed by an *address with no account* and creates one; a reset is keyed by an *existing account*
    and changes it. Sharing a table means a nullable `user_id`, a `kind` column and two sets of rules
    in one place — which is the "reviewable entity abstraction"
-   [implementation-plan.md § What this plan deliberately does not include](../implementation-plan.md#L372)
+   [implementation plan § What this plan deliberately does not include](docs/epics/epic-core-listening/implementation-plan.md#L372)
    rules out. Token shape is identical: 32 random bytes, base64url, SHA-256 at rest, the same
    `tokens.ts` helpers.
 
 2. **`can` starts reading its resource, and ownership is the rule.** Assumed: `profile.update` is
    permitted when `resource.ownerId === actor.id`, evaluated **inside the policy module** — the rule
    table gains an optional ownership predicate per action rather than routes comparing ids. This is
-   the first use of the parameter step 2 built ahead, and getting it wrong here is what would make
+   the first use of the parameter ticket 2 built ahead, and getting it wrong here is what would make
    every later owned resource compare ids at the call site. The alternative — a `/users/me`-only
    route with no id to check — is simpler today and does not generalise to a note or a highlight, so
    I would not take it.
 
 3. **The allowlist gains three entries, where the architecture anticipated one.**
-   [slice-architecture.md § Extension points](../slice-architecture.md#L339) says step 4 adds *one*.
+   [epic architecture § Extension points](docs/epics/epic-core-listening/architecture.md#L339) says ticket 4 adds *one*.
    Assumed: **three** — `POST /api/v1/auth/password-reset` (request),
    `GET /api/v1/auth/password-reset` (preview), and
-   `POST /api/v1/auth/password-reset/complete`. The preview is the same argument step 3 made and
+   `POST /api/v1/auth/password-reset/complete`. The preview is the same argument ticket 3 made and
    you accepted: it lets a dead link say "expired, ask for another" *before* somebody chooses a
    password, and it discloses only the address the token was already mailed to, to a caller already
    holding that token. The two-entry fallback is real and cheap — drop the preview, and the person
    learns the link is dead only after typing a new password. I think that is the wrong trade. It is
-   worth noticing separately that this is the third consecutive step to grow the list: **seven
+   worth noticing separately that this is the third consecutive ticket to grow the list: **seven
    entries after this one.** Every entry still holds the property the row protects, but the list is
-   no longer short, and step 5 should add none.
+   no longer short, and ticket 5 should add none.
 
 4. **A deactivated account is told so — but only after the password verifies.** Assumed: sign-in
    verifies the password first; a wrong password against a deactivated account answers
@@ -348,25 +348,25 @@ matter;** the rest are cheap defaults.
 6. **One live reset per account, and a re-send interval instead of a rate limiter.** Assumed:
    requesting a reset revokes any outstanding one, and a second request for the same address inside
    **60 seconds** answers identically but sends no second message. **Still no general rate
-   limiting** — third step running, carried from step 2's assumption 10 and step 3's assumption 12.
+   limiting** — third ticket running, carried from ticket 2's assumption 10 and ticket 3's assumption 12.
    But it is worth naming that reset is a different exposure from accept: it is an unauthenticated
    route that causes **mail to be sent to an arbitrary address**, which is a nuisance vector and a
    billed one. The 60-second interval is a database check, not infrastructure, and it removes the
    cheapest version of that abuse. It is not a rate limiter and does not pretend to be.
 
-7. **Role change ships here, guarded, rather than in step 5 unguarded.** As argued above. Assumed:
+7. **Role change ships here, guarded, rather than in ticket 5 unguarded.** As argued above. Assumed:
    `PATCH /api/v1/users/:id` carrying `role`, admin-only, with the last-admin guard on the demotion
-   path. If you would rather step 5 own it, then [3.1.11](../prd.md#L53)'s demotion half is
-   untestable this step and the guard ships half-covered — say so and I will plan it that way
+   path. If you would rather ticket 5 own it, then [3.1.11](docs/project/prd.md#L53)'s demotion half is
+   untestable this ticket and the guard ships half-covered — say so and I will plan it that way
    explicitly rather than leave it implied.
 
-8. **Reactivation is included.** [3.1.7](../prd.md#L49) names only deactivation. Assumed: an admin
+8. **Reactivation is included.** [3.1.7](docs/project/prd.md#L49) names only deactivation. Assumed: an admin
    can clear `deactivated_at`, because deactivation is a nullable timestamp and the inverse is the
    same write — and a console that can only ever disable accounts is one mis-click from a support
    ticket nobody can close. Cost is one route and one policy action.
 
-9. **The two reset screens are composed from the style guide, not from a PNG.** Assumed: the step-2
-   and step-3 carve-out extends to them. The files I would otherwise be asking for are
+9. **The two reset screens are composed from the style guide, not from a PNG.** Assumed: the ticket-2
+   and ticket-3 carve-out extends to them. The files I would otherwise be asking for are
    `docs/design referencess png/pages/forgot-password.png` and `reset-password.png`. They `compose`
    from `sign-in.module.css` exactly as `accept-invitation.module.css` does, inventing no new
    component — a field, a button, an error line, a centred card, and the dead-end state the accept
@@ -379,20 +379,20 @@ matter;** the rest are cheap defaults.
     and this is an invariant with no way back once broken: nobody left can promote anyone. The
     concurrency test above is what makes the difference observable.
 
-11. **The account listing lands here, not in step 5.** Same reasoning step 3's assumption 11 used
-    and you accepted: [Step 5](../implementation-plan.md#L134) is "the UI over steps 3 and 4", so
-    the query belongs to the step that owns the data and step 5 renders it.
+11. **The account listing lands here, not in ticket 5.** Same reasoning ticket 3's assumption 11 used
+    and you accepted: [Ticket 5](docs/epics/epic-core-listening/implementation-plan.md#L134) is "the UI over tickets 3 and 4", so
+    the query belongs to the ticket that owns the data and ticket 5 renders it.
 
-12. **Profile editing is API-only this step.** There is no console and no navigation until
-    [Step 5](../implementation-plan.md#L134), and the only authenticated screen is step 2's
-    placeholder. Assumed: display-name editing is exercised over the API only, and step 5 renders
-    the profile panel — consistent with how step 3 left its admin half. Overrule it if you want a
+12. **Profile editing is API-only this ticket.** There is no console and no navigation until
+    [Ticket 5](docs/epics/epic-core-listening/implementation-plan.md#L134), and the only authenticated screen is ticket 2's
+    placeholder. Assumed: display-name editing is exercised over the API only, and ticket 5 renders
+    the profile panel — consistent with how ticket 3 left its admin half. Overrule it if you want a
     `/profile` screen now; it is one small screen and one more feel requirement.
 
-13. **`displayNameFor` stays.** Step 3 derives a display name from the invited address as a
-    placeholder "until step 4 ships profile editing". Assumed: it stays as the *initial* value and
-    this step adds the ability to change it — accept still asks for one field, because asking an
-    invitee for a name before they have an account is the exam step 3 deliberately avoided.
+13. **`displayNameFor` stays.** Ticket 3 derives a display name from the invited address as a
+    placeholder "until ticket 4 ships profile editing". Assumed: it stays as the *initial* value and
+    this ticket adds the ability to change it — accept still asks for one field, because asking an
+    invitee for a name before they have an account is the exam ticket 3 deliberately avoided.
 
 ---
 
@@ -410,14 +410,14 @@ the sign-in screen; gate logging for every transition above; new error codes and
 types.
 
 **Out:** the admin console and any interface for listing accounts, deactivating, reactivating or
-changing a role ([Step 5](../implementation-plan.md#L134)) — the admin half of this step is
-exercised over the API only, as step 3's was. Self-service account **deletion**
-([3.1.8](../prd.md#L50)) and the content rules that follow it
-([3.1.9](../prd.md#L51)–[3.1.10](../prd.md#L52)) — deactivation is not deletion, and deletion is not
-in [slice-prd.md § In scope → 1](../slice-prd.md#L35). Avatars ([3.1.12](../prd.md#L54), explicitly
-deferred by [implementation-plan.md § Step 4](../implementation-plan.md#L123)). Changing your own
+changing a role ([Ticket 5](docs/epics/epic-core-listening/implementation-plan.md#L134)) — the admin half of this ticket is
+exercised over the API only, as ticket 3's was. Self-service account **deletion**
+([3.1.8](docs/project/prd.md#L50)) and the content rules that follow it
+([3.1.9](docs/project/prd.md#L51)–[3.1.10](docs/project/prd.md#L52)) — deactivation is not deletion, and deletion is not
+in [epic prd § In scope → 1](docs/epics/epic-core-listening/prd.md#L35). Avatars ([3.1.12](docs/project/prd.md#L54), explicitly
+deferred by [implementation plan § Ticket 4](docs/epics/epic-core-listening/implementation-plan.md#L123)). Changing your own
 password while signed in — no requirement asks for it, and reset covers the case that matters. Email
-address changes. `preferred_playback_speed` (step 15). Any second factor, lockout, general rate
+address changes. `preferred_playback_speed` (ticket 15). Any second factor, lockout, general rate
 limiting or password-history rule. Bounce, complaint or delivery-status handling. `contributor` in
 any form. Anything in
-[slice-architecture.md § Deliberately deferred](../slice-architecture.md#L341).
+[epic architecture § Deliberately deferred](docs/epics/epic-core-listening/architecture.md#L341).

@@ -1,7 +1,7 @@
 /**
  * The absolute origin the client calls. Read from configuration and never defaulted to "the host
  * this page came from" — that default is exactly what a packaged Capacitor build cannot satisfy
- * (docs/prd.md, 5.2.2), and the only way to keep it honest is for the client to have no fallback.
+ * (docs/project/prd.md, 5.2.2), and the only way to keep it honest is for the client to have no fallback.
  *
  * The literal `process.env.NEXT_PUBLIC_API_ORIGIN` is inlined at build time; it must stay written
  * out in full rather than read through a variable key.

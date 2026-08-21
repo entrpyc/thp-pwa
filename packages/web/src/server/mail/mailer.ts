@@ -39,7 +39,7 @@ const GENERIC_FAILURE_MESSAGE = 'The message could not be sent. Try again in a m
  * precisely for that case (see the invitation service).
  *
  * `failureMessage` is the caller's chance to say what to do next, because only the caller knows
- * what exists on the other side of the failure. Step 4's password reset does not pass one: it
+ * what exists on the other side of the failure. Ticket 4's password reset does not pass one: it
  * catches this refusal and answers with its own fixed payload instead, because a reset that told
  * the difference between "sent" and "could not send" would tell an anonymous caller whether the
  * address has an account.

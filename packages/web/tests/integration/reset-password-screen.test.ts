@@ -17,7 +17,7 @@ import { mailOffset, waitForMail, type CapturedMail } from '../support/mail';
  * The two reset screens, driven in a real browser.
  *
  * There is no `pages/forgot-password.png` or `pages/reset-password.png`; by operator decision they
- * are composed from the style guide, on step 2's token layer. What a PNG could not answer anyway is
+ * are composed from the style guide, on ticket 2's token layer. What a PNG could not answer anyway is
  * what this file asks: whether a dead link shows a password field, whether either form submits
  * without reloading, whether they fit a phone, and whether they are operable by keyboard alone.
  */

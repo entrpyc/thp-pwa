@@ -42,8 +42,8 @@ describe('the accounts schema', () => {
       'role',
       'updated_at',
     ]);
-    // `preferred_playback_speed` belongs to step 15, and an avatar is deferred outright. Their
-    // absence here is the point: columns arrive with the step that uses them, and a nullable one
+    // `preferred_playback_speed` belongs to ticket 15, and an avatar is deferred outright. Their
+    // absence here is the point: columns arrive with the ticket that uses them, and a nullable one
     // "for later" is how deferral quietly stops being deferral.
     expect(columns.map((column) => column.column_name)).not.toContain('preferred_playback_speed');
     for (const absent of ['avatar', 'avatar_url', 'avatar_key', 'image_url']) {

@@ -3,7 +3,7 @@ import { createHash, randomBytes } from 'node:crypto';
 /**
  * Opaque bearer tokens, and the one way they are stored.
  *
- * Sessions (step 2) and invitations (step 3) need the same thing: a value handed to somebody that
+ * Sessions (ticket 2) and invitations (ticket 3) need the same thing: a value handed to somebody that
  * proves nothing but its own possession, with only a digest kept on our side. They share this
  * module rather than each growing a copy, because two copies is how one of them ends up storing
  * the raw value.

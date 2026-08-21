@@ -14,7 +14,7 @@ export const CORRELATION_ID_HEADER = 'x-correlation-id';
  * reading a log or a screen and is never parsed.
  *
  * The three refusal codes are deliberately distinct, because
- * docs/architecture.md § Cross-cutting concerns makes error types part of the contract:
+ * docs/project/architecture.md § Cross-cutting concerns makes error types part of the contract:
  *
  * - `unauthenticated` — no usable session. The caller does not get to learn whether the route even
  *   exists; an unknown path answers this too.
@@ -25,7 +25,7 @@ export const CORRELATION_ID_HEADER = 'x-correlation-id';
  *   answer with this same code and the same message, so the response never discloses whether an
  *   address has an account.
  *
- * Step 3 adds six, and the split between them is the point rather than an accident of naming:
+ * Ticket 3 adds six, and the split between them is the point rather than an accident of naming:
  *
  * - `invalid_input` — the request could not be read as what the route accepts. A role nobody
  *   offers, a missing field, a body that is not an object.
@@ -41,7 +41,7 @@ export const CORRELATION_ID_HEADER = 'x-correlation-id';
  *   revoked and already-accepted are all `invitation_invalid`; only a token that was genuinely
  *   ours and ran out of time is `invitation_expired`.
  *
- * Step 4 adds five, and each exists because a screen or an operator has to be able to tell this
+ * Ticket 4 adds five, and each exists because a screen or an operator has to be able to tell this
  * failure from the one next to it:
  *
  * - `reset_invalid` and `reset_expired` — the same split as the two invitation codes, for the same

@@ -4,7 +4,7 @@ import { runMigrations } from '@thp/db';
 import { createThrowawayDatabase, type ThrowawayDatabase } from '../../../../tests/setup/throwaway-db';
 
 /**
- * The shape of step 4's table, and the two invariants that are the database's job rather than the
+ * The shape of ticket 4's table, and the two invariants that are the database's job rather than the
  * application's — asserted against a freshly migrated database rather than against the Drizzle
  * schema, because the schema is what we *meant* and the migration is what a deployment will have.
  */
@@ -119,8 +119,8 @@ describe('deactivation is a timestamp, not a deleted row', () => {
   }, 60_000);
 
   it('leaves the account, its password and everything it authored intact', async () => {
-    // docs/prd.md 3.1.7's "its authored content is retained", with the only authored content this
-    // slice yet has: the invitations this admin issued.
+    // docs/project/prd.md 3.1.7's "its authored content is retained", with the only authored content this
+    // epic yet has: the invitations this admin issued.
     const admin = await sql<{ id: string; password_hash: string }[]>`
       insert into "user" (email, password_hash, display_name, role)
       values ('retained@example.test', 'the-original-argon2-hash', 'Retained', 'admin')

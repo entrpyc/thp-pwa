@@ -8,7 +8,7 @@ export const runtime = 'nodejs';
 export const dynamic = 'force-dynamic';
 
 /**
- * `/api/v1/invitations/accept` — **the two unauthenticated routes step 3 adds**, and the only ones.
+ * `/api/v1/invitations/accept` — **the two unauthenticated routes ticket 3 adds**, and the only ones.
  *
  * Both are on `server/auth/allowlist.ts`, which is the single list of exceptions to "every route
  * requires a session"; declaring them `PUBLIC` here would do nothing on its own. Neither carries

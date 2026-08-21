@@ -5,7 +5,7 @@ import { hashPassword } from '@/server/auth/password';
 /**
  * Test accounts and sessions.
  *
- * Step 1's integration suite drove the diagnostics routes anonymously. From step 2 they require a
+ * Ticket 1's integration suite drove the diagnostics routes anonymously. From ticket 2 they require a
  * session like everything else, so the suite needs a way in — this is that way, and it goes through
  * the real sign-in route over HTTP rather than forging a cookie, because a helper that forges one
  * would stop the tests from proving anything about signing in.

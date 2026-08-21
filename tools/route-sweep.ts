@@ -4,7 +4,7 @@ import { join, relative, resolve, sep } from 'node:path';
 /**
  * The route sweep.
  *
- * "Every `/api/v1` route requires a session" (docs/prd.md, 3.1.2) is only worth stating if
+ * "Every `/api/v1` route requires a session" (docs/project/prd.md, 3.1.2) is only worth stating if
  * something can fail on it. This module **discovers** routes from the filesystem — every
  * `route.ts` under the API tree, every HTTP method it exports — rather than reading a list somebody
  * maintains, because a hand-maintained list re-introduces exactly the review dependency the

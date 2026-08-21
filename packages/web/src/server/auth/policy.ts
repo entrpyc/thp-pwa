@@ -4,8 +4,8 @@ import type { UserRow } from '@thp/db';
 /**
  * **The single place `(actor, action, resource)` is evaluated.**
  *
- * This is one of the three structures docs/slice-prd.md § Rationale names as making this slice
- * throwaway if skipped: Contributor arriving in a later slice is one enum value plus four widened
+ * This is one of the three structures docs/epics/epic-core-listening/prd.md § Rationale names as making this epic
+ * throwaway if skipped: Contributor arriving in a later epic is one enum value plus four widened
  * cases *only if* every check in the product goes through here. Nothing else in `src/` is allowed
  * to read a role or compare against one — tools/role-usage.ts fails the build if anything does,
  * which is why this file is also where an actor is built and where an actor is turned into the
@@ -19,14 +19,14 @@ import type { UserRow } from '@thp/db';
  *   boolean>`, so adding a role to the enum stops the build until every action says what that role
  *   may do. That is what turns "widen four cases" from a search of the codebase into a compiler
  *   error.
- * - **Ownership is a rule, not a comparison.** From step 4 an action may be conditioned on the
+ * - **Ownership is a rule, not a comparison.** From ticket 4 an action may be conditioned on the
  *   actor owning the resource, and that condition lives in the table below rather than at any call
  *   site.
  */
 
 /**
- * Every action the API can be asked to authorise. Step 2 shipped three, step 3 added four and step
- * 4 adds five; each later step adds the actions it needs alongside the routes that use them.
+ * Every action the API can be asked to authorise. Ticket 2 shipped three, ticket 3 added four and step
+ * 4 adds five; each later ticket adds the actions it needs alongside the routes that use them.
  */
 export const POLICY_ACTIONS = [
   /** Read the signed-in account. Any session may. */
@@ -36,7 +36,7 @@ export const POLICY_ACTIONS = [
   /** The admin-only diagnostic, which exists so "the API refuses, not the client" is testable. */
   'diagnostics.admin',
   /**
-   * The four invitation actions (step 3). Four rather than one `invitation.manage`, because the
+   * The four invitation actions (ticket 3). Four rather than one `invitation.manage`, because the
    * roles that may issue and the roles that may merely *see* who is pending are the same question
    * only for as long as there are two roles — and Contributor arriving is supposed to be four
    * widened cases, not a rewrite of what one coarse action meant.
@@ -46,7 +46,7 @@ export const POLICY_ACTIONS = [
   'invitation.revoke',
   'invitation.resend',
   /**
-   * The four admin account actions (step 4). Split for the same reason the invitation four are:
+   * The four admin account actions (ticket 4). Split for the same reason the invitation four are:
    * "who may see the member list" and "who may end somebody's access" are the same question only
    * while there are two roles.
    *
@@ -59,7 +59,7 @@ export const POLICY_ACTIONS = [
   'account.reactivate',
   'role.assign',
   /**
-   * **The first owned action in the product** (step 4). Editing a display name is permitted on your
+   * **The first owned action in the product** (ticket 4). Editing a display name is permitted on your
    * own account and on nobody else's — including, deliberately, to an admin. Every later owned
    * thing (a note, a highlight, a progress row) is this same shape.
    */
@@ -79,7 +79,7 @@ export interface Actor {
 /**
  * What is being acted on.
  *
- * Step 2 shipped this parameter with nothing yet using it — nothing existed to own. Step 4 is where
+ * Ticket 2 shipped this parameter with nothing yet using it — nothing existed to own. Ticket 4 is where
  * it starts being read: `ownerId` is what {@link RULES}' ownership rules are evaluated against.
  * Having it from the start is why that change is one function here rather than a visit to every
  * call site.
@@ -147,7 +147,7 @@ export function toActor(row: UserRow): Actor {
 /**
  * What the client renders from. It carries the role so the interface can *hide* what a member
  * cannot do — it is never what permits anything, because the client holds no decision
- * (docs/prd.md, 3.1.5).
+ * (docs/project/prd.md, 3.1.5).
  */
 export function describeActor(actor: Actor): SessionUser {
   return { id: actor.id, email: actor.email, displayName: actor.displayName, role: actor.role };
@@ -157,7 +157,7 @@ export function describeActor(actor: Actor): SessionUser {
  * The evaluation. `action` is a plain `string` on purpose: an unknown action must be answerable at
  * runtime, and answerable with `false`.
  *
- * Two gates, in order. The role gate is the one every action has had since step 2. The ownership
+ * Two gates, in order. The role gate is the one every action has had since ticket 2. The ownership
  * gate applies only to actions whose rule asks for it, and it **denies when no resource is
  * given** — an owned action asked in the abstract has no owner to compare against, and answering
  * `true` there would make "permitted on your own" mean "permitted".

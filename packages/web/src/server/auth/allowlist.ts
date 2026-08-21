@@ -8,7 +8,7 @@ import {
 
 /**
  * **The enumerated unauthenticated surface.** Every `/api/v1` route requires a session except the
- * entries below (docs/prd.md, 3.1.2).
+ * entries below (docs/project/prd.md, 3.1.2).
  *
  * This is a list, not a convention, and it is the *only* source of exceptions: `apiRoute(PUBLIC, …)`
  * consults it at request time, so declaring a route public without adding it here does not make it
@@ -16,22 +16,22 @@ import {
  * tests/guards/route-sweep — which discovers routes from the filesystem — subtracts exactly this
  * list before asserting that everything else refuses an anonymous caller.
  *
- * Seven entries, where docs/slice-architecture.md § Extension points names one. The architecture row
+ * Seven entries, where docs/epics/epic-core-listening/architecture.md § Extension points names one. The architecture row
  * says `GET /api/v1/health` is the only unauthenticated route; taken literally that is not
  * satisfiable, because **the sign-in route cannot require a session**. The property that row was
  * actually protecting is "no unauthenticated route carrying content", and every entry holds it:
  * health answers with a liveness verdict, sign-in answers with a refusal or a cookie, and the four
  * token routes answer only about the address the token they were handed was already mailed to.
  *
- * **Step 3 added two and step 4 adds three**, where the extension point anticipated one apiece. The
+ * **Ticket 3 added two and ticket 4 adds three**, where the extension point anticipated one apiece. The
  * extra one in each pair is a preview, and the argument is the same both times: it lets a dead link
  * say "this expired, ask for another" *before* somebody chooses a password, instead of after they
  * have typed one into a form that was always going to fail. Each preview discloses the address the
  * token was already mailed to, to a caller already holding that token, and nothing else.
  *
  * It is worth noticing that this is the third consecutive step to grow the list. Every entry still
- * holds the property the row protects, but the list is no longer short: **step 5 should add none**,
- * and any later step proposing an entry should have to argue against these seven rather than beside
+ * holds the property the row protects, but the list is no longer short: **ticket 5 should add none**,
+ * and any later ticket proposing an entry should have to argue against these seven rather than beside
  * them.
  */
 export interface AllowlistEntry {

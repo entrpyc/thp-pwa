@@ -9,14 +9,14 @@ import styles from './home.module.css';
 export const dynamic = 'force-dynamic';
 
 /**
- * The authenticated landing. Step 2 owns getting a person in and out, not what they see once they
- * are in — `pages/dashboard.png` replaces this whole screen in a later step.
+ * The authenticated landing. Ticket 2 owns getting a person in and out, not what they see once they
+ * are in — `pages/dashboard.png` replaces this whole screen in a later ticket.
  *
  * No session means sign-in, on the server, before anything renders.
  *
  * The console link is here because the console has to be reachable without typing a URL, and every
  * navigation this product will actually have — the top navigation in `top-navigation/` — belongs to
- * a later step and carries no admin entry to extend. So the link is deliberately temporary: it
+ * a later ticket and carries no admin entry to extend. So the link is deliberately temporary: it
  * lives on the placeholder and it goes when the placeholder does. It is rendered from the policy
  * module's answer rather than from a role read here, and it grants nothing — `/admin` gates itself
  * server-side, and every route behind it refuses independently.

@@ -18,7 +18,7 @@ export const dynamic = 'force-dynamic';
  * hand. The decision still happens in exactly one place; only the moment it is asked has moved.
  *
  * The role half is admin-only and guarded: demoting the last active admin is refused by the write
- * itself (docs/prd.md, 3.1.11).
+ * itself (docs/project/prd.md, 3.1.11).
  */
 export const PATCH = apiRoute(SESSION, async (request, context) => {
   const body: unknown = await request.json().catch(() => null);

@@ -30,7 +30,7 @@ describe('the display-name rules', () => {
 /**
  * **The avatar is deferred, and this is what keeps it deferred.**
  *
- * docs/prd.md 3.1.12 names an avatar and docs/implementation-plan.md § Step 4 defers it. A nullable
+ * docs/project/prd.md 3.1.12 names an avatar and docs/epics/epic-core-listening/implementation-plan.md § Ticket 4 defers it. A nullable
  * column, an optional payload field or a placeholder component "for later" is how deferral quietly
  * stops being deferral — six months on, half the product assumes the field exists and removing it is
  * a migration. So the absence is asserted at the source level, across the schema, the wire contract

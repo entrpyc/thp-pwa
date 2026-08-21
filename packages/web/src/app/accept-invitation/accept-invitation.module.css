@@ -1,7 +1,7 @@
 /*
  * The accept-invitation screen.
  *
- * There is no `pages/accept-invitation.png`; by operator decision the step-2 carve-out extends to
+ * There is no `pages/accept-invitation.png`; by operator decision the ticket-2 carve-out extends to
  * it, since it is an auth screen and the token layer already exists. **It invents no component.**
  * Everything shared with sign-in is composed from `sign-in.module.css` rather than copied, so the
  * four extrapolations documented there are stated once and this screen cannot drift from them.

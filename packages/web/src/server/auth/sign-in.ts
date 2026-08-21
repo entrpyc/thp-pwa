@@ -53,7 +53,7 @@ export async function signIn(body: unknown): Promise<SignInResult> {
     throw ApiError.invalidCredentials();
   }
 
-  // **After** the password verifies, and only then (docs/prd.md, 3.1.7).
+  // **After** the password verifies, and only then (docs/project/prd.md, 3.1.7).
   //
   // A wrong password against a deactivated account answers `invalid_credentials` like any other
   // wrong password, so there is no enumeration leak: reaching this line means the caller already

@@ -94,7 +94,7 @@ export function readCapturePath(env: EnvSource = process.env): string {
 /**
  * The origin an invitation link points at — the Next server, which serves both the accept screen
  * and the API. Read from `NEXT_PUBLIC_API_ORIGIN` rather than from a second variable, because in
- * this slice they are the same host and two variables would be two chances to set one wrong.
+ * this epic they are the same host and two variables would be two chances to set one wrong.
  *
  * Never derived from the incoming request's `Host` header: that header is attacker-controlled, and
  * a link built from it is a link an attacker chooses the destination of.

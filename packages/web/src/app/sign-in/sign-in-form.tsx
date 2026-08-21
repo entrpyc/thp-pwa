@@ -11,7 +11,7 @@ import styles from './sign-in.module.css';
  * The sign-in form.
  *
  * A client module: it imports no server module and holds no database access, and it calls the
- * absolute API origin like every other call the client makes — the boundary Step 1 established and
+ * absolute API origin like every other call the client makes — the boundary Ticket 1 established and
  * the import-boundary guard enforces.
  *
  * Two behaviours the tests pin, both about what being refused feels like: what you typed in the

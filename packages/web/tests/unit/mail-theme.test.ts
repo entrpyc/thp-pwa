@@ -5,7 +5,7 @@ import { MAIL_THEME, MAIL_THEME_TOKENS } from '@/server/mail/theme';
 import { parseCustomProperties } from '../../../../tools/style-tokens';
 
 /**
- * Assumption 9 of the step plan, made checkable.
+ * Assumption 9 of the ticket plan, made checkable.
  *
  * The invitation template cannot compose from `tokens.css` — mail clients do not support custom
  * properties — so it inlines literal values. The claim that makes that acceptable is "generated

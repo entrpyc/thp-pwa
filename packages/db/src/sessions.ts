@@ -53,7 +53,7 @@ export async function insertSession(
  * by Postgres against `now()`, so it cannot drift with the application server's clock.
  *
  * The deactivation condition is here, in the same statement that re-reads the account, rather than
- * in the caller. Deactivation revokes an account's sessions as well (docs/prd.md, 3.1.7), and this
+ * in the caller. Deactivation revokes an account's sessions as well (docs/project/prd.md, 3.1.7), and this
  * is the belt beside those braces: "no deactivated account acts" must not rest on remembering to
  * revoke, and a session row left live by any route still resolves to nobody.
  */

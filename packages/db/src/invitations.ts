@@ -100,7 +100,7 @@ export async function findLiveInvitationByEmail(
   return (rows[0] as InvitationRow | undefined) ?? null;
 }
 
-/** Every invitation, newest first. Step 5 renders this; step 3 only has to be able to answer it. */
+/** Every invitation, newest first. Ticket 5 renders this; ticket 3 only has to be able to answer it. */
 export async function listInvitations(
   handle: DatabaseHandle = getDatabase(),
 ): Promise<InvitationRow[]> {

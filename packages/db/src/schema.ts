@@ -6,8 +6,8 @@ import { PIPELINE_STEPS, ROLES } from '@thp/shared';
  * The Drizzle schema. Server-only by construction: this package is never imported by a client
  * module, and the import-boundary guard fails the build if it ever is.
  *
- * **Tables arrive with the step that uses them.** Step 1 shipped the migration mechanism and the
- * two domain enums; step 2 added `user` and `session`; step 3 added `invitation`; step 4 adds
+ * **Tables arrive with the ticket that uses them.** Ticket 1 shipped the migration mechanism and the
+ * two domain enums; ticket 2 added `user` and `session`; ticket 3 added `invitation`; ticket 4 adds
  * `password_reset` and nothing else. `recording`, `job`, `review_item` and the rest are still
  * absent.
  *
@@ -20,9 +20,9 @@ export const userRole = pgEnum('user_role', ROLES);
 export const pipelineStep = pgEnum('pipeline_step', PIPELINE_STEPS);
 
 /**
- * An account. Columns arrive with the steps that use them: `deactivated_at` comes with step 4
- * (account lifecycle) and `preferred_playback_speed` with step 15, so the second is not here yet.
- * Neither is an avatar — docs/prd.md 3.1.12's is deferred, and a nullable column "for later" is how
+ * An account. Columns arrive with the steps that use them: `deactivated_at` comes with ticket 4
+ * (account lifecycle) and `preferred_playback_speed` with ticket 15, so the second is not here yet.
+ * Neither is an avatar — docs/project/prd.md 3.1.12's is deferred, and a nullable column "for later" is how
  * deferral quietly stops being deferral.
  *
  * `email` is stored normalised (trimmed, lowercased) by the application, and uniqueness is
@@ -40,7 +40,7 @@ export const user = pgTable(
     createdAt: timestamp('created_at', { withTimezone: true }).notNull().defaultNow(),
     updatedAt: timestamp('updated_at', { withTimezone: true }).notNull().defaultNow(),
     /**
-     * **Deactivation is a timestamp, not a deleted row** (docs/prd.md, 3.1.7). The account, its
+     * **Deactivation is a timestamp, not a deleted row** (docs/project/prd.md, 3.1.7). The account, its
      * password hash and everything it authored survive intact; what changes is that no session
      * resolves to it and no password signs it in. Nullable, so the inverse — reactivation — is the
      * same write with `null`, and so "active" is a fact about the column rather than a second
@@ -56,7 +56,7 @@ export const user = pgTable(
  * carries an opaque random token and only its SHA-256 hash is stored, so
  *
  * - signing out genuinely ends the session rather than asking the browser to forget it, and
- * - step 4's deactivation can end a session that is already open instead of waiting for expiry.
+ * - ticket 4's deactivation can end a session that is already open instead of waiting for expiry.
  *
  * A stateless token makes both unbuildable without a revocation list, which is this table with
  * extra steps.
@@ -80,7 +80,7 @@ export const session = pgTable(
 
 /**
  * A pending invitation. **The only way an account comes to exist** other than the seed command
- * (docs/prd.md, 3.1.3), which is why the row and the account it becomes share an email column and
+ * (docs/project/prd.md, 3.1.3), which is why the row and the account it becomes share an email column and
  * a role column reading the same `user_role` enum rather than a second copy of it.
  *
  * Three properties this table holds, none of them by convention:
@@ -122,7 +122,7 @@ export const invitation = pgTable(
 );
 
 /**
- * A password reset in flight (docs/prd.md, 3.1.6).
+ * A password reset in flight (docs/project/prd.md, 3.1.6).
  *
  * Its own table rather than a second life for `invitation`, because the two look alike and are not:
  * an invitation is keyed by an *address with no account* and creates one; a reset is keyed by an

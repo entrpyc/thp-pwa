@@ -12,15 +12,15 @@ import type { Role } from './roles';
  * raw reset token exists in exactly two places — the link in the message, and the body of the
  * complete request — and neither is a representation of a reset.
  *
- * **No shape in this file carries an avatar.** docs/prd.md 3.1.12 names one and
- * docs/implementation-plan.md § Step 4 defers it; a nullable field "for later" is how deferral
+ * **No shape in this file carries an avatar.** docs/project/prd.md 3.1.12 names one and
+ * docs/epics/epic-core-listening/implementation-plan.md § Ticket 4 defers it; a nullable field "for later" is how deferral
  * quietly stops being deferral.
  */
 
 /** Paths of the account resource, relative to the `/api/v1` prefix. */
 export const USERS_PATH = '/users';
 
-/** Request (`POST`) and preview (`GET`) — two of step 4's three unauthenticated routes. */
+/** Request (`POST`) and preview (`GET`) — two of ticket 4's three unauthenticated routes. */
 export const PASSWORD_RESET_PATH = '/auth/password-reset';
 
 /** Completing the reset. The third. */

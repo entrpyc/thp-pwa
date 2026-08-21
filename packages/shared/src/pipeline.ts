@@ -1,6 +1,6 @@
 /**
- * The pipeline step enum. Slice 01 runs two steps in order; the worker that executes them arrives
- * in a later step, but the vocabulary is fixed here so the API, the worker and the job ledger
+ * The pipeline step enum. This epic runs two steps in order; the worker that executes them arrives
+ * in a later ticket, but the vocabulary is fixed here so the API, the worker and the job ledger
  * never drift apart.
  */
 export const PIPELINE_STEPS = ['transcribe', 'generate_draft'] as const;

@@ -3,7 +3,7 @@ import { MAIL_THEME } from './theme';
 
 /**
  * The password-reset email — the **second** message this product sends, and the first proof that
- * step 3 built a mail *port* rather than an invitation mailer with a general-sounding name. It goes
+ * ticket 3 built a mail *port* rather than an invitation mailer with a general-sounding name. It goes
  * through the same `Mailer`, over the same transport, with the same single sender address, and adds
  * no library and no configuration.
  *

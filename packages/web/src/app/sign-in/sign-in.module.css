@@ -17,7 +17,7 @@
  * 4. **The error message** sits under the fields in `--fs-body` at `--color-text`, with the card's
  *    border switched to `--color-border-strong`. The guide has no error colour, and red would be
  *    the second accent principle 1 forbids — so the error reads by emphasis rather than by hue.
- * 5. **A secondary link** (added in step 4, for the way out to `/forgot-password`) is `--fs-meta`
+ * 5. **A secondary link** (added in ticket 4, for the way out to `/forgot-password`) is `--fs-meta`
  *    on `--color-text-muted`, underlined, brightening to `--color-text` on hover. Not the accent
  *    colour: principle 3 reserves the accent for the one primary action, and a link that competes
  *    with the submit button is a link that gets pressed by mistake.

@@ -15,11 +15,11 @@ describe('the vector extension is available but not enabled', () => {
     expect(
       rows.map((row) => row.name),
       'pgvector is not installed on this Postgres instance. The single-datastore decision depends ' +
-        'on vectors and ACL data sharing a database — see docs/slice-architecture.md, "Primary datastore".',
+        'on vectors and ACL data sharing a database — see docs/epics/epic-core-listening/architecture.md, "Primary datastore".',
     ).toEqual(['vector']);
   });
 
-  it('is not enabled — CREATE EXTENSION belongs to a later slice', async () => {
+  it('is not enabled — CREATE EXTENSION belongs to a later epic', async () => {
     const rows = await sql<{ extname: string }[]>`
       select extname from pg_extension where extname = 'vector'
     `;
