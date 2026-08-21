@@ -1,6 +1,6 @@
-import { and, eq, inArray, sql } from 'drizzle-orm';
+import { and, asc, eq, inArray, sql } from 'drizzle-orm';
 import { UNFINISHED_JOB_STATUSES, type JobStatus, type PipelineStep } from '@thp/shared';
-import { getDatabase, queryable, type Executor } from './client';
+import { getDatabase, queryable, withTransaction, type Executor } from './client';
 import { job } from './schema';
 
 /**
@@ -166,4 +166,55 @@ export async function failJob(
   const row = rows[0] as JobRow | undefined;
   if (!row) throw new Error(`failJob: no job ${id}`);
   return row;
+}
+
+/** A job the sweep took back: the row it failed, and the fresh attempt it queued in its place. */
+export interface ReclaimedJob {
+  readonly failed: JobRow;
+  readonly requeued: JobRow;
+}
+
+/**
+ * Fail every `running` job and queue a fresh attempt of each — **crash recovery, not retry.**
+ *
+ * A job is `running` because a worker claimed it and has not finished it. At boot there is no such
+ * worker, so every one of those rows is abandoned by definition: the process that owned it is gone,
+ * and nothing else will ever finish it. Left alone it would sit `running` forever, and the
+ * recording behind it would be stuck with no failure to show for it.
+ *
+ * **Correct only while exactly one worker process runs.** A second worker booting would reclaim the
+ * first's jobs mid-flight — from this function's point of view an in-flight job and an abandoned one
+ * are the same row. The deployment pins concurrency to 1
+ * (docs/project/architecture.md § Estimated running costs); the caller logs that it assumes it.
+ *
+ * Fail-then-enqueue, in one transaction and in that order. The order is what keeps the partial
+ * unique index satisfied — the old row stops being unfinished before the new one starts. The
+ * transaction is what stops a half-swept ledger, where a job is failed and nothing was queued to
+ * replace it.
+ *
+ * This is the **one** automatic re-enqueue in the epic. A job that failed on its own merits stays
+ * failed until a human re-enqueues the step (docs/project/prd.md 3.21.2.3).
+ */
+export async function sweepRunning(
+  reason: string,
+  executor: Executor = getDatabase(),
+): Promise<ReclaimedJob[]> {
+  return withTransaction(async (tx) => {
+    const abandoned = (await queryable(tx)
+      .select()
+      .from(job)
+      .where(eq(job.status, 'running'))
+      .orderBy(asc(job.enqueuedAt), asc(job.id))) as JobRow[];
+
+    const reclaimed: ReclaimedJob[] = [];
+    for (const row of abandoned) {
+      const failed = await failJob(row.id, reason, tx);
+      const requeued = await enqueueJob(
+        { recordingId: row.recordingId, step: row.step, correlationId: row.correlationId },
+        tx,
+      );
+      reclaimed.push({ failed, requeued });
+    }
+    return reclaimed;
+  }, executor);
 }
