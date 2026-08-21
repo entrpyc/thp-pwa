@@ -245,8 +245,107 @@ downstream is triggered.
 
 ## Edge cases
 
-_Filled in during implementation — leave empty here._
+- An upload that is granted and never finalised, or finalised and refused, leaves its object in the
+  bucket for good — nothing sweeps it, nothing can see it, and the only trace is the
+  `recording.upload.granted` log line. The bucket grows by one abandoned file per abandoned upload.
+- A grant stays usable for its full hour, so the same presigned URL can be `PUT` again — including
+  **after** the recording exists, which replaces the bytes under it. Only the admin who asked for
+  that grant holds the URL, and the row is unchanged; what changes is what plays.
+- Nothing inspects the media. A text file renamed `.mp3` is accepted by the browser, signed as
+  `audio/mpeg`, stored as `audio/mpeg` and becomes a recording — it fails at transcription instead
+  (Story 2 Ticket 03), where there is nothing yet to fail into.
+- **Every store-side refusal of the `PUT` reads as the same sentence** — "The upload failed before it
+  finished. Nothing was saved" — whether the cause is a missing CORS rule, a bucket that does not
+  exist, a wrong access key or a dropped connection. A browser is not told why a cross-origin request
+  was refused, so the screen genuinely cannot say which; the log has no record either, because the
+  `PUT` never touches the application. Diagnosing one means the browser's network tab or the store's
+  own log. This is the failure an operator is most likely to hit first, and the reason
+  `docker-compose.yml` now creates the development bucket rather than leaving it to be discovered.
+- A `PUT` that drops halfway starts over from the beginning; there is no resume and no progress
+  indicator. A 200 MB upload on a slow connection sits on "Uploading…" for minutes with nothing
+  moving.
+- If the object store is unreachable, the presign and finalise routes answer `internal_error` (500)
+  with the generic message, not something naming storage. The correlation id in the log identifies
+  it.
+- A recording dated in the future is accepted and sorts to the top of the list. Nothing in the PRD
+  forbids one, and a rule against it would be a rule nobody asked for.
+- Two recordings may carry the same title and the same date; nothing dedupes them and nothing warns.
+  The only uniqueness in the table is the media key.
+- A recording cannot be edited, renamed, re-dated, re-uploaded or deleted once created. Getting the
+  title wrong means a second row and an orphan object.
+- The list has no pagination, no filter and no search, and loads every recording every time the
+  panel opens.
+- The upload screen refuses a file by **extension**, so a correctly-named file with the wrong
+  contents passes and a correctly-formatted file with an odd extension is refused. The API's check
+  is the declared content type, which the client derives from that same extension.
+- Two admins finalising the same key at the same instant: one gets the recording, the other gets
+  `upload_invalid`. Refused at the unique index, so there is no window in which both succeed.
+- A file's size is reported rounded **up** to whole megabytes, so a 128.2 MB file is announced as
+  129 MB. Deliberate — the number is read beside a ceiling, and understating it is the worse error.
+- A title is refused only for being absent, empty or over the generic 512-character field cap. There
+  is no title-length rule, so a 400-character title renders as a 400-character title.
 
 ## Implementation notes
 
-_Filled in during implementation — leave empty here._
+### Assumptions — major (confirmed with the operator)
+
+- **The test suite reaches the MinIO container directly and never reads the `MEDIA_` values from
+  `.env`.** They are harness constants in `tests/setup/media-bucket.ts`, beside the compose file
+  that declares them. This diverges from how `DATABASE_URL` is treated — the suite carves a
+  throwaway database out of the developer's instance — and it diverges deliberately: `.env` is
+  where a deployment's real bucket credentials live, that bucket has **no delete path**, and a suite
+  able to reach it would create `thp-test-media` in production and upload two hundred megabytes of
+  test objects that could never be removed. A throwaway database is dropped afterwards; an object
+  written to the wrong bucket is there for good.
+- **The suite's bucket is created and never emptied**, for the same reason: tearing it down would
+  mean deleting objects, and there is no delete path against a bucket anywhere in this repository,
+  harness included. Keys are uuids, so runs cannot collide.
+
+### Assumptions — minor
+
+- The presigned `PUT` signs `content-type` as a **signed header**. Without that the signature covers
+  only the host, and a grant issued for an mp3 authorises a `PUT` of anything — the binding would
+  have been a sentence rather than a property.
+- `upload_invalid` is `409` for all three of its cases: the request was well-formed, and it is the
+  state of the store that refuses it.
+- The title is checked for present-and-non-empty and capped only by the generic 512-character field
+  limit every route already applies. No title-length rule was invented.
+- `listRecordings` breaks a same-date tie on `created_at`, because a SQL `date` has no time of day
+  and two teachings recorded the same Sunday would otherwise come back in planner order.
+- A file size renders rounded up — MB above a megabyte, KB below — so a file one byte over the
+  ceiling never reads as "200 MB; the limit is 200 MB".
+- `isUniqueViolation` lives in `@thp/db` rather than in the API service: Drizzle wraps the driver's
+  error as a `cause`, and the shape of a driver error is that package's business in the same way
+  query construction is.
+- The console header and panel list moved into `admin/console-shell.tsx` when the second panel
+  arrived, so the two pages cannot grow two headers.
+- CI starts MinIO with a `docker run` step rather than a service container: the `minio/minio` image
+  needs a command (`server /data`) and a service container cannot supply one.
+- The development container sets `MINIO_API_CORS_ALLOW_ORIGIN=*`. That is the container's rule, not
+  a deployment's — a real bucket's rule names the application origin.
+- `docker-compose.yml` carries a one-shot `minio-init` service that creates the bucket `.env` names,
+  so `docker compose up -d` followed by `npm run dev` gives a store that can actually be uploaded to.
+  Added after the first real upload failed on a store with no bucket in it — see the first Edge case.
+  It only ever creates; `mc rb` appears nowhere in this repository.
+
+### Other notes
+
+- **MinIO does not implement `PutBucketCors`.** Its CORS rule is a server setting, which is why
+  docker-compose.yml carries it and why the CORS criterion is verified by issuing a real `OPTIONS`
+  preflight rather than by reading a bucket policy back. A deployment applies its rule on the bucket
+  by hand — the ticket's user prerequisite.
+- **The store refuses every unsigned request with `403`, whether the object exists or not.** That is
+  the property [§6](docs/project/prd.md#L724) Security wanted, and it also means "was the refused
+  object left in place" cannot be asked without a signature — the test asks the port's own `head`.
+- Next.js keeps an empty `role="alert"` route announcer in every document, so `getByRole('alert')`
+  is never zero. Every alert assertion in the browser tests is scoped to the upload region; an
+  unscoped one passes whatever the screen does, and did until it was caught.
+- The one thing the suite cannot prove is that the **deployment's** bucket is private and carries its
+  CORS rule — MinIO and R2 are different products and the suite only has the first. That is exactly
+  what the two manual user steps are for.
+- The second media pointer attaches at `server/media/store.ts`
+  ([epic architecture § Extension points](docs/epics/epic-core-listening/architecture.md#L323)): a
+  processed rendition is a second key minted the same way and a preference at read time. Nothing in
+  the port anticipates it today.
+- Ticket 02's queue port has nothing to attach to yet on purpose — `finaliseUpload` writes the row
+  and returns. That is the edge [3.5.1](docs/project/prd.md#L112) needs and Ticket 03 wires.

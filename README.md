@@ -11,7 +11,8 @@ exists yet — no invitations, no uploads, no library.
 - **Node 22 LTS** — pinned in [.nvmrc](.nvmrc). `nvm use` picks it up.
 - **PostgreSQL 17 with the `vector` extension installed** — see **Database** below. The extension
   must be *available* and **not enabled**; the test suite asserts both.
-- **Docker** (for the development database only). Any Postgres 17 with pgvector installed works.
+- **Docker** (for the development database and the object store). Any Postgres 17 with pgvector
+  installed works, and any S3-compatible bucket — see **Media store** below.
 - **Chromium for Playwright** — `npx playwright install chromium`, once. The sign-in screen is
   tested in a real browser.
 
@@ -19,7 +20,7 @@ exists yet — no invitations, no uploads, no library.
 
 ```bash
 cp .env.example .env      # then edit if your Postgres is not the compose one
-docker compose up -d      # PostgreSQL 17 + pgvector, on 127.0.0.1:5432
+docker compose up -d      # PostgreSQL 17 + pgvector on :5432, MinIO on :9000 + its bucket
 npm install
 npm run migrate
 
@@ -253,6 +254,41 @@ Migrations are plain checked-in SQL in [packages/db/drizzle](packages/db/drizzle
 `drizzle-kit` from [packages/db/src/schema.ts](packages/db/src/schema.ts) and applied in journal
 order. Read the diff, not the ORM.
 
+## Media store
+
+Original audio uploads live in an S3-compatible bucket. Development runs against the MinIO
+container in [docker-compose.yml](docker-compose.yml), which also creates the bucket `.env` names
+on the way up — `docker compose up -d` leaves you with a store you can upload to; a deployment points the five `MEDIA_` values
+in `.env` at its own bucket — Cloudflare R2 is what this one uses. **The test suite reads neither**:
+it talks only to the container, with the container's own credentials held in
+[tests/setup/media-bucket.ts](tests/setup/media-bucket.ts), because `.env` may point at a real bucket
+and a bucket this product can never delete from is not somewhere a test run may write. **Nothing in the
+source names a vendor**: the adapter speaks plain S3, and
+[tools/media-boundary.ts](tools/media-boundary.ts) fails the build if anything outside
+[packages/web/src/server/media/s3-store.ts](packages/web/src/server/media/s3-store.ts) imports the
+SDK.
+
+Three properties, none of them optional:
+
+1. **The bucket is never publicly readable.** Every read is a short-lived signed URL minted after an
+   authorisation check. The suite proves this against MinIO; on the real bucket it is a setting you
+   apply, and the one manual check worth doing after the first upload.
+2. **The bucket needs a CORS rule** permitting `PUT` and its preflight from the application origin,
+   with `content-type` on the allowed headers. Without it the browser cannot make the upload at all
+   — the preflight fails and no `PUT` is ever sent. The container is configured for this in
+   `docker-compose.yml`; on R2 it is a rule on the bucket.
+3. **Nothing is ever deleted.** The original is the input transcription reads, and every later
+   re-transcription depends on it, so the media store port has **no delete operation** — a guard test
+   asserts the interface declares none. The cost is that an upload whose finalisation is refused
+   leaves an orphan object nobody can see, and that is the cheap side of the trade.
+
+Uploads go **straight from the browser to the bucket** on a presigned `PUT`; bytes never pass
+through the application. The API mints the key, signs the grant, and afterwards asks the store what
+actually arrived — which is what "re-checked server-side" means when the API never sees the file.
+
+**200 MB, as MP3, M4A, AAC, WAV or FLAC.** A 90-minute teaching fits comfortably as MP3 or M4A and
+does **not** fit as WAV or FLAC; the upload screen says so before a file is chosen.
+
 ## Tests
 
 - `npx vitest run --project unit` — no database, no server. Guards and pure logic.
@@ -266,6 +302,12 @@ order. Read the diff, not the ORM.
   one in `.env`. The suite writes accounts and sessions, and those must not end up in the database
   you sign into; it also means every run starts from an empty `user` table, so no test can quietly
   depend on what the last run left behind.
+
+  It also needs the **MinIO container** (`docker compose up -d minio`) and uses a bucket of its own
+  on it — reached with the container's credentials, never with what `.env` names. That bucket is
+  *not* dropped afterwards: emptying it would mean deleting objects, and there is no delete path
+  against a bucket anywhere in this repository, not even in the harness. Every key is a uuid, so
+  runs cannot collide.
 
   The sign-in and accept-invitation screens are driven in a real Chromium via Playwright — layout overflow at a phone width,
   keyboard order, and "the page did not reload" are not answerable in a DOM simulation. Run
