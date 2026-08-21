@@ -32,6 +32,14 @@ export const FORGOT_PASSWORD_PAGE_PATH = '/forgot-password';
 /** The screen a reset link opens. */
 export const RESET_PASSWORD_PAGE_PATH = '/reset-password';
 
+/**
+ * The admin console, on the web origin rather than under the API prefix.
+ *
+ * Here beside the other page-path constants rather than in a module of its own: it is the console
+ * over exactly the account routes declared above, and one string does not earn a file.
+ */
+export const ADMIN_PAGE_PATH = '/admin';
+
 /** The query parameter the reset link carries the token in. */
 export const RESET_TOKEN_PARAM = 'token';
 

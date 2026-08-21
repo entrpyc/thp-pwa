@@ -1,0 +1,502 @@
+/*
+ * The admin console.
+ *
+ * There is no `pages/admin.png`; by operator decision the console takes the same carve-out steps
+ * 2, 3 and 4 received, so it is composed from docs/design referencess png/style-guide.md and the
+ * token layer. `pages/dashboard.png` is the *member* dashboard and belongs to a later step, and the
+ * top-navigation references carry no admin entry — so neither describes this screen.
+ *
+ * **It invents no component.** The field, the label, the solid submit and the error line are
+ * composed from `sign-in.module.css` rather than copied, so the four extrapolations documented
+ * there are stated once and the console cannot drift from them. What follows is only what a list of
+ * people needs and an auth card does not, and each is read from a rule in the guide:
+ *
+ * 1. `.section` — a panel, so `--radius-lg` ("large panels") rather than the card's `--radius-md`,
+ *    one tone above the page on `--color-surface`. Sections separate by gap; rows inside one
+ *    separate by hairline, which is the guide's own rule for list rows.
+ * 2. `.rolePicker` / `.roleOption` — the guide's pill tab, verbatim: transparent with a hairline,
+ *    and `--color-primary-soft` behind `--color-primary-strong` when selected. A role picker *is*
+ *    a tab strip — two mutually exclusive states, one of them current — so it gets the tab recipe
+ *    rather than a new one.
+ * 3. `.chip` — the same pill at metadata size, carrying a state instead of a choice. Never
+ *    coloured by hue: principle 1 allows one accent, so `Pending` takes the accent and every closed
+ *    state reads by tone alone, sitting *below* the page on `--color-bg-deep`.
+ * 4. `.rowInactive` — a deactivated account or a closed invitation, dimmed a step so the panel
+ *    answers "who can get in right now" before a word of it is read. Dimmed by text colour, not by
+ *    `opacity`: opacity would take the focus ring down with it.
+ * 5. `.actionStrong` — the confirming press. Emphasis, not hue: `--color-border-strong` on the
+ *    raised surface with full-weight text, for the same reason sign-in's error is not red. There is
+ *    no destructive colour in this product, and adding one would be the second accent.
+ *
+ * Controls are `--space-8 + --space-3` tall at minimum — a thumb, on a phone, standing up after a
+ * service — and every row collapses to a single column below `48rem`.
+ */
+
+.screen {
+  min-height: 100vh;
+  background: var(--color-bg);
+  padding: var(--space-6) var(--space-4) var(--space-8);
+}
+
+.shell {
+  width: 100%;
+  max-width: 64rem;
+  margin: 0 auto;
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-6);
+}
+
+/* ---------------------------------------------------------------------------------- the shell */
+
+.header {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: var(--space-4);
+}
+
+.eyebrow {
+  margin: 0 0 var(--space-1);
+  font-size: var(--fs-meta);
+  color: var(--color-text-dim);
+  text-transform: uppercase;
+  letter-spacing: 0.08em;
+}
+
+.title {
+  margin: 0;
+  font-size: var(--fs-title);
+  font-weight: 700;
+  line-height: 1.2;
+  color: var(--color-text);
+}
+
+.identity {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: var(--space-1);
+  min-width: 0;
+}
+
+.identityName {
+  margin: 0;
+  font-size: var(--fs-body);
+  font-weight: 600;
+  color: var(--color-text);
+  overflow-wrap: anywhere;
+}
+
+.identityEmail {
+  margin: 0 0 var(--space-2);
+  font-size: var(--fs-meta);
+  color: var(--color-text-dim);
+  overflow-wrap: anywhere;
+}
+
+.panels {
+  min-width: 0;
+}
+
+.panelList {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--space-2);
+}
+
+/* The guide's pill tab. One entry today; a later panel is one more `li`. */
+.panelLink {
+  display: inline-flex;
+  align-items: center;
+  min-height: calc(var(--space-8) + var(--space-3));
+  background: transparent;
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-pill);
+  padding: var(--space-2) var(--space-5);
+  color: var(--color-text-muted);
+  font-size: var(--fs-body);
+  text-decoration: none;
+}
+
+.panelLink[aria-current='page'] {
+  border-color: var(--color-primary-strong);
+  background: var(--color-primary-soft);
+  color: var(--color-text);
+}
+
+/* -------------------------------------------------------------------------------- the sections */
+
+.panel {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-6);
+}
+
+.section {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-5);
+  background: var(--color-surface);
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-lg);
+  padding: var(--space-5);
+  min-width: 0;
+}
+
+.sectionTitle {
+  margin: 0 0 var(--space-1);
+  font-size: var(--fs-card-title);
+  font-weight: 600;
+  color: var(--color-text);
+}
+
+.sectionNote {
+  margin: 0;
+  font-size: var(--fs-meta);
+  color: var(--color-text-dim);
+}
+
+.footnote {
+  margin: 0;
+  font-size: var(--fs-meta);
+  color: var(--color-text-dim);
+  text-align: center;
+  overflow-wrap: anywhere;
+}
+
+/* --------------------------------------------------------------------------------- the invite */
+
+.inviteForm {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-4);
+}
+
+.inviteRow {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: flex-end;
+  gap: var(--space-4);
+}
+
+.field {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: var(--space-2);
+  flex: 1 1 16rem;
+  min-width: 0;
+}
+
+/* The role picker is as wide as two pills and no wider — it is a choice, not a text field. */
+.fieldTight {
+  composes: field;
+  flex: 0 0 auto;
+}
+
+.field .input {
+  align-self: stretch;
+}
+
+.label {
+  composes: label from '../sign-in/sign-in.module.css';
+}
+
+.input {
+  composes: input from '../sign-in/sign-in.module.css';
+  min-height: calc(var(--space-8) + var(--space-3));
+}
+
+/* The panel's one solid fill — principle 3, and the thing an operator is most often here to do. */
+.submit {
+  composes: submit from '../sign-in/sign-in.module.css';
+  width: auto;
+  min-height: calc(var(--space-8) + var(--space-3));
+  border-radius: var(--radius-pill);
+  padding: var(--space-3) var(--space-6);
+}
+
+.error {
+  composes: error from '../sign-in/sign-in.module.css';
+}
+
+.done {
+  margin: 0;
+  font-size: var(--fs-body);
+  color: var(--color-text-muted);
+}
+
+.failure {
+  margin: 0;
+  background: var(--color-surface-raised);
+  border: 1px solid var(--color-border-strong);
+  border-radius: var(--radius-sm);
+  padding: var(--space-3) var(--space-4);
+  font-size: var(--fs-body);
+  color: var(--color-text);
+}
+
+.empty {
+  margin: 0;
+  font-size: var(--fs-body);
+  color: var(--color-text-muted);
+}
+
+/* ----------------------------------------------------------------------------------- the rows */
+
+.list {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+}
+
+.row {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--space-3);
+  padding: var(--space-4) 0;
+  border-bottom: 1px solid var(--color-border);
+  min-width: 0;
+}
+
+.row:first-child {
+  padding-top: 0;
+}
+
+.row:last-child {
+  padding-bottom: 0;
+  border-bottom: none;
+}
+
+.rowIdentity {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-1);
+  flex: 1 1 14rem;
+  min-width: 0;
+}
+
+.rowName {
+  margin: 0;
+  font-size: var(--fs-body);
+  font-weight: 600;
+  color: var(--color-text);
+  overflow-wrap: anywhere;
+}
+
+.rowMeta {
+  margin: 0;
+  font-size: var(--fs-meta);
+  color: var(--color-text-dim);
+  overflow-wrap: anywhere;
+}
+
+.rowSelf {
+  margin: 0;
+  font-size: var(--fs-meta);
+  color: var(--color-text-muted);
+}
+
+.rowInactive .rowName {
+  color: var(--color-text-muted);
+  font-weight: 400;
+}
+
+.rowControls {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: var(--space-2);
+  min-width: 0;
+}
+
+.chip {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--space-1);
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-pill);
+  padding: var(--space-1) var(--space-3);
+  font-size: var(--fs-meta);
+  color: var(--color-text-muted);
+  white-space: nowrap;
+}
+
+.chipPending {
+  border-color: var(--color-primary-strong);
+  background: var(--color-primary-soft);
+  color: var(--color-text);
+}
+
+.chipInactive {
+  background: var(--color-bg-deep);
+  border-color: var(--color-border-strong);
+  color: var(--color-text-dim);
+}
+
+/* ------------------------------------------------------------------------------- the controls */
+
+.rolePicker {
+  display: inline-flex;
+  gap: var(--space-1);
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-pill);
+  padding: var(--space-1);
+}
+
+.roleOption {
+  min-height: var(--space-8);
+  background: transparent;
+  border: 1px solid transparent;
+  border-radius: var(--radius-pill);
+  padding: var(--space-1) var(--space-4);
+  color: var(--color-text-muted);
+  font-family: inherit;
+  font-size: var(--fs-meta);
+  cursor: pointer;
+  white-space: nowrap;
+}
+
+.roleOption[aria-pressed='true'] {
+  border-color: var(--color-primary-strong);
+  background: var(--color-primary-soft);
+  color: var(--color-text);
+}
+
+.roleOption:hover:not(:disabled) {
+  color: var(--color-text);
+}
+
+.roleOption:disabled {
+  cursor: progress;
+}
+
+.action {
+  min-height: calc(var(--space-8) + var(--space-3));
+  background: transparent;
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-pill);
+  padding: var(--space-2) var(--space-5);
+  color: var(--color-text-muted);
+  font-family: inherit;
+  font-size: var(--fs-body);
+  cursor: pointer;
+  white-space: nowrap;
+}
+
+.action:hover:not(:disabled) {
+  border-color: var(--color-border-strong);
+  color: var(--color-text);
+}
+
+.action:disabled {
+  cursor: progress;
+  color: var(--color-text-dim);
+}
+
+.actionStrong {
+  composes: action;
+  background: var(--color-surface-raised);
+  border-color: var(--color-border-strong);
+  color: var(--color-text);
+  font-weight: 600;
+}
+
+/* --------------------------------------------------------------- confirmation, and what happened */
+
+.confirm {
+  flex: 1 1 100%;
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--space-3);
+  background: var(--color-surface-raised);
+  border: 1px solid var(--color-border-strong);
+  border-radius: var(--radius-md);
+  padding: var(--space-4);
+  min-width: 0;
+}
+
+.confirmText {
+  margin: 0;
+  flex: 1 1 18rem;
+  font-size: var(--fs-body);
+  color: var(--color-text);
+  overflow-wrap: anywhere;
+}
+
+.confirmActions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--space-2);
+}
+
+/* The refusal, where the press was. Emphasis rather than hue — see sign-in's `.error`. */
+.rowRefusal {
+  flex: 1 1 100%;
+  margin: 0;
+  background: var(--color-surface-raised);
+  border: 1px solid var(--color-border-strong);
+  border-radius: var(--radius-sm);
+  padding: var(--space-3) var(--space-4);
+  font-size: var(--fs-body);
+  color: var(--color-text);
+  overflow-wrap: anywhere;
+}
+
+.rowDone {
+  flex: 1 1 100%;
+  margin: 0;
+  font-size: var(--fs-meta);
+  color: var(--color-text-muted);
+  overflow-wrap: anywhere;
+}
+
+/* ------------------------------------------------------------------------------------ a phone */
+
+@media (max-width: 48rem) {
+  .screen {
+    padding: var(--space-5) var(--space-4) var(--space-8);
+  }
+
+  /*
+   * A row becomes a column, and every `flex-basis` in it has to be dropped with it: `1 1 14rem` on
+   * the identity block is a *width* along a row and a *height* down a column, and left in place it
+   * turns four accounts into four screenfuls of empty navy.
+   */
+  .row {
+    flex-direction: column;
+    align-items: stretch;
+    justify-content: flex-start;
+  }
+
+  .rowIdentity,
+  .confirm,
+  .confirmText,
+  .rowRefusal,
+  .rowDone {
+    flex: 0 0 auto;
+  }
+
+  .rowControls {
+    justify-content: flex-start;
+  }
+
+  .submit {
+    width: 100%;
+  }
+
+  .field {
+    flex-basis: 100%;
+  }
+}

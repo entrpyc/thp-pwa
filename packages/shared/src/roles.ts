@@ -20,3 +20,16 @@ export const ROLE = { admin: 'admin', member: 'member' } as const satisfies Reco
 export function isRole(value: unknown): value is Role {
   return typeof value === 'string' && (ROLES as readonly string[]).includes(value);
 }
+
+/**
+ * What a role is called on screen. Declared beside the enum rather than in the console, because
+ * tools/role-usage.ts refuses a role literal anywhere outside this file — so a picker or a tag
+ * built anywhere else would have to spell one, and the guard would be right to stop it.
+ *
+ * `Record<Role, string>` rather than a lookup with a fallback: adding a role to {@link ROLES} stops
+ * the build until it has a name, which is the same property {@link ROLE} and the policy table both
+ * have, and the reason Contributor arriving is a compiler error rather than an unlabelled pill.
+ *
+ * Iterate {@link ROLES} to build a picker; never restate the list.
+ */
+export const ROLE_LABEL: Record<Role, string> = { admin: 'Admin', member: 'Member' };
