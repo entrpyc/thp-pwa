@@ -7,6 +7,15 @@ export const PIPELINE_STEPS = ['transcribe', 'generate_draft'] as const;
 
 export type PipelineStep = (typeof PIPELINE_STEPS)[number];
 
+/**
+ * Where a recording's pipeline starts.
+ *
+ * Read from the list rather than named, for the same reason the successor is: inserting
+ * `process_audio` ahead of `transcribe` ([§3.4](docs/project/prd.md)) has to change what
+ * finalising an upload enqueues, and it does — without an edit anywhere near the upload code.
+ */
+export const FIRST_PIPELINE_STEP: PipelineStep = PIPELINE_STEPS[0];
+
 export function isPipelineStep(value: unknown): value is PipelineStep {
   return typeof value === 'string' && (PIPELINE_STEPS as readonly string[]).includes(value);
 }

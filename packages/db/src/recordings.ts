@@ -1,5 +1,5 @@
 import { desc } from 'drizzle-orm';
-import { getDatabase, type DatabaseHandle } from './client';
+import { getDatabase, queryable, type Executor } from './client';
 import { recording } from './schema';
 
 /**
@@ -31,6 +31,10 @@ export interface NewRecording {
 /**
  * Insert a recording.
  *
+ * Takes an executor rather than a handle, because finalising an upload writes this row **and**
+ * its first job in one transaction: there is no state in which a recording exists and its pipeline
+ * never started.
+ *
  * **Throws on the unique index if that object is already a recording**, which is deliberately the
  * only thing standing between "finalise twice" and two rows: a `select` here followed by an
  * `insert` has a window in which two requests both find nothing. The caller turns the constraint
@@ -38,9 +42,9 @@ export interface NewRecording {
  */
 export async function insertRecording(
   input: NewRecording,
-  handle: DatabaseHandle = getDatabase(),
+  executor: Executor = getDatabase(),
 ): Promise<RecordingRow> {
-  const rows = await handle.db.insert(recording).values(input).returning();
+  const rows = await queryable(executor).insert(recording).values(input).returning();
   const row = rows[0] as RecordingRow | undefined;
   if (!row) throw new Error('insertRecording returned no row');
   return row;
@@ -54,9 +58,9 @@ export async function insertRecording(
  * the same Sunday would otherwise come back in whatever order the planner chose that second.
  */
 export async function listRecordings(
-  handle: DatabaseHandle = getDatabase(),
+  executor: Executor = getDatabase(),
 ): Promise<RecordingRow[]> {
-  const rows = await handle.db
+  const rows = await queryable(executor)
     .select()
     .from(recording)
     .orderBy(desc(recording.recordedAt), desc(recording.createdAt));
