@@ -66,9 +66,14 @@ describe('the sign-in screen', () => {
     try {
       await fillAndSubmit(page, account.email, account.password);
       await page.waitForURL(`${baseUrl}/`, { timeout: 30_000 });
+      // Scoped to the heading rather than counting matches on the page. Signing in is a *soft*
+      // navigation (`router.replace`), and Next.js copies the new page's `h1` into its
+      // `#__next-route-announcer__` live region roughly 250ms afterwards — so an unscoped text
+      // locator finds the greeting twice from then on, and a count of 1 is a race the fast machine
+      // wins and the slow one loses. Asserting the heading is also what this test means.
       await expect
-        .poll(() => page.getByText(`Signed in as ${account.displayName}`).count())
-        .toBe(1);
+        .poll(() => page.getByRole('heading', { level: 1 }).textContent())
+        .toBe(`Signed in as ${account.displayName}`);
     } finally {
       await page.context().close();
     }
@@ -210,9 +215,12 @@ describe('signing out', () => {
       await page.waitForURL(`${baseUrl}/`, { timeout: 30_000 });
 
       await page.reload({ waitUntil: 'domcontentloaded' });
+      // Scoped for the same reason as above. A reload empties the route announcer, so this one is
+      // not racy today — but it is the same fragile shape, and the next soft navigation added ahead
+      // of it would break it silently.
       await expect
-        .poll(() => page.getByText(`Signed in as ${account.displayName}`).count())
-        .toBe(1);
+        .poll(() => page.getByRole('heading', { level: 1 }).textContent())
+        .toBe(`Signed in as ${account.displayName}`);
 
       // Visiting sign-in with a live session sends you on rather than asking again.
       await page.goto(`${baseUrl}/sign-in`, { waitUntil: 'domcontentloaded' });
