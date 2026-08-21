@@ -49,6 +49,8 @@ async function killTree(child: ChildProcess): Promise<void> {
 export interface StartOptions {
   readonly name: string;
   readonly databaseUrl: string;
+  /** Chosen ahead of time when the client bundle has to know it — otherwise a free one is found. */
+  readonly port?: number;
   /** Extra environment for the server process. */
   readonly env?: Record<string, string>;
   readonly readyTimeoutMs?: number;
@@ -62,7 +64,7 @@ export interface StartOptions {
  * once and starting two production servers sidesteps that, and has the better property anyway: the
  * tests exercise the artefact that actually ships.
  */
-export async function buildNextApp(): Promise<void> {
+export async function buildNextApp(publicApiOrigin: string): Promise<void> {
   mkdirSync(LOG_DIR, { recursive: true });
   const logPath = resolve(LOG_DIR, 'build.log');
   rmSync(logPath, { force: true });
@@ -73,9 +75,11 @@ export async function buildNextApp(): Promise<void> {
     env: {
       ...process.env,
       NODE_ENV: 'production',
-      // Inlined into the client bundle at build time. The integration tests build their own URLs,
-      // so the value only has to exist.
-      NEXT_PUBLIC_API_ORIGIN: 'http://127.0.0.1:0',
+      // Inlined into the client bundle **at build time** — `next start` cannot change it later.
+      // The browser suite drives the real client, so this has to be the origin the primary server
+      // will actually listen on, which is why the port is chosen before the build rather than at
+      // start (tests/setup/global.ts).
+      NEXT_PUBLIC_API_ORIGIN: publicApiOrigin,
       NEXT_TELEMETRY_DISABLED: '1',
       FORCE_COLOR: '0',
     },
@@ -96,7 +100,7 @@ export async function buildNextApp(): Promise<void> {
  */
 export async function startNextServer(options: StartOptions): Promise<RunningServer> {
   mkdirSync(LOG_DIR, { recursive: true });
-  const port = await freePort();
+  const port = options.port ?? (await freePort());
   const baseUrl = `http://127.0.0.1:${port}`;
   const logPath = resolve(LOG_DIR, `${options.name}.log`);
   rmSync(logPath, { force: true });
@@ -118,6 +122,7 @@ export async function startNextServer(options: StartOptions): Promise<RunningSer
         ...process.env,
         NODE_ENV: 'production',
         DATABASE_URL: options.databaseUrl,
+        // Server-side only: the client bundle already has this value inlined from the build.
         NEXT_PUBLIC_API_ORIGIN: baseUrl,
         NEXT_TELEMETRY_DISABLED: '1',
         FORCE_COLOR: '0',

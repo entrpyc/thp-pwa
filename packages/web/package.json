@@ -9,6 +9,7 @@
     "start": "next start"
   },
   "dependencies": {
+    "@node-rs/argon2": "^2.1.0",
     "@thp/db": "*",
     "@thp/shared": "*",
     "next": "^16.3.1",

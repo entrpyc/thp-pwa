@@ -54,6 +54,12 @@ jobs:
       - name: Migrate
         run: npm run migrate
 
+      # The sign-in screen is checked in a real browser — layout overflow, keyboard order and
+      # "no full page reload" are not answerable in a DOM simulation. Chromium only; nothing in
+      # the suite is cross-browser.
+      - name: Install Chromium for the browser tests
+        run: npx playwright install --with-deps chromium
+
       - name: Test
         run: npm test
 

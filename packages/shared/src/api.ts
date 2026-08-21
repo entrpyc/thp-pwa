@@ -12,8 +12,23 @@ export const CORRELATION_ID_HEADER = 'x-correlation-id';
 /**
  * Machine-readable failure codes. The code is what a caller branches on; `message` is for a human
  * reading a log or a screen and is never parsed.
+ *
+ * The three refusal codes are deliberately distinct, because
+ * docs/architecture.md § Cross-cutting concerns makes error types part of the contract:
+ *
+ * - `unauthenticated` — no usable session. The caller does not get to learn whether the route even
+ *   exists; an unknown path answers this too.
+ * - `forbidden` — a real session, but the policy module refused this `(actor, action, resource)`.
+ *   A client that shows an admin control to a member sees this, which is the point: the API
+ *   refuses, the client only hides.
+ * - `invalid_credentials` — sign-in failed. Wrong password, unknown email and malformed input all
+ *   answer with this same code and the same message, so the response never discloses whether an
+ *   address has an account.
  */
 export const API_ERROR_CODES = [
+  'unauthenticated',
+  'forbidden',
+  'invalid_credentials',
   'not_found',
   'internal_error',
   'service_unavailable',

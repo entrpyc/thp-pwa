@@ -1,15 +1,35 @@
-import { describe, expect, it, inject } from 'vitest';
-import { API_PREFIX, CORRELATION_ID_HEADER } from '@thp/shared';
+import { afterAll, beforeAll, describe, expect, it, inject } from 'vitest';
+import { API_PREFIX, CORRELATION_ID_HEADER, ROLE } from '@thp/shared';
+import { closeTestDatabase, signedInAccount } from '../support/accounts';
 import { logOffset, waitForLogLines } from '../support/log-reader';
 
 const baseUrl = inject('apiBaseUrl');
+const databaseUrl = inject('databaseUrl');
 const logPath = inject('apiLogPath');
 const api = (path: string) => `${baseUrl}${API_PREFIX}${path}`;
+
+/**
+ * From step 2 the diagnostics routes require a session, so this suite signs in first and sends the
+ * cookie with every request that is not the (allowlisted) health check.
+ */
+let cookie = '';
+const withSession = (init: RequestInit = {}): RequestInit => ({
+  ...init,
+  headers: { ...(init.headers ?? {}), cookie },
+});
+
+beforeAll(async () => {
+  ({ cookie } = await signedInAccount(baseUrl, databaseUrl, ROLE.admin, 'correlation'));
+}, 60_000);
+
+afterAll(async () => {
+  await closeTestDatabase();
+});
 
 describe('the correlation id', () => {
   it('is present and non-empty on a success and on an error', async () => {
     const ok = await fetch(api('/health'));
-    const failed = await fetch(api('/diagnostics/boom'));
+    const failed = await fetch(api('/diagnostics/boom'), withSession());
 
     for (const response of [ok, failed]) {
       const id = response.headers.get(CORRELATION_ID_HEADER);
@@ -31,9 +51,7 @@ describe('the correlation id', () => {
 
   it('adopts the same id on a failing route too', async () => {
     const supplied = 'caller-supplied-failure-42';
-    const response = await fetch(api('/diagnostics/boom'), {
-      headers: { [CORRELATION_ID_HEADER]: supplied },
-    });
+    const response = await fetch(api('/diagnostics/boom'), withSession({ headers: { [CORRELATION_ID_HEADER]: supplied } }));
     const body = (await response.json()) as { error: { correlationId: string } };
     expect(response.headers.get(CORRELATION_ID_HEADER)).toBe(supplied);
     expect(body.error.correlationId).toBe(supplied);
@@ -50,8 +68,8 @@ describe('the correlation id', () => {
 
   it('gives two concurrent requests distinct ids', async () => {
     const [first, second] = await Promise.all([
-      fetch(api('/diagnostics/echo?lines=3&delayMs=40&marker=concurrent-a')),
-      fetch(api('/diagnostics/echo?lines=3&delayMs=40&marker=concurrent-b')),
+      fetch(api('/diagnostics/echo?lines=3&delayMs=40&marker=concurrent-a'), withSession()),
+      fetch(api('/diagnostics/echo?lines=3&delayMs=40&marker=concurrent-b'), withSession()),
     ]);
     const idA = first.headers.get(CORRELATION_ID_HEADER);
     const idB = second.headers.get(CORRELATION_ID_HEADER);
@@ -66,12 +84,8 @@ describe('the correlation id', () => {
     const idB = 'partition-test-bbbbbbbb';
 
     await Promise.all([
-      fetch(api('/diagnostics/echo?lines=4&delayMs=60&marker=partition-a'), {
-        headers: { [CORRELATION_ID_HEADER]: idA },
-      }),
-      fetch(api('/diagnostics/echo?lines=4&delayMs=60&marker=partition-b'), {
-        headers: { [CORRELATION_ID_HEADER]: idB },
-      }),
+      fetch(api('/diagnostics/echo?lines=4&delayMs=60&marker=partition-a'), withSession({ headers: { [CORRELATION_ID_HEADER]: idA } })),
+      fetch(api('/diagnostics/echo?lines=4&delayMs=60&marker=partition-b'), withSession({ headers: { [CORRELATION_ID_HEADER]: idB } })),
     ]);
 
     const lines = await waitForLogLines(
@@ -101,9 +115,7 @@ describe('the correlation id', () => {
     const offset = logOffset(logPath);
     const supplied = 'every-line-carries-this-id';
 
-    const response = await fetch(api('/diagnostics/echo?lines=5&marker=every-line'), {
-      headers: { [CORRELATION_ID_HEADER]: supplied },
-    });
+    const response = await fetch(api('/diagnostics/echo?lines=5&marker=every-line'), withSession({ headers: { [CORRELATION_ID_HEADER]: supplied } }));
     expect(response.status).toBe(200);
 
     const lines = await waitForLogLines(logPath, offset, (candidates) =>
@@ -120,9 +132,7 @@ describe('the correlation id', () => {
   it('finds every line for one request with a single search on the id', async () => {
     const offset = logOffset(logPath);
     const supplied = 'single-search-id-987654321';
-    await fetch(api('/diagnostics/echo?lines=3&marker=single-search'), {
-      headers: { [CORRELATION_ID_HEADER]: supplied },
-    });
+    await fetch(api('/diagnostics/echo?lines=3&marker=single-search'), withSession({ headers: { [CORRELATION_ID_HEADER]: supplied } }));
     await fetch(api('/health'));
 
     const lines = await waitForLogLines(logPath, offset, (candidates) =>

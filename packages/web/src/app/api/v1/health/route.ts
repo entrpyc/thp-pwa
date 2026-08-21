@@ -1,5 +1,6 @@
 import { pingDatabase } from '@thp/db';
 import type { HealthPayload } from '@thp/shared';
+import { PUBLIC } from '@/server/api/access';
 import { apiRoute } from '@/server/api/route';
 
 export const runtime = 'nodejs';
@@ -14,8 +15,11 @@ export const dynamic = 'force-dynamic';
  * `status`, not the status code.
  *
  * `database.reachable` reflects a real round-trip query, never a configuration value.
+ *
+ * **The one route that answers without a session** — see server/auth/allowlist.ts. It has to: it
+ * must answer *while the database is down*, which is precisely when a session lookup cannot.
  */
-export const GET = apiRoute(async (): Promise<HealthPayload> => {
+export const GET = apiRoute(PUBLIC, async (): Promise<HealthPayload> => {
   const ping = await pingDatabase();
   return {
     status: ping.reachable ? 'ok' : 'degraded',

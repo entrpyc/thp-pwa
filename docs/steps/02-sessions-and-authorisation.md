@@ -259,3 +259,59 @@ sending. `contributor` in any form. Rate limiting, lockout, 2FA, remember-me, se
 component library beyond the two or three elements sign-in actually needs; the tokens land now, the
 components land with the screens that need them. Nothing from
 [slice-architecture.md § Deliberately deferred](../slice-architecture.md#L330).
+
+---
+
+## Settled during implementation
+
+Written after the code, so the next reader sees what the assumptions above actually became.
+
+**Assumptions taken as written.** 1 (two allowlist entries), 2 (server-side `session` table), 3
+(30 days rolling, refreshed at most hourly on use), 5 (`user` columns for this step only), 6
+(seed command, not migration), 7 (one auth resource, three methods), 8 (diagnostics become
+authenticated), 10 (no rate limiting or lockout; constant-time comparison and identical failures
+kept). Assumption 9's four extrapolations shipped as described, including **the error line reading
+by emphasis rather than by hue** — no `--color-danger` was added, and that remains the one most
+worth overruling on sight.
+
+**Assumption 4 settled with numbers.** argon2id via `@node-rs/argon2`, **64 MiB / 3 passes / 1
+lane**. Measured at ~30 ms on the development machine; the ceiling was chosen as memory the target
+host can spare while also running Postgres and the worker, not as a copied default. bcrypt was not
+needed — the prebuilt binary installed without a toolchain.
+
+**Two documents were amended**, both named in the assumptions as needing it:
+
+- [slice-architecture.md § Data model (slice)](../slice-architecture.md#L229) gains `session`.
+- [slice-architecture.md § Extension points](../slice-architecture.md#L339) — the unauthenticated
+  surface is now "no route carrying content", with two entries; and the allowlist lives in the
+  **route wrapper** rather than a separate middleware, because only the wrapper can make access a
+  required argument. A middleware cannot refuse to compile.
+
+**Three decisions the plan did not anticipate.**
+
+1. **The negative control for the sweep is a real route.**
+   `/api/v1/diagnostics/unguarded` is written *without* `apiRoute` — the one case the required-access
+   argument cannot catch, since a route that never calls the wrapper never has to state anything. It
+   answers `200` anonymously only when the request carries a fixture header *and* the diagnostics
+   routes are enabled, so the sweep passes against the running server and the same sweep, re-run with
+   that header, has something real to catch.
+2. **The integration harness picks the primary server's port before the build.**
+   `NEXT_PUBLIC_API_ORIGIN` is inlined into the client bundle at build time and the browser suite
+   drives that bundle for real; the client has no same-host fallback by design
+   ([5.2.2](../prd.md#L706)), so the origin has to be right at build time rather than at start.
+3. **`Secure` is set everywhere except `next dev`**, not "in production". The suites run the
+   production build over `http://127.0.0.1`, which browsers treat as a secure context, so the flag
+   is under test rather than switched off for testing.
+
+**Three defects the new guards found before review did**, each now covered by a test:
+
+- `decodeURIComponent` on a malformed cookie value (`thp_session=%%%`) threw, turning a refusal into
+  a `500`.
+- The domain-declaration guard read `import { type Role }` as a *declaration* of `Role`, so every
+  consumer of the shared vocabulary was reported as duplicating it.
+- The import-boundary guard read an API path named in a doc comment as a hardcoded path.
+
+**Deliberately still absent.** Invitations, reset, deactivation, the last-admin guard, the admin
+console, any email, `contributor`, rate limiting, lockout, 2FA, remember-me, session listing, and
+every screen with a design reference. The authenticated landing at `/` is three lines and a sign-out
+control; `pages/dashboard.png` replaces it whole.

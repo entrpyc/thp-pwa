@@ -1,14 +1,33 @@
-import { beforeAll, describe, expect, it, inject } from 'vitest';
-import { API_PREFIX, CORRELATION_ID_HEADER, isApiErrorBody } from '@thp/shared';
+import { afterAll, beforeAll, describe, expect, it, inject } from 'vitest';
+import { API_PREFIX, CORRELATION_ID_HEADER, ROLE, isApiErrorBody } from '@thp/shared';
 import { BOOM_INTERNAL_MESSAGE } from '@/server/api/diagnostics';
+import { closeTestDatabase, signedInAccount } from '../support/accounts';
 
 const baseUrl = inject('apiBaseUrl');
+const databaseUrl = inject('databaseUrl');
 const api = (path: string) => `${baseUrl}${API_PREFIX}${path}`;
 
+/**
+ * From step 2 the diagnostics routes require a session like everything else, so this suite signs in
+ * first and carries the cookie. A request without one never reaches the envelope behaviour being
+ * tested, because it is refused before the handler runs — which is step 2 working, not a regression
+ * in step 1. Health stays anonymous: it is on the allowlist.
+ */
+let cookie = '';
+const withSession = (init: RequestInit = {}): RequestInit => ({
+  ...init,
+  headers: { ...(init.headers ?? {}), cookie },
+});
+
+afterAll(async () => {
+  await closeTestDatabase();
+});
+
 describe('the /api/v1 envelope', () => {
-  beforeAll(() => {
+  beforeAll(async () => {
     expect(baseUrl).toMatch(/^http:\/\/127\.0\.0\.1:\d+$/);
-  });
+    ({ cookie } = await signedInAccount(baseUrl, databaseUrl, ROLE.admin, 'envelope'));
+  }, 60_000);
 
   it('answers a health check over HTTP with 200 and a JSON body', async () => {
     const response = await fetch(api('/health'));
@@ -20,7 +39,7 @@ describe('the /api/v1 envelope', () => {
   });
 
   it('puts a successful payload at the top level, with no error key', async () => {
-    const response = await fetch(api('/diagnostics/echo?lines=1&marker=envelope-success'));
+    const response = await fetch(api('/diagnostics/echo?lines=1&marker=envelope-success'), withSession());
     expect(response.status).toBe(200);
     const body = (await response.json()) as Record<string, unknown>;
     expect(body['marker']).toBe('envelope-success');
@@ -28,7 +47,7 @@ describe('the /api/v1 envelope', () => {
   });
 
   it('returns the error envelope for a failure the route means to return', async () => {
-    const response = await fetch(api('/diagnostics/handled-failure'));
+    const response = await fetch(api('/diagnostics/handled-failure'), withSession());
     expect(response.status).toBe(503);
     expect(response.headers.get('content-type')).toContain('application/json');
     const body: unknown = await response.json();
@@ -40,14 +59,14 @@ describe('the /api/v1 envelope', () => {
   });
 
   it('returns the error envelope with 500 for an unhandled throw', async () => {
-    const response = await fetch(api('/diagnostics/boom'));
+    const response = await fetch(api('/diagnostics/boom'), withSession());
     expect(response.status).toBe(500);
     const body: unknown = await response.json();
     expect(isApiErrorBody(body)).toBe(true);
   });
 
   it('leaks neither the internal message nor a stack trace on an unhandled throw', async () => {
-    const response = await fetch(api('/diagnostics/boom'));
+    const response = await fetch(api('/diagnostics/boom'), withSession());
     const text = await response.text();
     expect(text).not.toContain(BOOM_INTERNAL_MESSAGE);
     expect(text).not.toContain('swordfish');
@@ -57,7 +76,7 @@ describe('the /api/v1 envelope', () => {
   });
 
   it('answers an unknown path under /api/v1 with a JSON 404, not an HTML page', async () => {
-    const response = await fetch(api('/there-is-no-such-route'));
+    const response = await fetch(api('/there-is-no-such-route'), withSession());
     expect(response.status).toBe(404);
     expect(response.headers.get('content-type')).toContain('application/json');
     const body: unknown = await response.json();
@@ -67,15 +86,15 @@ describe('the /api/v1 envelope', () => {
   });
 
   it('answers the bare /api/v1 root with the same JSON 404', async () => {
-    const response = await fetch(`${baseUrl}${API_PREFIX}`);
+    const response = await fetch(`${baseUrl}${API_PREFIX}`, withSession());
     expect(response.status).toBe(404);
     expect(response.headers.get('content-type')).toContain('application/json');
   });
 
   it('keeps the machine-readable code stable across two identical failures', async () => {
     const [first, second] = await Promise.all([
-      fetch(api('/diagnostics/boom')).then((response) => response.json() as Promise<unknown>),
-      fetch(api('/diagnostics/boom')).then((response) => response.json() as Promise<unknown>),
+      fetch(api('/diagnostics/boom'), withSession()).then((response) => response.json() as Promise<unknown>),
+      fetch(api('/diagnostics/boom'), withSession()).then((response) => response.json() as Promise<unknown>),
     ]);
     if (!isApiErrorBody(first) || !isApiErrorBody(second)) throw new Error('expected envelopes');
 
@@ -89,7 +108,7 @@ describe('the /api/v1 envelope', () => {
   it('carries the correlation id on every response, success and failure alike', async () => {
     const paths = ['/health', '/diagnostics/handled-failure', '/diagnostics/boom', '/nope'];
     for (const path of paths) {
-      const response = await fetch(api(path));
+      const response = await fetch(api(path), withSession());
       expect(response.headers.get(CORRELATION_ID_HEADER), path).toBeTruthy();
       expect(response.headers.get('content-type'), path).toContain('application/json');
     }
@@ -99,7 +118,7 @@ describe('the /api/v1 envelope', () => {
 describe('the envelope agrees with the response headers', () => {
   it('reports the same correlation id in the body as in the header', async () => {
     for (const path of ['/diagnostics/handled-failure', '/diagnostics/boom', '/nope']) {
-      const response = await fetch(api(path));
+      const response = await fetch(api(path), withSession());
       const body: unknown = await response.json();
       if (!isApiErrorBody(body)) throw new Error(`expected an error envelope from ${path}`);
       expect(body.error.correlationId, path).toBe(response.headers.get(CORRELATION_ID_HEADER));

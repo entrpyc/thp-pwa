@@ -1,0 +1,55 @@
+/*
+ * The token layer.
+ *
+ * This is the *Quick token block* of docs/design referencess png/style-guide.md, and nothing else.
+ * It is the single file in the application that declares a colour, a radius, a spacing value or a
+ * type size; every screen from here on composes from these names, and no component declares a raw
+ * hex, a pixel radius or an ad-hoc spacing value — tools/style-tokens.ts fails the build if one
+ * does.
+ *
+ * Keep it in step with the guide by editing the guide first. A test asserts the two match exactly,
+ * so they cannot drift silently.
+ */
+:root {
+  /* backgrounds */
+  --color-bg: #01101F;
+  --color-bg-deep: #00162B;
+  --color-surface: #0A1A2C;
+  --color-surface-raised: #0F2438;
+
+  /* accent */
+  --color-primary: #6F2BDD;
+  --color-primary-strong: #7030CE;
+  --color-primary-icon: #8B5CF6;
+  --color-primary-soft: rgba(111,43,221,0.12);
+
+  /* category */
+  --color-notes: #22C55E;
+  --color-notes-bg: #03352B;
+
+  /* text */
+  --color-text: #FCFCFC;
+  --color-text-muted: #8A97AC;
+  --color-text-dim: #6B7A90;
+
+  /* border */
+  --color-border: rgba(255,255,255,0.08);
+  --color-border-strong: rgba(255,255,255,0.14);
+
+  /* radius */
+  --radius-sm: 8px;
+  --radius-md: 12px;
+  --radius-lg: 16px;
+  --radius-pill: 999px;
+
+  /* spacing (4px base) */
+  --space-1: 4px;  --space-2: 8px;  --space-3: 12px; --space-4: 16px;
+  --space-5: 20px; --space-6: 24px; --space-8: 32px;
+
+  /* type */
+  --font-sans: "Inter", system-ui, -apple-system, sans-serif;
+  --fs-title: 2rem;
+  --fs-card-title: 1.125rem;
+  --fs-body: 0.875rem;
+  --fs-meta: 0.8125rem;
+}

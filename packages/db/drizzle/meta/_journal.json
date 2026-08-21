@@ -8,6 +8,13 @@
       "when": 1787206167041,
       "tag": "0000_domain_enums",
       "breakpoints": true
+    },
+    {
+      "idx": 1,
+      "version": "7",
+      "when": 1787211392662,
+      "tag": "0001_accounts_and_sessions",
+      "breakpoints": true
     }
   ]
 }

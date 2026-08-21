@@ -49,6 +49,24 @@ function declarationPattern(name: string): RegExp {
   return new RegExp(String.raw`\b(?:const|let|var|enum|type|interface|class)\s+` + name + String.raw`\b`);
 }
 
+/**
+ * Blank out comments and module statements, keeping the line count intact.
+ *
+ * Two things that are not declarations and were being read as one:
+ *
+ * - **An import.** Bringing the canonical vocabulary in is the behaviour this check exists to
+ *   encourage; reporting every consumer as a duplicate would punish exactly that.
+ * - **Prose.** Naming a declaration in a comment — including in this file's own explanation of the
+ *   rule — is not restating it.
+ */
+function scannableSource(source: string): string {
+  const blank = (text: string) => text.replace(/[^\n]/g, ' ');
+  return source
+    .replace(/\/\*[\s\S]*?\*\//g, blank)
+    .replace(/^[ \t]*\/\/[^\n]*/gm, blank)
+    .replace(/^[ \t]*(?:import|export)\b[\s\S]*?from\s*['"][^'"]+['"];?/gm, blank);
+}
+
 /** Quoted strings inside every array literal on a line, e.g. `['a', 'b']` -> `[['a','b']]`. */
 function arrayLiteralMembers(line: string): string[][] {
   return [...line.matchAll(/\[([^\][]*)\]/g)].map((match) =>
@@ -72,7 +90,7 @@ export function checkDomainDeclarations(
 
   for (const file of files) {
     const relativeFile = toPosix(relative(root, file));
-    const lines = readFileSync(file, 'utf8').split('\n');
+    const lines = scannableSource(readFileSync(file, 'utf8')).split('\n');
 
     for (const declaration of declarations) {
       const canonical = relativeFile === declaration.canonicalFile;

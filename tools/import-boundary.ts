@@ -31,6 +31,21 @@ function isPackage(specifier: string, name: string): boolean {
 }
 
 /**
+ * Blank out comment bodies, keeping line numbers and offsets intact.
+ *
+ * A doc comment that *names* an API path is documentation, not a hardcoded path, and a rule that
+ * cannot tell the two apart teaches people to stop writing the documentation rather than to stop
+ * hardcoding the path.
+ */
+function withoutComments(source: string): string {
+  return source
+    .replace(/\/\*[\s\S]*?\*\//g, (comment) => comment.replace(/[^\n]/g, ' '))
+    .replace(/(^|[^:])\/\/[^\n]*/g, (match, prefix: string) =>
+      prefix + match.slice(prefix.length).replace(/./g, ' '),
+    );
+}
+
+/**
  * A client module is anything under `src/client/`, plus any file anywhere in the app that opts into
  * the browser with a `'use client'` directive. Scoping it to a folder alone would leave the rule
  * trivially side-steppable.
@@ -56,7 +71,7 @@ export function checkClientBoundary(srcDir: string, files?: readonly string[]): 
   const violations: BoundaryViolation[] = [];
 
   for (const file of targets) {
-    const source = readFileSync(file, 'utf8');
+    const source = withoutComments(readFileSync(file, 'utf8'));
     const relativeFile = toPosix(relative(root, file));
     const lines = source.split('\n');
 

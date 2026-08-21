@@ -1,12 +1,17 @@
 import type { ReactNode } from 'react';
+import './tokens.css';
+import './globals.css';
 
 export const metadata = {
   title: 'Teaching Hub',
 };
 
 /**
- * The bare document Next.js needs in order to boot. **No page is designed in this step** — the
- * first designed screen arrives with the step that owns it, built from its reference PNG.
+ * The document, plus the two stylesheets every screen depends on: the token layer built from
+ * docs/design referencess png/style-guide.md, and the document-level base composed from it.
+ *
+ * Still no navigation chrome — the top and bottom navigation have design references and arrive
+ * with the steps that own them.
  */
 export default function RootLayout({ children }: { children: ReactNode }) {
   return (

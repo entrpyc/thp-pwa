@@ -1,4 +1,12 @@
 export {
+  findUserByEmail,
+  findUserById,
+  insertUser,
+  normaliseEmail,
+  type NewUser,
+  type UserRow,
+} from './accounts';
+export {
   closeDatabase,
   createDatabase,
   getDatabase,
@@ -11,4 +19,13 @@ export {
 } from './client';
 export { requireDatabaseUrl } from './env';
 export { MIGRATIONS_DIR, runMigrations, type RunMigrationsOptions } from './migrate';
+export {
+  findLiveSessionByTokenHash,
+  insertSession,
+  revokeSessionByTokenHash,
+  touchSession,
+  type LiveSession,
+  type NewSession,
+  type SessionRow,
+} from './sessions';
 export * as schema from './schema';

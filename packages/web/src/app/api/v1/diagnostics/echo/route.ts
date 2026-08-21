@@ -1,3 +1,4 @@
+import { permits } from '@/server/api/access';
 import { apiRoute } from '@/server/api/route';
 import { assertDiagnosticsEnabled } from '@/server/api/diagnostics';
 import { logger } from '@/server/observability/logger';
@@ -11,7 +12,7 @@ const sleep = (ms: number) => new Promise((resolve) => setTimeout(resolve, ms));
  * Logs a caller-controlled number of lines, optionally pausing between them so two requests
  * interleave. Used to prove that concurrent requests do not share a correlation id.
  */
-export const GET = apiRoute(async (request, context) => {
+export const GET = apiRoute(permits('diagnostics.run'), async (request, context) => {
   assertDiagnosticsEnabled();
   const url = new URL(request.url);
   const lines = Math.min(Number(url.searchParams.get('lines') ?? 3), 20);

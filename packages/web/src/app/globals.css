@@ -1,0 +1,37 @@
+/*
+ * Document-level base. Everything here is composed from tokens.css — see the note there.
+ *
+ * There is no component library in this step. The sign-in screen needs a card, a field, a button
+ * and an error line, and those live with the screen; components land with the screens that need
+ * them.
+ */
+
+*,
+*::before,
+*::after {
+  box-sizing: border-box;
+}
+
+html,
+body {
+  margin: 0;
+  padding: 0;
+}
+
+body {
+  background: var(--color-bg);
+  color: var(--color-text);
+  font-family: var(--font-sans);
+  font-size: var(--fs-body);
+  line-height: 1.4;
+  -webkit-font-smoothing: antialiased;
+}
+
+/*
+ * One visible focus treatment for the whole product, in the one accent. The sign-in screen has to
+ * be operable by keyboard alone, and an invisible focus ring is the usual reason that fails.
+ */
+:focus-visible {
+  outline: 2px solid var(--color-primary-strong);
+  outline-offset: 2px;
+}

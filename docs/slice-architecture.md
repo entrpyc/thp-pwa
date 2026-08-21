@@ -233,6 +233,17 @@ adding it is a one-value migration plus four policy cases ([slice-prd.md § Stil
 remaining](slice-prd.md#L171)). No avatar. Playback speed lives on the user because
 [3.2.4](prd.md#L65) persists it across recordings, not per recording.
 
+> **Amended in step 2** — one table added. `session (id, user_id, token_hash, created_at,
+> last_used_at, expires_at, revoked_at)`. Sessions are **server-side records, not signed stateless
+> tokens**: the cookie carries an opaque random token and only its hash is stored. That is what
+> makes sign-out real rather than a request that the browser forget something, and what lets step
+> 4's deactivation ([3.1.7](prd.md#L49)) end a session that is already open instead of waiting for
+> an expiry. A stateless token makes both unbuildable without a revocation list, which is this table
+> with extra steps.
+>
+> Uniqueness on `user.email` is enforced at the database on `lower(email)`, so two accounts
+> differing only in case are impossible however the row was written.
+
 **Member-owned state** — exactly one entity: `playback_progress (user_id, recording_id,
 position_ms, updated_at)`, primary-keyed on the pair, last-write-wins on the furthest position
 ([3.2.5](prd.md#L66)). No listening history, no completed marker, no notes, no highlights — all
@@ -325,7 +336,7 @@ The seams this slice leaves. **This is the section slice 02 reads first.**
 | **Client-owned playback state** | Progress and speed are held client-side and pushed to a single-position endpoint | [§3.18](prd.md#L391) adds the append-only outbox and a batch sync endpoint alongside it, plus the delta manifest for the pull direction. An addition, not a rewrite, which is [slice-prd.md § Rationale](slice-prd.md#L241)'s stated check that this cut is not a dead end. |
 | **Absolute API origin over a versioned contract** | The client's only route to data | [§5.2](prd.md#L701) wraps the same build in Capacitor; the service worker and manifest layer over the same contract. |
 | **Queue port** | The interface the API enqueues through | Redis/BullMQ dispatch drops in behind it; the ledger and the dashboard query are untouched. |
-| **Unauthenticated surface — `GET /api/v1/health` only** | The session middleware's allowlist — an enumerated list, not a convention | Health is the single route outside [3.1.2](prd.md#L44), because it answers while the database is down and a session lookup then cannot. Step 2 ships the allowlist with a test asserting every route *not* on it refuses an anonymous request, which is what keeps this seam **checkable** rather than reviewed — and what makes adding a second public route a deliberate edit to a named list. [5.3.1](prd.md#L718)'s podcast RSS and [3.8.13](prd.md#L177)'s shared mind map still arrive as the separate Feed service, so the API itself grows no further public surface. (`/api/v1/diagnostics/*` are not an exception: they `404` in a deployment.) |
+| **Unauthenticated surface — no route carrying content** | The route wrapper's allowlist — an enumerated list, not a convention | Health is the single route outside [3.1.2](prd.md#L44), because it answers while the database is down and a session lookup then cannot. Step 2 ships the allowlist with a test asserting every route *not* on it refuses an anonymous request, which is what keeps this seam **checkable** rather than reviewed — and what makes adding a second public route a deliberate edit to a named list. [5.3.1](prd.md#L718)'s podcast RSS and [3.8.13](prd.md#L177)'s shared mind map still arrive as the separate Feed service, so the API itself grows no further public surface. (`/api/v1/diagnostics/*` are not an exception: they require a session like everything else, and `404` in a deployment.)<br><br>**Amended in step 2**, in two ways. (1) The heading said `GET /api/v1/health` *only*, which is not satisfiable: **the sign-in route cannot require a session**. The list ships with two entries — health and `POST /api/v1/auth/session` — and the property actually being protected is that no unauthenticated route carries content. Step 3 (invitation accept) and step 4 (password reset) each add one, and each addition is a deliberate edit to the named list. (2) The allowlist lives in the **route wrapper**, not a separate middleware: `apiRoute` takes access as a required first argument, so a route cannot be written without stating it, and a route declared public that is not on the list is refused anyway. A middleware could not have the first property. |
 
 ## Deliberately deferred
 

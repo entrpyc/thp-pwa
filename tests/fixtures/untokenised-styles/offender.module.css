@@ -1,0 +1,14 @@
+/*
+ * A deliberate violation, so tools/style-tokens.ts can be seen failing. Never imported.
+ *
+ * Every line below is the thing that goes wrong once there is no PNG to compare a screen against:
+ * a colour that is nearly the guide's, a radius that is nearly a token, a padding that is nearly
+ * on the scale. Nothing about the rendered result would look wrong enough to catch by eye.
+ */
+.almost {
+  --color-local: #6F2BDE;
+  background: #0A1A2D;
+  border: 1px solid rgba(255, 255, 255, 0.09);
+  border-radius: 10px;
+  padding: 18px 16px;
+}

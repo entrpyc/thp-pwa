@@ -71,11 +71,12 @@ describe('migrations apply to an empty database by one command', () => {
       `;
       expect(types.map((row) => row.typname)).toEqual(['pipeline_step', 'user_role']);
 
-      // Slice 01 step 1 ships no tables — the data model arrives with the steps that use it.
+      // Tables arrive with the step that uses them. Step 2 adds accounts and sessions and nothing
+      // else — `recording`, `job` and the rest are still ahead.
       const tables = await sql<{ tablename: string }[]>`
-        select tablename from pg_tables where schemaname = 'public'
+        select tablename from pg_tables where schemaname = 'public' order by tablename
       `;
-      expect(tables).toEqual([]);
+      expect(tables.map((row) => row.tablename)).toEqual(['session', 'user']);
     } finally {
       await sql.end({ timeout: 5 });
     }
