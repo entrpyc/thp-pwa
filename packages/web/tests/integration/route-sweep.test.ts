@@ -57,6 +57,8 @@ describe('every /api/v1 route not on the allowlist refuses an anonymous request'
     expect(paths).toContain(`${API_PREFIX}/health`);
     expect(paths).toContain(`${API_PREFIX}/auth/session`);
     expect(paths).toContain(`${API_PREFIX}/diagnostics/admin-only`);
+    expect(paths).toContain(`${API_PREFIX}/invitations`);
+    expect(paths).toContain(`${API_PREFIX}/invitations/accept`);
     // The catch-all is discovered too, standing in for any path no route claims.
     expect(routes.some((route) => route.isCatchAll)).toBe(true);
   });
@@ -83,7 +85,7 @@ describe('every /api/v1 route not on the allowlist refuses an anonymous request'
   }, 60_000);
 
   it('subtracts exactly one named list, and it is the one the API reads', () => {
-    expect(UNAUTHENTICATED_ROUTES).toHaveLength(2);
+    expect(UNAUTHENTICATED_ROUTES).toHaveLength(4);
     for (const entry of UNAUTHENTICATED_ROUTES) {
       expect(isAllowlisted(entry.method, entry.path), `${entry.method} ${entry.path}`).toBe(true);
       expect(entry.because.length).toBeGreaterThan(20);
@@ -105,6 +107,28 @@ describe('every /api/v1 route not on the allowlist refuses an anonymous request'
       const code = isApiErrorBody(body) ? body.error.code : null;
       expect(code, `${entry.method} ${entry.path}`).not.toBe('unauthenticated');
       expect(response.status, `${entry.method} ${entry.path}`).not.toBe(404);
+    }
+  });
+
+  it('discloses no account content to an anonymous caller with no credential', async () => {
+    // Reachable is half the property. The other half is what the row is actually protecting: an
+    // unauthenticated route may exist, but none of them may hand out account content. Asked with
+    // nothing — no cookie, no token, no credentials — every one of the four must answer with a
+    // verdict or a refusal, never with a person.
+    for (const entry of UNAUTHENTICATED_ROUTES) {
+      const response = await fetch(`${baseUrl}${entry.path}`, {
+        method: entry.method,
+        headers: { accept: 'application/json', 'content-type': 'application/json' },
+        ...(entry.method === 'POST' ? { body: JSON.stringify({}) } : {}),
+      });
+      const body: unknown = await response.json().catch(() => undefined);
+      const keys = typeof body === 'object' && body !== null ? Object.keys(body) : [];
+
+      const where = `${entry.method} ${entry.path}`;
+      expect(keys, where).not.toContain('user');
+      for (const field of ['id', 'email', 'displayName', 'role', 'passwordHash', 'token']) {
+        expect(JSON.stringify(body), `${where} disclosed ${field}`).not.toContain(`"${field}"`);
+      }
     }
   });
 

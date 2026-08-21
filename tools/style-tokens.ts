@@ -1,5 +1,6 @@
 import { readFileSync, readdirSync, statSync } from 'node:fs';
 import { join, relative, resolve, sep } from 'node:path';
+import { walkFiles } from './fs-walk';
 
 /**
  * The style-guide guard.
@@ -144,5 +145,77 @@ export function checkStyleTokens(srcDir: string, tokenFile: string): StyleViolat
 }
 
 export function formatStyleViolations(violations: readonly StyleViolation[]): string {
+  return violations.map((v) => `${v.file}:${v.line}  [${v.rule}]  ${v.detail}`).join('\n');
+}
+
+// ---------------------------------------------------------------------------------------------
+
+/**
+ * The same rule, applied to TypeScript.
+ *
+ * Step 3 introduced a surface no stylesheet can reach: **the invitation email**. Mail clients do
+ * not support CSS custom properties and several strip `<style>` blocks entirely, so the template
+ * has to inline literal values — which means the guard above, scanning only `.css`, would not see
+ * the one place in the codebase where a raw colour actually appears.
+ *
+ * So the rule is answered rather than dodged. This scans application TypeScript for spelled-out
+ * colours and exempts a **named list of files** rather than a pattern: the exception is one path
+ * somebody had to add, not a shape anything can grow into.
+ */
+export interface InlineColourViolation {
+  readonly file: string;
+  readonly line: number;
+  readonly rule: 'raw-colour-in-source';
+  readonly detail: string;
+}
+
+/** The only files permitted to spell a colour out, repo-relative and posix. */
+export const COLOUR_LITERAL_FILES: readonly string[] = [
+  'packages/web/src/server/mail/theme.ts',
+];
+
+/**
+ * Six or eight hex digits, or three/four shorthand — anchored so it does not fire on the hex in a
+ * SHA-256 example or in an id. A colour literal in source is written as a string, so the pattern
+ * only looks inside quotes.
+ */
+const QUOTED_HEX_COLOUR = /['"`]#[0-9A-Fa-f]{3,8}['"`]/;
+const QUOTED_FUNCTIONAL_COLOUR = /['"`][^'"`]*\b(?:rgb|rgba|hsl|hsla|oklch|lab)\([^'"`]*['"`]/i;
+
+export function checkColourLiterals(
+  repoRoot: string,
+  allowedFiles: readonly string[] = COLOUR_LITERAL_FILES,
+  sourceDirs: readonly string[] = ['packages/web/src', 'packages/shared/src', 'packages/worker/src'],
+): InlineColourViolation[] {
+  const root = resolve(repoRoot);
+  const allowed = new Set(allowedFiles);
+  const violations: InlineColourViolation[] = [];
+
+  for (const dir of sourceDirs) {
+    for (const file of walkFiles(resolve(root, dir))) {
+      const relativeFile = relative(root, file).split(sep).join('/');
+      if (allowed.has(relativeFile)) continue;
+
+      withoutComments(readFileSync(file, 'utf8'))
+        .split('\n')
+        .forEach((raw, index) => {
+          if (QUOTED_HEX_COLOUR.test(raw) || QUOTED_FUNCTIONAL_COLOUR.test(raw)) {
+            violations.push({
+              file: relativeFile,
+              line: index + 1,
+              rule: 'raw-colour-in-source',
+              detail: raw.trim(),
+            });
+          }
+        });
+    }
+  }
+
+  return violations;
+}
+
+export function formatColourLiteralViolations(
+  violations: readonly InlineColourViolation[],
+): string {
   return violations.map((v) => `${v.file}:${v.line}  [${v.rule}]  ${v.detail}`).join('\n');
 }

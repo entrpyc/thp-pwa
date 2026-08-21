@@ -14,4 +14,8 @@ export const rules: PolicyRules = {
   'session.read': { admin: true, member: true },
   'diagnostics.run': { admin: true, member: true },
   'diagnostics.admin': { admin: true },
+  'invitation.issue': { admin: true, member: false },
+  'invitation.list': { admin: true, member: false },
+  'invitation.revoke': { admin: true, member: false },
+  'invitation.resend': { admin: true, member: false },
 };

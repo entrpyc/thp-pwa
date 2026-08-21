@@ -50,7 +50,9 @@ without a session.
 | `npm run db:generate`| Regenerate SQL migrations after changing the Drizzle schema.                  |
 
 Every command reads one `.env` at the repository root — [scripts/with-env.mjs](scripts/with-env.mjs)
-loads it before handing off, so there is no second env file inside a package.
+loads it before handing off, so there is no second env file inside a package. (`THP_SKIP_DOTENV=1`
+suppresses that load; only the seed-admin suite sets it, because a test that observes how the
+command handles a given environment has to be the thing that supplies it.)
 
 CI ([.github/workflows/ci.yml](.github/workflows/ci.yml)) runs install → typecheck → migrate →
 test → build on a fresh runner, which is what keeps this table honest. The test step covers *run*
@@ -102,9 +104,12 @@ fails the build, not by convention.
 
 ## Accounts, sessions and authorisation
 
-**Every `/api/v1` route requires a session**, with exactly two enumerated exceptions:
+**Every `/api/v1` route requires a session**, with exactly four enumerated exceptions:
 `GET /api/v1/health` (it must answer while the database is down, which is when a session lookup
-cannot) and `POST /api/v1/auth/session` (signing in is how a session comes to exist). The list is
+cannot), `POST /api/v1/auth/session` (signing in is how a session comes to exist), and the two
+invitation-accept routes `GET` and `POST /api/v1/invitations/accept` (an invitee has no account
+yet, and a dead link has to be able to say so before anybody chooses a password). None of the four
+carries account content. The list is
 [packages/web/src/server/auth/allowlist.ts](packages/web/src/server/auth/allowlist.ts), and it is
 the *only* source of exceptions — a route declared public that is not on it refuses anonymous
 callers like any other.
@@ -129,6 +134,11 @@ input all answer `invalid_credentials` with the same status and the same message
 never discloses whether an address has an account. Every refusal is logged with actor, action and
 target under the request's correlation id.
 
+Invitations add six more, and the splits between them are deliberate: `invalid_input` (the request
+could not be read), `weak_password` (it could, and the password was refused on its merits),
+`email_taken`, `invitation_exists` (use resend), and — separated so a dead link can say which —
+`invitation_expired` versus `invitation_invalid`.
+
 ### Sessions
 
 An opaque 32-byte token in an HTTP-only, `SameSite=Lax`, `Path=/` cookie — `Secure` everywhere but
@@ -151,15 +161,83 @@ is a credential in version control forever. It refuses a weak or absent password
 again against an existing account leaves the password **unchanged** — a seeder that silently
 re-seeds is a back door.
 
+### Invitations
+
+New accounts exist only by invitation. An admin `POST /api/v1/invitations` with an email and a
+role; the invitee gets a message, opens `/accept-invitation?token=…`, chooses a password, and is
+signed in by the same response that creates the account — there is no sign-in form in between.
+
+- The token is 32 random bytes, **stored only as its SHA-256**, exactly like a session token.
+- The window is **7 days**. Resend revokes the old token and issues a new one on a new window, so
+  after a resend exactly one link works.
+- **At most one live invitation per address**, enforced by a partial unique index rather than by a
+  check somebody has to remember. Revoking or accepting frees the address again, which is what
+  makes resend legal.
+- Status (`pending | expired | revoked | accepted`) is **derived** from the timestamps, never
+  stored — a stored status is a second source of truth a clock can make wrong.
+- Issue, accept, revoke and resend are each logged with actor, action and target under the
+  request's correlation id. No log line, error message or payload ever carries a raw token.
+
+There is no interface for issuing or managing them yet; that is the admin console, and it is the
+next step. Until then it is the API.
+
+### Email
+
+One module sends everything: [packages/web/src/server/mail](packages/web/src/server/mail).
+[tools/mail-boundary.ts](tools/mail-boundary.ts) fails the build if anything outside it imports a
+mail library, for the same reason only `packages/db` may import a database driver.
+
+The adapter speaks **SMTP and names no vendor**, so moving between providers is four environment
+values rather than a change of code. `.env.example` ships **Resend**'s settings, which is what this
+deployment sends through: host `smtp.resend.com`, port `465`, user `resend`, password an API key.
+
+> **Deliverability is yours to configure, not the adapter's.** Whoever `MAIL_FROM` claims to be, the
+> domain has to be verified with the provider and carry SPF and DKIM records, or invitations will be
+> filed as spam or rejected outright. Resend walks you through both when you add a domain. Sending
+> from a domain you have not verified is the single most likely reason a person never receives their
+> invitation — and nothing in the application can detect it, because SMTP accepted the message.
+
+`MAIL_TRANSPORT` selects the adapter:
+
+| Value | What it does |
+| :--- | :--- |
+| `smtp` | Sends. The only value a deployment should ever use. |
+| `capture` | Appends each message — headers, HTML and text — to `MAIL_CAPTURE_PATH` as JSON lines and sends nothing. What `npm test` uses, and what development uses. |
+| `failing` | Refuses every message. Exists so the suite can drive a send failure. |
+
+To read a captured invitation during development, pull the HTML out of the last line and open it:
+
+```sh
+node -e "const l=require('fs').readFileSync('.tmp/mail/outbox.jsonl','utf8').trim().split('\n');require('fs').writeFileSync('.tmp/mail/last.html',JSON.parse(l.at(-1)).html)"
+```
+
+A **send failure does not destroy the invitation**: the row is written first, a transport failure
+returns `service_unavailable`, and the invitation stays pending and resendable. Rolling back would
+throw away an intent the admin already expressed, and resend exists precisely for this.
+
+### Passwords
+
+One statement of the rules, in [packages/shared/src/passwords.ts](packages/shared/src/passwords.ts),
+read by the seed command, by the invitation-accept screen and by the API that refuses. The screen
+prints the rule *before* anyone can fail it — a rule you learn by being refused is an exam.
+
 ### Design
 
-There is no PNG for the sign-in screen. By operator decision, auth screens are composed from
+There is no PNG for the sign-in screen, and none for the accept-invitation screen. By operator
+decision, auth screens are composed from
 [the style guide](docs/design%20referencess%20png/style-guide.md) instead, so
 [packages/web/src/app/tokens.css](packages/web/src/app/tokens.css) is the guide's *Quick token
 block* and nothing else. Two tests hold that: one asserts the token file and the guide match name
 for name, and one ([tools/style-tokens.ts](tools/style-tokens.ts)) fails any stylesheet that spells
 a colour, a radius or a spacing value the tokens already cover. Every screen from here on reads
-this layer.
+this layer, and the accept-invitation screen composes its card, field, button and error line from
+the sign-in stylesheet rather than restating them.
+
+**The invitation email is the one exception, and it is a named one.** Mail clients do not support
+CSS custom properties and several strip `<style>` blocks, so the template inlines literal values
+from [server/mail/theme.ts](packages/web/src/server/mail/theme.ts) — the only file in the codebase
+allowed to spell a colour out. A test asserts every value there equals the token it copies, and the
+guard that forbids colour literals in source exempts that one path **by name**, not by pattern.
 
 ## Database
 
@@ -178,17 +256,18 @@ order. Read the diff, not the ORM.
 ## Tests
 
 - `npx vitest run --project unit` — no database, no server. Guards and pure logic.
-- `npx vitest run --project integration` — builds the app once, starts **two** production servers
-  (one on a working database, one on a deliberately broken one) and talks to them over HTTP,
-  against a real Postgres. Nothing here is mocked: the migration and pgvector checks would be
-  meaningless against a fake. Server logs land in `.tmp/logs/`.
+- `npx vitest run --project integration` — builds the app once, starts **three** production
+  servers (one healthy, one on a deliberately broken database, one whose mail transport refuses
+  everything) and talks to them over HTTP, against a real Postgres. Nothing here is mocked: the
+  migration and pgvector checks would be meaningless against a fake. Server logs land in
+  `.tmp/logs/`, and captured mail in `.tmp/mail/`.
 
   It runs against a **throwaway database created on your instance and dropped afterwards**, not the
   one in `.env`. The suite writes accounts and sessions, and those must not end up in the database
   you sign into; it also means every run starts from an empty `user` table, so no test can quietly
   depend on what the last run left behind.
 
-  The sign-in screen is driven in a real Chromium via Playwright — layout overflow at a phone width,
+  The sign-in and accept-invitation screens are driven in a real Chromium via Playwright — layout overflow at a phone width,
   keyboard order, and "the page did not reload" are not answerable in a DOM simulation. Run
   `npx playwright install chromium` once.
 

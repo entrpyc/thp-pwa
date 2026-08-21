@@ -183,7 +183,7 @@ each later slice adds its own panel.*
 | [§3.12](prd.md#L257) Timestamp notes | Anchors to the playback position the player already tracks; markers hang on the progress bar built here. |
 | [§3.13](prd.md#L281) Reflective questionnaires | A new admin-authored entity attached to the recording page below the summary. |
 | [§3.14](prd.md#L300) Flow tracker | Depends on cross-referencing ([3.9.8](prd.md#L192)) and on listening history ([3.2.7](prd.md#L68)), which is itself deferred — so this is at least two slices out. |
-| [§3.15](prd.md#L318) Highlights playlist | Pins the `(recording, timestamp)` pair the player already resolves; needs notes for [3.15.3](prd.md#L328). |
+| [§3.15](prd.md#L318) Highlights playlist | Pins the `(recording, timestamp)` pair the player already resolves; needs notes for [3.15.3](prd.md#L326). |
 | [§3.16](prd.md#L334) SOS signal | Independent of the content pipeline; needs only accounts and, to be useful, notifications. |
 | [§3.17](prd.md#L361) Notifications | Fans out per recipient off events this slice already emits — publish, transcription failure, summary ready. Push delivery pairs naturally with the store packaging slice. |
 | [§3.18](prd.md#L391) Offline support & downloads | Client-side cache and outbox over the API contract this slice defines; the playback state at [3.2.5](prd.md#L66) is already client-owned, which is what makes [3.18.14](prd.md#L419) an addition rather than a rewrite. |

@@ -7,8 +7,8 @@ import { PIPELINE_STEPS, ROLES } from '@thp/shared';
  * module, and the import-boundary guard fails the build if it ever is.
  *
  * **Tables arrive with the step that uses them.** Step 1 shipped the migration mechanism and the
- * two domain enums; step 2 adds `user` and `session` and nothing else. `recording`, `job`,
- * `review_item` and the rest are still absent.
+ * two domain enums; step 2 added `user` and `session`; step 3 adds `invitation` and nothing else.
+ * `recording`, `job`, `review_item` and the rest are still absent.
  *
  * The enums are **derived** from the shared TypeScript constants rather than restated beside them.
  * That is what keeps "each enum is declared exactly once in the repository" true, and it is
@@ -65,4 +65,47 @@ export const session = pgTable(
     revokedAt: timestamp('revoked_at', { withTimezone: true }),
   },
   (table) => [uniqueIndex('session_token_hash_unique').on(table.tokenHash)],
+);
+
+/**
+ * A pending invitation. **The only way an account comes to exist** other than the seed command
+ * (docs/prd.md, 3.1.3), which is why the row and the account it becomes share an email column and
+ * a role column reading the same `user_role` enum rather than a second copy of it.
+ *
+ * Three properties this table holds, none of them by convention:
+ *
+ * 1. **The raw token is never stored.** As with `session`, only its SHA-256 is — so the table
+ *    cannot leak a working invitation link however it is read.
+ * 2. **At most one *live* invitation per address.** The partial unique index below covers
+ *    `lower(email)` only where the row is neither revoked nor accepted, so inviting an address
+ *    twice is refused at the database and an admin is pointed at resend instead of quietly
+ *    creating a second token. Revoking or accepting frees the address again, which is exactly what
+ *    makes resend (revoke the old, issue a new) legal.
+ * 3. **Status is derived, never stored.** `expires_at`, `revoked_at` and `accepted_at` are the
+ *    facts; pending/expired/revoked/accepted is read off them. A stored status is a second source
+ *    of truth that a clock can make wrong.
+ *
+ * `invited_by` is nullable on delete rather than cascading: the invitation is a record of something
+ * that happened, and it should survive the admin's account being removed.
+ */
+export const invitation = pgTable(
+  'invitation',
+  {
+    id: uuid('id').primaryKey().defaultRandom(),
+    email: text('email').notNull(),
+    role: userRole('role').notNull(),
+    /** SHA-256 of the token in the emailed link. The raw token is never stored. */
+    tokenHash: text('token_hash').notNull(),
+    invitedBy: uuid('invited_by').references(() => user.id, { onDelete: 'set null' }),
+    createdAt: timestamp('created_at', { withTimezone: true }).notNull().defaultNow(),
+    expiresAt: timestamp('expires_at', { withTimezone: true }).notNull(),
+    revokedAt: timestamp('revoked_at', { withTimezone: true }),
+    acceptedAt: timestamp('accepted_at', { withTimezone: true }),
+  },
+  (table) => [
+    uniqueIndex('invitation_token_hash_unique').on(table.tokenHash),
+    uniqueIndex('invitation_live_email_unique')
+      .on(sql`lower(${table.email})`)
+      .where(sql`${table.revokedAt} is null and ${table.acceptedAt} is null`),
+  ],
 );

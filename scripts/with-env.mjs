@@ -6,7 +6,13 @@ import { pathToFileURL } from 'node:url';
 import { resolve } from 'node:path';
 import { config } from 'dotenv';
 
-config({ path: new URL('../.env', import.meta.url), quiet: true });
+// A test that runs this entry point in order to observe how it behaves with a given environment
+// has to be able to *supply* that environment. Without this opt-out the developer's own .env leaks
+// into the child and the test measures their machine instead of the command — which is exactly what
+// happened to the seed-admin suite once a real SEED_ADMIN_PASSWORD was set locally.
+if (process.env.THP_SKIP_DOTENV !== '1') {
+  config({ path: new URL('../.env', import.meta.url), quiet: true });
+}
 
 const [entry, ...rest] = process.argv.slice(2);
 if (!entry) {

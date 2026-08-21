@@ -9,6 +9,8 @@ const here = dirname(fileURLToPath(import.meta.url));
 export const REPO_ROOT = resolve(here, '..', '..');
 export const WEB_DIR = resolve(REPO_ROOT, 'packages', 'web');
 export const LOG_DIR = resolve(REPO_ROOT, '.tmp', 'logs');
+/** Where the capture transport writes. Gitignored, and cleared at the start of every run. */
+export const MAIL_DIR = resolve(REPO_ROOT, '.tmp', 'mail');
 
 const require = createRequire(import.meta.url);
 
@@ -100,6 +102,9 @@ export async function buildNextApp(publicApiOrigin: string): Promise<void> {
  */
 export async function startNextServer(options: StartOptions): Promise<RunningServer> {
   mkdirSync(LOG_DIR, { recursive: true });
+  mkdirSync(MAIL_DIR, { recursive: true });
+  // A capture file left by the previous run would let a test read somebody else's message.
+  rmSync(resolve(MAIL_DIR, `${options.name}.jsonl`), { force: true });
   const port = options.port ?? (await freePort());
   const baseUrl = `http://127.0.0.1:${port}`;
   const logPath = resolve(LOG_DIR, `${options.name}.log`);

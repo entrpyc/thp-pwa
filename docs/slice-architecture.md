@@ -182,7 +182,7 @@ column exists** — but the `vector` extension must be *installed and available*
 *expensive to reverse* and the whole reason it is right is that vectors and ACL data share a
 database. Self-hosting makes that availability something we install rather than something we have to
 pick a provider for. The cost it carries instead is backups, which are a `pgBackRest` archive to the
-object store, proven by a restore — [implementation-plan.md § Step 21](implementation-plan.md#L331)
+object store, proven by a restore — [implementation-plan.md § Step 21](implementation-plan.md#L341)
 owns that, along with the rest of the deployment.
 
 ## Changes to existing structure

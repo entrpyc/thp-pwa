@@ -2,8 +2,11 @@ import { readFileSync } from 'node:fs';
 import { resolve } from 'node:path';
 import { describe, expect, it } from 'vitest';
 import {
+  COLOUR_LITERAL_FILES,
+  checkColourLiterals,
   checkStyleTokens,
   diffTokens,
+  formatColourLiteralViolations,
   formatStyleViolations,
   listStylesheets,
   parseCustomProperties,
@@ -55,6 +58,7 @@ describe('no component declares what a token already covers', () => {
     expect(sheets).toContain('app/globals.css');
     expect(sheets).toContain('app/sign-in/sign-in.module.css');
     expect(sheets).toContain('app/home.module.css');
+    expect(sheets).toContain('app/accept-invitation/accept-invitation.module.css');
 
     // And the token file really is the one exception — scanned like any other when not excluded.
     const seeded = checkStyleTokens(WEB_SRC, resolve(WEB_SRC, 'nothing.css'));
@@ -75,5 +79,32 @@ describe('no component declares what a token already covers', () => {
     expect(rules).toContain('raw-spacing');
     expect(rules).toContain('token-declared-outside-token-file');
     expect(formatStyleViolations(violations)).toContain('offender.module.css');
+  });
+});
+
+describe('only the email theme spells a colour out', () => {
+  it('holds across every application module', () => {
+    // The stylesheet check above cannot see the invitation email: mail clients do not support
+    // custom properties, so that template inlines literal values. This is the half of assumption 9
+    // that answers the guard rather than escaping it.
+    expect(formatColourLiteralViolations(checkColourLiterals(REPO_ROOT))).toBe('');
+  });
+
+  it('reports the theme file itself when it is not the exempt one', () => {
+    // The exemption is a named path, not a pattern — take the name away and the real file fails.
+    const violations = checkColourLiterals(REPO_ROOT, []);
+    expect(violations.map((violation) => violation.file)).toContain(
+      'packages/web/src/server/mail/theme.ts',
+    );
+  });
+
+  it('reports a colour spelled out anywhere else', () => {
+    const violations = checkColourLiterals(REPO_ROOT, COLOUR_LITERAL_FILES, [
+      'tests/fixtures/inline-colour',
+    ]);
+    expect(violations.map((violation) => violation.rule)).toContain('raw-colour-in-source');
+    expect(formatColourLiteralViolations(violations)).toContain('offender.ts');
+    // Both spellings — a hex literal and a functional notation.
+    expect(violations).toHaveLength(2);
   });
 });

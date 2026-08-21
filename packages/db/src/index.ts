@@ -18,6 +18,19 @@ export {
   type Sql,
 } from './client';
 export { requireDatabaseUrl } from './env';
+export {
+  acceptInvitation,
+  findInvitationById,
+  findInvitationByTokenHash,
+  findLiveInvitationByEmail,
+  insertInvitation,
+  listInvitations,
+  revokeInvitation,
+  type AcceptInvitationInput,
+  type AcceptedInvitation,
+  type InvitationRow,
+  type NewInvitation,
+} from './invitations';
 export { MIGRATIONS_DIR, runMigrations, type RunMigrationsOptions } from './migrate';
 export {
   findLiveSessionByTokenHash,

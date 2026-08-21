@@ -40,23 +40,33 @@ These apply to every step and are not restated per step. A step that breaks one 
 - **The client holds no authorisation decision.** It hides what a Member cannot do; the API is what
   refuses it ([3.1.5](prd.md#L47),
   [slice-architecture.md § Next.js application — client half](slice-architecture.md#L109)).
-- **Every `/api/v1` route requires a session** — with exactly one enumerated exception,
-  `GET /api/v1/health` ([3.1.2](prd.md#L44),
-  [slice-architecture.md § Extension points](slice-architecture.md#L312)). Health is outside the rule
+- **Every `/api/v1` route requires a session** — with no exception carrying content
+  ([3.1.2](prd.md#L44),
+  [slice-architecture.md § Extension points](slice-architecture.md#L323)). Health is outside the rule
   because it must answer *while the database is down*, which is precisely when a session lookup
   cannot — a probe that needs a session is no probe, and
-  [Step 21](#L331) depends on one. The exception is an **allowlist in the session middleware, not a
+  [Step 21](#L341) depends on one. The exception is an **allowlist in the route wrapper, not a
   convention**: Step 2 ships it as an enumerated list plus a test asserting every route *not* on that
   list refuses an anonymous request, so "no exceptions" can never quietly become "the exceptions
   nobody wrote down".
+
+  > **Amended after step 2.** This constraint said *exactly one* exception, `GET /api/v1/health`,
+  > held in the *session middleware*. Both were wrong on contact with the code, and the amended
+  > [slice-architecture.md § Extension points](slice-architecture.md#L323) is the settled version.
+  > The list ships with **two** entries — health and `POST /api/v1/auth/session`, because signing in
+  > cannot require a session — and it lives in the **route wrapper**, where `apiRoute` takes access
+  > as a required first argument so a route cannot be written without stating it. A middleware could
+  > not have that property. **Step 3 (invitation accept) and Step 4 (password reset) each add one
+  > entry**, and each addition is a deliberate edit to the named list rather than a breach of this
+  > constraint.
 - **The original upload is never overwritten or deleted** — the one non-negotiable
   ([3.4.9](prd.md#L102), [slice-architecture.md § Media store](slice-architecture.md#L164)).
 - **Nothing publishes automatically** ([4.17.3](prd.md#L683)).
 - **Correlation id spans API request → job → provider call**, and every gate transition is logged
   with actor, action, target and timestamp
-  ([slice-architecture.md § Key choices](slice-architecture.md#L244)).
+  ([slice-architecture.md § Key choices](slice-architecture.md#L255)).
 - **Do not build what is deferred.** Before adding infrastructure, check
-  [slice-architecture.md § Deliberately deferred](slice-architecture.md#L330) — no broker, no CDN,
+  [slice-architecture.md § Deliberately deferred](slice-architecture.md#L341) — no broker, no CDN,
   no pgvector, no service worker, no Capacitor, no Contributor role, no audio processing.
 
 ---
@@ -71,7 +81,7 @@ health route responds; nothing else exists yet.
 **References:** [slice-architecture.md § Overview](slice-architecture.md#L7);
 [slice-architecture.md § Next.js application — API half](slice-architecture.md#L123);
 [slice-architecture.md § Primary datastore](slice-architecture.md#L177);
-[slice-architecture.md § Key choices](slice-architecture.md#L244);
+[slice-architecture.md § Key choices](slice-architecture.md#L255);
 [architecture.md § Key technology choices](architecture.md#L209);
 [5.2.2](prd.md#L706)
 **Notes:** one decision here is hard to walk back — the client must call an absolute API origin over
@@ -91,7 +101,7 @@ route so unauthenticated requests are refused by construction rather than by rev
 **References:** [slice-prd.md § In scope → 1](slice-prd.md#L35);
 [3.1.1](prd.md#L43); [3.1.2](prd.md#L44); [3.1.5](prd.md#L47);
 [slice-architecture.md § Data model (slice) → Accounts](slice-architecture.md#L193);
-[slice-architecture.md § Extension points → Role enum + policy module](slice-architecture.md#L312);
+[slice-architecture.md § Extension points → Role enum + policy module](slice-architecture.md#L323);
 [architecture.md § Cross-cutting concerns](architecture.md#L271)
 **Notes:** the single evaluation point is one of the three structures
 [slice-prd.md § Rationale](slice-prd.md#L241) names as making this slice throwaway if skipped.
@@ -105,7 +115,7 @@ revoking the old one. Includes the transactional email adapter.
 **References:** [3.1.3](prd.md#L45); [3.1.4](prd.md#L46);
 [slice-prd.md § Slice flows → A](slice-prd.md#L210);
 [slice-architecture.md § Data model (slice) → Accounts](slice-architecture.md#L193);
-[slice-architecture.md § Key choices](slice-architecture.md#L244) — "Two inputs this slice needs
+[slice-architecture.md § Key choices](slice-architecture.md#L255) — "Two inputs this slice needs
 and nothing defines", item 1
 **Notes:** [3.1.4](prd.md#L46) says only "a fixed window". The settled value is **7 days**; tokens
 are stored hashed.
@@ -144,12 +154,12 @@ at finalisation.
 [3.2.1](prd.md#L62) (Admin-only in this slice);
 [slice-architecture.md § Media store](slice-architecture.md#L164);
 [slice-architecture.md § Data model (slice) → The spine](slice-architecture.md#L193);
-[slice-architecture.md § Key choices](slice-architecture.md#L244) — "Two inputs", item 2;
+[slice-architecture.md § Key choices](slice-architecture.md#L255) — "Two inputs", item 2;
 [§6](prd.md#L724) Security
 **Notes:** **200 MB ceiling; mp3, m4a/aac, wav, flac.** The upload UI states the limit and the reason
 up front rather than rejecting silently — a 90-minute teaching fits as mp3/m4a but not as WAV or
 FLAC. `Recording` gets **no processed-media pointer**; adding one is what [§3.4](prd.md#L88) does
-later ([slice-architecture.md § Extension points](slice-architecture.md#L312)).
+later ([slice-architecture.md § Extension points](slice-architecture.md#L323)).
 
 ### Step 7 — Job ledger, worker process and transcription
 **Delivers:** finalising an upload produces timestamped segments unattended. A `job` table polled
@@ -196,7 +206,7 @@ tags and scripture references deferred); [4.17.5](prd.md#L685); [3.21.2.2](prd.m
 **Notes:** the `kind` column is the only thing in this slice built past its immediate need, and it is
 built deliberately — later artefacts must add a **value, not a table**, or the single-query Pending
 Reviews degrades into a union of six. Emit a domain event on job completion; nothing subscribes yet
-([slice-architecture.md § Extension points](slice-architecture.md#L312)).
+([slice-architecture.md § Extension points](slice-architecture.md#L323)).
 
 ---
 
@@ -263,7 +273,7 @@ work without a CDN. Media is never publicly addressable.
 [slice-prd.md § In scope → 8](slice-prd.md#L161); [§6](prd.md#L724) Security
 **Notes:** members hear the **raw upload** — [3.4.1](prd.md#L94)'s "processed before available for
 playback" deliberately does not hold in this slice
-([slice-architecture.md § Divergence from the north star](slice-architecture.md#L283)). Signed-URL
+([slice-architecture.md § Divergence from the north star](slice-architecture.md#L294)). Signed-URL
 minting is the exact place [§3.4](prd.md#L88) will later prefer a processed rendition and fall back
 to the original, so keep it one function.
 
@@ -280,7 +290,7 @@ updated_at)`, primary-keyed on the pair, last-write-wins on the furthest positio
 client-side and pushed to a single-position endpoint.
 **References:** [3.2.5](prd.md#L66); [slice-prd.md § In scope → 5](slice-prd.md#L117);
 [slice-architecture.md § Data model (slice) → Member-owned state](slice-architecture.md#L193);
-[slice-architecture.md § Extension points → Client-owned playback state](slice-architecture.md#L312);
+[slice-architecture.md § Extension points → Client-owned playback state](slice-architecture.md#L323);
 [slice-prd.md § Slice flows → C](slice-prd.md#L210)
 **Notes:** client-owned-and-pushed is the shape that makes offline ([§3.18](prd.md#L391)) an addition
 rather than a rewrite — it is [slice-prd.md § Rationale](slice-prd.md#L241)'s stated check that this
@@ -293,7 +303,7 @@ segment as playback moves, and seeking the audio when a member selects any point
 place a member touches the segment model, and the proof it works end to end.
 **References:** [slice-prd.md § In scope → 6](slice-prd.md#L132);
 [3.5.3](prd.md#L114); [3.5.4](prd.md#L115);
-[slice-architecture.md § Extension points → `(recording_id, timestamp_ms)` offset](slice-architecture.md#L312)
+[slice-architecture.md § Extension points → `(recording_id, timestamp_ms)` offset](slice-architecture.md#L323)
 **Notes:** the `(recording_id, timestamp_ms)` pair resolved here is what later makes "open at the
 moment" one behaviour across notes, highlights, mind maps, search and Flow Tracker.
 
@@ -353,7 +363,7 @@ real origin and a real bucket. It sits last because there is no member to serve 
 deployment carried through twenty steps of schema churn is real cost. That tradeoff deserves a
 decision, not inheritance. Second, this step adds **no CDN and no broker**: signed URLs still point
 straight at the object store, and the box runs exactly the two processes the slice already has
-([slice-architecture.md § Deliberately deferred](slice-architecture.md#L330)). Third,
+([slice-architecture.md § Deliberately deferred](slice-architecture.md#L341)). Third,
 `NEXT_PUBLIC_API_ORIGIN` moves from `http://localhost:3000` to the real origin here — the single
 value [01-project-skeleton.md](steps/01-project-skeleton.md#L112) assumption 2 exists to keep cheap.
 
@@ -361,7 +371,7 @@ value [01-project-skeleton.md](steps/01-project-skeleton.md#L112) assumption 2 e
 
 ## What this plan deliberately does not include
 
-Cross-checked against [slice-architecture.md § Deliberately deferred](slice-architecture.md#L330)
+Cross-checked against [slice-architecture.md § Deliberately deferred](slice-architecture.md#L341)
 and [slice-prd.md § Still remaining after this slice](slice-prd.md#L171). No step below exists, and
 none should be added mid-build without going back to Phase 3:
 

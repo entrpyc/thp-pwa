@@ -37,6 +37,11 @@ async function runSeedAdmin(
       cwd: REPO_ROOT,
       env: {
         ...process.env,
+        // The command loads the repository .env by default. This suite is about what the command
+        // does with a *given* environment, so it supplies one and suppresses the file — otherwise a
+        // developer with a real SEED_ADMIN_PASSWORD in .env makes "refuses an absent password"
+        // untestable on their machine.
+        THP_SKIP_DOTENV: '1',
         DATABASE_URL: databaseUrl,
         SEED_ADMIN_EMAIL: undefined,
         SEED_ADMIN_DISPLAY_NAME: undefined,

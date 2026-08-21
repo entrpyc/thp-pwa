@@ -1,16 +1,16 @@
 # Step 1 — Project skeleton and the `/api/v1` boundary
 
-> Phase 6 artefact for [implementation-plan.md § Step 1](../implementation-plan.md#L66).
+> Phase 6 artefact for [implementation-plan.md § Step 1](../implementation-plan.md#L76).
 > Sections pulled: [slice-architecture.md § Overview](../slice-architecture.md#L7),
 > [slice-architecture.md § Next.js application — API half](../slice-architecture.md#L123),
 > [slice-architecture.md § Primary datastore](../slice-architecture.md#L177),
-> [slice-architecture.md § Key choices](../slice-architecture.md#L244),
+> [slice-architecture.md § Key choices](../slice-architecture.md#L255),
 > [architecture.md § Key technology choices](../architecture.md#L209),
 > [5.2.2](../prd.md#L706).
 
 This step ships no product behaviour. Its whole value is that two boundaries — the client/API
 contract and the single-datastore choice — are correct on the first commit, because
-[implementation-plan.md § Step 1](../implementation-plan.md#L66) marks both hard to walk back.
+[implementation-plan.md § Step 1](../implementation-plan.md#L76) marks both hard to walk back.
 
 ## Requirements (test-covered)
 
@@ -34,7 +34,7 @@ contract and the single-datastore choice — are correct on the first commit, be
 - Every request is assigned a correlation id and it is returned on the response — verified by
   asserting the response header is present and non-empty on both a success and an error.
 - A caller-supplied correlation id is adopted rather than replaced, so the id can later span
-  API → job → provider ([slice-architecture.md § Key choices](../slice-architecture.md#L244)) —
+  API → job → provider ([slice-architecture.md § Key choices](../slice-architecture.md#L255)) —
   verified by sending a known id and asserting the same id comes back.
 - Two concurrent requests get distinct ids, and no log line from one carries the other's id —
   verified by firing overlapping requests against a route that logs, then asserting the captured log
@@ -151,7 +151,7 @@ annoying later; assumption 2 is the hard-to-reverse one.
    holds: nothing in the code depends on a specific platform, so the box is a deploy target rather
    than an architectural input. What it does settle is assumption 1. Provisioning, TLS, process
    supervision and `pgBackRest` backups are deployment work and belong to
-   [implementation-plan.md § Step 21](../implementation-plan.md#L331), not here.
+   [implementation-plan.md § Step 21](../implementation-plan.md#L341), not here.
 
 ## Scope
 
@@ -170,6 +170,6 @@ the one route that will stay outside it). No object storage, no presigned URLs, 
 running — the package may exist as an empty stub polling nothing. No UI beyond what Next.js needs to
 boot: **no page is designed in this step.** No auth provider, no email sending, no error-tracking
 SaaS. And nothing from
-[slice-architecture.md § Deliberately deferred](../slice-architecture.md#L330) — in particular no
+[slice-architecture.md § Deliberately deferred](../slice-architecture.md#L341) — in particular no
 Redis, no CDN, and **no `CREATE EXTENSION vector`**: the requirement above asserts it is available
 and *unenabled*, and enabling it belongs to a later slice.

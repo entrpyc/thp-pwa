@@ -1,5 +1,5 @@
-import { findUserByEmail, insertUser, normaliseEmail, type DatabaseHandle } from '@thp/db';
-import { ROLE } from '@thp/shared';
+import { findUserByEmail, insertUser, type DatabaseHandle } from '@thp/db';
+import { ROLE, checkPassword } from '@thp/shared';
 import { hashPassword } from './password';
 
 /**
@@ -14,8 +14,12 @@ import { hashPassword } from './password';
  * the deploy can take over the account.
  */
 
-/** Long enough that argon2's cost matters. Nothing shorter is worth seeding as an admin. */
-export const MINIMUM_PASSWORD_LENGTH = 12;
+/**
+ * The password rules are **not** stated here. They live in `@thp/shared` (`checkPassword`), which
+ * step 3's invitation-accept screen and step 4's reset both read, so the three cannot disagree
+ * about what a usable password is. Re-exported for the callers that already named it here.
+ */
+export { MINIMUM_PASSWORD_LENGTH } from '@thp/shared';
 
 export interface SeedAdminInput {
   readonly email: string | undefined;
@@ -37,16 +41,12 @@ function validate(input: SeedAdminInput): { email: string; displayName: string; 
   if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)) return `SEED_ADMIN_EMAIL is not an email address: ${email}`;
   if (displayName === '') return 'SEED_ADMIN_DISPLAY_NAME is not set.';
   if (password === '') return 'SEED_ADMIN_PASSWORD is not set.';
-  if (password.length < MINIMUM_PASSWORD_LENGTH) {
-    return `SEED_ADMIN_PASSWORD is ${password.length} characters; at least ${MINIMUM_PASSWORD_LENGTH} are required.`;
-  }
-  if (password.trim() === '') return 'SEED_ADMIN_PASSWORD is only whitespace.';
-  if (password.toLowerCase().includes('password')) {
-    return 'SEED_ADMIN_PASSWORD contains "password". Pick something a list would not.';
-  }
-  if (normaliseEmail(email) === password.toLowerCase()) {
-    return 'SEED_ADMIN_PASSWORD is the email address.';
-  }
+
+  // One rule set, named by the variable the operator has to go and change. The message never
+  // repeats the password itself — this reason is printed to a terminal and may end up in a log.
+  const weakness = checkPassword(password, { email });
+  if (weakness !== null) return `SEED_ADMIN_PASSWORD is not usable. ${weakness}`;
+
   return { email, displayName, password };
 }
 

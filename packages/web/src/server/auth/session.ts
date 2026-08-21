@@ -1,4 +1,3 @@
-import { createHash, randomBytes } from 'node:crypto';
 import {
   findLiveSessionByTokenHash,
   insertSession,
@@ -6,6 +5,7 @@ import {
   touchSession,
 } from '@thp/db';
 import { SESSION_COOKIE_NAME } from '@thp/shared';
+import { generateToken, hashToken } from './tokens';
 import { toActor, type Actor } from './policy';
 
 /**
@@ -30,14 +30,12 @@ export const SESSION_LIFETIME_MS = 30 * 24 * 60 * 60 * 1000;
  */
 const REFRESH_AFTER_MS = 60 * 60 * 1000;
 
-/** SHA-256, hex. Fast on purpose: the token is 256 bits of entropy, not a password. */
-export function hashSessionToken(token: string): string {
-  return createHash('sha256').update(token).digest('hex');
-}
-
-export function generateSessionToken(): string {
-  return randomBytes(32).toString('base64url');
-}
+/**
+ * The cookie value, and its digest. Both are the shared helpers in `./tokens`, which step 3's
+ * invitation tokens also read — same shape, same storage rule, one implementation.
+ */
+export const generateSessionToken = generateToken;
+export const hashSessionToken = hashToken;
 
 export interface IssuedSession {
   readonly token: string;

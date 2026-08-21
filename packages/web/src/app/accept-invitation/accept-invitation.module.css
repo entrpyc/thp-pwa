@@ -1,0 +1,86 @@
+/*
+ * The accept-invitation screen.
+ *
+ * There is no `pages/accept-invitation.png`; by operator decision the step-2 carve-out extends to
+ * it, since it is an auth screen and the token layer already exists. **It invents no component.**
+ * Everything shared with sign-in is composed from `sign-in.module.css` rather than copied, so the
+ * four extrapolations documented there are stated once and this screen cannot drift from them.
+ *
+ * Three things are only here, and each is a consequence of what this screen is rather than a new
+ * recipe:
+ *
+ * 1. `.readonlyValue` — the invited address, shown as context and not as something to fill in. It
+ *    is the input recipe with the fill dropped to `--color-bg` and the text muted, which is the
+ *    guide's own way of saying "not interactive".
+ * 2. `.rule` — the password rule, printed before anybody can fail it. `--fs-meta` on
+ *    `--color-text-dim`, the same weight the guide gives supporting metadata.
+ * 3. `.deadEnd` — an expired, revoked or unknown link. The card's copy, with no form under it.
+ */
+
+.screen {
+  composes: screen from '../sign-in/sign-in.module.css';
+}
+
+.card {
+  composes: card from '../sign-in/sign-in.module.css';
+}
+
+.cardErrored {
+  composes: cardErrored from '../sign-in/sign-in.module.css';
+}
+
+.title {
+  composes: title from '../sign-in/sign-in.module.css';
+}
+
+.subtitle {
+  composes: subtitle from '../sign-in/sign-in.module.css';
+}
+
+.form {
+  composes: form from '../sign-in/sign-in.module.css';
+}
+
+.field {
+  composes: field from '../sign-in/sign-in.module.css';
+}
+
+.label {
+  composes: label from '../sign-in/sign-in.module.css';
+}
+
+.input {
+  composes: input from '../sign-in/sign-in.module.css';
+}
+
+.submit {
+  composes: submit from '../sign-in/sign-in.module.css';
+}
+
+.error {
+  composes: error from '../sign-in/sign-in.module.css';
+}
+
+/* The address the invitation was sent to. Present so it is obvious whose account this becomes —
+ * and a real input, so a password manager has a username field to attach the new credential to. */
+.readonlyValue {
+  composes: input from '../sign-in/sign-in.module.css';
+  background: var(--color-bg);
+  color: var(--color-text-muted);
+  cursor: default;
+}
+
+/* The rule, before the failure. Visible from the moment the screen loads. */
+.rule {
+  margin: 0;
+  font-size: var(--fs-meta);
+  color: var(--color-text-dim);
+}
+
+/* A dead invitation. Prose and nothing else — there is deliberately no field to type into. */
+.deadEnd {
+  margin: 0;
+  font-size: var(--fs-body);
+  line-height: 1.5;
+  color: var(--color-text-muted);
+}

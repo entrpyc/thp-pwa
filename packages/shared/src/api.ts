@@ -24,11 +24,33 @@ export const CORRELATION_ID_HEADER = 'x-correlation-id';
  * - `invalid_credentials` — sign-in failed. Wrong password, unknown email and malformed input all
  *   answer with this same code and the same message, so the response never discloses whether an
  *   address has an account.
+ *
+ * Step 3 adds six, and the split between them is the point rather than an accident of naming:
+ *
+ * - `invalid_input` — the request could not be read as what the route accepts. A role nobody
+ *   offers, a missing field, a body that is not an object.
+ * - `weak_password` — the password was read fine and refused on its merits. Distinct from
+ *   `invalid_input` because the accept screen prints the reason beside the field rather than as a
+ *   general failure.
+ * - `email_taken` — that address already has an account. Only ever returned to an admin, who is
+ *   the one person entitled to know it; sign-in still discloses nothing.
+ * - `invitation_exists` — that address already has a live invitation. The admin wants resend, not
+ *   a second live token.
+ * - `invitation_invalid` and `invitation_expired` — deliberately two codes, so a dead link can
+ *   say "this expired, ask an admin to send another" rather than "wrong". Unknown, malformed,
+ *   revoked and already-accepted are all `invitation_invalid`; only a token that was genuinely
+ *   ours and ran out of time is `invitation_expired`.
  */
 export const API_ERROR_CODES = [
   'unauthenticated',
   'forbidden',
   'invalid_credentials',
+  'invalid_input',
+  'weak_password',
+  'email_taken',
+  'invitation_exists',
+  'invitation_invalid',
+  'invitation_expired',
   'not_found',
   'internal_error',
   'service_unavailable',

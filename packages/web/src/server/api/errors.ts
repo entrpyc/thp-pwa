@@ -43,6 +43,59 @@ export class ApiError extends Error {
     );
   }
 
+  /**
+   * The request could not be read as what the route accepts — a missing field, a body that is not
+   * an object, a role nobody offers. `400`, because the caller can fix it and try again.
+   */
+  static invalidInput(message: string): ApiError {
+    return new ApiError('invalid_input', 400, message);
+  }
+
+  /**
+   * The password was read fine and refused on its merits. Separate from {@link invalidInput}
+   * because the accept screen prints this one beside the field rather than as a general failure —
+   * and `message` is written to be shown to the person choosing, so it never quotes what they
+   * typed.
+   */
+  static weakPassword(message: string): ApiError {
+    return new ApiError('weak_password', 400, message);
+  }
+
+  /**
+   * That address already has an account. `409` — a conflict with the state of the world, not a
+   * malformed request. Only ever returned to an admin issuing an invitation, or to somebody
+   * already holding a token for that address; sign-in still discloses nothing.
+   */
+  static emailTaken(message: string): ApiError {
+    return new ApiError('email_taken', 409, message);
+  }
+
+  /** That address already has a live invitation. The admin wants resend, not a second token. */
+  static invitationExists(message: string): ApiError {
+    return new ApiError('invitation_exists', 409, message);
+  }
+
+  /**
+   * Unknown, malformed, revoked or already accepted — **one code for all four**, so an anonymous
+   * guesser cannot learn which of their guesses was ever a real token.
+   */
+  static invitationInvalid(
+    message = 'That invitation link is not valid. Ask an admin to send a new one.',
+  ): ApiError {
+    return new ApiError('invitation_invalid', 410, message);
+  }
+
+  /**
+   * Ours, and out of time. Deliberately distinguishable from {@link invitationInvalid}: it is the
+   * difference between a screen that says "this expired, ask for another" and one that says
+   * "wrong", and only somebody who was genuinely sent this token can reach it.
+   */
+  static invitationExpired(
+    message = 'That invitation expired. Ask an admin to send you a new one.',
+  ): ApiError {
+    return new ApiError('invitation_expired', 410, message);
+  }
+
   static notFound(message = 'The requested resource does not exist.'): ApiError {
     return new ApiError('not_found', 404, message);
   }

@@ -21,8 +21,8 @@ import type { UserRow } from '@thp/db';
  */
 
 /**
- * Every action the API can be asked to authorise. Slice 01 step 2 has three; each later step adds
- * the actions it needs alongside the routes that use them.
+ * Every action the API can be asked to authorise. Step 2 shipped three and step 3 adds four; each
+ * later step adds the actions it needs alongside the routes that use them.
  */
 export const POLICY_ACTIONS = [
   /** Read the signed-in account. Any session may. */
@@ -31,6 +31,16 @@ export const POLICY_ACTIONS = [
   'diagnostics.run',
   /** The admin-only diagnostic, which exists so "the API refuses, not the client" is testable. */
   'diagnostics.admin',
+  /**
+   * The four invitation actions (step 3). Four rather than one `invitation.manage`, because the
+   * roles that may issue and the roles that may merely *see* who is pending are the same question
+   * only for as long as there are two roles — and Contributor arriving is supposed to be four
+   * widened cases, not a rewrite of what one coarse action meant.
+   */
+  'invitation.issue',
+  'invitation.list',
+  'invitation.revoke',
+  'invitation.resend',
 ] as const;
 
 export type PolicyAction = (typeof POLICY_ACTIONS)[number];
@@ -68,6 +78,12 @@ const RULES: PolicyRules = {
   'session.read': { admin: true, member: true },
   'diagnostics.run': { admin: true, member: true },
   'diagnostics.admin': { admin: true, member: false },
+  // Members join by invitation; they do not issue one, and they do not get to read the list of
+  // addresses somebody has invited. Refused by the API, not merely absent from an interface.
+  'invitation.issue': { admin: true, member: false },
+  'invitation.list': { admin: true, member: false },
+  'invitation.revoke': { admin: true, member: false },
+  'invitation.resend': { admin: true, member: false },
 };
 
 export function isPolicyAction(value: string): value is PolicyAction {

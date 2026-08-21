@@ -1,10 +1,10 @@
 # Step 2 — Sessions and server-side authorisation
 
-> Phase 6 artefact for [implementation-plan.md § Step 2](../implementation-plan.md#L85).
+> Phase 6 artefact for [implementation-plan.md § Step 2](../implementation-plan.md#L95).
 > Sections pulled: [slice-prd.md § In scope → 1](../slice-prd.md#L35);
 > [3.1.1](../prd.md#L43), [3.1.2](../prd.md#L44), [3.1.5](../prd.md#L47);
 > [slice-architecture.md § Data model (slice)](../slice-architecture.md#L193);
-> [slice-architecture.md § Extension points](../slice-architecture.md#L312);
+> [slice-architecture.md § Extension points](../slice-architecture.md#L323);
 > [architecture.md § Cross-cutting concerns](../architecture.md#L271);
 > [style-guide.md](../design%20referencess%20png/style-guide.md), standing in for the absent auth
 > design reference by operator decision.
@@ -112,7 +112,7 @@ assumption 9 for exactly how, so the extrapolation is reviewed here rather than 
   contract.
 - Adding a role to the enum does not compile until every policy case handles it — verified by an
   exhaustiveness fixture, which is the property that makes Contributor "one enum value plus four
-  widened cases" ([slice-architecture.md § Extension points](../slice-architecture.md#L312)) rather
+  widened cases" ([slice-architecture.md § Extension points](../slice-architecture.md#L323)) rather
   than a search of the codebase.
 - Every authorisation refusal is logged with actor, action, target and timestamp under the request's
   correlation id — verified by capturing logs across one refused request.
@@ -176,7 +176,7 @@ Implementation does not start until these are settled. **1, 2 and 9 are the ones
 rest are cheap defaults.
 
 1. **The allowlist has two entries in this step, not one.**
-   [slice-architecture.md § Extension points](../slice-architecture.md#L312) names
+   [slice-architecture.md § Extension points](../slice-architecture.md#L323) names
    `GET /api/v1/health` as the *only* unauthenticated route. Taken literally that is not
    satisfiable: **the sign-in route cannot require a session.** Assumed: the allowlist ships as
    `GET /api/v1/health` and `POST /api/v1/auth/session`, and that architecture row is amended to say
@@ -205,13 +205,13 @@ rest are cheap defaults.
 6. **The first admin is seeded by a command, not by a migration.** Assumed: an idempotent CLI
    reading email, display name and password from environment, so no credential is ever committed in
    a migration file. Running it in production is deployment work and belongs to
-   [Step 21](../implementation-plan.md#L331).
+   [Step 21](../implementation-plan.md#L341).
 7. **Sign-in and sign-out are one resource.** Assumed: `POST /api/v1/auth/session` signs in,
    `DELETE /api/v1/auth/session` signs out, `GET /api/v1/auth/session` returns the current user for
    the client to render with — the last being how the client learns what to hide without holding a
    decision.
 8. **The `/api/v1/diagnostics/*` routes become authenticated.**
-   [slice-architecture.md § Extension points](../slice-architecture.md#L312) is explicit that they
+   [slice-architecture.md § Extension points](../slice-architecture.md#L323) is explicit that they
    are not an exception. Assumed: they require a session like everything else, and Step 1's
    integration tests gain a sign-in helper. Consequence worth stating plainly: **Step 1's suite
    changes in this step**, which is expected, not a regression.
@@ -258,7 +258,7 @@ sending. `contributor` in any form. Rate limiting, lockout, 2FA, remember-me, se
 "sign out everywhere". Any screen other than sign-in — no dashboard, no navigation chrome, no
 component library beyond the two or three elements sign-in actually needs; the tokens land now, the
 components land with the screens that need them. Nothing from
-[slice-architecture.md § Deliberately deferred](../slice-architecture.md#L330).
+[slice-architecture.md § Deliberately deferred](../slice-architecture.md#L341).
 
 ---
 
@@ -281,8 +281,8 @@ needed — the prebuilt binary installed without a toolchain.
 
 **Two documents were amended**, both named in the assumptions as needing it:
 
-- [slice-architecture.md § Data model (slice)](../slice-architecture.md#L229) gains `session`.
-- [slice-architecture.md § Extension points](../slice-architecture.md#L339) — the unauthenticated
+- [slice-architecture.md § Data model (slice)](../slice-architecture.md#L193) gains `session`.
+- [slice-architecture.md § Extension points](../slice-architecture.md#L323) — the unauthenticated
   surface is now "no route carrying content", with two entries; and the allowlist lives in the
   **route wrapper** rather than a separate middleware, because only the wrapper can make access a
   required argument. A middleware cannot refuse to compile.

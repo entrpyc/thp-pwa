@@ -248,7 +248,7 @@ listing what has been added, changed or revoked since its last sync token.
 
 **API ↔ workers.** One direction only: the API enqueues, workers write results back as drafts. Workers
 never call the API. Job completion raises a domain event, which is what drives the notifications at
-[3.17.10](prd.md#L361)–[3.17.12](prd.md#L361).
+[3.17.10](prd.md#L381)–[3.17.12](prd.md#L383).
 
 **Workers ↔ AI providers.** Every provider sits behind a narrow adapter — `transcribe`, `generate`,
 `embed`, `synthesize`, `render` — with the model, version and prompt recorded on every output
@@ -446,5 +446,5 @@ before the relevant slice.
    falls through to contended shared-vCPU disk. Truncating to 512 dimensions (Matryoshka) or choosing a
    512/768-dimension model puts the whole index near 1 GB and makes queries faster. It is a retrieval-
    quality decision, so it is not purely technical — but it is free today and a 250k-row backfill once
-   [§3.9](prd.md#L179) has shipped. [slice-architecture.md](slice-architecture.md#L321) confirms
+   [§3.9](prd.md#L179) has shipped. [slice-architecture.md](slice-architecture.md#L323) confirms
    `segment` has no embedding column yet, which is the window.
