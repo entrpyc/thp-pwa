@@ -1,16 +1,6 @@
 import { sql } from 'drizzle-orm';
-import {
-  date,
-  integer,
-  jsonb,
-  pgEnum,
-  pgTable,
-  text,
-  timestamp,
-  uniqueIndex,
-  uuid,
-} from 'drizzle-orm/pg-core';
-import { JOB_STATUSES, PIPELINE_STEPS, ROLES, UNFINISHED_JOB_STATUSES } from '@thp/shared';
+import { date, pgEnum, pgTable, text, timestamp, uniqueIndex, uuid } from 'drizzle-orm/pg-core';
+import { PIPELINE_STEPS, ROLES } from '@thp/shared';
 
 /**
  * The Drizzle schema. Server-only by construction: this package is never imported by a client
@@ -18,8 +8,8 @@ import { JOB_STATUSES, PIPELINE_STEPS, ROLES, UNFINISHED_JOB_STATUSES } from '@t
  *
  * **Tables arrive with the ticket that uses them.** Ticket 1 shipped the migration mechanism and the
  * two domain enums; ticket 2 added `user` and `session`; ticket 3 added `invitation`; ticket 4 added
- * `password_reset`. Story 2 Ticket 01 adds `recording`, and Ticket 02 the `job` ledger beneath it —
- * `transcript`, `segment`, `review_item` and the rest are still absent.
+ * `password_reset`. Story 2 Ticket 01 adds `recording` and nothing else — `job`, `transcript`,
+ * `segment`, `review_item` and the rest are still absent.
  *
  * The enums are **derived** from the shared TypeScript constants rather than restated beside them.
  * That is what keeps "each enum is declared exactly once in the repository" true, and it is
@@ -28,8 +18,6 @@ import { JOB_STATUSES, PIPELINE_STEPS, ROLES, UNFINISHED_JOB_STATUSES } from '@t
 export const userRole = pgEnum('user_role', ROLES);
 
 export const pipelineStep = pgEnum('pipeline_step', PIPELINE_STEPS);
-
-export const jobStatus = pgEnum('job_status', JOB_STATUSES);
 
 /**
  * An account. Columns arrive with the steps that use them: `deactivated_at` comes with ticket 4
@@ -224,87 +212,4 @@ export const recording = pgTable(
     createdAt: timestamp('created_at', { withTimezone: true }).notNull().defaultNow(),
   },
   (table) => [uniqueIndex('recording_original_media_key_unique').on(table.originalMediaKey)],
-);
-
-/**
- * A single run of a single pipeline step for a single recording (Story 2 Ticket 02) — **the ledger
- * and the queue at once**. There is no broker and no second store: the rows the worker dispatches
- * from are the same rows an operator queries and Ticket 04 renders a dashboard out of
- * (docs/project/architecture.md § Key technology choices, the ledger-is-the-queue row).
- *
- * **The table is append-only.** A step that is re-run is a *new row*, not a status reset, with
- * `attempt` counting 1, 2, 3 for a `(recording_id, step)` pair — so a failure that was later
- * re-run stays readable, and "what happened to this recording" is a history rather than a snapshot.
- * That is why uniqueness cannot be over the pair itself; see the index below.
- *
- * **`correlation_id` is a column, not an inference.** The worker is a second process with no
- * request behind it, so the id that
- * docs/epics/epic-core-listening/architecture.md § Key choices wants spanning API request → job →
- * provider call cannot live in an async-context frame — it has to survive the process boundary, and
- * a column is the only form of that which does. `text` because the API adopts a caller's id when
- * it is usable, and what it adopts is not necessarily a UUID.
- *
- * **`provider_meta` is `jsonb`** because docs/project/prd.md §7 wants spend measured per job and
- * no two providers report model, version and cost in the same shape. It ships empty; the stub
- * handlers of this ticket mark themselves in it, and the handler that has a provider to record
- * fills it in.
- *
- * What is absent is the design. No `updated_at` — `enqueued_at`, `started_at` and
- * `finished_at` are the three transitions and the row has no fourth. No `worker_id`, because
- * concurrency is pinned to 1 and the startup sweep is what recovers an abandoned job. No
- * `scheduled_for`, because docs/project/prd.md 3.21.3 is not in this epic and a job is enqueued to
- * run now. No `payload`, because a step's input is the recording it names. The migration test
- * asserts the exact column set rather than trusting this comment.
- */
-export const job = pgTable(
-  'job',
-  {
-    id: uuid('id').primaryKey().defaultRandom(),
-    /**
-     * Cascades: a job is a fact about a recording and is meaningless without it. `NOT NULL`
-     * because every step in this epic and every deferred one belongs to a recording — a nullable
-     * column for a job type nobody has asked for is deferral quietly stopping being deferral.
-     */
-    recordingId: uuid('recording_id')
-      .notNull()
-      .references(() => recording.id, { onDelete: 'cascade' }),
-    step: pipelineStep('step').notNull(),
-    status: jobStatus('status').notNull().default('pending'),
-    /** 1 for the first run of this `(recording_id, step)` pair, one higher for each run after. */
-    attempt: integer('attempt').notNull(),
-    /** The reason a failed job failed, truncated by the writer. The stack trace is in the log. */
-    error: text('error'),
-    /** The id of the request that caused this job, carried forward when a step chains to the next. */
-    correlationId: text('correlation_id').notNull(),
-    enqueuedAt: timestamp('enqueued_at', { withTimezone: true }).notNull().defaultNow(),
-    /** Stamped when a worker claims the row. Null while `pending`. */
-    startedAt: timestamp('started_at', { withTimezone: true }),
-    /** Stamped when the row reaches `succeeded` or `failed`. Null before that. */
-    finishedAt: timestamp('finished_at', { withTimezone: true }),
-    /** What the handler wants recorded about how it ran. Null at enqueue. */
-    providerMeta: jsonb('provider_meta'),
-  },
-  (table) => [
-    /**
-     * **At most one *unfinished* job per `(recording_id, step)`**, enforced at the database.
-     *
-     * Partial rather than total, because the ledger is append-only: a succeeded or failed row must
-     * not block the step being run again, and a total unique index would make re-running
-     * impossible. What must never exist twice is the same step *in flight* for the same recording.
-     *
-     * This is what makes an admin double-clicking Ticket 04's re-run harmless without Ticket 04
-     * having to think about it, and what makes "enqueue is a no-op when one is already unfinished"
-     * a property of the database rather than of a check-then-insert with a window in it.
-     *
-     * The predicate is derived from `UNFINISHED_JOB_STATUSES`, so "unfinished" has one definition
-     * that the index and the enqueue read the same way.
-     */
-    uniqueIndex('job_unfinished_step_unique')
-      .on(table.recordingId, table.step)
-      .where(
-        sql`${table.status} in (${sql.raw(
-          UNFINISHED_JOB_STATUSES.map((status) => `'${status}'`).join(', '),
-        )})`,
-      ),
-  ],
 );
