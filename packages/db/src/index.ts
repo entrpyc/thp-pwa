@@ -18,15 +18,11 @@ export {
   getDatabase,
   isUniqueViolation,
   pingDatabase,
-  queryable,
-  withTransaction,
   type CreateDatabaseOptions,
   type Database,
   type DatabaseHandle,
-  type Executor,
   type PingResult,
   type Sql,
-  type Transaction,
 } from './client';
 export { requireDatabaseUrl } from './env';
 export {

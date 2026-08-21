@@ -1,53 +1,28 @@
-import {
-  completeJob,
-  enqueueJob,
-  failJob,
-  withTransaction,
-  type Executor,
-  type JobRow,
-  type ProviderMeta,
-} from '@thp/db';
-import { PIPELINE_STEPS, nextPipelineStep, type PipelineStep } from '@thp/shared';
+import { completeJob, failJob, type DatabaseHandle, type JobRow } from '@thp/db';
 import { withCorrelationId } from '@thp/shared/observability/correlation';
 import { logger } from '@thp/shared/observability/logger';
 import type { HandlerRegistry } from './handlers';
 
-export interface RunJobOptions {
-  /** Where the outcome is written. Defaults to the process's pool. */
-  readonly executor?: Executor;
-  /**
-   * The ordered pipeline. The successor of a step that succeeds is read from **this list and
-   * nowhere else**, which is what makes inserting a step an edit to one array.
-   */
-  readonly steps?: readonly PipelineStep[];
-}
-
 /**
- * Run one claimed job to a terminal status, and chain forward if it succeeded.
+ * Run one claimed job to a terminal status.
  *
- * **A handler that throws is a failed row, not a crashed worker.** One recording's bad audio is not
- * a reason to stop processing everybody else's, so the failure is recorded and the runner returns
- * normally. What it does *not* swallow is a failure to write the ledger: a worker that cannot
- * record what happened has nothing useful left to do, and the job it was running stays `running`
- * for the startup sweep to reclaim — which is the correct outcome, because nothing about it is
- * known.
+ * **This function never throws for a job that failed.** A handler that throws is a failed row and a
+ * logged line, not a crashed worker — the loop above it must keep polling, because one recording's
+ * bad audio is not a reason to stop processing everybody else's. What it *can* still throw is a
+ * database failure while recording the outcome, and that is deliberately not swallowed: a worker
+ * that cannot write the ledger has nothing useful left to do.
  *
- * **Success and the successor are one transaction.** Either the step is succeeded and the next step
- * is queued, or neither happened. A crash between the two would otherwise leave a recording that
- * has finished a step nothing will follow — a pipeline stalled in a state no operator can tell from
- * a pipeline still working.
- *
- * **The correlation id comes off the row** and is carried to the successor, so one upload's whole
- * chain shares the id of the request that started it
- * (docs/epics/epic-core-listening/architecture.md § Key choices).
+ * **The correlation id comes off the row.** The worker has no request behind it, so the id that
+ * spans API request → job → provider call cannot be inherited from an async frame — it travelled
+ * here as a column (docs/epics/epic-core-listening/architecture.md § Key choices). Entering it here
+ * is what makes every line this job emits, including the handler's own, quotable against the
+ * upload that caused it.
  */
 export async function runJob(
   job: JobRow,
   handlers: HandlerRegistry,
-  options: RunJobOptions = {},
+  handle?: DatabaseHandle,
 ): Promise<JobRow> {
-  const { executor, steps = PIPELINE_STEPS } = options;
-
   return withCorrelationId(job.correlationId, async () => {
     const fields = {
       jobId: job.id,
@@ -59,43 +34,26 @@ export async function runJob(
     const handler = handlers[job.step];
     if (!handler) {
       // Naming the step rather than saying "unknown handler": the operator reading this row needs
-      // to know *which* step nothing was registered for, and no other column answers that.
+      // to know *which* step nothing was registered for, and the answer is not on any other column
+      // once a second worker build with a different registry exists.
       const reason = `no handler is registered for step "${job.step}"`;
-      const row = await failJob(job.id, reason, executor);
+      const row = await failJob(job.id, reason, handle);
       logger.error('job.failed', { ...fields, reason });
       return row;
     }
 
-    let providerMeta: ProviderMeta | null;
     try {
-      providerMeta = (await handler(job)) ?? null;
+      const providerMeta = (await handler(job)) ?? null;
+      const row = await completeJob(job.id, providerMeta, handle);
+      logger.info('job.succeeded', fields);
+      return row;
     } catch (cause) {
       // The message on the row, the whole error in the log — see MAX_JOB_ERROR_LENGTH.
       const reason = cause instanceof Error ? cause.message : String(cause);
-      const row = await failJob(job.id, reason, executor);
-      // **The chain stops here.** A failed step enqueues nothing, which is what turns
-      // docs/project/prd.md 3.21.2.3's "halt and flag" into a property of the mechanism rather than
-      // a rule each handler has to remember.
+      const row = await failJob(job.id, reason, handle);
       logger.error('job.failed', { ...fields, reason, error: describeError(cause) });
       return row;
     }
-
-    const next = nextPipelineStep(job.step, steps);
-    const row = await withTransaction(async (tx) => {
-      const completed = await completeJob(job.id, providerMeta, tx);
-      if (next !== null) {
-        // A no-op when the successor is already pending or running — the partial unique index says
-        // so, and `enqueueJob` reads the existing row back rather than failing.
-        await enqueueJob(
-          { recordingId: job.recordingId, step: next, correlationId: job.correlationId },
-          tx,
-        );
-      }
-      return completed;
-    }, executor);
-
-    logger.info('job.succeeded', { ...fields, next });
-    return row;
   });
 }
 

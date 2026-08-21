@@ -1,6 +1,6 @@
 import { and, eq, inArray, sql } from 'drizzle-orm';
 import { UNFINISHED_JOB_STATUSES, type JobStatus, type PipelineStep } from '@thp/shared';
-import { getDatabase, queryable, type Executor } from './client';
+import { getDatabase, type DatabaseHandle } from './client';
 import { job } from './schema';
 
 /**
@@ -56,14 +56,14 @@ export interface NewJob {
  */
 export async function enqueueJob(
   input: NewJob,
-  executor: Executor = getDatabase(),
+  handle: DatabaseHandle = getDatabase(),
 ): Promise<JobRow> {
   const nextAttempt = sql<number>`(
     select coalesce(max(${job.attempt}), 0) + 1 from ${job}
     where ${and(eq(job.recordingId, input.recordingId), eq(job.step, input.step))}
   )`;
 
-  const inserted = await queryable(executor)
+  const inserted = await handle.db
     .insert(job)
     .values({
       recordingId: input.recordingId,
@@ -80,7 +80,7 @@ export async function enqueueJob(
 
   // Refused by the partial unique index: this step is already pending or running for this
   // recording, and *that* row is the answer.
-  const existing = await findUnfinishedJob(input.recordingId, input.step, executor);
+  const existing = await findUnfinishedJob(input.recordingId, input.step, handle);
   if (existing) return existing;
 
   // Reachable only if the conflicting job finished between the insert and this read, which leaves
@@ -94,9 +94,9 @@ export async function enqueueJob(
 export async function findUnfinishedJob(
   recordingId: string,
   step: PipelineStep,
-  executor: Executor = getDatabase(),
+  handle: DatabaseHandle = getDatabase(),
 ): Promise<JobRow | null> {
-  const rows = await queryable(executor)
+  const rows = await handle.db
     .select()
     .from(job)
     .where(
@@ -132,9 +132,9 @@ export type ProviderMeta = Record<string, unknown>;
 export async function completeJob(
   id: string,
   providerMeta: ProviderMeta | null = null,
-  executor: Executor = getDatabase(),
+  handle: DatabaseHandle = getDatabase(),
 ): Promise<JobRow> {
-  const rows = await queryable(executor)
+  const rows = await handle.db
     .update(job)
     .set({ status: 'succeeded', finishedAt: sql`now()`, error: null, providerMeta })
     .where(eq(job.id, id))
@@ -155,9 +155,9 @@ export async function completeJob(
 export async function failJob(
   id: string,
   reason: string,
-  executor: Executor = getDatabase(),
+  handle: DatabaseHandle = getDatabase(),
 ): Promise<JobRow> {
-  const rows = await queryable(executor)
+  const rows = await handle.db
     .update(job)
     .set({ status: 'failed', finishedAt: sql`now()`, error: reason.slice(0, MAX_JOB_ERROR_LENGTH) })
     .where(eq(job.id, id))

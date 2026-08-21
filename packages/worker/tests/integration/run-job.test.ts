@@ -81,7 +81,7 @@ describe('running a claimed job', () => {
       },
     };
 
-    const row = await runJob(job, handlers, { executor: handle });
+    const row = await runJob(job, handlers, handle);
 
     expect(ran).toBe(1);
     expect(row.status).toBe('succeeded');
@@ -97,7 +97,7 @@ describe('running a claimed job', () => {
       transcribe: () => ({ model: 'a-fake-model', spendCents: 3 }),
     };
 
-    const row = await runJob(job, handlers, { executor: handle });
+    const row = await runJob(job, handlers, handle);
 
     expect(row.status).toBe('succeeded');
     expect(row.providerMeta).toEqual({ model: 'a-fake-model', spendCents: 3 });
@@ -113,7 +113,7 @@ describe('running a claimed job', () => {
 
     // Not `rejects` — the runner returning normally *is* the assertion. A worker that rethrew here
     // would take the loop down with the job.
-    const row = await runJob(job, handlers, { executor: handle });
+    const row = await runJob(job, handlers, handle);
 
     expect(row.status).toBe('failed');
     expect(row.error).toBe('the provider refused the audio');
@@ -129,7 +129,7 @@ describe('running a claimed job', () => {
       },
     };
 
-    const row = await runJob(job, handlers, { executor: handle });
+    const row = await runJob(job, handlers, handle);
 
     expect(row.error).toHaveLength(MAX_JOB_ERROR_LENGTH);
     expect(row.error?.startsWith('xxx')).toBe(true);
@@ -141,7 +141,7 @@ describe('running a claimed job', () => {
     const job = await claimedJob('generate_draft');
 
     // A registry that knows the other step, so this is "not registered" rather than "empty".
-    const row = await runJob(job, { transcribe: () => undefined }, { executor: handle });
+    const row = await runJob(job, { transcribe: () => undefined }, handle);
 
     expect(row.status).toBe('failed');
     expect(row.error).toContain('generate_draft');
@@ -150,7 +150,7 @@ describe('running a claimed job', () => {
 
   it('logs one line per outcome, carrying the job, the step, the recording and the id', async () => {
     const succeeding = await claimedJob();
-    await runJob(succeeding, { transcribe: () => undefined }, { executor: handle });
+    await runJob(succeeding, { transcribe: () => undefined }, handle);
 
     const failing = await claimedJob();
     await runJob(
@@ -160,7 +160,7 @@ describe('running a claimed job', () => {
           throw new Error('nope');
         },
       },
-      { executor: handle },
+      handle,
     );
 
     const succeeded = captured.filter((line) => line.message === 'job.succeeded');
