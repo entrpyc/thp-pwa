@@ -50,6 +50,13 @@
       "when": 1787346636225,
       "tag": "0006_transcripts",
       "breakpoints": true
+    },
+    {
+      "idx": 7,
+      "version": "7",
+      "when": 1787352458058,
+      "tag": "0007_segment_speaker",
+      "breakpoints": true
     }
   ]
 }

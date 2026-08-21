@@ -390,6 +390,16 @@ export const segment = pgTable(
     /** Exclusive end offset from the beginning of the recording, in milliseconds. */
     endMs: integer('end_ms').notNull(),
     text: text('text').notNull(),
+    /**
+     * The provider's **anonymous speaker index** for this sentence (Story 2 Ticket 04–05).
+     *
+     * Nullable, and nothing back-fills it: a provider that attributes a sentence to nobody writes
+     * null, and every segment written before this column existed keeps null until somebody re-runs
+     * `transcribe` for that recording. An integer rather than a label because that is genuinely all
+     * the provider answers — `0`, `1`, `2` — and a `text` column here would invite somebody to
+     * write a name into it, which is a labelling surface no epic has asked for.
+     */
+    speaker: integer('speaker'),
     /** Set when a human has corrected the machine output. Story 5; nothing writes it yet. */
     correctedAt: timestamp('corrected_at', { withTimezone: true }),
     correctedByUserId: uuid('corrected_by_user_id').references(() => user.id, {

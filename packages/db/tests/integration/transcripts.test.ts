@@ -78,6 +78,35 @@ describe('writing a recording its transcript', () => {
     // Story 5's columns exist and nothing in this epic writes them.
     expect(segments.every((one) => one.correctedAt === null)).toBe(true);
     expect(segments.every((one) => one.correctedByUserId === null)).toBe(true);
+    // And a writer that says nothing about the speaker writes null, which is what a transcript
+    // with no speaker information in it reads as.
+    expect(segments.every((one) => one.speaker === null)).toBe(true);
+  });
+
+  it('reads a speaker back where one was written, and null where one was not', async () => {
+    const recordingId = await newRecording();
+
+    const written = await replaceTranscript(
+      {
+        recordingId,
+        language: 'en',
+        confidence: 0.95,
+        segments: [
+          { startMs: 0, endMs: 4000, text: 'The teacher opens.', speaker: 0 },
+          { startMs: 4000, endMs: 9000, text: 'A question from the room.', speaker: 1 },
+          { startMs: 9000, endMs: 12_500, text: 'The teacher again.', speaker: 0 },
+          // Explicitly nobody — a real answer from a provider that attributed this to no one.
+          { startMs: 12_500, endMs: 15_000, text: 'Something nobody was given.', speaker: null },
+          // And a writer that omits the field entirely, which is every fixture written before the
+          // column existed.
+          { startMs: 15_000, endMs: 17_000, text: 'Written without a speaker at all.' },
+        ],
+      },
+      handle,
+    );
+
+    const segments = await listSegments(written.id, handle);
+    expect(segments.map((one) => one.speaker)).toEqual([0, 1, 0, null, null]);
   });
 
   it('reads segments back ascending by start, whatever order they were given in', async () => {

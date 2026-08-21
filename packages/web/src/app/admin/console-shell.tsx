@@ -1,5 +1,9 @@
 import type { ReactNode } from 'react';
-import { ADMIN_PAGE_PATH, ADMIN_RECORDINGS_PAGE_PATH } from '@thp/shared';
+import {
+  ADMIN_PAGE_PATH,
+  ADMIN_PIPELINE_PAGE_PATH,
+  ADMIN_RECORDINGS_PAGE_PATH,
+} from '@thp/shared';
 import type { Actor } from '@/server/auth/policy';
 import { SignOutButton } from '../sign-out-button';
 import styles from './admin.module.css';
@@ -13,14 +17,15 @@ import styles from './admin.module.css';
  * headers that can drift.
  *
  * **It is not a gate.** Each page decides what it renders by asking the policy module before it
- * renders anything, and every row either panel shows comes from an API route that refuses a member
+ * renders anything, and every row any of them shows comes from an API route that refuses a member
  * independently.
  */
 
-/** The panels, in the order they are read. A third is one entry. */
+/** The panels, in the order they are read. A fourth is one entry. */
 const PANELS = [
   { id: 'users', href: ADMIN_PAGE_PATH, label: 'User management' },
   { id: 'recordings', href: ADMIN_RECORDINGS_PAGE_PATH, label: 'Recordings' },
+  { id: 'pipeline', href: ADMIN_PIPELINE_PAGE_PATH, label: 'Pipeline' },
 ] as const;
 
 export type PanelId = (typeof PANELS)[number]['id'];

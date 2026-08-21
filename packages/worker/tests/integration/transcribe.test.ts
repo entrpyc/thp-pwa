@@ -213,6 +213,67 @@ describe('a recording that transcribes', () => {
     expect(persisted?.provider_meta).toEqual(meta);
   });
 
+  it('persists the speaker the port answered with, segment by segment', async () => {
+    const job = await claimedJob();
+
+    // A diarised script: two voices, and one sentence the provider attributed to nobody. Speaker
+    // is a value of the script rather than a mode of the fake, so the suite drives both answers
+    // through the same adapter.
+    await run(
+      job,
+      fakeTranscriber({
+        ...SCRIPT,
+        segments: [
+          { startMs: 0, endMs: 4120, text: 'The teacher opens.', speaker: 0 },
+          { startMs: 4120, endMs: 9880, text: 'A question from the room.', speaker: 1 },
+          { startMs: 9880, endMs: 15_340, text: 'The teacher answers it.', speaker: 0 },
+          { startMs: 15_340, endMs: 18_000, text: 'Something nobody was given.', speaker: null },
+        ],
+      }),
+    );
+
+    const transcript = await findTranscriptByRecording(job.recordingId, handle);
+    const segments = await listSegments(transcript!.id, handle);
+    // What the port returned, persisted as it came — nothing here turns an index into a name.
+    expect(segments.map((one) => one.speaker)).toEqual([0, 1, 0, null]);
+  });
+
+  it('writes null speakers for a script that carries none', async () => {
+    const job = await claimedJob();
+
+    // The existing script says nothing about speakers, which is what every transcript written
+    // before this ticket says. It must still transcribe.
+    await run(job, fakeTranscriber(SCRIPT));
+
+    const transcript = await findTranscriptByRecording(job.recordingId, handle);
+    const segments = await listSegments(transcript!.id, handle);
+    expect(segments.every((one) => one.speaker === null)).toBe(true);
+  });
+
+  it('reports how many distinct speakers it heard, beside how many segments', async () => {
+    const job = await claimedJob();
+
+    await run(
+      job,
+      fakeTranscriber({
+        ...SCRIPT,
+        segments: [
+          { startMs: 0, endMs: 4120, text: 'The teacher opens.', speaker: 0 },
+          { startMs: 4120, endMs: 9880, text: 'The teacher continues.', speaker: 0 },
+          { startMs: 9880, endMs: 15_340, text: 'A question from the room.', speaker: 1 },
+          { startMs: 15_340, endMs: 18_000, text: 'Attributed to nobody.', speaker: null },
+        ],
+      }),
+    );
+
+    const succeeded = captured.find((line) => line.message === 'transcribe.succeeded');
+    // The named accuracy risk on real material is one teaching voice split into several speakers,
+    // and a count is what makes that visible without reading nine hundred rows. Sentences the
+    // provider attributed to nobody are not a speaker and are not counted.
+    expect(succeeded?.['speakers']).toBe(2);
+    expect(succeeded?.['segments']).toBe(4);
+  });
+
   it('chains forward once the transcript is confident', async () => {
     const job = await claimedJob();
 

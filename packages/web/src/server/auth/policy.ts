@@ -73,6 +73,15 @@ export const POLICY_ACTIONS = [
    */
   'recording.upload',
   'recording.list',
+  /**
+   * The two pipeline actions (Story 2 Ticket 04–05), split for the reason every pair above is:
+   * "who may see what the pipeline is doing" and "who may make it do it again" are the same
+   * question only while there are two roles. Reading is a console panel; re-running spends money
+   * at a provider and discards a transcript, and the day a Contributor may watch the first without
+   * being able to press the second is the day that split stops being decoration.
+   */
+  'pipeline.read',
+  'pipeline.rerun',
 ] as const;
 
 export type PolicyAction = (typeof POLICY_ACTIONS)[number];
@@ -146,6 +155,10 @@ const RULES: PolicyRules = {
   // epic; nothing here is member-visible until Story 3 publishes it.
   'recording.upload': { roles: { admin: true, member: false } },
   'recording.list': { roles: { admin: true, member: false } },
+  // Reading what the pipeline is doing, and running one step of it again. Operator work in this
+  // epic; a member has nothing to see here and nothing to press.
+  'pipeline.read': { roles: { admin: true, member: false } },
+  'pipeline.rerun': { roles: { admin: true, member: false } },
 };
 
 export function isPolicyAction(value: string): value is PolicyAction {
