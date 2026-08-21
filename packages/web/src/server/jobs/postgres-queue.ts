@@ -1,4 +1,4 @@
-import { enqueueJob } from '@thp/db';
+import { enqueueJob, type Executor } from '@thp/db';
 import { correlationIdForJob, type EnqueueRequest, type EnqueuedJob, type Queue } from './queue';
 
 /**
@@ -18,12 +18,16 @@ export function buildQueue(): Queue {
   return {
     name: 'postgres',
 
-    async enqueue(input: EnqueueRequest): Promise<EnqueuedJob> {
-      const row = await enqueueJob({
-        recordingId: input.recordingId,
-        step: input.step,
-        correlationId: correlationIdForJob(input.correlationId),
-      });
+    async enqueue(input: EnqueueRequest, executor?: Executor): Promise<EnqueuedJob> {
+      const row = await enqueueJob(
+        {
+          recordingId: input.recordingId,
+          step: input.step,
+          correlationId: correlationIdForJob(input.correlationId),
+        },
+        // `undefined` here means "the process's pool", which is what the ledger's default says.
+        executor,
+      );
 
       return {
         id: row.id,
