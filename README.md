@@ -45,7 +45,7 @@ without a session.
 | `npm run seed:admin` | Create the first admin from `SEED_ADMIN_*`. Idempotent, and **never** resets an existing password. |
 | `npm test`           | Unit and integration tests. Integration needs a real Postgres.                |
 | `npm run dev`        | Next.js development server (UI and `/api/v1`).                                |
-| `npm run worker`     | The pipeline worker — polls the job ledger and runs `transcribe`. A second terminal, beside `npm run dev`. |
+| `npm run worker`     | The worker stub. Polls nothing yet.                                            |
 | `npm run build`      | Production build.                                                             |
 | `npm start`          | Serve the production build.                                                   |
 | `npm run db:generate`| Regenerate SQL migrations after changing the Drizzle schema.                  |
@@ -311,19 +311,6 @@ provider that URL; the provider fetches the object itself, which is the same bou
 - `ASR_PROVIDER=fake` reads a fixed script off `ASR_FAKE_SCRIPT` and returns it, spending nothing
   and reaching no network. **That is what the test suite runs against** — the provider is
   configuration, so the test double is a value of the same setting rather than a mock.
-
-**Local development runs on the fake, and has to.** The provider fetches the object from the signed
-URL itself, so it must be able to *reach* the bucket — and the MinIO container on `127.0.0.1:9000`
-is not routable from the internet. Pointing the real provider at a local upload fails with
-`REMOTE_CONTENT_ERROR: URL for media download must be publicly routable`, which is the design
-working rather than failing: a deployment's bucket is a public R2 endpoint and the same URL works
-unchanged. To exercise the real provider from a developer machine you need a bucket it can reach —
-a tunnel in front of MinIO, or the `MEDIA_` values pointed at the real bucket.
-
-```bash
-# the whole pipeline, locally, spending nothing
-ASR_PROVIDER=fake ASR_FAKE_SCRIPT=packages/worker/tests/fixtures/teaching-script.json npm run worker
-```
 
 Three things worth knowing before the first real recording:
 

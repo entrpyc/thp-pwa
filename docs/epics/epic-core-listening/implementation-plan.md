@@ -116,12 +116,9 @@ sessions, password hashing, the transactional mail adapter — is not repeated h
 ## Story — Get a recording transcribed
 
 **Delivers:** an admin uploads an audio file with a title and a date, and with no further action the
-recording ends up with a timestamped transcript in the detected language, each segment attributed to
-the speaker the provider heard. If any step fails, the admin sees which one, why, and can re-run just
-that step. Nothing is member-visible.
-**Feature:** [epic prd § In scope → 2](docs/epics/epic-core-listening/prd.md#L52). **Ticket 05 has no
-feature behind it** — speaker attribution was added mid-build at the operator's instruction and
-appears nowhere in the PRD; see that ticket's notes.
+recording ends up with a timestamped transcript in the detected language. If any step fails, the admin
+sees which one, why, and can re-run just that step. Nothing is member-visible.
+**Feature:** [epic prd § In scope → 2](docs/epics/epic-core-listening/prd.md#L52)
 
 ### Ticket 01 — Upload to object storage
 **Delivers:** an admin uploads an audio file with a title and date recorded, and it appears in an admin
@@ -203,43 +200,6 @@ One query over the ledger — no log-reading.
 claim about rows nobody can see. It hangs off the admin console shell and has no design reference;
 compose from the style guide.
 
-### Ticket 05 — Speaker labels on segments
-**Delivers:** a transcript records who was speaking, segment by segment. The ASR adapter asks the
-provider for diarisation, the `Transcriber` port carries a speaker per segment alongside the offsets
-and the text, and `segment` grows the column to hold it. **Speakers are the provider's anonymous
-indices — 0, 1, 2 — not people.** Nothing names them, nothing renders them, and no screen changes;
-what this ticket delivers is the data and the contract that carries it.
-**References:**
-[03-transcription-into-timestamped-segments.md § Out of scope](docs/epics/epic-core-listening/stories/get-a-recording-transcribed/03-transcription-into-timestamped-segments.md#L88)
-— the line this ticket reverses, and the reason it is worth reading first;
-[epic architecture § Extension points](docs/epics/epic-core-listening/architecture.md#L323) — *Segment row*, the seam
-this attaches to; [epic architecture § Key choices](docs/epics/epic-core-listening/architecture.md#L255) — the
-ASR-adapter row, whose low reversal cost is what makes this a query parameter rather than a project;
-[4.4](docs/project/prd.md#L539) — the Transcript entity this widens;
-[project architecture § Data model](docs/project/architecture.md#L171);
-[§7](docs/project/prd.md#L742) — the spend line, because diarisation may change the per-minute rate
-**Notes:** **no PRD requirement stands behind this ticket.** The word "speaker" appears nowhere in
-[docs/project/prd.md](docs/project/prd.md#L1), the project architecture, the epic PRD or the epic
-architecture; it was added mid-build at the operator's instruction, and Phase 3 was not revisited.
-That is a deliberate exception to the rule stated in *What this plan deliberately does not include*,
-recorded here rather than left to be rediscovered. If speaker labels are to survive the epic,
-[4.4](docs/project/prd.md#L539) and a feature requirement should be amended to say so — otherwise the
-next person to read the PRD against the schema finds a column the product never asked for.
-
-Three things this ticket must settle. **It widens the shared contract:** `segment`'s columns are
-locked to the `Segment` type in `@thp/shared` by `tests/guards/segment-shape.test.ts`, so the type,
-the table and the migration change together — and that type is what the client and the API agree on,
-not an internal detail of the worker. **Diarisation returns indices, not names**, so on its own the
-column has no reader; turning "speaker 1" into a person is a labelling surface that this ticket does
-not include and nothing else in the epic provides, and that gap is the main risk it carries. **The
-rate must be confirmed before building** — [§7](docs/project/prd.md#L742) measures spend per job, and
-a diarised minute that costs more than a plain one changes the cost table.
-
-Two facts about the data. There is **no back-fill**: re-running `transcribe` replaces a transcript
-wholesale, so recordings already transcribed gain speakers only when somebody re-runs them, and doing
-so discards any corrections Story 5 has let an admin make. And the likely accuracy failure on this
-material is **over-segmentation** — one teacher, a long single voice, occasional questions from the
-room — so the ticket is only validated by reading a real diarised transcript, not by a fixture.
 ---
 
 ## Story — Review and publish a teaching

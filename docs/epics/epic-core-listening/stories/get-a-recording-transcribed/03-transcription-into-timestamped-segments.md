@@ -346,18 +346,6 @@ reason and stops the chain there rather than proceeding to generation on bad inp
   confidence and the threshold, so an operator has to read the `error` column to tell "the machine
   doubted this" from "the provider refused this". Ticket 04's screen is what makes the difference
   legible.
-- **A half-edited `MEDIA_` block fails late and unhelpfully.** The reader has no defaults, but it
-  validates nothing beyond presence — credentials that belong to a different store than
-  `MEDIA_ENDPOINT` names surface as a browser upload that "failed before it finished", and an
-  endpoint URL pasted into `MEDIA_BUCKET` surfaces as a 500 carrying an SDK message about slashes in
-  bucket names. Both were hit while validating this ticket. Nothing checks that a bucket name is a
-  name.
-- **The real provider cannot transcribe anything stored in local MinIO.** Deepgram fetches the audio
-  from the signed URL itself, and `http://127.0.0.1:9000` is not routable from its servers — every
-  such job fails with `REMOTE_CONTENT_ERROR: URL for media download must be publicly routable`. This
-  is the design working, not failing: production is a public R2 endpoint and the same URL works
-  unchanged. It means local development runs on `ASR_PROVIDER=fake`, and the real provider is only
-  exercisable against a bucket the provider can reach.
 - **A provider that answers with an empty transcript for real silence** fails the job saying the
   provider returned no segments. An admin uploading a silent file sees a failed step, not "this
   recording has no speech in it".
@@ -434,18 +422,10 @@ reason and stops the chain there rather than proceeding to generation on bad inp
   `replaceTranscript`, and the job's outcome is `runJob`'s existing transaction as Ticket 02 built
   it. The gap this leaves is one line in Edge cases and is closed by the next sweep.
 - **The Deepgram response fixture is hand-built from the documented response shape, not captured
-  from a real call.** The mapping is therefore proven against a plausible response rather than a real
-  one. If the segments come back empty or the model version is blank on the first real
-  transcription, that fixture is the first place to look.
-- **The real provider was never exercised end to end, and cannot be from a developer machine.** The
-  first attempt failed with `REMOTE_CONTENT_ERROR: URL for media download must be publicly routable`
-  — Deepgram fetches the object itself, and the MinIO container is not reachable from the internet.
-  Everything up to and including the provider call is proven (the key authenticates, the request is
-  well formed, the refusal is recorded correctly and the chain halts); what is unproven is the
-  response mapping and the accuracy judgement, and both need a bucket the provider can reach. The
-  options are a tunnel in front of MinIO, or pointing the five `MEDIA_` values at the real R2 bucket
-  — which is a decision about writing test uploads into a store nothing can delete from, and so the
-  operator's.
+  from a real call** — capturing one needs the key that arrives with this ticket's user steps. The
+  mapping is therefore proven against a plausible response rather than a real one, and the first
+  real transcription is what confirms the shape. If the segments come back empty or the model
+  version is blank, that fixture is the first place to look.
 - **The media port moved to `@thp/media`, a package beside `@thp/db`.** Everything it guaranteed
   survived — the S3 SDK is still imported by exactly one file, and there is still no delete on the
   interface. Both guards follow the new path. `01-upload-to-object-storage.md` says the second media
