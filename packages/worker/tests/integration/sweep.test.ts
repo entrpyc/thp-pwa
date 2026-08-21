@@ -11,7 +11,7 @@ import {
 import { setLogSink, type LogLine } from '@thp/shared/observability/logger';
 import type { PipelineStep } from '@thp/shared';
 import { SOLE_WORKER_ASSUMPTION, sweepAbandonedJobs } from '../../src/sweep';
-import { runJob } from '../../src/run-job';
+import { startWorkerLoop } from '../../src/loop';
 import { createThrowawayDatabase, type ThrowawayDatabase } from '../../../../tests/setup/throwaway-db';
 
 /**
@@ -52,15 +52,37 @@ describe('the startup sweep', () => {
     return row.id;
   }
 
-  /** A job in the state a killed worker leaves behind: claimed, running, never finished. */
-  async function abandonedJob(step: PipelineStep = 'transcribe'): Promise<JobRow> {
+  /** A job waiting to be claimed, on a recording of its own. */
+  async function queuedJob(step: PipelineStep = 'transcribe'): Promise<JobRow> {
     const recordingId = await newRecording();
-    const job = await enqueueJob(
+    return enqueueJob(
       { recordingId, step, correlationId: `sweep-${recordings}-correlation` },
       handle,
     );
+  }
+
+  /** A job in the state a killed worker leaves behind: claimed, running, never finished. */
+  async function abandonedJob(step: PipelineStep = 'transcribe'): Promise<JobRow> {
+    const job = await queuedJob(step);
     await sql`update job set status = 'running', started_at = now() where id = ${job.id}`;
     return { ...job, status: 'running', startedAt: new Date() };
+  }
+
+  async function statusOf(jobId: string): Promise<string | undefined> {
+    const [row] = await sql<{ status: string }[]>`
+      select status::text as status from job where id = ${jobId}
+    `;
+    return row?.status;
+  }
+
+  /** Wait for something a loop does in the background, or fail saying what never happened. */
+  async function waitFor(what: string, predicate: () => Promise<boolean>): Promise<void> {
+    const deadline = Date.now() + 15_000;
+    while (Date.now() < deadline) {
+      if (await predicate()) return;
+      await new Promise((resolve) => setTimeout(resolve, 10));
+    }
+    throw new Error(`timed out waiting for ${what}`);
   }
 
   async function ledger(recordingId: string): Promise<LedgerRow[]> {
@@ -83,7 +105,10 @@ describe('the startup sweep', () => {
     await target?.drop();
   }, 60_000);
 
-  beforeEach(() => {
+  beforeEach(async () => {
+    // An empty ledger per test: the sweep and the loop both read *every* row, so a job another
+    // test left waiting is a job this one would claim.
+    await sql`delete from job`;
     captured = [];
     restoreSink = setLogSink((line) => captured.push(line));
     return () => restoreSink();
@@ -161,39 +186,69 @@ describe('the startup sweep', () => {
   });
 
   it('runs the handler of an interrupted job a second time', async () => {
-    const job = await abandonedJob('transcribe');
+    const job = await queuedJob('transcribe');
     const ranFor: string[] = [];
-    const handlers = {
-      transcribe: (running: JobRow) => {
-        ranFor.push(running.id);
-      },
-    };
 
-    // The kill: the handler had started and the process went away, so the row is still `running`
-    // and the work was never recorded. That is the state `abandonedJob` above leaves behind.
-    ranFor.push(job.id);
+    // A handler that never returns: the first worker is *inside* it when the process dies.
+    const interrupted = startWorkerLoop({
+      executor: handle,
+      pollIntervalMs: 20,
+      handlers: {
+        transcribe: (running: JobRow) => {
+          ranFor.push(running.id);
+          return new Promise<void>(() => {});
+        },
+      },
+    });
+
+    await waitFor('the first worker to start the handler', async () => ranFor.length === 1);
+
+    // **The kill.** `stop()` without awaiting `done`: the job in flight never finishes and nothing
+    // releases that handler — a process that had been killed would not release it either. So the
+    // row is left `running`, which is exactly the state the sweep exists for.
+    interrupted.stop();
+    expect(await statusOf(job.id)).toBe('running');
 
     const [reclaimed] = await sweepAbandonedJobs(handle);
-    expect(reclaimed).toBeDefined();
     const requeued = reclaimed?.requeued as JobRow;
+    expect(requeued.attempt).toBe(2);
 
-    // The next boot picks the fresh attempt up and runs the same step over the same recording.
-    // (The loop that would claim it is the last slice of this ticket; the row it would hand over is
-    // this one.)
-    await sql`update job set status = 'running', started_at = now() where id = ${requeued.id}`;
-    await runJob(requeued, handlers, { executor: handle });
+    // The next boot, with a handler that returns.
+    const restarted = startWorkerLoop({
+      executor: handle,
+      pollIntervalMs: 20,
+      handlers: {
+        transcribe: (running: JobRow) => {
+          ranFor.push(running.id);
+        },
+      },
+    });
+    try {
+      await waitFor('the reclaimed job to finish', async () => {
+        return (await statusOf(requeued.id)) === 'succeeded';
+      });
+    } finally {
+      restarted.stop();
+      await restarted.done;
+    }
 
-    // **At-least-once, stated as a test rather than as prose.** Which is why every handler in this
-    // epic and every later epic must be idempotent.
-    expect(ranFor).toHaveLength(2);
-    expect(new Set(ranFor).size).toBe(2);
-    // And the re-run is a full run: it succeeded, so it chained forward exactly as a first run
-    // would have. Nothing about a reclaimed job is second class.
+    // **At-least-once, stated as a test rather than as prose.** Two runs of the same step over the
+    // same recording, and neither of them performed by this test — the first is the interrupted
+    // worker's, the second is the restarted worker's. Which is why every handler in this epic and
+    // every later epic must be idempotent.
+    expect(ranFor).toEqual([job.id, requeued.id]);
+    expect(requeued.recordingId).toBe(job.recordingId);
+    expect(requeued.step).toBe(job.step);
+
     const rows = await ledger(job.recordingId);
-    expect(rows.map((row) => [row.step, row.status])).toEqual([
-      ['transcribe', 'failed'],
-      ['transcribe', 'succeeded'],
-      ['generate_draft', 'pending'],
-    ]);
-  });
+    const attempts = rows.filter((row) => row.step === 'transcribe');
+    expect(attempts.map((row) => row.status)).toEqual(['failed', 'succeeded']);
+    expect(attempts[0]?.error).toContain('restarted');
+
+    // And the re-run is a full run: it succeeded, so it chained forward exactly as a first run
+    // would have. Nothing about a reclaimed job is second class. What then happens to that
+    // successor is this loop's registry's business — it was given `transcribe` and nothing else —
+    // so only its existence is asserted here.
+    expect(rows.some((row) => row.step === 'generate_draft')).toBe(true);
+  }, 60_000);
 });
