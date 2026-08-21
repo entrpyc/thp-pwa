@@ -1,6 +1,6 @@
 import { readFileSync } from 'node:fs';
 import { relative, resolve, sep } from 'node:path';
-import { PIPELINE_STEPS, ROLES } from '@thp/shared';
+import { JOB_STATUSES, PIPELINE_STEPS, ROLES } from '@thp/shared';
 import { walkFiles } from './fs-walk';
 
 export interface DomainDeclaration {
@@ -29,6 +29,12 @@ export const DOMAIN_DECLARATIONS: readonly DomainDeclaration[] = [
     members: PIPELINE_STEPS,
   },
   { name: 'PipelineStep', canonicalFile: 'packages/shared/src/pipeline.ts' },
+  {
+    name: 'JOB_STATUSES',
+    canonicalFile: 'packages/shared/src/jobs.ts',
+    members: JOB_STATUSES,
+  },
+  { name: 'JobStatus', canonicalFile: 'packages/shared/src/jobs.ts' },
   { name: 'Segment', canonicalFile: 'packages/shared/src/segment.ts' },
 ];
 

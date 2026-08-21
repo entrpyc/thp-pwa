@@ -91,7 +91,7 @@ describe('the invitation schema', () => {
     const enums = await sql<{ typname: string }[]>`
       select typname from pg_type where typtype = 'e' order by typname
     `;
-    expect(enums.map((row) => row.typname)).toEqual(['pipeline_step', 'user_role']);
+    expect(enums.map((row) => row.typname)).toEqual(['job_status', 'pipeline_step', 'user_role']);
   });
 
   it('stores the email normalised, whatever casing it was written with', async () => {
