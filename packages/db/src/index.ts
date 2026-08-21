@@ -28,7 +28,7 @@ export {
   type Sql,
   type Transaction,
 } from './client';
-export { requireDatabaseUrl } from './env';
+export { requireDatabaseUrl, type EnvSource } from './env';
 export {
   acceptInvitation,
   findInvitationById,
@@ -44,6 +44,7 @@ export {
 } from './invitations';
 export {
   MAX_JOB_ERROR_LENGTH,
+  claimNextJob,
   completeJob,
   enqueueJob,
   failJob,

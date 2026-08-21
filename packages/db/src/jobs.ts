@@ -218,3 +218,43 @@ export async function sweepRunning(
     return reclaimed;
   }, executor);
 }
+
+/**
+ * Claim the oldest waiting job: mark it `running`, stamp `started_at`, and hand it back.
+ *
+ * **One statement.** The row is selected, locked, and changed in a single
+ * `update … where id = (select … for update skip locked limit 1) returning *`, so there is no
+ * window between "this job is mine" and "this job says it is mine" for a second worker to look into.
+ * A claim in two statements would need a transaction around it and would still be the same query
+ * written less honestly.
+ *
+ * **`skip locked`, not `nowait` and not waiting.** A row another transaction holds is *passed over*
+ * rather than waited for, so two workers polling at the same moment take different jobs instead of
+ * queueing behind one. It is also what makes the empty answer meaningful: nothing came back because
+ * nothing is available *to me*, which is the same thing as far as the caller is concerned.
+ *
+ * Oldest first, `enqueued_at` ascending with `id` as the tiebreak — for the same reason
+ * `listRecordings` breaks its tie: two rows written in the same millisecond would otherwise come
+ * back in whatever order the planner chose that second.
+ *
+ * `null` when the queue is empty, which is not an error. It is what a worker sees most of the time.
+ */
+export async function claimNextJob(executor: Executor = getDatabase()): Promise<JobRow | null> {
+  const on = queryable(executor);
+
+  const oldestWaiting = on
+    .select({ id: job.id })
+    .from(job)
+    .where(eq(job.status, 'pending'))
+    .orderBy(asc(job.enqueuedAt), asc(job.id))
+    .limit(1)
+    .for('update', { skipLocked: true });
+
+  const rows = await on
+    .update(job)
+    .set({ status: 'running', startedAt: sql`now()` })
+    .where(eq(job.id, sql`(${oldestWaiting})`))
+    .returning();
+
+  return (rows[0] as JobRow | undefined) ?? null;
+}
