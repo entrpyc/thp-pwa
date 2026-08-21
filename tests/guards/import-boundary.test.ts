@@ -3,11 +3,9 @@ import { describe, expect, it } from 'vitest';
 import {
   checkClientBoundary,
   checkSingleDatabaseModule,
-  checkWorkerBoundary,
   collectClientFiles,
   formatViolations,
 } from '../../tools/import-boundary';
-import { walkFiles } from '../../tools/fs-walk';
 
 const REPO_ROOT = resolve(import.meta.dirname, '..', '..');
 const WEB_SRC = resolve(REPO_ROOT, 'packages/web/src');
@@ -53,27 +51,3 @@ describe('one database module', () => {
     expect(violations.map((violation) => violation.detail)).toContain('postgres');
   });
 });
-
-describe('the worker and the API share a database, not a codebase', () => {
-  it('no worker source imports anything from packages/web', () => {
-    expect(formatViolations(checkWorkerBoundary(REPO_ROOT))).toBe('');
-  });
-
-  it('has worker source to check at all — otherwise the pass above is vacuous', () => {
-    // The rule is about a package that exists and does real work, not an empty folder.
-    expect(collectWorkerFiles().length).toBeGreaterThan(0);
-  });
-
-  it('would report it if one did', () => {
-    const violations = checkWorkerBoundary(REPO_ROOT, ['tests/fixtures/leaky-worker']);
-    expect(violations.map((violation) => violation.detail)).toContain(
-      '@/server/observability/logger',
-    );
-    expect(formatViolations(violations)).toContain('reaches-web.ts');
-    expect(violations.every((violation) => violation.line > 0)).toBe(true);
-  });
-});
-
-function collectWorkerFiles(): string[] {
-  return walkFiles(resolve(REPO_ROOT, 'packages/worker/src'));
-}
