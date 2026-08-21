@@ -48,11 +48,9 @@ export {
   enqueueJob,
   failJob,
   findUnfinishedJob,
-  sweepRunning,
   type JobRow,
   type NewJob,
   type ProviderMeta,
-  type ReclaimedJob,
 } from './jobs';
 export { MIGRATIONS_DIR, runMigrations, type RunMigrationsOptions } from './migrate';
 export {
