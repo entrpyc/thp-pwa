@@ -102,3 +102,39 @@ export function isUniqueViolation(cause: unknown): boolean {
   }
   return false;
 }
+
+/**
+ * A transaction on the pool, as Drizzle hands it to a `db.transaction` callback.
+ *
+ * Derived from the callback's own parameter rather than named as a Drizzle type, so it cannot drift
+ * from what `transaction` actually passes.
+ */
+export type Transaction = Parameters<Parameters<Database['transaction']>[0]>[0];
+
+/**
+ * Where a query runs: the pool, a transaction on it, or the handle that wraps the pool.
+ *
+ * **This is what lets one function be called both ways.** `enqueueJob` is called on its own by the
+ * API's queue adapter and *inside* the transaction that marks a step succeeded — and those have to
+ * be the same function, or the chain rule would be enqueuing through a second code path with its
+ * own idea of what `attempt` is.
+ */
+export type Executor = Database | Transaction | DatabaseHandle;
+
+/** The query builder behind an executor. A handle wraps one; a database or a transaction is one. */
+export function queryable(executor: Executor = getDatabase()): Database | Transaction {
+  return 'db' in executor ? executor.db : executor;
+}
+
+/**
+ * Run `work` in a transaction, committing when it returns and rolling back when it throws.
+ *
+ * Nested by design: passing a transaction runs `work` in a savepoint of it rather than opening a
+ * second one, so a caller never has to know whether it is already inside one.
+ */
+export async function withTransaction<T>(
+  work: (tx: Transaction) => Promise<T>,
+  executor: Executor = getDatabase(),
+): Promise<T> {
+  return queryable(executor).transaction(work);
+}
