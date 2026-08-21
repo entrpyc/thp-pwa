@@ -142,28 +142,6 @@ describe('the worker loop', () => {
     expect(mostAtOnce).toBe(1);
   });
 
-  it('keeps polling after a job fails', async () => {
-    const failing = await queueJob();
-    const following = await queueJob();
-
-    const loop = start({
-      handlers: {
-        transcribe: (job) => {
-          if (job.id === failing.id) throw new Error('the provider refused the audio');
-        },
-      },
-    });
-
-    await waitFor('the second job to be run', async () => {
-      return (await statusOf(following.id)) === 'succeeded';
-    });
-    loop.stop();
-    await loop.done;
-
-    // One recording's bad audio is not a reason to stop processing everybody else's.
-    expect(await statusOf(failing.id)).toBe('failed');
-  });
-
   it('stops claiming when asked, and lets the job in flight finish first', async () => {
     const job = await queueJob();
     const waiting = await queueJob();

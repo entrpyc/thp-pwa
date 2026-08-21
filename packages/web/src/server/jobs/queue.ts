@@ -1,4 +1,3 @@
-import type { Executor } from '@thp/db';
 import type { PipelineStep } from '@thp/shared';
 import { currentCorrelationId, resolveCorrelationId } from '@/server/observability/correlation';
 import { buildQueue } from './postgres-queue';
@@ -52,15 +51,8 @@ export interface Queue {
    * **Enqueuing twice is a no-op, not an error** — the second call returns the first call's job.
    * The rule is the database's (a partial unique index over `(recording_id, step)` while
    * unfinished), not this interface's, so it holds however the row was written.
-   *
-   * `executor` runs the enqueue inside a transaction the caller already opened, so the job and
-   * the row that caused it land together or not at all. **This is the one place the port admits
-   * what is behind it**, and deliberately: transactional enqueue is the entire reason
-   * docs/project/architecture.md § Key technology choices made the ledger the queue. A broker
-   * adapter could not honour it, and the day one arrives that is the conversation to have — not a
-   * detail to have hidden here in advance.
    */
-  enqueue(input: EnqueueRequest, executor?: Executor): Promise<EnqueuedJob>;
+  enqueue(input: EnqueueRequest): Promise<EnqueuedJob>;
 }
 
 /**
@@ -77,20 +69,4 @@ let instance: Queue | undefined;
 export function queue(): Queue {
   instance ??= buildQueue();
   return instance;
-}
-
-/**
- * Swap the queue, and hand back a function that puts the real one back.
- *
- * The same seam `setLogSink` is, and it exists for one thing the real queue cannot be made to do
- * on demand: **fail**. "The recording row is rolled back when the enqueue fails" is a property of
- * the finalise transaction, and the only honest way to drive it is to supply an enqueue that
- * refuses. Used by tests; nothing in the application calls it.
- */
-export function setQueue(next: Queue): () => void {
-  const previous = instance;
-  instance = next;
-  return () => {
-    instance = previous;
-  };
 }

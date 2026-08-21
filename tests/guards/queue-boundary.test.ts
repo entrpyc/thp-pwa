@@ -22,7 +22,7 @@ describe('one queue module', () => {
     const [adapterFile] = QUEUE_ADAPTER_FILES;
     expect(adapterFile).toBeDefined();
     const source = readFileSync(resolve(REPO_ROOT, adapterFile ?? ''), 'utf8');
-    expect(source).toMatch(/import\s*\{[^}]*\benqueueJob\b[^}]*\}\s*from\s*'@thp\/db'/);
+    expect(source).toMatch(/import\s*\{\s*enqueueJob\s*\}\s*from\s*'@thp\/db'/);
   });
 
   it('reads the ledger it claims to — otherwise every name is permitted', () => {

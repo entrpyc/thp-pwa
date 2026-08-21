@@ -1,12 +1,5 @@
+import { insertRecording, isUniqueViolation, listRecordings, type RecordingRow } from '@thp/db';
 import {
-  insertRecording,
-  isUniqueViolation,
-  listRecordings,
-  withTransaction,
-  type RecordingRow,
-} from '@thp/db';
-import {
-  FIRST_PIPELINE_STEP,
   MAX_UPLOAD_BYTES,
   MAX_UPLOAD_LABEL,
   ACCEPTED_AUDIO_LABEL,
@@ -20,7 +13,6 @@ import {
 } from '@thp/shared';
 import { ApiError } from '@/server/api/errors';
 import type { Actor } from '@/server/auth/policy';
-import { queue } from '@/server/jobs/queue';
 import { UPLOAD_GRANT_SECONDS, mediaStore, mintOriginalKey } from '@/server/media/store';
 import { logger } from '@/server/observability/logger';
 
@@ -135,32 +127,12 @@ export async function finaliseUpload(actor: Actor, body: unknown): Promise<Recor
   }
 
   let row: RecordingRow;
-  let jobId: string;
   try {
-    // **One transaction.** The row and the job that starts its pipeline land together, so there is
-    // no state in which a recording exists and nothing will ever process it — which is the failure
-    // class the ledger-is-the-queue choice exists to remove. An enqueue that fails takes the
-    // recording with it, and the admin re-finalises the same key.
-    const written = await withTransaction(async (tx) => {
-      const created = await insertRecording(
-        {
-          originalMediaKey: requested.key,
-          title: requested.title,
-          recordedAt: requested.recordedAt,
-        },
-        tx,
-      );
-      // The first step comes off the ordered list, so §3.4 inserting a step ahead of `transcribe`
-      // changes what an upload starts without an edit here. The correlation id is not passed: the
-      // port reads the one this request is running under.
-      const enqueued = await queue().enqueue(
-        { recordingId: created.id, step: FIRST_PIPELINE_STEP },
-        tx,
-      );
-      return { created, enqueued };
+    row = await insertRecording({
+      originalMediaKey: requested.key,
+      title: requested.title,
+      recordedAt: requested.recordedAt,
     });
-    row = written.created;
-    jobId = written.enqueued.id;
   } catch (cause) {
     if (!isUniqueViolation(cause)) throw cause;
     throw refuse(
@@ -179,10 +151,6 @@ export async function finaliseUpload(actor: Actor, body: unknown): Promise<Recor
     mediaKey: row.originalMediaKey,
     size: stored.size,
     contentType: stored.contentType,
-    // The pipeline started itself (docs/project/prd.md 3.21.2.1). This line is where an operator
-    // picks up the job id and follows it into the worker's log under the same correlation id.
-    jobId,
-    step: FIRST_PIPELINE_STEP,
   });
 
   return describeRecording(row);
