@@ -80,3 +80,25 @@ export async function pingDatabase(target: DatabaseHandle = getDatabase()): Prom
     };
   }
 }
+
+/**
+ * Whether a failed write was refused by a unique constraint (SQLSTATE `23505`).
+ *
+ * Here rather than at the call site because the **shape** of a driver error is this package's
+ * business, exactly as query construction is: Drizzle wraps the driver's error as a `cause`, and a
+ * caller in `packages/web` checking `error.code` would be reaching through two layers it is not
+ * supposed to know about — and would silently stop working the day either layer changes how it
+ * wraps.
+ *
+ * Used where a unique index is the mechanism rather than a backstop — `recording.original_media_key`
+ * is the one that makes "finalise the same upload twice" produce one row instead of two, and a
+ * check-then-insert has a window in which two requests both find nothing.
+ */
+export function isUniqueViolation(cause: unknown): boolean {
+  for (let current: unknown = cause, depth = 0; current != null && depth < 5; depth += 1) {
+    if (typeof current !== 'object') break;
+    if ((current as { code?: unknown }).code === '23505') return true;
+    current = (current as { cause?: unknown }).cause;
+  }
+  return false;
+}

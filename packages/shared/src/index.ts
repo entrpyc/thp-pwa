@@ -5,5 +5,6 @@ export * from './health';
 export * from './invitations';
 export * from './passwords';
 export * from './pipeline';
+export * from './recordings';
 export * from './roles';
 export * from './segment';

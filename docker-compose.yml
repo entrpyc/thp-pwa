@@ -20,5 +20,60 @@ services:
       timeout: 5s
       retries: 20
 
+  # Development object storage. MinIO speaks plain S3, which is what the media store's adapter
+  # speaks — production is Cloudflare R2, and nothing in the source knows that.
+  #
+  # It is here so the properties that matter about a bucket are driven for real rather than faked:
+  # a presigned PUT that is bound to a content type and expires, a CORS preflight that is what
+  # makes a browser PUT possible at all, and an object that is **not readable without a signature**.
+  # None of those is assertable against a stub.
+  #
+  # `MINIO_API_CORS_ALLOW_ORIGIN` is the bucket's CORS rule for development. A deployment sets the
+  # equivalent rule on the real bucket by hand — see README.md, "Media store".
+  minio:
+    image: minio/minio:RELEASE.2025-04-22T22-12-26Z
+    container_name: thp-minio
+    restart: unless-stopped
+    command: server /data --console-address ':9001'
+    environment:
+      MINIO_ROOT_USER: thp
+      MINIO_ROOT_PASSWORD: thp-secret-not-a-real-key
+      MINIO_API_CORS_ALLOW_ORIGIN: '*'
+    ports:
+      - '9000:9000'
+      - '9001:9001'
+    volumes:
+      - thp-minio-data:/data
+    healthcheck:
+      test: ['CMD-SHELL', 'mc ready local || exit 1']
+      interval: 5s
+      timeout: 5s
+      retries: 20
+
+  # Create the development bucket, once, and exit.
+  #
+  # Without this, `docker compose up -d` followed by `npm run dev` gives a store with no bucket in
+  # it, and the first upload fails with the screen's generic "the upload failed" — because a browser
+  # is not told why a cross-origin PUT was refused, so the screen genuinely cannot say `NoSuchBucket`.
+  # The bucket is named from `.env` so this and the application cannot disagree about which one it is.
+  #
+  # It only ever creates. `mc rb` appears nowhere in this repository, here included.
+  minio-init:
+    image: minio/mc:RELEASE.2025-04-16T18-13-26Z
+    container_name: thp-minio-init
+    depends_on:
+      minio:
+        condition: service_healthy
+    entrypoint:
+      - sh
+      - -c
+      - >
+        mc alias set local http://minio:9000 thp thp-secret-not-a-real-key &&
+        mc mb --ignore-existing "local/$${MEDIA_BUCKET}" &&
+        echo "bucket $${MEDIA_BUCKET} ready"
+    environment:
+      MEDIA_BUCKET: ${MEDIA_BUCKET:?set MEDIA_BUCKET in .env — see .env.example}
+
 volumes:
   thp-pgdata:
+  thp-minio-data:

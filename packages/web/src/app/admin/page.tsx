@@ -1,15 +1,13 @@
 import { redirect } from 'next/navigation';
-import { ADMIN_PAGE_PATH } from '@thp/shared';
 import { currentActor } from '@/server/auth/current-actor';
 import { can } from '@/server/auth/policy';
-import { SignOutButton } from '../sign-out-button';
+import { ConsoleShell } from './console-shell';
 import { UserManagementPanel } from './user-management-panel';
-import styles from './admin.module.css';
 
 export const dynamic = 'force-dynamic';
 
 /**
- * `/admin` — the operator console, and the last step of movement 1.
+ * `/admin` — the operator console's first panel, and the last step of movement 1.
  *
  * There is no `pages/admin.png`. By operator decision this screen takes the same carve-out steps
  * 2, 3 and 4 received: it is composed from docs/design referencess png/style-guide.md and the token
@@ -26,9 +24,8 @@ export const dynamic = 'force-dynamic';
  * `not_found` to a member who calls the same data, so a 404 here would be the only place in the
  * product pretending the console is not there.
  *
- * The shell is a layout and a panel list, not a registry. One entry today; a later panel is a file
- * and a line in the list below, which is all "the shell is where every later panel hangs" has to
- * mean.
+ * The shell and its panel list moved to `console-shell.tsx` when the second panel arrived — which
+ * is all "the shell is where every later panel hangs" ever had to mean.
  */
 export default async function AdminPage() {
   const actor = await currentActor();
@@ -36,32 +33,8 @@ export default async function AdminPage() {
   if (!can(actor, 'account.list')) redirect('/');
 
   return (
-    <main className={styles.screen}>
-      <div className={styles.shell}>
-        <header className={styles.header}>
-          <div>
-            <p className={styles.eyebrow}>Teaching Hub</p>
-            <h1 className={styles.title}>Admin console</h1>
-          </div>
-          <div className={styles.identity}>
-            <p className={styles.identityName}>{actor.displayName}</p>
-            <p className={styles.identityEmail}>{actor.email}</p>
-            <SignOutButton />
-          </div>
-        </header>
-
-        <nav className={styles.panels} aria-label="Console panels">
-          <ul className={styles.panelList}>
-            <li>
-              <a className={styles.panelLink} href={ADMIN_PAGE_PATH} aria-current="page">
-                User management
-              </a>
-            </li>
-          </ul>
-        </nav>
-
-        <UserManagementPanel signedInId={actor.id} signedInName={actor.displayName} />
-      </div>
-    </main>
+    <ConsoleShell actor={actor} current="users">
+      <UserManagementPanel signedInId={actor.id} signedInName={actor.displayName} />
+    </ConsoleShell>
   );
 }

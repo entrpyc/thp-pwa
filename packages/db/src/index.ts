@@ -16,6 +16,7 @@ export {
   closeDatabase,
   createDatabase,
   getDatabase,
+  isUniqueViolation,
   pingDatabase,
   type CreateDatabaseOptions,
   type Database,
@@ -48,6 +49,12 @@ export {
   type NewPasswordReset,
   type PasswordResetRow,
 } from './password-resets';
+export {
+  insertRecording,
+  listRecordings,
+  type NewRecording,
+  type RecordingRow,
+} from './recordings';
 export {
   findLiveSessionByTokenHash,
   insertSession,

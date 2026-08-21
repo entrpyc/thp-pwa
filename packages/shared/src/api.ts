@@ -57,6 +57,16 @@ export const CORRELATION_ID_HEADER = 'x-correlation-id';
  * - `last_admin` — refused because the product would be left with no active admin. Distinct from
  *   `forbidden`: the caller *was* permitted, and the refusal names an invariant rather than a
  *   permission. That is what lets the message say "promote someone first" instead of "you may not".
+ *
+ * Story 2 Ticket 01 adds one, and deliberately only one:
+ *
+ * - `upload_invalid` — the key being finalised does not describe an upload this API can turn into
+ *   a recording. A key with no object behind it, an object the store reports as too large or of a
+ *   format we do not accept, and a key that already became a recording all answer with this. One
+ *   code for the three, because all three mean the same thing to the caller — *this upload is not
+ *   going to become a recording; start it again* — and because the alternative is three codes a
+ *   screen would branch on identically. What the client says next comes from `message`; the title
+ *   and date it was refused with are still in the form.
  */
 export const API_ERROR_CODES = [
   'unauthenticated',
@@ -73,6 +83,7 @@ export const API_ERROR_CODES = [
   'account_deactivated',
   'account_state_conflict',
   'last_admin',
+  'upload_invalid',
   'not_found',
   'internal_error',
   'service_unavailable',

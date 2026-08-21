@@ -11,6 +11,7 @@ import {
   type RunningServer,
 } from './next-server';
 import { createThrowawayDatabase, type ThrowawayDatabase } from './throwaway-db';
+import { TEST_MEDIA, ensureTestBucket, type MediaEnvironment } from './media-bucket';
 
 loadEnv({ path: `${REPO_ROOT}/.env`, quiet: true });
 
@@ -42,6 +43,13 @@ export default async function setup(project: TestProject): Promise<() => Promise
     );
   }
 
+  // The suite's own bucket on the MinIO container. Its configuration is the harness's, not the
+  // developer's: `.env` is where a deployment's real bucket credentials live, and that bucket has
+  // no delete path — so the suite is deliberately unable to reach anything but the container. See
+  // tests/setup/media-bucket.ts.
+  const media: MediaEnvironment = TEST_MEDIA;
+  await ensureTestBucket(media);
+
   // The servers get a database of their own, created on the same instance and dropped afterwards.
   // From ticket 2 the suite writes rows — accounts, sessions — and it must not leave them in the
   // database the developer signs into. It also means every run starts from an empty `user` table,
@@ -69,14 +77,14 @@ export default async function setup(project: TestProject): Promise<() => Promise
       name: 'primary',
       databaseUrl: appDatabase.url,
       port: primaryPort,
-      env: captureMail('primary'),
+      env: { ...media, ...captureMail('primary') },
     });
     servers.push(primary);
 
     const broken = await startNextServer({
       name: 'broken-db',
       databaseUrl: UNREACHABLE_DATABASE_URL,
-      env: captureMail('broken-db'),
+      env: { ...media, ...captureMail('broken-db') },
     });
     servers.push(broken);
 
@@ -85,7 +93,7 @@ export default async function setup(project: TestProject): Promise<() => Promise
     const mailDown = await startNextServer({
       name: 'mail-down',
       databaseUrl: appDatabase.url,
-      env: { MAIL_TRANSPORT: 'failing', MAIL_FROM },
+      env: { ...media, MAIL_TRANSPORT: 'failing', MAIL_FROM },
     });
     servers.push(mailDown);
 
@@ -95,6 +103,7 @@ export default async function setup(project: TestProject): Promise<() => Promise
     project.provide('mailDownBaseUrl', mailDown.baseUrl);
     project.provide('mailCapturePath', resolve(MAIL_DIR, 'primary.jsonl'));
     project.provide('databaseUrl', appDatabase.url);
+    project.provide('mediaSettings', media);
   } catch (error) {
     await stopEverything();
     throw error;
@@ -114,5 +123,17 @@ declare module 'vitest' {
     mailCapturePath: string;
     /** The suite's own database, not the one in `.env`. Dropped when the run ends. */
     databaseUrl: string;
+    /**
+     * The suite's own bucket on the MinIO container, and the credentials the servers use for it.
+     * Never what `.env` names, and not dropped when the run ends — nothing in this repository
+     * deletes from a bucket.
+     */
+    mediaSettings: {
+      readonly MEDIA_ENDPOINT: string;
+      readonly MEDIA_REGION: string;
+      readonly MEDIA_BUCKET: string;
+      readonly MEDIA_ACCESS_KEY_ID: string;
+      readonly MEDIA_SECRET_ACCESS_KEY: string;
+    };
   }
 }

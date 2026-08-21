@@ -1,0 +1,191 @@
+/*
+ * The recordings panel.
+ *
+ * There is no `pages/admin.png`; this panel takes the same carve-out every other admin screen has,
+ * so it is composed from docs/design referencess png/style-guide.md and the token layer. It
+ * **invents almost nothing**: the section, the field, the label, the input, the solid submit, the
+ * list row, the chip and the error line all `composes` from `admin.module.css`, so the
+ * extrapolations documented there are stated once and the two panels cannot drift.
+ *
+ * Two things a file upload needs and a list of people does not:
+ *
+ * 1. `.file` — the file control. The native `<input type="file">` is kept rather than replaced by a
+ *    styled button plus a hidden input: the native one is the only version that is reachable by
+ *    keyboard, announced correctly and understood by a phone's own file picker, and this screen is
+ *    used standing up after a service. It takes the field recipe — `--color-surface-raised`,
+ *    hairline border, `--radius-sm` — and nothing else.
+ * 2. `.rowKey` — the object key under each recording, in `--fs-meta` on `--color-text-dim` and
+ *    monospaced, because it is a string somebody copies rather than reads. The one place in the
+ *    product where a machine value is shown on purpose.
+ */
+
+.panel {
+  composes: panel from '../admin.module.css';
+}
+
+.section {
+  composes: section from '../admin.module.css';
+}
+
+.sectionTitle {
+  composes: sectionTitle from '../admin.module.css';
+}
+
+.sectionNote {
+  composes: sectionNote from '../admin.module.css';
+}
+
+.empty {
+  composes: empty from '../admin.module.css';
+}
+
+.failure {
+  composes: failure from '../admin.module.css';
+}
+
+.error {
+  composes: error from '../admin.module.css';
+}
+
+.done {
+  composes: done from '../admin.module.css';
+}
+
+/* ---------------------------------------------------------------------------------- the form */
+
+.form {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-4);
+}
+
+.row {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: flex-end;
+  gap: var(--space-4);
+}
+
+.field {
+  composes: field from '../admin.module.css';
+}
+
+.fieldTight {
+  composes: fieldTight from '../admin.module.css';
+}
+
+.label {
+  composes: label from '../admin.module.css';
+}
+
+.input {
+  composes: input from '../admin.module.css';
+  align-self: stretch;
+}
+
+.submit {
+  composes: submit from '../admin.module.css';
+}
+
+/*
+ * The native control, wearing the field recipe. `::file-selector-button` is the browser's own
+ * button inside it — left as a pill on the raised surface so it reads as the secondary action it
+ * is, never as the panel's one solid fill.
+ */
+.file {
+  align-self: stretch;
+  min-height: calc(var(--space-8) + var(--space-3));
+  width: 100%;
+  background: var(--color-surface-raised);
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-sm);
+  padding: var(--space-3) var(--space-4);
+  color: var(--color-text);
+  font-family: inherit;
+  font-size: var(--fs-body);
+}
+
+.file::file-selector-button {
+  margin-right: var(--space-4);
+  background: transparent;
+  border: 1px solid var(--color-border-strong);
+  border-radius: var(--radius-pill);
+  padding: var(--space-2) var(--space-4);
+  color: var(--color-text-muted);
+  font-family: inherit;
+  font-size: var(--fs-meta);
+  cursor: pointer;
+}
+
+.file:disabled {
+  cursor: progress;
+  color: var(--color-text-dim);
+}
+
+/* What is about to be sent, confirmed back in the words the limit is stated in. */
+.chosen {
+  margin: 0;
+  font-size: var(--fs-meta);
+  color: var(--color-text-muted);
+  overflow-wrap: anywhere;
+}
+
+/* ---------------------------------------------------------------------------------- the list */
+
+.list {
+  composes: list from '../admin.module.css';
+}
+
+.listRow {
+  composes: row from '../admin.module.css';
+}
+
+.rowIdentity {
+  composes: rowIdentity from '../admin.module.css';
+}
+
+.rowName {
+  composes: rowName from '../admin.module.css';
+}
+
+.rowMeta {
+  composes: rowMeta from '../admin.module.css';
+}
+
+.rowControls {
+  composes: rowControls from '../admin.module.css';
+}
+
+.chip {
+  composes: chip from '../admin.module.css';
+}
+
+.rowKey {
+  margin: 0;
+  font-family: ui-monospace, monospace;
+  font-size: var(--fs-meta);
+  color: var(--color-text-dim);
+  overflow-wrap: anywhere;
+}
+
+/* ----------------------------------------------------------------------------------- a phone */
+
+@media (max-width: 48rem) {
+  /*
+   * The same collapse `admin.module.css` makes: a row becomes a column, and every `flex-basis`
+   * along it has to be dropped with it or four recordings become four screenfuls of empty navy.
+   */
+  .row {
+    flex-direction: column;
+    align-items: stretch;
+  }
+
+  .field,
+  .fieldTight {
+    flex: 0 0 auto;
+  }
+
+  .submit {
+    width: 100%;
+  }
+}

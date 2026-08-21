@@ -64,6 +64,15 @@ export const POLICY_ACTIONS = [
    * thing (a note, a highlight, a progress row) is this same shape.
    */
   'profile.update',
+  /**
+   * The two recording actions (Story 2 Ticket 01). Two rather than one `recording.manage`, and the
+   * same split the invitation four and the account four already take: "who may put a teaching into
+   * the product" and "who may see what is in it" are the same question only while there are two
+   * roles, and Contributor arriving is meant to be widened cases rather than a rewrite of what one
+   * coarse action meant (docs/project/prd.md, 3.2.1 — admin-only *in this epic*).
+   */
+  'recording.upload',
+  'recording.list',
 ] as const;
 
 export type PolicyAction = (typeof POLICY_ACTIONS)[number];
@@ -133,6 +142,10 @@ const RULES: PolicyRules = {
   // Both roles, and only over themselves. An admin may end an account; an admin may not rename its
   // owner, because a display name is not an operator control.
   'profile.update': { roles: { admin: true, member: true }, requiresOwnership: true },
+  // Uploading a teaching, and reading the admin list of everything uploaded. Admin-only in this
+  // epic; nothing here is member-visible until Story 3 publishes it.
+  'recording.upload': { roles: { admin: true, member: false } },
+  'recording.list': { roles: { admin: true, member: false } },
 };
 
 export function isPolicyAction(value: string): value is PolicyAction {

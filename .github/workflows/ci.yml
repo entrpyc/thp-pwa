@@ -39,6 +39,20 @@ jobs:
     steps:
       - uses: actions/checkout@v5
 
+      # An S3-compatible object store, started as a step rather than as a service container: the
+      # `minio/minio` image needs a command (`server /data`) and a service container cannot give it
+      # one. The suite drives presigning, the CORS preflight and the unsigned-read refusal against
+      # this for real — none of the three is a property a fake could have. Production is Cloudflare
+      # R2, and nothing in the source knows that.
+      - name: Object storage (MinIO)
+        run: |
+          docker run -d --name thp-minio -p 9000:9000 -e MINIO_ROOT_USER=thp -e MINIO_ROOT_PASSWORD=thp-secret-not-a-real-key -e MINIO_API_CORS_ALLOW_ORIGIN='*' minio/minio:RELEASE.2025-04-22T22-12-26Z server /data
+          for _ in $(seq 1 40); do
+            if curl -sf http://127.0.0.1:9000/minio/health/live > /dev/null; then exit 0; fi
+            sleep 2
+          done
+          echo "MinIO never became ready"; docker logs thp-minio; exit 1
+
       - uses: actions/setup-node@v5
         with:
           node-version-file: .nvmrc

@@ -153,6 +153,18 @@ export class ApiError extends Error {
     return new ApiError('last_admin', 409, message);
   }
 
+  /**
+   * The key being finalised does not describe an upload we can turn into a recording — nothing is
+   * behind it, the store's own metadata fails the re-check, or it already became one.
+   *
+   * `409` for all three: the request was well-formed and it is the state of the store that refuses
+   * it. **The object is left where it is** — nothing in this product deletes from the bucket
+   * (docs/project/prd.md, 3.4.9) — so a refusal costs an orphan and never a lost original.
+   */
+  static uploadInvalid(message: string): ApiError {
+    return new ApiError('upload_invalid', 409, message);
+  }
+
   static notFound(message = 'The requested resource does not exist.'): ApiError {
     return new ApiError('not_found', 404, message);
   }

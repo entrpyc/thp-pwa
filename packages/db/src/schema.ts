@@ -1,5 +1,5 @@
 import { sql } from 'drizzle-orm';
-import { pgEnum, pgTable, text, timestamp, uniqueIndex, uuid } from 'drizzle-orm/pg-core';
+import { date, pgEnum, pgTable, text, timestamp, uniqueIndex, uuid } from 'drizzle-orm/pg-core';
 import { PIPELINE_STEPS, ROLES } from '@thp/shared';
 
 /**
@@ -7,9 +7,9 @@ import { PIPELINE_STEPS, ROLES } from '@thp/shared';
  * module, and the import-boundary guard fails the build if it ever is.
  *
  * **Tables arrive with the ticket that uses them.** Ticket 1 shipped the migration mechanism and the
- * two domain enums; ticket 2 added `user` and `session`; ticket 3 added `invitation`; ticket 4 adds
- * `password_reset` and nothing else. `recording`, `job`, `review_item` and the rest are still
- * absent.
+ * two domain enums; ticket 2 added `user` and `session`; ticket 3 added `invitation`; ticket 4 added
+ * `password_reset`. Story 2 Ticket 01 adds `recording` and nothing else — `job`, `transcript`,
+ * `segment`, `review_item` and the rest are still absent.
  *
  * The enums are **derived** from the shared TypeScript constants rather than restated beside them.
  * That is what keeps "each enum is declared exactly once in the repository" true, and it is
@@ -165,4 +165,51 @@ export const passwordReset = pgTable(
       .on(table.userId)
       .where(sql`${table.usedAt} is null and ${table.revokedAt} is null`),
   ],
+);
+
+/**
+ * A recording (Story 2 Ticket 01) — the first row in the spine
+ * docs/epics/epic-core-listening/architecture.md § Data model draws as
+ * `Series 1—* Recording 1—1 Transcript 1—* Segment`.
+ *
+ * **What is absent is the design.** There is no `duration`, because nothing inspects the media in
+ * this epic ([§3.4](docs/project/prd.md) is deferred whole); no `processed_media_key`, because no
+ * processed rendition exists and that column is the named seam
+ * (docs/epics/epic-core-listening/architecture.md § Extension points, "Second media pointer"); and
+ * no `series_id`, because series arrive in Story 6 and a recording with no series is the only kind
+ * there is (docs/project/prd.md, 3.3.9). A nullable column added "for later" is how deferral
+ * quietly stops being deferral, so the migration test asserts the exact column set rather than
+ * trusting this comment.
+ *
+ * Two columns *are* here and nothing writes them, and they are here for a different reason:
+ * `published_at` and `description` are what the row means, not what a later step adds to it.
+ * Publishing is a timestamp on the recording (3.2.2, 3.2.11) exactly as deactivation is one on the
+ * account, and the description is a field of the recording that Story 3 generates. Both ship
+ * nullable and unwritten.
+ *
+ * `original_media_key` is where the bytes are, and it is **unique** — the same object cannot become
+ * two recordings, which is what makes "finalising the same key twice produces exactly one row" a
+ * property of the database rather than of a check-then-insert with a window in it. It is a key, not
+ * a URL: the bucket is never publicly addressable, and every read is a signed URL minted after an
+ * authorisation check.
+ *
+ * `recorded_at` is a `date`, not a timestamp. docs/project/prd.md 4.2 calls it the date recorded,
+ * and it is the list's primary sort key; a time of day nobody supplies is a time of day somebody
+ * will one day read as meaningful.
+ */
+export const recording = pgTable(
+  'recording',
+  {
+    id: uuid('id').primaryKey().defaultRandom(),
+    /** Where the original sits in the object store. Never overwritten, never deleted. */
+    originalMediaKey: text('original_media_key').notNull(),
+    title: text('title').notNull(),
+    recordedAt: date('recorded_at').notNull(),
+    /** `null` until Story 3 Ticket 04 publishes it. Nothing in this ticket writes it. */
+    publishedAt: timestamp('published_at', { withTimezone: true }),
+    /** Generated in Story 3. Nothing in this ticket writes it. */
+    description: text('description'),
+    createdAt: timestamp('created_at', { withTimezone: true }).notNull().defaultNow(),
+  },
+  (table) => [uniqueIndex('recording_original_media_key_unique').on(table.originalMediaKey)],
 );
