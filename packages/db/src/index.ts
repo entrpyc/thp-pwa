@@ -38,6 +38,7 @@ export {
   type InvitationRow,
   type NewInvitation,
 } from './invitations';
+export { enqueueJob, findUnfinishedJob, type JobRow, type NewJob } from './jobs';
 export { MIGRATIONS_DIR, runMigrations, type RunMigrationsOptions } from './migrate';
 export {
   completePasswordReset,
