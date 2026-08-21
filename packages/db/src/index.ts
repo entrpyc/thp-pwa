@@ -38,7 +38,16 @@ export {
   type InvitationRow,
   type NewInvitation,
 } from './invitations';
-export { enqueueJob, findUnfinishedJob, type JobRow, type NewJob } from './jobs';
+export {
+  MAX_JOB_ERROR_LENGTH,
+  completeJob,
+  enqueueJob,
+  failJob,
+  findUnfinishedJob,
+  type JobRow,
+  type NewJob,
+  type ProviderMeta,
+} from './jobs';
 export { MIGRATIONS_DIR, runMigrations, type RunMigrationsOptions } from './migrate';
 export {
   completePasswordReset,

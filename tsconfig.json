@@ -12,6 +12,7 @@
     "packages/web/next.config.ts",
     "packages/web/tests/**/*.ts",
     "packages/db/tests/**/*.ts",
+    "packages/worker/tests/**/*.ts",
     "packages/worker/src/**/*.ts",
     "tools/**/*.ts",
     "tests/**/*.ts",
