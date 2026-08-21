@@ -59,6 +59,8 @@ describe('no component declares what a token already covers', () => {
     expect(sheets).toContain('app/sign-in/sign-in.module.css');
     expect(sheets).toContain('app/home.module.css');
     expect(sheets).toContain('app/accept-invitation/accept-invitation.module.css');
+    expect(sheets).toContain('app/forgot-password/forgot-password.module.css');
+    expect(sheets).toContain('app/reset-password/reset-password.module.css');
 
     // And the token file really is the one exception — scanned like any other when not excluded.
     const seeded = checkStyleTokens(WEB_SRC, resolve(WEB_SRC, 'nothing.css'));

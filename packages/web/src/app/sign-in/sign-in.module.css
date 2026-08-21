@@ -17,6 +17,10 @@
  * 4. **The error message** sits under the fields in `--fs-body` at `--color-text`, with the card's
  *    border switched to `--color-border-strong`. The guide has no error colour, and red would be
  *    the second accent principle 1 forbids — so the error reads by emphasis rather than by hue.
+ * 5. **A secondary link** (added in step 4, for the way out to `/forgot-password`) is `--fs-meta`
+ *    on `--color-text-muted`, underlined, brightening to `--color-text` on hover. Not the accent
+ *    colour: principle 3 reserves the accent for the one primary action, and a link that competes
+ *    with the submit button is a link that gets pressed by mistake.
  *
  * The layout is the guide's `.card` recipe, centred on `--color-bg`.
  */
@@ -132,6 +136,31 @@
   padding: var(--space-3) var(--space-4);
   font-size: var(--fs-body);
   color: var(--color-text);
+}
+
+/*
+ * The way out, and never the way on. Quiet enough that it does not compete with the submit button,
+ * present enough that somebody who has just been refused does not have to go looking for it.
+ */
+.link {
+  align-self: flex-start;
+  font-size: var(--fs-meta);
+  color: var(--color-text-muted);
+  text-decoration: underline;
+  text-underline-offset: var(--space-1);
+}
+
+.link:hover,
+.link:focus-visible {
+  color: var(--color-text);
+}
+
+/* Prose in the card with no form under it — a confirmation, or a dead end. */
+.prose {
+  margin: 0;
+  font-size: var(--fs-body);
+  line-height: 1.5;
+  color: var(--color-text-muted);
 }
 
 @media (max-width: 30rem) {

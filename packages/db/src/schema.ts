@@ -7,8 +7,9 @@ import { PIPELINE_STEPS, ROLES } from '@thp/shared';
  * module, and the import-boundary guard fails the build if it ever is.
  *
  * **Tables arrive with the step that uses them.** Step 1 shipped the migration mechanism and the
- * two domain enums; step 2 added `user` and `session`; step 3 adds `invitation` and nothing else.
- * `recording`, `job`, `review_item` and the rest are still absent.
+ * two domain enums; step 2 added `user` and `session`; step 3 added `invitation`; step 4 adds
+ * `password_reset` and nothing else. `recording`, `job`, `review_item` and the rest are still
+ * absent.
  *
  * The enums are **derived** from the shared TypeScript constants rather than restated beside them.
  * That is what keeps "each enum is declared exactly once in the repository" true, and it is
@@ -20,7 +21,9 @@ export const pipelineStep = pgEnum('pipeline_step', PIPELINE_STEPS);
 
 /**
  * An account. Columns arrive with the steps that use them: `deactivated_at` comes with step 4
- * (account lifecycle) and `preferred_playback_speed` with step 15, so neither is here yet.
+ * (account lifecycle) and `preferred_playback_speed` with step 15, so the second is not here yet.
+ * Neither is an avatar — docs/prd.md 3.1.12's is deferred, and a nullable column "for later" is how
+ * deferral quietly stops being deferral.
  *
  * `email` is stored normalised (trimmed, lowercased) by the application, and uniqueness is
  * enforced on `lower(email)` by the index below — at the database, so two accounts differing only
@@ -36,6 +39,14 @@ export const user = pgTable(
     role: userRole('role').notNull(),
     createdAt: timestamp('created_at', { withTimezone: true }).notNull().defaultNow(),
     updatedAt: timestamp('updated_at', { withTimezone: true }).notNull().defaultNow(),
+    /**
+     * **Deactivation is a timestamp, not a deleted row** (docs/prd.md, 3.1.7). The account, its
+     * password hash and everything it authored survive intact; what changes is that no session
+     * resolves to it and no password signs it in. Nullable, so the inverse — reactivation — is the
+     * same write with `null`, and so "active" is a fact about the column rather than a second
+     * status somebody has to keep in step with it.
+     */
+    deactivatedAt: timestamp('deactivated_at', { withTimezone: true }),
   },
   (table) => [uniqueIndex('user_email_lower_unique').on(sql`lower(${table.email})`)],
 );
@@ -107,5 +118,51 @@ export const invitation = pgTable(
     uniqueIndex('invitation_live_email_unique')
       .on(sql`lower(${table.email})`)
       .where(sql`${table.revokedAt} is null and ${table.acceptedAt} is null`),
+  ],
+);
+
+/**
+ * A password reset in flight (docs/prd.md, 3.1.6).
+ *
+ * Its own table rather than a second life for `invitation`, because the two look alike and are not:
+ * an invitation is keyed by an *address with no account* and creates one; a reset is keyed by an
+ * *existing account* and changes it. Sharing a table would mean a nullable `user_id`, a `kind`
+ * column and two sets of rules in one place.
+ *
+ * The token shape is identical, though, and deliberately so — 32 random bytes, base64url, SHA-256
+ * at rest, the same helpers `session` and `invitation` use. Three properties, all held by the
+ * database rather than by a caller remembering:
+ *
+ * 1. **The raw token is never stored.** Only its SHA-256 is, so the table cannot leak a working
+ *    reset link however it is read.
+ * 2. **At most one *live* reset per account.** The partial unique index covers `user_id` only where
+ *    the row is neither used nor revoked, so requesting a second reset while one is outstanding is
+ *    refused at the database — which is what makes "revoke the old, issue the new" the only legal
+ *    way to re-send, and therefore what makes "exactly one link works" true.
+ * 3. **Status is derived, never stored.** `expires_at`, `used_at` and `revoked_at` are the facts;
+ *    pending/expired/used/revoked is read off them.
+ *
+ * `user_id` cascades: a reset is meaningless without the account it resets, and unlike an
+ * invitation it is not a record of something that happened to somebody else.
+ */
+export const passwordReset = pgTable(
+  'password_reset',
+  {
+    id: uuid('id').primaryKey().defaultRandom(),
+    userId: uuid('user_id')
+      .notNull()
+      .references(() => user.id, { onDelete: 'cascade' }),
+    /** SHA-256 of the token in the emailed link. The raw token is never stored. */
+    tokenHash: text('token_hash').notNull(),
+    createdAt: timestamp('created_at', { withTimezone: true }).notNull().defaultNow(),
+    expiresAt: timestamp('expires_at', { withTimezone: true }).notNull(),
+    usedAt: timestamp('used_at', { withTimezone: true }),
+    revokedAt: timestamp('revoked_at', { withTimezone: true }),
+  },
+  (table) => [
+    uniqueIndex('password_reset_token_hash_unique').on(table.tokenHash),
+    uniqueIndex('password_reset_live_user_unique')
+      .on(table.userId)
+      .where(sql`${table.usedAt} is null and ${table.revokedAt} is null`),
   ],
 );

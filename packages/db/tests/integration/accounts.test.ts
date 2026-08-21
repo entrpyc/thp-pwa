@@ -24,7 +24,7 @@ describe('the accounts schema', () => {
     await target?.drop();
   }, 60_000);
 
-  it('gives `user` exactly the columns step 2 owns', async () => {
+  it('gives `user` exactly the columns steps 2 and 4 own', async () => {
     const columns = await sql<{ column_name: string; is_nullable: string }[]>`
       select column_name, is_nullable
       from information_schema.columns
@@ -34,6 +34,7 @@ describe('the accounts schema', () => {
 
     expect(columns.map((column) => column.column_name)).toEqual([
       'created_at',
+      'deactivated_at',
       'display_name',
       'email',
       'id',
@@ -41,10 +42,32 @@ describe('the accounts schema', () => {
       'role',
       'updated_at',
     ]);
-    // `deactivated_at` belongs to step 4 and `preferred_playback_speed` to step 15. Their absence
-    // here is the point: columns arrive with the step that uses them.
-    expect(columns.map((column) => column.column_name)).not.toContain('deactivated_at');
-    expect(columns.every((column) => column.is_nullable === 'NO')).toBe(true);
+    // `preferred_playback_speed` belongs to step 15, and an avatar is deferred outright. Their
+    // absence here is the point: columns arrive with the step that uses them, and a nullable one
+    // "for later" is how deferral quietly stops being deferral.
+    expect(columns.map((column) => column.column_name)).not.toContain('preferred_playback_speed');
+    for (const absent of ['avatar', 'avatar_url', 'avatar_key', 'image_url']) {
+      expect(columns.map((column) => column.column_name)).not.toContain(absent);
+    }
+
+    // Deactivation is the only column that may be absent from a row: an account is active by
+    // omission, so no existing row had to be given a value when the column arrived.
+    const nullable = columns.filter((column) => column.is_nullable === 'YES');
+    expect(nullable.map((column) => column.column_name)).toEqual(['deactivated_at']);
+  });
+
+  it('migrates every account that already existed to active', async () => {
+    // The column arrived on a database that already had rows in it. "Existing rows migrate to
+    // null" is what makes the deploy safe, and it is a fact about the default rather than about
+    // the application remembering to backfill.
+    await sql`
+      insert into "user" (email, password_hash, display_name, role)
+      values ('pre-existing@example.test', 'hash', 'Pre Existing', 'member')
+    `;
+    const rows = await sql<{ deactivated_at: Date | null }[]>`
+      select deactivated_at from "user" where email = 'pre-existing@example.test'
+    `;
+    expect(rows[0]?.deactivated_at).toBeNull();
   });
 
   it('makes role a Postgres enum whose only values are admin and member', async () => {

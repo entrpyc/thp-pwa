@@ -27,17 +27,29 @@ export function mailTransport(): MailTransport {
   return transport;
 }
 
+/** What a delivery failure says when the caller has nothing more specific to offer. */
+const GENERIC_FAILURE_MESSAGE = 'The message could not be sent. Try again in a moment.';
+
 /**
  * Send, or refuse in a way the caller can act on.
  *
- * A delivery failure becomes `service_unavailable` — **retryable, and it says so**, because the
- * invitation row is written before this is called and is still there afterwards. Losing the record
- * of an intent the admin already expressed would be the worse failure, and resend exists precisely
- * for this case (see the invitation service).
+ * A delivery failure becomes `service_unavailable` — **retryable, and it says so**, because the row
+ * behind the message is written before this is called and is still there afterwards. Losing the
+ * record of an intent somebody already expressed would be the worse failure, and resend exists
+ * precisely for that case (see the invitation service).
  *
- * The recipient is logged; the body is not. An invitation body contains a working token.
+ * `failureMessage` is the caller's chance to say what to do next, because only the caller knows
+ * what exists on the other side of the failure. Step 4's password reset does not pass one: it
+ * catches this refusal and answers with its own fixed payload instead, because a reset that told
+ * the difference between "sent" and "could not send" would tell an anonymous caller whether the
+ * address has an account.
+ *
+ * The recipient is logged; the body is not. Both bodies contain a working token.
  */
-export async function sendMail(message: MailMessage): Promise<void> {
+export async function sendMail(
+  message: MailMessage,
+  failureMessage: string = GENERIC_FAILURE_MESSAGE,
+): Promise<void> {
   const active = mailTransport();
   try {
     await active.send(message);
@@ -59,8 +71,6 @@ export async function sendMail(message: MailMessage): Promise<void> {
           ? cause.cause.message
           : undefined,
     });
-    throw ApiError.serviceUnavailable(
-      'The invitation was created but the email could not be sent. Use resend to try again.',
-    );
+    throw ApiError.serviceUnavailable(failureMessage);
   }
 }

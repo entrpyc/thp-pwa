@@ -15,14 +15,18 @@ import type { UserRow } from '@thp/db';
  *
  * - **Denies by default.** An action nobody has written a rule for is refused, not permitted, and
  *   not an exception.
- * - **Exhaustive over roles.** {@link RULES} is a `Record<PolicyAction, Record<Role, boolean>>`, so
- *   adding a role to the enum stops the build until every action says what that role may do. That
- *   is what turns "widen four cases" from a search of the codebase into a compiler error.
+ * - **Exhaustive over roles.** Every rule in {@link RULES} answers per role in a `Record<Role,
+ *   boolean>`, so adding a role to the enum stops the build until every action says what that role
+ *   may do. That is what turns "widen four cases" from a search of the codebase into a compiler
+ *   error.
+ * - **Ownership is a rule, not a comparison.** From step 4 an action may be conditioned on the
+ *   actor owning the resource, and that condition lives in the table below rather than at any call
+ *   site.
  */
 
 /**
- * Every action the API can be asked to authorise. Step 2 shipped three and step 3 adds four; each
- * later step adds the actions it needs alongside the routes that use them.
+ * Every action the API can be asked to authorise. Step 2 shipped three, step 3 added four and step
+ * 4 adds five; each later step adds the actions it needs alongside the routes that use them.
  */
 export const POLICY_ACTIONS = [
   /** Read the signed-in account. Any session may. */
@@ -41,6 +45,25 @@ export const POLICY_ACTIONS = [
   'invitation.list',
   'invitation.revoke',
   'invitation.resend',
+  /**
+   * The four admin account actions (step 4). Split for the same reason the invitation four are:
+   * "who may see the member list" and "who may end somebody's access" are the same question only
+   * while there are two roles.
+   *
+   * `role.assign` rather than `account.role.change`, because tools/role-usage.ts refuses a role
+   * field access anywhere outside this module and reads the three-segment name as one. Naming the
+   * action after the thing being assigned is the better name anyway.
+   */
+  'account.list',
+  'account.deactivate',
+  'account.reactivate',
+  'role.assign',
+  /**
+   * **The first owned action in the product** (step 4). Editing a display name is permitted on your
+   * own account and on nobody else's — including, deliberately, to an admin. Every later owned
+   * thing (a note, a highlight, a progress row) is this same shape.
+   */
+  'profile.update',
 ] as const;
 
 export type PolicyAction = (typeof POLICY_ACTIONS)[number];
@@ -54,9 +77,12 @@ export interface Actor {
 }
 
 /**
- * What is being acted on. Slice 01 step 2 authorises no owned resource yet — nothing exists to
- * own — so every rule is role-only. The parameter is here from the start because retrofitting it
- * would mean touching every call site, which is the cost this module exists to avoid.
+ * What is being acted on.
+ *
+ * Step 2 shipped this parameter with nothing yet using it — nothing existed to own. Step 4 is where
+ * it starts being read: `ownerId` is what {@link RULES}' ownership rules are evaluated against.
+ * Having it from the start is why that change is one function here rather than a visit to every
+ * call site.
  */
 export interface PolicyResource {
   readonly kind: string;
@@ -65,25 +91,48 @@ export interface PolicyResource {
 }
 
 /**
- * The shape of {@link RULES}: an answer per role, per action.
+ * One action's rule: which roles may take it, and whether it is additionally conditioned on the
+ * actor owning the resource.
  *
- * `Record<Role, boolean>` rather than `readonly Role[]`, deliberately — a list of permitted roles
- * still compiles when a role is added to the enum, and a record does not. Exported so the
- * exhaustiveness fixture (tests/fixtures/type-errors) can assert that property against the real
+ * `roles` is `Record<Role, boolean>` rather than `readonly Role[]`, deliberately — a list of
+ * permitted roles still compiles when a role is added to the enum, and a record does not.
+ *
+ * `requiresOwnership` is a flag on the rule rather than a comparison at the call site. That is the
+ * whole decision: the day a route compares `actor.id === resource.ownerId` itself is the day
+ * ownership stops being one auditable table and becomes a convention spread across handlers, and
+ * every owned thing this product will later have — a note, a highlight, a progress row — is the
+ * same shape as this one.
+ */
+export interface PolicyRule {
+  readonly roles: Record<Role, boolean>;
+  readonly requiresOwnership?: true;
+}
+
+/**
+ * The shape of {@link RULES}: one rule per action, with an answer per role inside it. Exported so
+ * the exhaustiveness fixture (tests/fixtures/type-errors) can assert that property against the real
  * type rather than a restatement of it.
  */
-export type PolicyRules = Record<PolicyAction, Record<Role, boolean>>;
+export type PolicyRules = Record<PolicyAction, PolicyRule>;
 
 const RULES: PolicyRules = {
-  'session.read': { admin: true, member: true },
-  'diagnostics.run': { admin: true, member: true },
-  'diagnostics.admin': { admin: true, member: false },
+  'session.read': { roles: { admin: true, member: true } },
+  'diagnostics.run': { roles: { admin: true, member: true } },
+  'diagnostics.admin': { roles: { admin: true, member: false } },
   // Members join by invitation; they do not issue one, and they do not get to read the list of
   // addresses somebody has invited. Refused by the API, not merely absent from an interface.
-  'invitation.issue': { admin: true, member: false },
-  'invitation.list': { admin: true, member: false },
-  'invitation.revoke': { admin: true, member: false },
-  'invitation.resend': { admin: true, member: false },
+  'invitation.issue': { roles: { admin: true, member: false } },
+  'invitation.list': { roles: { admin: true, member: false } },
+  'invitation.revoke': { roles: { admin: true, member: false } },
+  'invitation.resend': { roles: { admin: true, member: false } },
+  // Ending or restoring somebody's access, and deciding what they may do, is operator work.
+  'account.list': { roles: { admin: true, member: false } },
+  'account.deactivate': { roles: { admin: true, member: false } },
+  'account.reactivate': { roles: { admin: true, member: false } },
+  'role.assign': { roles: { admin: true, member: false } },
+  // Both roles, and only over themselves. An admin may end an account; an admin may not rename its
+  // owner, because a display name is not an operator control.
+  'profile.update': { roles: { admin: true, member: true }, requiresOwnership: true },
 };
 
 export function isPolicyAction(value: string): value is PolicyAction {
@@ -107,9 +156,19 @@ export function describeActor(actor: Actor): SessionUser {
 /**
  * The evaluation. `action` is a plain `string` on purpose: an unknown action must be answerable at
  * runtime, and answerable with `false`.
+ *
+ * Two gates, in order. The role gate is the one every action has had since step 2. The ownership
+ * gate applies only to actions whose rule asks for it, and it **denies when no resource is
+ * given** — an owned action asked in the abstract has no owner to compare against, and answering
+ * `true` there would make "permitted on your own" mean "permitted".
  */
-export function can(actor: Actor | null, action: string, _resource?: PolicyResource): boolean {
+export function can(actor: Actor | null, action: string, resource?: PolicyResource): boolean {
   if (actor === null) return false;
   if (!isPolicyAction(action)) return false;
-  return RULES[action][actor.role] === true;
+
+  const rule = RULES[action];
+  if (rule.roles[actor.role] !== true) return false;
+  if (rule.requiresOwnership !== true) return true;
+
+  return resource !== undefined && resource.ownerId === actor.id;
 }

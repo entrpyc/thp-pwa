@@ -40,6 +40,23 @@ export const CORRELATION_ID_HEADER = 'x-correlation-id';
  *   say "this expired, ask an admin to send another" rather than "wrong". Unknown, malformed,
  *   revoked and already-accepted are all `invitation_invalid`; only a token that was genuinely
  *   ours and ran out of time is `invitation_expired`.
+ *
+ * Step 4 adds five, and each exists because a screen or an operator has to be able to tell this
+ * failure from the one next to it:
+ *
+ * - `reset_invalid` and `reset_expired` — the same split as the two invitation codes, for the same
+ *   reason: an expired reset link is owed "ask for another" rather than "wrong". Unknown,
+ *   malformed, revoked and already-used are all `reset_invalid`.
+ * - `account_deactivated` — the password was right and the account is no longer active. Returned
+ *   **only after the password verifies**, so it discloses nothing to a caller who does not already
+ *   know the credential, and a real person is told what happened instead of hunting for a typo
+ *   that does not exist.
+ * - `account_state_conflict` — deactivating an already-deactivated account, or reactivating an
+ *   active one. A conflict rather than a silent success, so an admin console cannot report an
+ *   action it did not take.
+ * - `last_admin` — refused because the product would be left with no active admin. Distinct from
+ *   `forbidden`: the caller *was* permitted, and the refusal names an invariant rather than a
+ *   permission. That is what lets the message say "promote someone first" instead of "you may not".
  */
 export const API_ERROR_CODES = [
   'unauthenticated',
@@ -51,6 +68,11 @@ export const API_ERROR_CODES = [
   'invitation_exists',
   'invitation_invalid',
   'invitation_expired',
+  'reset_invalid',
+  'reset_expired',
+  'account_deactivated',
+  'account_state_conflict',
+  'last_admin',
   'not_found',
   'internal_error',
   'service_unavailable',

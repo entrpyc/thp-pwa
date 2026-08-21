@@ -11,8 +11,9 @@ import type { UserRow } from './accounts';
  * 1. **The raw token is never stored.** Callers hand in a hash; a lookup by the raw cookie value
  *    finds nothing.
  * 2. **The account is re-read on every request.** {@link findLiveSessionByTokenHash} joins `user`,
- *    so a role change or (from step 4) a deactivation takes effect on the next request rather than
- *    at the next sign-in. Nothing about the user is trusted from the cookie.
+ *    so a role change takes effect on the next request rather than at the next sign-in, and a
+ *    deactivated account stops resolving to an actor whether or not anybody remembered to revoke
+ *    its sessions. Nothing about the user is trusted from the cookie.
  */
 
 export interface SessionRow {
@@ -48,8 +49,13 @@ export async function insertSession(
 
 /**
  * The session behind a cookie, with its account — or `null` if there is no such session, it was
- * revoked, or it has expired. The expiry comparison is made by Postgres against `now()`, so it
- * cannot drift with the application server's clock.
+ * revoked, it has expired, **or the account has been deactivated**. The expiry comparison is made
+ * by Postgres against `now()`, so it cannot drift with the application server's clock.
+ *
+ * The deactivation condition is here, in the same statement that re-reads the account, rather than
+ * in the caller. Deactivation revokes an account's sessions as well (docs/prd.md, 3.1.7), and this
+ * is the belt beside those braces: "no deactivated account acts" must not rest on remembering to
+ * revoke, and a session row left live by any route still resolves to nobody.
  */
 export async function findLiveSessionByTokenHash(
   tokenHash: string,
@@ -64,6 +70,7 @@ export async function findLiveSessionByTokenHash(
         eq(session.tokenHash, tokenHash),
         isNull(session.revokedAt),
         sql`${session.expiresAt} > now()`,
+        isNull(user.deactivatedAt),
       ),
     )
     .limit(1);
@@ -95,4 +102,23 @@ export async function touchSession(
   handle: DatabaseHandle = getDatabase(),
 ): Promise<void> {
   await handle.db.update(session).set({ lastUsedAt: new Date(), expiresAt }).where(eq(session.id, id));
+}
+
+/**
+ * End every live session an account has. Returns how many there were.
+ *
+ * The write deactivation and password reset both depend on: without it, "a deactivated account
+ * cannot act" would mean "cannot act once its cookie expires", which for a 30-day rolling window is
+ * not the same sentence at all.
+ */
+export async function revokeSessionsForUser(
+  userId: string,
+  handle: DatabaseHandle = getDatabase(),
+): Promise<number> {
+  const rows = await handle.db
+    .update(session)
+    .set({ revokedAt: new Date() })
+    .where(and(eq(session.userId, userId), isNull(session.revokedAt)))
+    .returning({ id: session.id });
+  return rows.length;
 }

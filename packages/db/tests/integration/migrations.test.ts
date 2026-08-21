@@ -71,12 +71,17 @@ describe('migrations apply to an empty database by one command', () => {
       `;
       expect(types.map((row) => row.typname)).toEqual(['pipeline_step', 'user_role']);
 
-      // Tables arrive with the step that uses them. Step 2 added accounts and sessions, step 3 adds
-      // invitations — `recording`, `job` and the rest are still ahead.
+      // Tables arrive with the step that uses them. Step 2 added accounts and sessions, step 3
+      // invitations, step 4 password resets — `recording`, `job` and the rest are still ahead.
       const tables = await sql<{ tablename: string }[]>`
         select tablename from pg_tables where schemaname = 'public' order by tablename
       `;
-      expect(tables.map((row) => row.tablename)).toEqual(['invitation', 'session', 'user']);
+      expect(tables.map((row) => row.tablename)).toEqual([
+        'invitation',
+        'password_reset',
+        'session',
+        'user',
+      ]);
     } finally {
       await sql.end({ timeout: 5 });
     }

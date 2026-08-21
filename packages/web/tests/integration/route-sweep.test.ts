@@ -59,6 +59,9 @@ describe('every /api/v1 route not on the allowlist refuses an anonymous request'
     expect(paths).toContain(`${API_PREFIX}/diagnostics/admin-only`);
     expect(paths).toContain(`${API_PREFIX}/invitations`);
     expect(paths).toContain(`${API_PREFIX}/invitations/accept`);
+    expect(paths).toContain(`${API_PREFIX}/auth/password-reset`);
+    expect(paths).toContain(`${API_PREFIX}/auth/password-reset/complete`);
+    expect(paths).toContain(`${API_PREFIX}/users`);
     // The catch-all is discovered too, standing in for any path no route claims.
     expect(routes.some((route) => route.isCatchAll)).toBe(true);
   });
@@ -85,12 +88,16 @@ describe('every /api/v1 route not on the allowlist refuses an anonymous request'
   }, 60_000);
 
   it('subtracts exactly one named list, and it is the one the API reads', () => {
-    expect(UNAUTHENTICATED_ROUTES).toHaveLength(4);
+    expect(UNAUTHENTICATED_ROUTES).toHaveLength(7);
     for (const entry of UNAUTHENTICATED_ROUTES) {
       expect(isAllowlisted(entry.method, entry.path), `${entry.method} ${entry.path}`).toBe(true);
       expect(entry.because.length).toBeGreaterThan(20);
     }
     expect(isAllowlisted('GET', `${API_PREFIX}/auth/session`)).toBe(false);
+    // The three step-4 entries are the reset flow and nothing beside it: the admin account routes
+    // added in the same step are on the far side of the line, and the sweep proves it.
+    expect(isAllowlisted('GET', `${API_PREFIX}/users`)).toBe(false);
+    expect(isAllowlisted('PATCH', `${API_PREFIX}/users/anything`)).toBe(false);
     expect(isAllowlisted('POST', `${API_PREFIX}/health`)).toBe(false);
   });
 
@@ -113,7 +120,7 @@ describe('every /api/v1 route not on the allowlist refuses an anonymous request'
   it('discloses no account content to an anonymous caller with no credential', async () => {
     // Reachable is half the property. The other half is what the row is actually protecting: an
     // unauthenticated route may exist, but none of them may hand out account content. Asked with
-    // nothing — no cookie, no token, no credentials — every one of the four must answer with a
+    // nothing — no cookie, no token, no credentials — every one of the seven must answer with a
     // verdict or a refusal, never with a person.
     for (const entry of UNAUTHENTICATED_ROUTES) {
       const response = await fetch(`${baseUrl}${entry.path}`, {

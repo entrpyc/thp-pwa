@@ -57,6 +57,7 @@ describe('the policy module answers (actor, action, resource)', () => {
       role: ROLE.member,
       createdAt: new Date(),
       updatedAt: new Date(),
+      deactivatedAt: null,
     };
 
     const actor = toActor(row);
@@ -71,5 +72,62 @@ describe('the policy module answers (actor, action, resource)', () => {
     expect(payload).toEqual(actor);
     // The hash must not survive the trip, however the payload is built.
     expect(JSON.stringify(payload)).not.toContain('argon2-hash-goes-here');
+  });
+});
+
+/**
+ * Step 4's addition: the resource parameter, which step 2 shipped and nothing read until now.
+ *
+ * These assertions are deliberately made against the policy module alone, with no route and no
+ * request involved. The claim being pinned is not "the profile route refuses" — it is that the
+ * *refusal comes from `can` reading the resource*, which is what makes every later owned thing (a
+ * note, a highlight, a progress row) one row in the rules table rather than an id comparison in a
+ * handler.
+ */
+describe('an owned action is answered against the resource, not only the role', () => {
+  const owner: Actor = {
+    id: 'owner-1',
+    email: 'owner@example.test',
+    displayName: 'Owner',
+    role: ROLE.member,
+  };
+  const somebodyElse: Actor = { ...owner, id: 'other-1', email: 'other@example.test' };
+  const admin: Actor = { ...owner, id: 'admin-1', email: 'admin@example.test', role: ROLE.admin };
+
+  const profileOf = (actorId: string) => ({ kind: 'profile', id: actorId, ownerId: actorId });
+
+  it('permits the same (actor, action) on their own resource and refuses it on another’s', () => {
+    expect(can(owner, 'profile.update', profileOf(owner.id))).toBe(true);
+    expect(can(owner, 'profile.update', profileOf(somebodyElse.id))).toBe(false);
+  });
+
+  it('refuses an admin the same way it refuses a member — a name is not an operator control', () => {
+    expect(can(admin, 'profile.update', profileOf(admin.id))).toBe(true);
+    expect(can(admin, 'profile.update', profileOf(owner.id))).toBe(false);
+  });
+
+  it('refuses an owned action asked with no resource at all', () => {
+    // "Permitted on your own" must not collapse into "permitted" when nobody says whose.
+    expect(can(owner, 'profile.update')).toBe(false);
+    expect(can(admin, 'profile.update')).toBe(false);
+    expect(can(owner, 'profile.update', { kind: 'profile' })).toBe(false);
+  });
+
+  it('ignores the resource for the actions that are not owned', () => {
+    // A role-only action must not become answerable by handing it somebody else's resource.
+    expect(can(admin, 'account.deactivate', profileOf(owner.id))).toBe(true);
+    expect(can(owner, 'account.deactivate', profileOf(owner.id))).toBe(false);
+  });
+});
+
+describe('the admin account actions are the API’s refusal, not the console’s', () => {
+  it.each([
+    'account.list',
+    'account.deactivate',
+    'account.reactivate',
+    'role.assign',
+  ] as const)('permits %s for an admin and refuses it for a member', (action) => {
+    expect(can(actorWith(ROLE.admin), action)).toBe(true);
+    expect(can(actorWith(ROLE.member), action)).toBe(false);
   });
 });

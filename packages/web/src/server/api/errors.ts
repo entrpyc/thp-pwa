@@ -96,6 +96,63 @@ export class ApiError extends Error {
     return new ApiError('invitation_expired', 410, message);
   }
 
+/**
+   * Unknown, malformed, revoked or already used — **one code for all four**, so an anonymous
+   * guesser cannot learn which of their guesses was ever a real reset token. The same split, and
+   * the same reasoning, as the two invitation codes.
+   */
+  static resetInvalid(
+    message = 'That reset link is not valid. Ask for a new one and try again.',
+  ): ApiError {
+    return new ApiError('reset_invalid', 410, message);
+  }
+
+  /**
+   * Ours, and out of time. Distinguishable from {@link resetInvalid} on purpose: it is the
+   * difference between a screen that offers to send another link and one that says "wrong".
+   */
+  static resetExpired(
+    message = 'That reset link has expired. Reset links last one hour — ask for a new one.',
+  ): ApiError {
+    return new ApiError('reset_expired', 410, message);
+  }
+
+  /**
+   * The password was right and the account is no longer active.
+   *
+   * Returned **only after the password verifies**, which is what stops it being an enumeration
+   * oracle: a caller who knows the password already knows the account exists. The alternative — one
+   * uniform refusal — is marginally safer and lies to a real person who is about to spend twenty
+   * minutes hunting for a typo that does not exist, and then email an admin anyway.
+   */
+  static accountDeactivated(
+    message = 'This account is no longer active. Ask an admin to restore it.',
+  ): ApiError {
+    return new ApiError('account_deactivated', 403, message);
+  }
+
+  /**
+   * The account is already in the state the request asks for. `409` — a conflict with the state of
+   * the world, and a refusal rather than a silent success, so an admin console cannot report an
+   * action it did not take.
+   */
+  static accountStateConflict(message: string): ApiError {
+    return new ApiError('account_state_conflict', 409, message);
+  }
+
+  /**
+   * Refused because it would leave the product with no active admin (docs/prd.md, 3.1.11).
+   *
+   * Its own code rather than `forbidden`, because the caller *was* permitted: what refused is an
+   * invariant, not a permission. The message says which invariant, so an operator reads a guardrail
+   * rather than a bug and knows the fix is to promote somebody first.
+   */
+  static lastAdmin(
+    message = 'This is the only active admin. Promote another account to admin first, then try again.',
+  ): ApiError {
+    return new ApiError('last_admin', 409, message);
+  }
+
   static notFound(message = 'The requested resource does not exist.'): ApiError {
     return new ApiError('not_found', 404, message);
   }

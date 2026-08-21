@@ -217,6 +217,7 @@ async function createAndSend(
       acceptUrl: acceptUrlFor(token),
       expiresAt: row.expiresAt,
     }),
+    'The invitation was created but the email could not be sent. Use resend to try again.',
   );
 
   return row;

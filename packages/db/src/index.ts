@@ -1,8 +1,14 @@
 export {
+  deactivateUser,
   findUserByEmail,
   findUserById,
   insertUser,
+  listUsers,
   normaliseEmail,
+  reactivateUser,
+  setUserRole,
+  updateDisplayName,
+  type GuardedWrite,
   type NewUser,
   type UserRow,
 } from './accounts';
@@ -33,9 +39,20 @@ export {
 } from './invitations';
 export { MIGRATIONS_DIR, runMigrations, type RunMigrationsOptions } from './migrate';
 export {
+  completePasswordReset,
+  findLivePasswordResetForUser,
+  findPasswordResetWithUser,
+  issuePasswordReset,
+  revokePasswordResetsForUser,
+  type CompletedPasswordReset,
+  type NewPasswordReset,
+  type PasswordResetRow,
+} from './password-resets';
+export {
   findLiveSessionByTokenHash,
   insertSession,
   revokeSessionByTokenHash,
+  revokeSessionsForUser,
   touchSession,
   type LiveSession,
   type NewSession,

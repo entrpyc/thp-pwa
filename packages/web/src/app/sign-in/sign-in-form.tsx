@@ -1,8 +1,9 @@
 'use client';
 
+import Link from 'next/link';
 import { useRouter } from 'next/navigation';
 import { useId, useState, type FormEvent } from 'react';
-import { AUTH_SESSION_PATH } from '@thp/shared';
+import { AUTH_SESSION_PATH, FORGOT_PASSWORD_PAGE_PATH } from '@thp/shared';
 import { ApiClientError, apiFetch } from '@/client/api-client';
 import styles from './sign-in.module.css';
 
@@ -104,6 +105,15 @@ export function SignInForm() {
         <button className={styles.submit} type="submit" disabled={submitting}>
           {submitting ? 'Signing in…' : 'Sign in'}
         </button>
+
+        {/*
+          Inside the form and after the button, so it is the next thing a keyboard reaches after
+          failing — and always present, not revealed by a refusal. A reset flow nobody can get to
+          from where they failed is a flow that does not exist.
+        */}
+        <Link className={styles.link} href={FORGOT_PASSWORD_PAGE_PATH}>
+          Forgotten your password?
+        </Link>
       </form>
     </div>
   );
