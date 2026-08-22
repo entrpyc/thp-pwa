@@ -145,7 +145,11 @@ the exact failure the absolute-origin rule was held eighteen tickets to catch.
 Every one of these is on the box or in a provider console, and none of them can be done from here.
 
 - **SSH access to `167.86.71.60`** with a key, and `sudo`. Confirm the Ubuntu release (`lsb_release -a`) — it
-  decides whether PostgreSQL 17 comes from the distribution or from the PGDG apt repository.
+  decides whether PostgreSQL 17 comes from the distribution or from the PGDG apt repository, and whether the
+  release is still supported at all.
+- **A git remote the box can clone from**, and — if the repository is private — a deploy key or token on the
+  box for it. Every deploy after the first is `git pull`, so this is a standing requirement rather than a
+  one-off.
 - **Confirm what nginx already serves on the box** — `ls /etc/nginx/sites-enabled/`, and whether any block is
   `default_server`. The new vhost must not collide on `server_name` and must not take the default.
 - **Confirm certbot's renewal timer is active** — `systemctl status certbot.timer` (or `snap.certbot.renew`).
@@ -232,7 +236,7 @@ This group ends with **the platform answering and the application not yet deploy
   - `pm2-logrotate` configured with a size cap and a retention count, because the box has 100 GB and pm2's logs
     are otherwise unbounded.
 
-- **A crash brings the process back** — verified by `npm run verify:production --kill-drill`, which records the
+- **A crash brings the process back** — verified by `npm run verify:production -- --kill-drill`, which records the
   worker's pid, kills it, waits, and asserts pm2 reports it `online` again under a different pid with an
   incremented restart count.
   - `autorestart: true` with a restart delay, so a process that cannot start at all does not spin.
@@ -282,7 +286,7 @@ This group ends with **the platform answering and the application not yet deploy
     is a version nobody can reproduce.
 
 - **The whole epic works on the box, against real providers** — verified by
-  `npm run verify:production --smoke`, which signs in as the seeded admin, creates a recording, uploads the
+  `npm run verify:production -- --smoke`, which signs in as the seeded admin, creates a recording, uploads the
   operator's short audio file through a real presigned `PUT` to the production bucket, polls the pipeline until
   `transcribe` and `generate_draft` both report success, publishes the result, and asserts a member request can
   read it and mint a playable URL.
@@ -353,40 +357,64 @@ This group ends with **the platform answering and the application not yet deploy
 
 Ordered. Everything here is on the box or in a provider console.
 
+**The exact commands are in [README.md § Deployment](README.md), which is the runbook these steps
+summarise.** Follow the README; this list is the shape of it and the order the criteria are met in.
+
+**Group 0 — before anything on the box**
+
+0. **Commit and push.** Step 6 clones from the remote and every later deploy is `git pull
+   --ff-only`, so nothing on the box can start until this work is on the remote.
+
 **Group 1 — the platform**
 
-1. Harden the box: create the service user, disable SSH password and root login, enable `ufw` with 22/80/443.
-2. Install PostgreSQL 17 and `postgresql-17-pgvector`; create the application database and role; set
-   `listen_addresses = 'localhost'`.
-3. Symlink `deploy/nginx/thp.conf` into `sites-enabled`, run `nginx -t`, reload.
+1. Harden the box: create the service user, disable SSH password and root login, enable `ufw` with
+   22/80/443. Check `/etc/ssh/sshd_config.d/` as well as the main file — a drop-in wins over it.
+2. Install PostgreSQL 17, `postgresql-17-pgvector` and `pgbackrest`; create the application database
+   and role; set `listen_addresses = 'localhost'`. **Neither Ubuntu 20.04 nor 22.04 ships PostgreSQL
+   17**, so this needs the PGDG apt repository.
+3. Diff the live nginx block against `deploy/nginx/thp.conf`, copy across the `proxy_set_header`
+   lines and `client_max_body_size`, then `nginx -t` and reload. Do not edit any other site's file.
 4. **Confirm** the certificate rather than issuing it — `certbot certificates` — then prove renewal
    with `certbot renew --dry-run`. It was already issued for this host on 14 Aug 2026 and certbot
    manages the nginx TLS lines; re-running `certbot --nginx` would rewrite a block it owns.
-5. Create the two R2 buckets and their two tokens; set the media bucket's CORS rule, and confirm public access
-   is off on both.
-6. Clone the repository as the service user and write `.env` from `.env.example` with the production values;
-   `chmod 600`.
+5. Create the two R2 buckets and their two tokens; set the media bucket's CORS rule, and confirm
+   public access is off on both.
+6. Clone the repository as the service user and write `.env` from `.env.example` with the production
+   values; `chmod 600`. Set `THP_MOCK_EXTERNAL=false` and leave `ENABLE_DIAGNOSTIC_ROUTES` unset.
 
 **Group 2 — the services**
 
-7. `npm ci && npm run migrate && npm run build`.
-8. `pm2 start ecosystem.config.cjs`, `pm2 startup systemd`, `pm2 save`, and install `pm2-logrotate`.
+7. `npm ci && npm run migrate && npm run build`. **In that order, and after step 6** —
+   `NEXT_PUBLIC_API_ORIGIN` is inlined at build time, so a build made before `.env` holds the real
+   origin serves a site that calls `localhost` from every visitor's browser.
+8. `pm2 start ecosystem.config.cjs`, then `pm2 startup systemd` (run the command it prints), then
+   `pm2 save` — **after both apps are online**, because pm2 restores what was saved rather than what
+   the config file says. Then `pm2 install pm2-logrotate`.
 9. `npm run seed:admin`, then sign in at the real origin.
 10. `npm run verify:production` — every check green before going further.
-11. `npm run verify:production --kill-drill`.
-12. **Reboot the box**, wait, and run `npm run verify:production` again without touching anything. This is the
-    criterion; the configuration is only the claim.
-13. `npm run verify:production --smoke` with your short audio file, and watch it through `/admin/pipeline`.
+11. `npm run verify:production -- --kill-drill`.
+12. **Reboot the box**, wait, and run `npm run verify:production` again without touching anything.
+    This is the criterion; the configuration is only the claim.
+13. `npm run verify:production -- --smoke --audio=<path to your short file>`, and watch it through
+    `/admin/pipeline`. It spends about half a cent.
 
 **Group 3 — the backups**
 
-14. Install pgBackRest, place `deploy/pgbackrest/pgbackrest.conf`, add the R2 credentials, and run
-    `pgbackrest stanza-create`.
+14. Place `deploy/pgbackrest/pgbackrest.conf` at `/etc/pgbackrest/pgbackrest.conf` (owned
+    `root:postgres`, mode 640), fill in the endpoint, bucket and key, and run `pgbackrest
+    stanza-create`.
 15. Set `archive_mode`, `archive_command` and `archive_timeout`, and restart Postgres.
-16. Install the two systemd timers, and take the first full backup by hand rather than waiting for 02:00.
-17. Run `scripts/restore-drill.sh`, read the comparison it prints, and keep the receipt.
-18. **The next morning, confirm the 02:00 backup landed** — `pgbackrest info` should show two fulls, not one.
-    A timer that never fired is the only failure in this story that cannot be detected on the day it ships.
+16. Install the four systemd units from `deploy/systemd/`, enable both timers, and take the first
+    full backup by hand rather than waiting for 02:00.
+17. Run `./scripts/restore-drill.sh` **as the service user, not under `sudo`** — it escalates per
+    command, and a receipt written as root fails the `secrets` check. Read the comparison it prints
+    and keep the receipt.
+18. **The next morning, confirm the 02:00 backup landed** — `pgbackrest info` should show two fulls,
+    not one. A timer that never fired is the only failure in this story that cannot be detected on
+    the day it ships.
+
+**After the first deploy**, every later one is `./scripts/deploy.sh` — pull, install, migrate, build,
+check the origin, restart, verify — and a failing check fails the deploy.
 
 ## Assumptions
 

@@ -1,0 +1,4 @@
+# The deployment scripts run on Linux and are authored on Windows. A CRLF checkout breaks the
+# shebang with `bad interpreter: /usr/bin/env bash^M`, which is a confusing way to lose an hour on
+# the box — so these are LF regardless of anyone's core.autocrlf.
+*.sh text eol=lf

@@ -1,6 +1,6 @@
 #!/usr/bin/env bash
 #
-# `sudo ./scripts/restore-drill.sh` — **restore the latest backup and prove it is the database.**
+# `./scripts/restore-drill.sh` — **restore the latest backup and prove it is the database.**
 #
 # An unverified backup is not a backup. This is the ticket that proves it rather than the incident
 # that disproves it, and it is an acceptance criterion rather than a follow-up: the restore runs
@@ -10,6 +10,10 @@
 # port, compares the migration journal and four row counts against the live database, then stops
 # and removes the scratch cluster and writes a dated receipt. `verify:production`'s
 # `restore-drill-age` check reads that receipt and fails once it is more than 90 days old.
+#
+# **Run it as the service user, from the checkout — not under `sudo`.** It escalates per command,
+# and running the whole thing as root would write the receipt as root into a checkout that the
+# `secrets` check requires be owned by the service user.
 #
 # **It never touches production.** The guards below refuse to run if the target directory or port
 # is the live one — a drill must not be one typo away from being the incident it rehearses.
@@ -21,13 +25,31 @@ cd "$(dirname "$0")/.."
 STANZA=thp
 SCRATCH_DIR=/var/lib/postgresql/restore-drill
 SCRATCH_PORT=5433
-LIVE_DIR=$(awk -F= '/^pg1-path/ {gsub(/ /, "", $2); print $2}' /etc/pgbackrest/pgbackrest.conf)
-LIVE_PORT=$(sudo -u postgres psql -Atc 'show port')
 RECEIPT=.restore-drill
 
+# On Ubuntu/PGDG the server binaries are not on PATH — only the client ones are.
+PG_BIN=/usr/lib/postgresql/17/bin
+
+# The connection string is not exported into every shell, so read it from the same `.env` every
+# other command in this repository reads. Falls back to the environment when it is already set.
+if [[ -z "${DATABASE_URL:-}" ]]; then
+  DATABASE_URL=$(grep -E '^DATABASE_URL=' .env | head -1 | cut -d= -f2- || true)
+fi
+if [[ -z "${DATABASE_URL:-}" ]]; then
+  echo "DATABASE_URL is not set and .env does not name it." >&2
+  exit 1
+fi
+
+LIVE_DIR=$(awk -F= '/^pg1-path/ {gsub(/ /, "", $2); print $2}' /etc/pgbackrest/pgbackrest.conf)
+LIVE_PORT=$(sudo -u postgres psql -Atc 'show port')
+
 # ------------------------------------------------------------------------------------------------
-# The guards. Both of these are the difference between a drill and an outage.
+# The guards. These are the difference between a drill and an outage.
 # ------------------------------------------------------------------------------------------------
+if [[ -z "$LIVE_DIR" ]]; then
+  echo "Refusing: could not read pg1-path from /etc/pgbackrest/pgbackrest.conf." >&2
+  exit 1
+fi
 if [[ "$SCRATCH_DIR" == "$LIVE_DIR" ]]; then
   echo "Refusing: the scratch directory is the live data directory ($LIVE_DIR)." >&2
   exit 1
@@ -36,48 +58,44 @@ if [[ "$SCRATCH_PORT" == "$LIVE_PORT" ]]; then
   echo "Refusing: the scratch port is the live port ($LIVE_PORT)." >&2
   exit 1
 fi
-if [[ -z "$LIVE_DIR" ]]; then
-  echo "Refusing: could not read pg1-path from /etc/pgbackrest/pgbackrest.conf." >&2
-  exit 1
-fi
 
-# Counted before the restore starts, so the comparison is against the database as it was when the
-# drill began rather than as it is several minutes later.
-echo "==> Reading production"
-LIVE_COUNTS=$(sudo -u postgres psql "$DATABASE_URL" -At -c "
+COUNTS_SQL="
   select 'account=' || (select count(*) from account)
       || ' recording=' || (select count(*) from recording)
       || ' transcript=' || (select count(*) from transcript)
       || ' segment=' || (select count(*) from segment)
-      || ' migrations=' || (select count(*) from drizzle.__drizzle_migrations)")
+      || ' migrations=' || (select count(*) from drizzle.__drizzle_migrations)"
+
+# Counted before the restore starts, so the comparison is against the database as it was when the
+# drill began rather than as it is several minutes later.
+echo "==> Reading production"
+LIVE_COUNTS=$(psql "$DATABASE_URL" -At -c "$COUNTS_SQL")
 
 echo "==> Restoring the latest backup into $SCRATCH_DIR"
-rm -rf "$SCRATCH_DIR"
-install -d -o postgres -g postgres -m 700 "$SCRATCH_DIR"
+sudo rm -rf "$SCRATCH_DIR"
+sudo install -d -o postgres -g postgres -m 700 "$SCRATCH_DIR"
 sudo -u postgres pgbackrest --stanza="$STANZA" --pg1-path="$SCRATCH_DIR" --type=default restore
 
-# The scratch cluster must not try to archive its own WAL back into the repository, and must not
-# take the live port. Both are set after the restore, because restore lays down postgresql.conf.
+# The scratch cluster must not archive its own WAL back into the repository, and must not take the
+# live port. Both are set after the restore, because restore lays down the configuration files.
 sudo -u postgres tee -a "$SCRATCH_DIR/postgresql.auto.conf" > /dev/null <<CONF
 port = $SCRATCH_PORT
 archive_mode = off
 CONF
 
 echo "==> Starting the scratch cluster on port $SCRATCH_PORT"
-sudo -u postgres pg_ctl -D "$SCRATCH_DIR" -o "-p $SCRATCH_PORT" -w -t 120 start
+sudo -u postgres "$PG_BIN/pg_ctl" -D "$SCRATCH_DIR" -o "-p $SCRATCH_PORT" -w -t 120 start
 
 cleanup() {
-  sudo -u postgres pg_ctl -D "$SCRATCH_DIR" -m immediate stop > /dev/null 2>&1 || true
-  rm -rf "$SCRATCH_DIR"
+  sudo -u postgres "$PG_BIN/pg_ctl" -D "$SCRATCH_DIR" -m immediate stop > /dev/null 2>&1 || true
+  sudo rm -rf "$SCRATCH_DIR"
 }
 trap cleanup EXIT
 
-RESTORED_COUNTS=$(sudo -u postgres psql -p "$SCRATCH_PORT" -d "${PGDATABASE:-thp}" -At -c "
-  select 'account=' || (select count(*) from account)
-      || ' recording=' || (select count(*) from recording)
-      || ' transcript=' || (select count(*) from transcript)
-      || ' segment=' || (select count(*) from segment)
-      || ' migrations=' || (select count(*) from drizzle.__drizzle_migrations)")
+# The restored cluster carries production's databases, so the database name is the one in
+# DATABASE_URL rather than a guess.
+SCRATCH_DB=$(basename "${DATABASE_URL%%\?*}")
+RESTORED_COUNTS=$(sudo -u postgres psql -p "$SCRATCH_PORT" -d "$SCRATCH_DB" -At -c "$COUNTS_SQL")
 
 echo
 echo "production: $LIVE_COUNTS"
