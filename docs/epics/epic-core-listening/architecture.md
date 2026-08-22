@@ -21,8 +21,8 @@ short-lived signed URL the API mints after an authorisation check.
 
 Three structures are built now because retrofitting any of them costs most of the codebase
 ([epic prd § Rationale](docs/epics/epic-core-listening/prd.md#L241)): the **timestamped segment** as the atom
-([3.5.2](docs/project/prd.md#L113)), the **review gate** as one status column with one queue query
-([4.17.3](docs/project/prd.md#L683)), and **authorisation server-side per request** ([3.1.5](docs/project/prd.md#L47)).
+([3.5.2](docs/project/prd.md#L119)), the **review gate** as one status column with one queue query
+([4.17.3](docs/project/prd.md#L701)), and **authorisation server-side per request** ([3.1.5](docs/project/prd.md#L47)).
 
 Everything else is stripped. There is no Redis, no CDN, no service worker, no Capacitor shell, no
 Feed service, no vector index, and no audio processing step. Each is a marked seam, not a missing
@@ -101,7 +101,7 @@ yet*. Dashed = **deferred**, seams drawn so it stays obvious they are not being 
 no CDN, no vector index, no second UI delivery route, and three external services instead of nine.
 The one property the north star calls structural is nonetheless already true here — every model
 call sits behind the ledger in the worker, and the audio bytes bypass the application entirely, so
-*"a failure in AI generation never blocks listening"* ([§6](docs/project/prd.md#L724)) holds from day one rather
+*"a failure in AI generation never blocks listening"* ([§6](docs/project/prd.md#L758)) holds from day one rather
 than being retrofitted.
 
 ## Components for the epic
@@ -118,7 +118,7 @@ management).
 - **Does not own:** any authorisation decision ([project architecture § Client — PWA
   shell](docs/project/architecture.md#L111)). It hides what a Member cannot do; the API is what refuses it.
 - **Not yet:** no service worker, no web app manifest, no offline cache, no Capacitor. Responsive
-  only — the installable-PWA row of [§5.1](docs/project/prd.md#L689) is deferred with offline.
+  only — the installable-PWA row of [§5.1](docs/project/prd.md#L723) is deferred with offline.
 
 ### Next.js application — API half
 
@@ -133,7 +133,7 @@ Postgres and the single place `(actor, action, resource)` is evaluated.
   enqueued to the ledger and returned from immediately.
 - **The contract is the boundary, not the process.** The client imports no server module and holds
   no database access; it calls an absolute API origin. That is the whole of what
-  [5.2.2](docs/project/prd.md#L706) needs from this epic, and it is what makes the Capacitor build later the
+  [5.2.2](docs/project/prd.md#L740) needs from this epic, and it is what makes the Capacitor build later the
   same client against the same contract.
 
 ### Worker process
@@ -143,21 +143,21 @@ jobs against the ledger ([project architecture § Worker pool](docs/project/arch
 
 - **Steps in this epic, in order:** `transcribe` → `generate_draft`. That is it.
 - `transcribe` reads the original object, calls the ASR adapter, writes `transcript` + `segment`
-  rows with `start_ms`/`end_ms` and the detected language ([3.5.2](docs/project/prd.md#L113),
-  [3.5.7](docs/project/prd.md#L118)).
+  rows with `start_ms`/`end_ms` and the detected language ([3.5.2](docs/project/prd.md#L119),
+  [3.5.7](docs/project/prd.md#L124)).
 - `generate_draft` feeds the whole transcript to Claude in one call and writes **two** review items
-  — one `summary` ([3.6.1](docs/project/prd.md#L127)), one `recording_metadata` carrying the suggested
-  description ([4.17.1](docs/project/prd.md#L681)) — each recording the model, model version and prompt version
-  that produced it ([4.17.5](docs/project/prd.md#L685)).
-- **Owns no publish decision.** Workers only ever produce drafts ([3.21.2.2](docs/project/prd.md#L484)).
+  — one `summary` ([3.6.1](docs/project/prd.md#L135)), one `recording_metadata` carrying the suggested
+  description ([4.17.1](docs/project/prd.md#L699)) — each recording the model, model version and prompt version
+  that produced it ([4.17.5](docs/project/prd.md#L703)).
+- **Owns no publish decision.** Workers only ever produce drafts ([3.21.2.2](docs/project/prd.md#L495)).
 - **Chain semantics:** a step enqueues its successor only on success. A failure records the failing
-  step and reason and stops there ([3.21.2.3](docs/project/prd.md#L485), [3.5.8](docs/project/prd.md#L119)); an admin can
-  enqueue any single step again without re-running the chain ([3.21.2.4](docs/project/prd.md#L486)).
+  step and reason and stops there ([3.21.2.3](docs/project/prd.md#L496), [3.5.8](docs/project/prd.md#L125)); an admin can
+  enqueue any single step again without re-running the chain ([3.21.2.4](docs/project/prd.md#L497)).
 
 ### Job ledger (in Postgres, not a broker)
 
 A `job` table polled with `FOR UPDATE SKIP LOCKED`. It is both the dispatch mechanism and the
-queryable pipeline state the admin dashboard reads ([3.19.4](docs/project/prd.md#L432)) — which is the property
+queryable pipeline state the admin dashboard reads ([3.19.4](docs/project/prd.md#L442)) — which is the property
 [project architecture § Key technology choices](docs/project/architecture.md#L209) asks for; the north star simply
 also has Redis in front of it. See **Divergence**.
 
@@ -167,12 +167,12 @@ Object storage on a zero-egress tier, holding **original uploads only** — no p
 exists yet ([epic prd § In scope → 2](docs/epics/epic-core-listening/prd.md#L52)). Never publicly addressable. Upload is
 a presigned PUT issued to an authenticated admin; playback is a short-lived signed GET the API
 mints after checking the recording is published and the caller is authenticated
-([§6](docs/project/prd.md#L724) Security). Range requests come from the object store directly, which is what
-makes scrubbing ([3.2.9](docs/project/prd.md#L70)) work without a CDN.
+([§6](docs/project/prd.md#L758) Security). Range requests come from the object store directly, which is what
+makes scrubbing ([3.2.9](docs/project/prd.md#L72)) work without a CDN.
 
 **The one non-negotiable** ([epic prd § Rationale](docs/epics/epic-core-listening/prd.md#L241)): the original object is
-never overwritten or deleted. It is the input [§3.4](docs/project/prd.md#L88) will read, and re-transcription
-after processing lands depends on it ([3.4.9](docs/project/prd.md#L102)).
+never overwritten or deleted. It is the input [§3.4](docs/project/prd.md#L94) will read, and re-transcription
+after processing lands depends on it ([3.4.9](docs/project/prd.md#L108)).
 
 ### Primary datastore
 
@@ -192,18 +192,18 @@ is where the regressions live; for this epic an empty answer is the correct one.
 
 ## Data model (epic)
 
-Conceptual; [§4](docs/project/prd.md#L497) already defines the fields. **Every entity here is new.**
+Conceptual; [§4](docs/project/prd.md#L511) already defines the fields. **Every entity here is new.**
 
 **The spine** — `Series 1—* Recording 1—1 Transcript 1—* Segment`, exactly as [project architecture §
 Data model](docs/project/architecture.md#L171) draws it. A recording belongs to at most one series
-([3.3.2](docs/project/prd.md#L79)) and may have none ([3.3.9](docs/project/prd.md#L86)). `Segment` carries `start_ms`,
-`end_ms`, `text`, and who corrected it when ([3.5.5](docs/project/prd.md#L116)) — **no embedding column.**
+([3.3.2](docs/project/prd.md#L84)) and may have none ([3.3.9](docs/project/prd.md#L91)). `Segment` carries `start_ms`,
+`end_ms`, `text`, and who corrected it when ([3.5.5](docs/project/prd.md#L122)) — **no embedding column.**
 `Recording` carries `original_media_key`, `title`, `recorded_at`, `published_at` (nullable —
-unpublish clears it without deleting, [3.2.11](docs/project/prd.md#L72)), and `description`.
+unpublish clears it without deleting, [3.2.11](docs/project/prd.md#L74)), and `description`.
 
 *Deliberately shaped for later:* `Recording` has room for a second media pointer
-([4.2](docs/project/prd.md#L513) *Processed audio*) but does not have the column yet — adding it is what
-[§3.4](docs/project/prd.md#L88) does.
+([4.2](docs/project/prd.md#L529) *Processed audio*) but does not have the column yet — adding it is what
+[§3.4](docs/project/prd.md#L94) does.
 
 **The review gate** — one `review_item` table, not one table per artefact:
 `(id, recording_id, kind, status, fields, provenance, created_at, reviewed_by, reviewed_at)`.
@@ -211,27 +211,27 @@ unpublish clears it without deleting, [3.2.11](docs/project/prd.md#L72)), and `d
 - `kind` in this epic is `summary` or `recording_metadata`; later artefacts add a value, not a
   table.
 - `status` is `draft | published | discarded`. **Pending Reviews is one query over this one column**
-  ([3.19.2](docs/project/prd.md#L430)) — which is precisely the property [project architecture § Cross-cutting
+  ([3.19.2](docs/project/prd.md#L440)) — which is precisely the property [project architecture § Cross-cutting
   concerns](docs/project/architecture.md#L271) says must not degrade into a union of six.
 - `fields` holds the per-field values and `provenance` holds, per field, that it was AI-suggested
-  and whether an admin changed it ([4.17.5](docs/project/prd.md#L685)) — which is what makes per-field
-  accept/edit/discard ([4.17.2](docs/project/prd.md#L682)) a form over one row rather than a column per field
+  and whether an admin changed it ([4.17.5](docs/project/prd.md#L703)) — which is what makes per-field
+  accept/edit/discard ([4.17.2](docs/project/prd.md#L700)) a form over one row rather than a column per field
   per artefact.
 - Approving writes through to the canonical entity (`summary.content`, `recording.description`) and
-  closes the item; regenerating ([3.6.9](docs/project/prd.md#L135)) discards the current draft and enqueues
+  closes the item; regenerating ([3.6.9](docs/project/prd.md#L143)) discards the current draft and enqueues
   `generate_draft` for that kind with the optional steering prompt attached.
 - Every transition is logged with actor, action, target and timestamp.
 
 **Pipeline state** — `job (id, recording_id, step, status, attempt, error, enqueued_at, started_at,
 finished_at, provider_meta)`. `provider_meta` carries model, version and spend per job, because
-[§7](docs/project/prd.md#L742) wants cost measured rather than estimated.
+[§7](docs/project/prd.md#L779) wants cost measured rather than estimated.
 
 **Accounts** — `user (email, password_hash, display_name, role, deactivated_at,
 preferred_playback_speed)` and `invitation (email, role, token_hash, expires_at, revoked_at,
 accepted_at)`. Role is `admin | member`; **`contributor` is deliberately absent from the enum**, and
 adding it is a one-value migration plus four policy cases ([epic prd § Still
 remaining](docs/epics/epic-core-listening/prd.md#L171)). No avatar. Playback speed lives on the user because
-[3.2.4](docs/project/prd.md#L65) persists it across recordings, not per recording.
+[3.2.4](docs/project/prd.md#L67) persists it across recordings, not per recording.
 
 > **Amended in ticket 2** — one table added. `session (id, user_id, token_hash, created_at,
 > last_used_at, expires_at, revoked_at)`. Sessions are **server-side records, not signed stateless
@@ -246,7 +246,7 @@ remaining](docs/epics/epic-core-listening/prd.md#L171)). No avatar. Playback spe
 
 **Member-owned state** — exactly one entity: `playback_progress (user_id, recording_id,
 position_ms, updated_at)`, primary-keyed on the pair, last-write-wins on the furthest position
-([3.2.5](docs/project/prd.md#L66)). No listening history, no completed marker, no notes, no highlights — all
+([3.2.5](docs/project/prd.md#L68)). No listening history, no completed marker, no notes, no highlights — all
 deferred ([epic prd § In scope → 5](docs/epics/epic-core-listening/prd.md#L117)).
 
 **Not modelled at all:** cross-reference edges, tags, scripture references, mind maps, videos,
@@ -258,10 +258,10 @@ questionnaires, Flow Tracker sessions, SOS signals, notifications, notification 
 | :---- | :---- | :---- |
 | **TypeScript monorepo; domain types shared between client, API and worker** | The segment shape, the pipeline step enum and the role enum are defined once. That is what keeps the API-first contract honest instead of hand-maintained. | Matches [project architecture § Key technology choices](docs/project/architecture.md#L209) directly. |
 | **Next.js App Router, one codebase for UI and API** | The UI codebase choice is marked *expensive to reverse*, so it is taken as given. Serving `/api/v1` from the same app removes a deploy unit without touching the contract. | Matches on the UI; consolidates the deployment — see **Divergence**. |
-| **Postgres job ledger polled with `SKIP LOCKED`; no broker** | Two steps, ~4.3 recordings/month, seconds of dispatch latency is invisible. The ledger has to be in Postgres regardless, because [3.19.4](docs/project/prd.md#L432) and [3.21.2.4](docs/project/prd.md#L486) need pipeline state to be queryable data. Adding a broker now would add infrastructure that only changes *dispatch*. | Matches — the north star makes the ledger itself the queue for the same reason, and names no broker. |
+| **Postgres job ledger polled with `SKIP LOCKED`; no broker** | Two steps, ~4.3 recordings/month, seconds of dispatch latency is invisible. The ledger has to be in Postgres regardless, because [3.19.4](docs/project/prd.md#L442) and [3.21.2.4](docs/project/prd.md#L497) need pipeline state to be queryable data. Adding a broker now would add infrastructure that only changes *dispatch*. | Matches — the north star makes the ledger itself the queue for the same reason, and names no broker. |
 | **Presigned direct-to-object-store upload and playback; no CDN** | Keeps bulk audio out of the application in both directions, which is the boundary that actually matters. Range requests from the object store give scrubbing for free. At ~11 GB/month a CDN buys latency nobody has complained about. | Keeps the zero-egress storage decision, which is the part with real reversal cost; defers the edge. |
 | **One `review_item` table with a `kind`, built generically for two kinds** | The only structure in this epic built past its immediate need, and it earns it: [epic prd § Rationale](docs/epics/epic-core-listening/prd.md#L241) names publishing-without-a-review-gate as one of three things that would make this epic throwaway, and the north star's single-query Pending Reviews only survives if kinds 3–6 are rows. | Matches [project architecture § Cross-cutting concerns](docs/project/architecture.md#L271). |
-| **Managed ASR behind a `transcribe` adapter; Claude behind a `generate` adapter** | Both providers are named in [§7](docs/project/prd.md#L742) as accuracy and cost risks. Two narrow interfaces cost almost nothing now and are what make provider swap and regeneration tractable. Model, version and prompt version are recorded on every output. | Matches exactly, including the deliberate low reversal cost. |
+| **Managed ASR behind a `transcribe` adapter; Claude behind a `generate` adapter** | Both providers are named in [§7](docs/project/prd.md#L779) as accuracy and cost risks. Two narrow interfaces cost almost nothing now and are what make provider swap and regeneration tractable. Model, version and prompt version are recorded on every output. | Matches exactly, including the deliberate low reversal cost. |
 | **Whole transcript in one LLM call, producing summary and description together** | A 90-minute transcript fits in long context, which is why the north star picked Claude. One call for both artefacts halves the cost and keeps them consistent with each other. | Matches. |
 | **Self-hosted email/password, HTTP-only cookie session, roles in our database** | No self-signup, invitation-only, ~100 users. A third-party IdP would complicate [3.1.3](docs/project/prd.md#L45) and still leave the product-context permission checks with us. | Matches. |
 | **Single self-hosted Postgres on the application host, single region, no read replica** | 100 members, one group, one publishing cadence. Co-locating it with the app is what makes the launch bill ~$20 rather than ~$85; the price is that backups and patching become ours. | Matches [project architecture § Scalability](docs/project/architecture.md#L317) "deliberately not built yet" and the topology in [§ Estimated running costs](docs/project/architecture.md#L343). |
@@ -273,7 +273,7 @@ not ambiguous, and both are cheap to change *before* implementation and annoying
 
 1. **Invitation validity window** ([3.1.4](docs/project/prd.md#L46) says only "a fixed window"). **Assumed: 7
    days**, with resend issuing a fresh token and revoking the old one.
-2. **Accepted audio formats and maximum upload size** ([3.2.1](docs/project/prd.md#L62) says only "the common
+2. **Accepted audio formats and maximum upload size** ([3.2.1](docs/project/prd.md#L64) says only "the common
    formats produced by consumer and semi-professional capture equipment"). **Set by the operator:
    200 MB ceiling**; accepted formats mp3, m4a/aac, wav, flac. This determines both the
    presigned-upload validation and what the ASR adapter must accept or reject. The ceiling is
@@ -287,8 +287,8 @@ not ambiguous, and both are cheap to change *before* implementation and annoying
    in practice the working path is a compressed export, and `wav`/`flac` are accepted only for
    shorter recordings. Two consequences worth carrying forward: the admin upload UI should say the
    limit and the reason up front rather than rejecting silently, and the retained original that
-   [§3.4](docs/project/prd.md#L88) will later denoise and loudness-normalise
-   ([3.4.9](docs/project/prd.md#L102)) will usually be lossy — which costs a little headroom in that
+   [§3.4](docs/project/prd.md#L94) will later denoise and loudness-normalise
+   ([3.4.9](docs/project/prd.md#L108)) will usually be lossy — which costs a little headroom in that
    processing pass, though not enough to change any decision in this epic.
 
 ## Divergence from the north star
@@ -301,11 +301,11 @@ Two, both *the epic bending*, neither touching anything [project architecture](d
 > The north star has since adopted the same position — the ledger *is* the queue, no broker — so
 > this is now a match and is recorded in **Key choices** above. Redis remains available behind the
 > queue port when a step becomes latency-sensitive or the back-catalogue burst
-> ([3.21.3.3](docs/project/prd.md#L492)) needs real concurrency control.
+> ([3.21.3.3](docs/project/prd.md#L506)) needs real concurrency control.
 
 1. **The API is deployed inside the Next.js app rather than as its own service.** The *contract* is
    intact — versioned JSON, absolute origin, no server imports in the client — so the store-build
-   requirement at [5.2.2](docs/project/prd.md#L706) is unaffected. What is deferred is the independent scaling
+   requirement at [5.2.2](docs/project/prd.md#L740) is unaffected. What is deferred is the independent scaling
    the north star draws, which matters when the worker pool and the API want different shapes.
    Splitting later is a deploy change, not a code change, precisely because the boundary is honoured
    now.
@@ -317,7 +317,7 @@ shell are all absent because the features that need them are out of scope, and t
 already expects an epic to carry less than full scope.
 
 **One product-level ordering the architecture cannot fix**, restated so it is not rediscovered
-mid-build: [3.4.1](docs/project/prd.md#L94)'s "processed before available for playback" does not hold in this
+mid-build: [3.4.1](docs/project/prd.md#L100)'s "processed before available for playback" does not hold in this
 epic — members hear the raw upload ([epic prd § In scope → 2](docs/epics/epic-core-listening/prd.md#L52)).
 
 ## Extension points
@@ -326,17 +326,17 @@ The seams this epic leaves. **This is the section the next epic reads first.**
 
 | Seam | Where it is | How the deferred work attaches |
 | :---- | :---- | :---- |
-| **Pipeline step chain** | The ordered step list the worker walks, and the `step` column on `job` | [§3.4](docs/project/prd.md#L88) inserts `process_audio` *before* `transcribe`; embeddings, scripture, tags and mind maps append after `generate_draft`. A new step is a list entry, a ledger value and a job handler. |
-| **Second media pointer** | `Recording` has `original_media_key` and no processed pointer | [§3.4](docs/project/prd.md#L88) adds `processed_media_key` (plural renditions per [project architecture § Open questions](docs/project/architecture.md#L414) item 5) and switches signed-URL minting to prefer it, falling back to the original — which is what lets the back-fill run recording by recording. |
+| **Pipeline step chain** | The ordered step list the worker walks, and the `step` column on `job` | [§3.4](docs/project/prd.md#L94) inserts `process_audio` *before* `transcribe`; embeddings, scripture, tags and mind maps append after `generate_draft`. A new step is a list entry, a ledger value and a job handler. |
+| **Second media pointer** | `Recording` has `original_media_key` and no processed pointer | [§3.4](docs/project/prd.md#L94) adds `processed_media_key` (plural renditions per [project architecture § Open questions](docs/project/architecture.md#L414) item 5) and switches signed-URL minting to prefer it, falling back to the original — which is what lets the back-fill run recording by recording. |
 | **Review-gate `kind`** | `review_item.kind` | Scripture references, tags, mind maps and video scripts each add a `kind` value and a generation step. The Pending Reviews query does not change. |
-| **Segment row** | `segment` has no embedding column | [§3.9](docs/project/prd.md#L179)/[§3.10](docs/project/prd.md#L194) enable pgvector, `ALTER TABLE segment ADD embedding`, add an HNSW index, add an `embed` step, and add the `cross_reference` edge table over segment pairs. No re-transcription. |
+| **Segment row** | `segment` has no embedding column | [§3.9](docs/project/prd.md#L189)/[§3.10](docs/project/prd.md#L204) enable pgvector, `ALTER TABLE segment ADD embedding`, add an HNSW index, add an `embed` step, and add the `cross_reference` edge table over segment pairs. No re-transcription. |
 | **`(recording_id, timestamp_ms)` offset** | Established by `segment` and `playback_progress` | Notes, highlights, mind-map nodes, search results and Flow Tracker recommendations all resolve through the same pair, which is what makes "open at the moment" one behaviour across six features ([project architecture § Data model](docs/project/architecture.md#L171)). |
-| **Role enum + policy module** | `user.role` and the single `(actor, action, resource)` evaluation point | Contributor is one enum value plus four widened cases — upload ([3.2.1](docs/project/prd.md#L62)), transcript correction ([3.5.5](docs/project/prd.md#L116)), series management ([3.3.6](docs/project/prd.md#L83)), dashboard gating ([3.19.1](docs/project/prd.md#L429)). Cheap only because the check already exists server-side. |
-| **Domain events at job completion and at publish** | Emitted and logged; nothing subscribes | [§3.17](docs/project/prd.md#L361) fans out `Notification` rows per recipient from these exact events — publish, transcription failure, summary ready ([3.6.3](docs/project/prd.md#L129)). |
-| **Client-owned playback state** | Progress and speed are held client-side and pushed to a single-position endpoint | [§3.18](docs/project/prd.md#L391) adds the append-only outbox and a batch sync endpoint alongside it, plus the delta manifest for the pull direction. An addition, not a rewrite, which is [epic prd § Rationale](docs/epics/epic-core-listening/prd.md#L241)'s stated check that this cut is not a dead end. |
-| **Absolute API origin over a versioned contract** | The client's only route to data | [§5.2](docs/project/prd.md#L701) wraps the same build in Capacitor; the service worker and manifest layer over the same contract. |
+| **Role enum + policy module** | `user.role` and the single `(actor, action, resource)` evaluation point | Contributor is one enum value plus four widened cases — upload ([3.2.1](docs/project/prd.md#L64)), transcript correction ([3.5.5](docs/project/prd.md#L122)), series management ([3.3.6](docs/project/prd.md#L88)), dashboard gating ([3.19.1](docs/project/prd.md#L439)). Cheap only because the check already exists server-side. |
+| **Domain events at job completion and at publish** | Emitted and logged; nothing subscribes | [§3.17](docs/project/prd.md#L371) fans out `Notification` rows per recipient from these exact events — publish, transcription failure, summary ready ([3.6.3](docs/project/prd.md#L137)). |
+| **Client-owned playback state** | Progress and speed are held client-side and pushed to a single-position endpoint | [§3.18](docs/project/prd.md#L401) adds the append-only outbox and a batch sync endpoint alongside it, plus the delta manifest for the pull direction. An addition, not a rewrite, which is [epic prd § Rationale](docs/epics/epic-core-listening/prd.md#L241)'s stated check that this cut is not a dead end. |
+| **Absolute API origin over a versioned contract** | The client's only route to data | [§5.2](docs/project/prd.md#L735) wraps the same build in Capacitor; the service worker and manifest layer over the same contract. |
 | **Queue port** | The interface the API enqueues through | Redis/BullMQ dispatch drops in behind it; the ledger and the dashboard query are untouched. |
-| **Unauthenticated surface — no route carrying content** | The route wrapper's allowlist — an enumerated list, not a convention | Health is the single route outside [3.1.2](docs/project/prd.md#L44), because it answers while the database is down and a session lookup then cannot. Ticket 2 ships the allowlist with a test asserting every route *not* on it refuses an anonymous request, which is what keeps this seam **checkable** rather than reviewed — and what makes adding a second public route a deliberate edit to a named list. [5.3.1](docs/project/prd.md#L718)'s podcast RSS and [3.8.13](docs/project/prd.md#L177)'s shared mind map still arrive as the separate Feed service, so the API itself grows no further public surface. (`/api/v1/diagnostics/*` are not an exception: they require a session like everything else, and `404` in a deployment.)<br><br>**Amended in ticket 2**, in two ways. (1) The heading said `GET /api/v1/health` *only*, which is not satisfiable: **the sign-in route cannot require a session**. The list ships with two entries — health and `POST /api/v1/auth/session` — and the property actually being protected is that no unauthenticated route carries content. Ticket 3 (invitation accept) and ticket 4 (password reset) each add one, and each addition is a deliberate edit to the named list. (2) The allowlist lives in the **route wrapper**, not a separate middleware: `apiRoute` takes access as a required first argument, so a route cannot be written without stating it, and a route declared public that is not on the list is refused anyway. A middleware could not have the first property. |
+| **Unauthenticated surface — no route carrying content** | The route wrapper's allowlist — an enumerated list, not a convention | Health is the single route outside [3.1.2](docs/project/prd.md#L44), because it answers while the database is down and a session lookup then cannot. Ticket 2 ships the allowlist with a test asserting every route *not* on it refuses an anonymous request, which is what keeps this seam **checkable** rather than reviewed — and what makes adding a second public route a deliberate edit to a named list. [5.3.1](docs/project/prd.md#L752)'s podcast RSS and [3.8.13](docs/project/prd.md#L187)'s shared mind map still arrive as the separate Feed service, so the API itself grows no further public surface. (`/api/v1/diagnostics/*` are not an exception: they require a session like everything else, and `404` in a deployment.)<br><br>**Amended in ticket 2**, in two ways. (1) The heading said `GET /api/v1/health` *only*, which is not satisfiable: **the sign-in route cannot require a session**. The list ships with two entries — health and `POST /api/v1/auth/session` — and the property actually being protected is that no unauthenticated route carries content. Ticket 3 (invitation accept) and ticket 4 (password reset) each add one, and each addition is a deliberate edit to the named list. (2) The allowlist lives in the **route wrapper**, not a separate middleware: `apiRoute` takes access as a required first argument, so a route cannot be written without stating it, and a route declared public that is not on the list is refused anyway. A middleware could not have the first property. |
 
 ## Deliberately deferred
 
@@ -349,7 +349,7 @@ Not built, and not to be added by reflex. Each has a home above.
   is in scope, and [epic prd § Rationale](docs/epics/epic-core-listening/prd.md#L241) is explicit that semantic search
   over five recordings is worse than scrolling.
 - **Audio processing, the sound profile, FFmpeg, processed renditions.** The whole of
-  [§3.4](docs/project/prd.md#L88).
+  [§3.4](docs/project/prd.md#L94).
 - **Service worker, web app manifest, offline cache, outbox, sync endpoint, delta manifest.**
 - **Capacitor shell, native background audio, push transports.**
 - **Feed service and every unauthenticated route.**

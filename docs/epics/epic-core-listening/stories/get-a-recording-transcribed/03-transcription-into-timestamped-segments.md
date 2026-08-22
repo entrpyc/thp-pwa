@@ -3,24 +3,24 @@ _Story: Get a recording transcribed_
 
 > Phase 6 artefact for [implementation plan § Ticket 03](docs/epics/epic-core-listening/implementation-plan.md#L167).
 > Sections pulled: [epic prd § In scope → 2](docs/epics/epic-core-listening/prd.md#L52);
-> [3.5.1](docs/project/prd.md#L112) (**narrowed — triggers on upload completing, not on processing
-> completing**); [3.5.2](docs/project/prd.md#L113); [3.5.7](docs/project/prd.md#L118);
-> [3.5.8](docs/project/prd.md#L119);
+> [3.5.1](docs/project/prd.md#L118) (**narrowed — triggers on upload completing, not on processing
+> completing**); [3.5.2](docs/project/prd.md#L119); [3.5.7](docs/project/prd.md#L124);
+> [3.5.8](docs/project/prd.md#L125);
 > [epic architecture § Worker process](docs/epics/epic-core-listening/architecture.md#L139);
 > [epic architecture § Data model (epic)](docs/epics/epic-core-listening/architecture.md#L193) — *The spine*;
-> [4.4](docs/project/prd.md#L539);
+> [4.4](docs/project/prd.md#L555);
 > [project architecture § Data model](docs/project/architecture.md#L171);
 > [project architecture § Key technology choices](docs/project/architecture.md#L209) — the managed-ASR row.
 > Carried in because this ticket touches them:
 > [epic architecture § Media store](docs/epics/epic-core-listening/architecture.md#L164) and
-> [3.4.9](docs/project/prd.md#L102), whose non-negotiable this ticket must not break;
+> [3.4.9](docs/project/prd.md#L108), whose non-negotiable this ticket must not break;
 > [epic architecture § Extension points](docs/epics/epic-core-listening/architecture.md#L323) — *Segment row* and
 > *`(recording_id, timestamp_ms)` offset*;
 > [epic architecture § Key choices](docs/epics/epic-core-listening/architecture.md#L255) — the ASR-adapter row and the
 > correlation-id row; [project architecture § Estimated running costs](docs/project/architecture.md#L343) — the
-> transcription line the provider choice is measured against; [§7](docs/project/prd.md#L742) — the
-> ministry-vocabulary accuracy risk; [3.21.2.3](docs/project/prd.md#L485) and
-> [3.19.4](docs/project/prd.md#L432), which are how a failure here becomes visible in Ticket 04;
+> transcription line the provider choice is measured against; [§7](docs/project/prd.md#L779) — the
+> ministry-vocabulary accuracy risk; [3.21.2.3](docs/project/prd.md#L496) and
+> [3.19.4](docs/project/prd.md#L442), which are how a failure here becomes visible in Ticket 04;
 > [epic architecture § Deliberately deferred](docs/epics/epic-core-listening/architecture.md#L341);
 > [02-job-ledger-and-worker-loop.md § Implementation notes](docs/epics/epic-core-listening/stories/get-a-recording-transcribed/02-job-ledger-and-worker-loop.md#L327)
 > — the handler contract this ticket is the first real implementation of.
@@ -30,7 +30,7 @@ cross-references and Flow Tracker all resolve through `(recording_id, timestamp_
 ([project architecture § Data model](docs/project/architecture.md#L171)), so the row shape settled
 here is the most consequential schema decision left in this epic. It is settled by matching the
 `Segment` type that already exists in `packages/shared` rather than by inventing a second shape, and
-it takes **no embedding column** — that is [§3.9](docs/project/prd.md#L179)/[§3.10](docs/project/prd.md#L194)'s
+it takes **no embedding column** — that is [§3.9](docs/project/prd.md#L189)/[§3.10](docs/project/prd.md#L204)'s
 `ALTER TABLE`, and adding it now is deferral quietly stopping being deferral.
 
 Two other things are worth naming before the criteria. **This is the first handler that does real
@@ -51,28 +51,28 @@ the spend for that job. A failure — the provider's, or a transcript the provid
 reason and stops the chain there rather than proceeding to generation on bad input.
 
 - As an admin I want an uploaded recording to end up with a timestamped transcript without my doing
-  anything ([3.5.1](docs/project/prd.md#L112) as this epic narrows it,
-  [3.5.2](docs/project/prd.md#L113)).
+  anything ([3.5.1](docs/project/prd.md#L118) as this epic narrows it,
+  [3.5.2](docs/project/prd.md#L119)).
 - As an operator I want the transcript to record the language it was transcribed in, so adding a
   second language later is an adapter change rather than a migration and a back-fill
-  ([3.5.7](docs/project/prd.md#L118), [4.4](docs/project/prd.md#L539)).
+  ([3.5.7](docs/project/prd.md#L124), [4.4](docs/project/prd.md#L555)).
 - As an admin I do not want a summary generated from a transcript the machine itself doubted
-  ([3.5.8](docs/project/prd.md#L119)).
+  ([3.5.8](docs/project/prd.md#L125)).
 - As an operator I want the model, the version and what the job cost recorded on the row, so spend is
-  measured rather than estimated ([§7](docs/project/prd.md#L742)).
+  measured rather than estimated ([§7](docs/project/prd.md#L779)).
 
 ## Out of scope
 
 - **Every surface that shows a transcript.** Nothing renders segments, nothing seeks to one, nothing
-  highlights one — [3.5.3](docs/project/prd.md#L114) and [3.5.4](docs/project/prd.md#L115) are Story 5,
+  highlights one — [3.5.3](docs/project/prd.md#L120) and [3.5.4](docs/project/prd.md#L121) are Story 5,
   and no member can see anything until Story 3 publishes it. This ticket ships no route and no
   screen.
-- **Transcript correction** ([3.5.5](docs/project/prd.md#L116)) and the regeneration offer that
-  follows it ([3.5.6](docs/project/prd.md#L117)) — Story 5. `segment` carries `corrected_at` and
+- **Transcript correction** ([3.5.5](docs/project/prd.md#L122)) and the regeneration offer that
+  follows it ([3.5.6](docs/project/prd.md#L123)) — Story 5. `segment` carries `corrected_at` and
   `corrected_by_user_id` because the shared `Segment` type already does; nothing in this ticket
   writes them.
-- **The pipeline status view and per-step re-run** — Ticket 04 owns [3.19.4](docs/project/prd.md#L432)
-  and [3.21.2.4](docs/project/prd.md#L486). A low-confidence transcript is flagged here by *failing
+- **The pipeline status view and per-step re-run** — Ticket 04 owns [3.19.4](docs/project/prd.md#L442)
+  and [3.21.2.4](docs/project/prd.md#L497). A low-confidence transcript is flagged here by *failing
   the job*, and the screen that makes that legible is the next ticket, not this one.
 - **`generate_draft`** and the `review_item` table — Story 3. This ticket only chains into it, which
   Ticket 02 already built.
@@ -83,7 +83,7 @@ reason and stops the chain there rather than proceeding to generation on bad inp
   because English is pinned, its keyterm feature is available to this configuration rather than
   ruled out by a multilingual model — but a term list is something somebody curates through a
   screen, and there is no screen. The adapter leaves the seam and passes an empty list, which is the
-  mitigation [§7](docs/project/prd.md#L742)'s ministry-vocabulary risk gets when somebody decides to
+  mitigation [§7](docs/project/prd.md#L779)'s ministry-vocabulary risk gets when somebody decides to
   build it.
 - **Speaker diarisation and per-speaker labelling.** Nothing in the PRD asks who is speaking.
 - **Word-level timestamps as stored rows.** The provider returns them; a segment is a sentence, and
@@ -93,7 +93,7 @@ reason and stops the chain there rather than proceeding to generation on bad inp
 - **Automatic retry on a provider error, backoff, and a dead-letter queue.** A failed job stays
   failed until a human re-enqueues the step, exactly as Ticket 02 settled.
 - **Audio duration, bitrate, channel count or any inspection of the media** —
-  [§3.4](docs/project/prd.md#L88) is deferred whole and `recording` grows no column here.
+  [§3.4](docs/project/prd.md#L94) is deferred whole and `recording` grows no column here.
 - **A processed-media pointer, or reading anything other than the original object.**
 - **Chunking, splitting or re-encoding the upload before sending it.** The 200 MB ceiling
   ([epic architecture § Key choices](docs/epics/epic-core-listening/architecture.md#L255)) and the chosen
@@ -119,7 +119,7 @@ reason and stops the chain there rather than proceeding to generation on bad inp
   existing migration tests use.
   - A new numbered SQL migration beside the existing six, and the tables added to the Drizzle schema.
   - `recording_id` is a non-null foreign key to `recording` cascading on delete, and **unique** —
-    [4.4](docs/project/prd.md#L539) says one transcript per recording, so the database says it too.
+    [4.4](docs/project/prd.md#L555) says one transcript per recording, so the database says it too.
   - `language` is a BCP-47 code — always `en` in this epic, because English is pinned; `confidence`
     is a `real` in `0..1`.
   - **No `text` column.** The segments are the text, and a concatenated copy is a second source of
@@ -168,7 +168,7 @@ reason and stops the chain there rather than proceeding to generation on bad inp
   the S3 SDK is still imported by exactly one file — verified by the existing media-boundary guard,
   updated to the new path, plus the import-boundary guard extended to the moved package.
   - Everything the port already guarantees survives the move, **including that there is no delete on
-    it** — [3.4.9](docs/project/prd.md#L102)'s non-negotiable is a fact about that interface.
+    it** — [3.4.9](docs/project/prd.md#L108)'s non-negotiable is a fact about that interface.
   - The web app's existing call sites change import path and nothing else.
 - The port gains `presignGet`, minting a short-lived signed `GET` for a key — verified by an
   integration test against MinIO asserting the URL fetches the object and that a URL is refused after
@@ -195,7 +195,7 @@ reason and stops the chain there rather than proceeding to generation on bad inp
   asserting the invariants over a multi-segment fixture.
 - The adapter asks for English explicitly and the transcript records `en` — verified by a unit test
   asserting the request carries the pinned language, and an integration test asserting the persisted
-  row ([3.5.7](docs/project/prd.md#L118)).
+  row ([3.5.7](docs/project/prd.md#L124)).
   - Pinned rather than detected, and the column exists anyway so that a second language later is an
     adapter change rather than a migration and a back-fill over every transcript already written.
 - The transcript, its segments and the job's outcome are written in one transaction — verified by an
@@ -211,10 +211,10 @@ reason and stops the chain there rather than proceeding to generation on bad inp
     writes something.
 - `provider_meta` records the model, the model version, the audio duration the provider billed and
   the cost of the job — verified by an integration test asserting the four keys on the succeeded job
-  row ([§7](docs/project/prd.md#L742)).
+  row ([§7](docs/project/prd.md#L779)).
 - A provider failure marks the job `failed` with the reason and enqueues no successor — verified by
   an integration test with a failing fake asserting the job row and that no `generate_draft` job
-  exists ([3.21.2.3](docs/project/prd.md#L485)).
+  exists ([3.21.2.3](docs/project/prd.md#L496)).
   - Which is Ticket 02's chain rule doing the work; this handler adds nothing to it but a throw.
 - A recording whose object is missing from the store fails naming the key rather than calling the
   provider — verified by an integration test with a `recording` row pointing at nothing.
@@ -228,7 +228,7 @@ reason and stops the chain there rather than proceeding to generation on bad inp
 - A transcript whose overall confidence is below the threshold is **written**, and then the job
   **fails** with a reason naming the confidence and the threshold — verified by an integration test
   with a low-confidence fake asserting both the persisted transcript and the failed job row
-  ([3.5.8](docs/project/prd.md#L119)).
+  ([3.5.8](docs/project/prd.md#L125)).
   - Written first because the admin has to be able to read it to judge it, and because Story 5's
     correction has nothing to correct otherwise.
 - A low-confidence transcript enqueues no `generate_draft` — verified by asserting the job table
@@ -258,7 +258,7 @@ reason and stops the chain there rather than proceeding to generation on bad inp
   close to $0.258/hr of audio. **This is the first real spend against the account** — check the
   console's usage view agrees with the row.
 - Read a dozen segments against the audio and judge the accuracy on names and terminology
-  ([§7](docs/project/prd.md#L742)). If it is poor, say so — the keyterm seam is left open for exactly
+  ([§7](docs/project/prd.md#L779)). If it is poor, say so — the keyterm seam is left open for exactly
   that, and filling it is a scope decision rather than a fix.
 
 ## Assumptions
@@ -279,7 +279,7 @@ reason and stops the chain there rather than proceeding to generation on bad inp
   coarse enough that a corrected segment is a readable unit of text. Words are not persisted.
 - **Low confidence writes the transcript and then fails the job**, so it halts the chain and appears
   in Ticket 04's failed column with no second flagging mechanism. The admin's escape hatch is Ticket
-  04's per-step re-run of `generate_draft` directly ([3.21.2.4](docs/project/prd.md#L486)) once they
+  04's per-step re-run of `generate_draft` directly ([3.21.2.4](docs/project/prd.md#L497)) once they
   have read the transcript and judged it usable.
 - **The threshold is 0.6.** A first setting, not a measured one; the first real recording is what
   tells us whether it is right.
@@ -291,14 +291,14 @@ reason and stops the chain there rather than proceeding to generation on bad inp
   The cost is that a re-run discards any corrections Story 5 will let an admin make — stated here
   rather than defended against, because the alternative is versioned transcripts and nothing in this
   epic asks for them.
-- **`transcript` has no `text` column.** [4.4](docs/project/prd.md#L539) lists Text; the segments are
+- **`transcript` has no `text` column.** [4.4](docs/project/prd.md#L555) lists Text; the segments are
   it, and Story 3 concatenates them when it feeds Claude.
 - **The language is pinned to English, not detected.** The ministry publishes in English, so
   detection would buy nothing and cost accuracy — the monolingual English model is the more accurate
   one and, at $0.0043/min, the one the cost table is built on. `transcript.language` is still written
-  and still reads `en`, which is what keeps [4.4](docs/project/prd.md#L539)'s Language field honest
+  and still reads `en`, which is what keeps [4.4](docs/project/prd.md#L555)'s Language field honest
   and makes a second language an adapter change later.
-  - **The accepted cost:** [3.5.7](docs/project/prd.md#L118) asks for the language *detected*, and a
+  - **The accepted cost:** [3.5.7](docs/project/prd.md#L124) asks for the language *detected*, and a
     pinned language records what was configured. A recording in another language is transcribed
     badly as English and still reads `en` — a wrong answer rather than a visible one. Nothing in this
     epic catches that; the low-confidence gate is the only thing likely to.

@@ -10,36 +10,36 @@ _Story: Listen to a teaching_
 > groups, in the plan's order, so the parts can still be read and run apart.
 >
 > Sections pulled, Ticket 01: [epic prd § In scope → 4](docs/epics/epic-core-listening/prd.md#L100);
-> [3.3.1](docs/project/prd.md#L78); [3.3.9](docs/project/prd.md#L86); [3.6.7](docs/project/prd.md#L133);
+> [3.3.1](docs/project/prd.md#L83); [3.3.9](docs/project/prd.md#L91); [3.6.7](docs/project/prd.md#L141);
 > [epic prd § Epic flows → C](docs/epics/epic-core-listening/prd.md#L210);
 > [epic architecture § Next.js application — client half](docs/epics/epic-core-listening/architecture.md#L109);
 > `pages/dashboard.png`, `pages/recording.png`, `top-navigation/default.png`,
 > `top-navigation/menu-opened.png`.
 > Ticket 02: [epic prd § In scope → 5](docs/epics/epic-core-listening/prd.md#L117);
-> [3.2.3](docs/project/prd.md#L64); [3.2.9](docs/project/prd.md#L70);
+> [3.2.3](docs/project/prd.md#L66); [3.2.9](docs/project/prd.md#L72);
 > [epic architecture § Media store](docs/epics/epic-core-listening/architecture.md#L164);
 > [epic architecture § Extension points](docs/epics/epic-core-listening/architecture.md#L323) — *Second media
-> pointer*; [§6](docs/project/prd.md#L724) Security; `bottom-navigation/default.png`, `pages/player.png`.
-> Ticket 03: [3.2.4](docs/project/prd.md#L65);
+> pointer*; [§6](docs/project/prd.md#L758) Security; `bottom-navigation/default.png`, `pages/player.png`.
+> Ticket 03: [3.2.4](docs/project/prd.md#L67);
 > [epic architecture § Data model (epic)](docs/epics/epic-core-listening/architecture.md#L193) — *Accounts*;
 > `bottom-navigation/default.png`.
-> Ticket 04: [3.2.5](docs/project/prd.md#L66);
+> Ticket 04: [3.2.5](docs/project/prd.md#L68);
 > [epic architecture § Data model (epic)](docs/epics/epic-core-listening/architecture.md#L193) — *Member-owned
 > state*; [epic architecture § Extension points](docs/epics/epic-core-listening/architecture.md#L323) —
 > *Client-owned playback state*; `pages/dashboard.png` — the *Resume recording* card.
 >
-> Carried in because this story touches them: [3.2.2](docs/project/prd.md#L63) and
-> [3.2.11](docs/project/prd.md#L72), the gate every read here obeys; [3.6.12](docs/project/prd.md#L138), the
-> second gate on the summary; [3.6.10](docs/project/prd.md#L136), the reason a published teaching may have no
+> Carried in because this story touches them: [3.2.2](docs/project/prd.md#L65) and
+> [3.2.11](docs/project/prd.md#L74), the gate every read here obeys; [3.6.12](docs/project/prd.md#L146), the
+> second gate on the summary; [3.6.10](docs/project/prd.md#L144), the reason a published teaching may have no
 > summary; [3.1.2](docs/project/prd.md#L44) and [3.1.5](docs/project/prd.md#L47), the two rules every route
-> here obeys; [4.1](docs/project/prd.md#L501) and [4.2](docs/project/prd.md#L513), the two entities this
-> story widens by one column each; [3.4.1](docs/project/prd.md#L94) and
-> [§3.4](docs/project/prd.md#L88), the processed rendition members do not get in this epic;
-> [3.4.9](docs/project/prd.md#L102), the original this story reads and never writes;
-> [3.2.6](docs/project/prd.md#L67), [3.2.7](docs/project/prd.md#L68), [3.2.8](docs/project/prd.md#L69),
-> [3.3.4](docs/project/prd.md#L81), [§3.10](docs/project/prd.md#L194), [§3.12](docs/project/prd.md#L257) —
+> here obeys; [4.1](docs/project/prd.md#L515) and [4.2](docs/project/prd.md#L529), the two entities this
+> story widens by one column each; [3.4.1](docs/project/prd.md#L100) and
+> [§3.4](docs/project/prd.md#L94), the processed rendition members do not get in this epic;
+> [3.4.9](docs/project/prd.md#L108), the original this story reads and never writes;
+> [3.2.6](docs/project/prd.md#L69), [3.2.7](docs/project/prd.md#L70), [3.2.8](docs/project/prd.md#L71),
+> [3.3.4](docs/project/prd.md#L86), [§3.10](docs/project/prd.md#L204), [§3.12](docs/project/prd.md#L267) —
 > the six things the design references show that this story does not ship;
-> [3.5.3](docs/project/prd.md#L114)–[3.5.4](docs/project/prd.md#L115), the follow-along transcript that
+> [3.5.3](docs/project/prd.md#L120)–[3.5.4](docs/project/prd.md#L121), the follow-along transcript that
 > attaches to this story's player next;
 > [epic architecture § Divergence from the north star](docs/epics/epic-core-listening/architecture.md#L294);
 > [epic architecture § Deliberately deferred](docs/epics/epic-core-listening/architecture.md#L341);
@@ -90,7 +90,7 @@ recorded here rather than left as a missing screen somebody looks for at validat
 [epic architecture § Data model (epic)](docs/epics/epic-core-listening/architecture.md#L193) says
 `playback_progress` is "last-write-wins on the furthest position", which is two rules that disagree. Taken as
 *furthest*, a member who scrubs back to re-hear something and then closes the tab is returned to where they
-had got to, not where they were listening — which is the opposite of what [3.2.5](docs/project/prd.md#L66)
+had got to, not where they were listening — which is the opposite of what [3.2.5](docs/project/prd.md#L68)
 promises. This story implements **last-write-wins, plainly**: the newest write sets the position. Amending
 that line is a Phase 4 edit and is **out of scope here**; until somebody makes it, the architecture and the
 schema disagree by one word.
@@ -116,27 +116,27 @@ Almost everything in this list is visible in a design reference. That is the poi
 
 **Deferred features the references show.** Chapters and the chapter list, the `Chapter` / `Scripture` /
 `Notes` / `Mindmap` tabs and the tab strip that holds them, the *My notes* card
-([§3.12](docs/project/prd.md#L257)), the download control and any offline behaviour, search
-([§3.10](docs/project/prd.md#L194)) and the search control in the top bar, *All chapters* as a destination,
+([§3.12](docs/project/prd.md#L267)), the download control and any offline behaviour, search
+([§3.10](docs/project/prd.md#L204)) and the search control in the top bar, *All chapters* as a destination,
 hero and series artwork, the scripture-reference list of `pages/player.png`, and the `···` side toolbar of
 `bottom-navigation/menu-opened.png`.
 
-**Deferred playback behaviour.** Background audio and lock-screen transport ([3.2.6](docs/project/prd.md#L67))
-— it needs the Capacitor shell. Listening history ([3.2.7](docs/project/prd.md#L68)) and the completed marker
-([3.2.8](docs/project/prd.md#L69)) — this story writes one row per user per recording and no play log.
+**Deferred playback behaviour.** Background audio and lock-screen transport ([3.2.6](docs/project/prd.md#L69))
+— it needs the Capacitor shell. Listening history ([3.2.7](docs/project/prd.md#L70)) and the completed marker
+([3.2.8](docs/project/prd.md#L71)) — this story writes one row per user per recording and no play log.
 Per-recording progress in the library list and the series view's progress column
-([3.3.4](docs/project/prd.md#L81)) — that arrives with Story 6.
+([3.3.4](docs/project/prd.md#L86)) — that arrives with Story 6.
 
 **Not this story.** The follow-along transcript, the current-segment caption and seek-from-transcript
-([3.5.3](docs/project/prd.md#L114)–[3.5.4](docs/project/prd.md#L115)) — Story 5. Series, the series listing
+([3.5.3](docs/project/prd.md#L120)–[3.5.4](docs/project/prd.md#L121)) — Story 5. Series, the series listing
 and the series segment of the breadcrumb — Story 6. Audio processing and any processed rendition
-([§3.4](docs/project/prd.md#L88)) — members hear the raw upload, which
+([§3.4](docs/project/prd.md#L94)) — members hear the raw upload, which
 [epic architecture § Divergence from the north star](docs/epics/epic-core-listening/architecture.md#L294)
 already records.
 
 **Reachable-for and not wanted.** A `duration` column on `recording` or `transcript` — deliberately deferred,
 and `packages/db/tests/integration/migrations.test.ts` asserts its absence. A CDN in front of the object
-store. A batch or outbox sync endpoint for playback state — [§3.18](docs/project/prd.md#L391) adds that
+store. A batch or outbox sync endpoint for playback state — [§3.18](docs/project/prd.md#L401) adds that
 beside the single-position endpoint this story ships. Pagination or filtering on the library. A second
 visibility query: `packages/db/src/visibility.ts` is the only file allowed to compare `published_at`, and the
 guard enforces it. A fifth entry on the unauthenticated allowlist — every route here requires a session.
@@ -162,7 +162,7 @@ guard enforces it. A fifth entry on the unauthenticated allowlist — every rout
   - Ordering is the query's, not the client's, so the library and the console give one answer to "what is
     most recent".
   - A published teaching with no series and a published teaching with no summary both appear
-    ([3.3.9](docs/project/prd.md#L86), [3.6.10](docs/project/prd.md#L136)).
+    ([3.3.9](docs/project/prd.md#L91), [3.6.10](docs/project/prd.md#L144)).
 
 - **The member surface shows published rows only, whatever the caller's role** — verified by
   `packages/web/tests/integration/member-library.test.ts`, which requests the member surface as an admin and
@@ -181,7 +181,7 @@ guard enforces it. A fifth entry on the unauthenticated allowlist — every rout
   - A `GET /api/v1/recordings/[id]` route behind `recording.browse`, reading the same visibility condition
     as the list.
   - The summary is present only when both gates are open, and `null` when
-    [3.6.12](docs/project/prd.md#L138)'s return-to-draft has closed the second one.
+    [3.6.12](docs/project/prd.md#L146)'s return-to-draft has closed the second one.
   - Unpublished and nonexistent answer the same refusal, so the API does not report which ids exist.
 
 - **Every route added by this group refuses an anonymous caller** — verified by the existing
@@ -236,7 +236,7 @@ guard enforces it. A fifth entry on the unauthenticated allowlist — every rout
   `packages/web/tests/integration/playback.test.ts`, which asserts there is a single exported minting
   function and that the route is its only caller.
   - [epic architecture § Extension points](docs/epics/epic-core-listening/architecture.md#L323)'s *Second
-    media pointer* attaches here: [§3.4](docs/project/prd.md#L88) later makes this function prefer a
+    media pointer* attaches here: [§3.4](docs/project/prd.md#L94) later makes this function prefer a
     processed rendition and fall back to the original, and it can only do that if there is one of it.
 
 - **A member presses play and hears the recording** — verified by
@@ -290,7 +290,7 @@ guard enforces it. A fifth entry on the unauthenticated allowlist — every rout
   context, opens a different recording and asserts the element starts at that rate.
   - Stored on `user.preferred_playback_speed`, per
     [epic architecture § Data model (epic)](docs/epics/epic-core-listening/architecture.md#L193) — on the
-    user because [3.2.4](docs/project/prd.md#L65) persists it across recordings, not per recording.
+    user because [3.2.4](docs/project/prd.md#L67) persists it across recordings, not per recording.
   - Written by a route behind a session when the value changes, and applied optimistically before the
     write returns.
   - A value outside the six is refused by the API and by a database check constraint, so the column cannot
@@ -343,7 +343,7 @@ guard enforces it. A fifth entry on the unauthenticated allowlist — every rout
   - The card is `pages/dashboard.png`'s *Resume recording*: title, description, elapsed, and the filled
     purple play circle.
   - It shows the most recently updated progress row whose recording is **still published** — a teaching
-    taken down by [3.2.11](docs/project/prd.md#L72) does not reappear through a resume card.
+    taken down by [3.2.11](docs/project/prd.md#L74) does not reappear through a resume card.
   - **Elapsed only** — "Resume at 01:23", not the reference's "01:23 / 02:30", because no duration is stored
     anywhere and the player learns duration from the element.
   - No card renders when the member has no progress on any published recording.
@@ -428,7 +428,7 @@ guard enforces it. A fifth entry on the unauthenticated allowlist — every rout
 - **Scrubbing lands on whole seconds** — the position slider steps in seconds, so a member cannot
   seek to a finer offset than that from the bar.
 - **Locking a phone stops playback** — background audio and lock-screen transport need the Capacitor
-  shell ([3.2.6](docs/project/prd.md#L67)) and are deferred.
+  shell ([3.2.6](docs/project/prd.md#L69)) and are deferred.
 - **A speed changed in one tab does not reach another tab already open** — the rate is applied when
   the element loads metadata, so a second open tab keeps the old rate until it navigates or reloads.
 - **The resume card appears after the landing has rendered** — on a slow connection the landing
@@ -438,9 +438,9 @@ guard enforces it. A fifth entry on the unauthenticated allowlist — every rout
   it means the two readings differ by a parameter rather than by a route.
 - **No listening history and no completed marker** — one row per member per teaching and nothing
   else, so "what have I finished" and "what have I played" are unanswerable
-  ([3.2.7](docs/project/prd.md#L68), [3.2.8](docs/project/prd.md#L69), both deferred).
+  ([3.2.7](docs/project/prd.md#L70), [3.2.8](docs/project/prd.md#L71), both deferred).
 - **The library has no pagination, filter or search** — every published teaching is one list, which
-  is fine at five and is not at five hundred ([§3.10](docs/project/prd.md#L194) is deferred).
+  is fine at five and is not at five hundred ([§3.10](docs/project/prd.md#L204) is deferred).
 
 ## Implementation notes
 
@@ -511,5 +511,5 @@ guard enforces it. A fifth entry on the unauthenticated allowlist — every rout
   item attach to `packages/web/src/app/(member)/transport-bar.tsx` and the state they need is
   already in `player-context.tsx`.
 - **`mintPlaybackGrant` is the seam for a processed rendition** and a test asserts it is the only
-  caller of `presignGet` and that the route is its only caller. [§3.4](docs/project/prd.md#L88)
+  caller of `presignGet` and that the route is its only caller. [§3.4](docs/project/prd.md#L94)
   changes that one function; a second caller appearing fails the build.

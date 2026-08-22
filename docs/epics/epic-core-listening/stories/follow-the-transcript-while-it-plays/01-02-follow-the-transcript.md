@@ -8,31 +8,31 @@ _Story: Follow the transcript while it plays_
 > groups, in the plan's order, so the halves can still be read and run apart.
 >
 > Sections pulled, Ticket 01: [epic prd § In scope → 6](docs/epics/epic-core-listening/prd.md#L132);
-> [3.5.3](docs/project/prd.md#L114); [3.5.4](docs/project/prd.md#L115);
+> [3.5.3](docs/project/prd.md#L120); [3.5.4](docs/project/prd.md#L121);
 > [epic prd § Epic flows → C](docs/epics/epic-core-listening/prd.md#L210);
 > [epic architecture § Extension points](docs/epics/epic-core-listening/architecture.md#L323) —
 > *`(recording_id, timestamp_ms)` offset*; `bottom-navigation/subtitles.png`, the `Transcript` tab in
 > `pages/recording.png`.
 > Ticket 02: [epic prd § In scope → 6](docs/epics/epic-core-listening/prd.md#L132);
-> [3.5.5](docs/project/prd.md#L116) (**admin-only in this epic**);
-> [3.5.6](docs/project/prd.md#L117) (**narrowed to the summary**);
+> [3.5.5](docs/project/prd.md#L122) (**admin-only in this epic**);
+> [3.5.6](docs/project/prd.md#L123) (**narrowed to the summary**);
 > [epic prd § Epic flows → D](docs/epics/epic-core-listening/prd.md#L210);
 > [epic architecture § Data model (epic)](docs/epics/epic-core-listening/architecture.md#L193) — *The spine*,
 > the corrected-by fields on `segment`.
 >
-> Carried in because this story touches them: [3.5.2](docs/project/prd.md#L113) and
-> [4.4](docs/project/prd.md#L539), the segmented, timestamped shape this story is the first reader of;
-> [3.2.2](docs/project/prd.md#L63) and [3.2.11](docs/project/prd.md#L72), the gate every read here obeys;
-> [3.6.12](docs/project/prd.md#L138), the second gate on the summary the regeneration path must not trip;
-> [3.6.9](docs/project/prd.md#L135), the regeneration this one routes through;
-> [3.6.11](docs/project/prd.md#L137), the reason a published summary is still editable;
-> [3.6.4](docs/project/prd.md#L130), the precedent for an admin acting from the recording page;
+> Carried in because this story touches them: [3.5.2](docs/project/prd.md#L119) and
+> [4.4](docs/project/prd.md#L555), the segmented, timestamped shape this story is the first reader of;
+> [3.2.2](docs/project/prd.md#L65) and [3.2.11](docs/project/prd.md#L74), the gate every read here obeys;
+> [3.6.12](docs/project/prd.md#L146), the second gate on the summary the regeneration path must not trip;
+> [3.6.9](docs/project/prd.md#L143), the regeneration this one routes through;
+> [3.6.11](docs/project/prd.md#L145), the reason a published summary is still editable;
+> [3.6.4](docs/project/prd.md#L138), the precedent for an admin acting from the recording page;
 > [3.1.2](docs/project/prd.md#L44) and [3.1.5](docs/project/prd.md#L47), the two rules every route here obeys;
-> [4.17.3](docs/project/prd.md#L683) and [3.21.2.2](docs/project/prd.md#L484), why regeneration produces a
-> draft rather than a summary; [4.17.5](docs/project/prd.md#L685), the provenance the new draft carries;
-> [3.6.3](docs/project/prd.md#L129), the notification this story does **not** get;
-> [§3.9](docs/project/prd.md#L179), [§3.10](docs/project/prd.md#L194), [§3.12](docs/project/prd.md#L257),
-> [§3.14](docs/project/prd.md#L300) — the four later features that resolve through the offset this story
+> [4.17.3](docs/project/prd.md#L701) and [3.21.2.2](docs/project/prd.md#L495), why regeneration produces a
+> draft rather than a summary; [4.17.5](docs/project/prd.md#L703), the provenance the new draft carries;
+> [3.6.3](docs/project/prd.md#L137), the notification this story does **not** get;
+> [§3.9](docs/project/prd.md#L189), [§3.10](docs/project/prd.md#L204), [§3.12](docs/project/prd.md#L267),
+> [§3.14](docs/project/prd.md#L310) — the four later features that resolve through the offset this story
 > makes real; [epic architecture § Deliberately deferred](docs/epics/epic-core-listening/architecture.md#L341);
 > [epic architecture § Key choices](docs/epics/epic-core-listening/architecture.md#L255);
 > [epic architecture § Next.js application — client half](docs/epics/epic-core-listening/architecture.md#L109);
@@ -73,8 +73,8 @@ both. The mitigation is that the criteria stay in two groups and each group is s
 
 **This is where `(recording_id, timestamp_ms)` stops being a schema comment.**
 [epic architecture § Extension points](docs/epics/epic-core-listening/architecture.md#L323) names this pair
-as the seam notes ([§3.12](docs/project/prd.md#L257)), cross-references ([§3.9](docs/project/prd.md#L179)),
-search ([§3.10](docs/project/prd.md#L194)) and the Flow Tracker ([§3.14](docs/project/prd.md#L300)) all
+as the seam notes ([§3.12](docs/project/prd.md#L267)), cross-references ([§3.9](docs/project/prd.md#L189)),
+search ([§3.10](docs/project/prd.md#L204)) and the Flow Tracker ([§3.14](docs/project/prd.md#L310)) all
 resolve "open at the moment" through. So *which segment covers this offset* is a **pure function in its own
 module**, unit-tested against a segment list, and the transcript view and the caption pill both call it. It
 is deliberately not a `find` inlined in a component, because the next four features would each write their
@@ -91,7 +91,7 @@ it is the provider's anonymous index, not a label, and no epic has asked for a l
 the existing `generate_draft` step and the existing Pending Reviews queue. The published summary stays
 visible to members the whole time, and is replaced only when an admin approves the new draft — the same
 press that publishes any other summary. Nothing about this path publishes automatically
-([4.17.3](docs/project/prd.md#L683)), and nothing about it touches `recording.published_at`.
+([4.17.3](docs/project/prd.md#L701)), and nothing about it touches `recording.published_at`.
 
 ## Out of scope
 
@@ -111,16 +111,16 @@ published-only, so no admin transcript surface and no `?surface=` parameter on t
 Bulk find-and-replace across a transcript. A revision history of corrections beyond the single
 `corrected_at` / `corrected_by_user_id` pair the row already carries.
 
-**The rest of [3.5.6](docs/project/prd.md#L117).** Mind maps, scripture references, tags and
+**The rest of [3.5.6](docs/project/prd.md#L123).** Mind maps, scripture references, tags and
 cross-references do not exist, so the offer is the summary and nothing else — which the plan already
-narrowed. The Contributor half of [3.5.5](docs/project/prd.md#L116) is deferred with the role.
+narrowed. The Contributor half of [3.5.5](docs/project/prd.md#L122) is deferred with the role.
 
 **Deferred behaviour a reasonable implementer would reach for here.** A `text` column on `transcript`
 holding the joined transcript — Story 2 Ticket 03 deliberately did not write one, and correction is exactly
 the reader that would have to keep a copy in step. Persisting the caption on/off choice to `user` — that is
 a preferences column nobody asked for, and playback speed is the only preference this epic keeps. Notifying
-the admin when the regenerated draft is ready ([3.6.3](docs/project/prd.md#L129)) — that arrives with
-[§3.17](docs/project/prd.md#L361); until then the Pending Reviews queue is the signal. Transcript search,
+the admin when the regenerated draft is ready ([3.6.3](docs/project/prd.md#L137)) — that arrives with
+[§3.17](docs/project/prd.md#L371); until then the Pending Reviews queue is the signal. Transcript search,
 pagination, download or export. A `duration` column — `packages/db/tests/integration/migrations.test.ts`
 asserts its absence. An embedding column on `segment`. A fifth entry on the unauthenticated allowlist.
 
@@ -255,7 +255,7 @@ asserts its absence. An embedding column on `segment`. A fifth entry on the unau
   `packages/web/tests/integration/transcript-correction-screen.test.ts`, which corrects a segment, dismisses
   the offer, and asserts no job was enqueued and no review item was created.
   - The offer appears after the correction is saved, never before, and never fires by itself
-    ([3.5.6](docs/project/prd.md#L117) offers; it does not act).
+    ([3.5.6](docs/project/prd.md#L123) offers; it does not act).
   - It names the summary and nothing else, because nothing else derived from the transcript exists yet.
 
 - **Accepting the offer enqueues one `generate_draft` for the summary, and the resulting draft lands in
@@ -266,7 +266,7 @@ asserts its absence. An embedding column on `segment`. A fifth entry on the unau
     enqueuing through the existing queue port with `{ kinds: ['summary'] }`.
   - The worker's existing `replaceOpenDrafts` is what makes a repeated dispatch leave one draft, and the
     generated draft carries the AI-suggested provenance every draft carries
-    ([4.17.5](docs/project/prd.md#L685)).
+    ([4.17.5](docs/project/prd.md#L703)).
   - Nothing in this path writes `summary.published_at` — approving does, exactly as it already does.
 
 - **The published summary stays visible to members from the moment the offer is accepted until the new
@@ -274,7 +274,7 @@ asserts its absence. An embedding column on `segment`. A fifth entry on the unau
   reads the recording as a member after accepting and again after the draft lands, and asserts the old
   summary both times.
   - Regeneration creates a draft; it does not discard the published `summary` row, which is what makes this
-    path different from [3.6.9](docs/project/prd.md#L135)'s discard-and-replace of an open draft.
+    path different from [3.6.9](docs/project/prd.md#L143)'s discard-and-replace of an open draft.
 
 - **A second regeneration while one is in flight is refused rather than answered** — verified by
   `packages/web/tests/integration/transcript-correction.test.ts`, which asks twice and asserts
@@ -304,7 +304,7 @@ asserts its absence. An embedding column on `segment`. A fifth entry on the unau
 ### Major (confirmed with the operator)
 
 - Correction lives **inline in the `Transcript` tab of the member recording page**, with admin-only
-  affordances, rather than in a new admin console screen — the precedent [3.6.4](docs/project/prd.md#L130)
+  affordances, rather than in a new admin console screen — the precedent [3.6.4](docs/project/prd.md#L138)
   already set for acting on a recording from its own page.
 - Correction is **published recordings only**. Epic flow B's pre-publish correction is satisfied by
   correcting after publish, per flow D; the transcript route grows no `?surface=` parameter and no admin
@@ -351,8 +351,8 @@ asserts its absence. An embedding column on `segment`. A fifth entry on the unau
   accepts on the first will be refused on the second with `generation_in_flight` until the worker
   finishes — the message says to wait and try again, and nothing tells them when it has.
 - Accepting the offer and then never approving the draft leaves an open review item indefinitely;
-  nothing notifies the admin it is ready ([3.6.3](docs/project/prd.md#L129) arrives with
-  [§3.17](docs/project/prd.md#L361), so Pending Reviews is the only signal).
+  nothing notifies the admin it is ready ([3.6.3](docs/project/prd.md#L137) arrives with
+  [§3.17](docs/project/prd.md#L371), so Pending Reviews is the only signal).
 - A regenerated draft is written from the transcript as it stands when the **worker** runs, not as it
   stood when the offer was accepted. A correction made in between is included silently.
 - Auto-scroll suspension resets when the tab is closed and re-opened, and when a different teaching

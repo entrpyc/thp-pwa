@@ -250,7 +250,7 @@ only. Password reset ([3.1.6](docs/project/prd.md#L48)), deactivation, the last-
 ([3.1.11](docs/project/prd.md#L53)) and profile editing ([Ticket 4](docs/epics/epic-core-listening/implementation-plan.md#L123)). Changing
 an existing user's role ([3.1.5](docs/project/prd.md#L47)) — an invitation is for an address with no account.
 Any email other than the invitation: no reset mail until ticket 4, no summary-ready notification
-([§3.17](docs/project/prd.md#L361) is deferred), no digests. Bounce, complaint or delivery-status handling.
+([§3.17](docs/project/prd.md#L371) is deferred), no digests. Bounce, complaint or delivery-status handling.
 Magic-link or passwordless sign-in. Bulk or CSV invitation. `contributor` in any form. Rate
 limiting, lockout, 2FA. Anything in
 [epic architecture § Deliberately deferred](docs/epics/epic-core-listening/architecture.md#L341).

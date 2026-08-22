@@ -6,14 +6,14 @@ _Story: Get a recording transcribed_
 > [epic architecture § Job ledger (in Postgres, not a broker)](docs/epics/epic-core-listening/architecture.md#L157);
 > [epic architecture § Data model (epic)](docs/epics/epic-core-listening/architecture.md#L193) — *Pipeline state*;
 > [epic architecture § Extension points](docs/epics/epic-core-listening/architecture.md#L323) — *Pipeline step chain*
-> and *Queue port*; [3.21.2.1](docs/project/prd.md#L483); [3.21.2.3](docs/project/prd.md#L485);
+> and *Queue port*; [3.21.2.1](docs/project/prd.md#L494); [3.21.2.3](docs/project/prd.md#L496);
 > [project architecture § Worker pool](docs/project/architecture.md#L147);
 > [project architecture § Key technology choices](docs/project/architecture.md#L209) — the ledger-is-the-queue row.
 > Carried in because this ticket touches them:
 > [epic architecture § Key choices](docs/epics/epic-core-listening/architecture.md#L255) — the correlation-id row and
 > the `SKIP LOCKED` row; [project architecture § Estimated running costs](docs/project/architecture.md#L343) — where
 > worker concurrency 1 comes from; [project architecture § Cross-cutting concerns](docs/project/architecture.md#L271);
-> [3.21.2.4](docs/project/prd.md#L486) and [3.19.4](docs/project/prd.md#L432), which Ticket 04 reads this table for;
+> [3.21.2.4](docs/project/prd.md#L497) and [3.19.4](docs/project/prd.md#L442), which Ticket 04 reads this table for;
 > [epic architecture § Deliberately deferred](docs/epics/epic-core-listening/architecture.md#L341);
 > [01-upload-to-object-storage.md § Implementation notes](docs/epics/epic-core-listening/stories/get-a-recording-transcribed/01-upload-to-object-storage.md#L288)
 > — its last line, which names the edge this ticket connects.
@@ -23,7 +23,7 @@ transcribed. What ships is the mechanism every later step in this epic and every
 epic runs on — and three of its properties are settled here and awkward to revisit: **claiming is
 at-least-once**, so a handler that is not idempotent is a bug rather than a preference; **a step
 enqueues its successor only on success**, so a failure genuinely halts a recording's pipeline
-([3.21.2.3](docs/project/prd.md#L485)); and **the ledger is the queue**, so the rows the worker dispatches
+([3.21.2.3](docs/project/prd.md#L496)); and **the ledger is the queue**, so the rows the worker dispatches
 from are the same rows Ticket 04 renders a dashboard out of. There is no second store and no broker
 ([project architecture § Key technology choices](docs/project/architecture.md#L209)).
 
@@ -42,7 +42,7 @@ the handler registered for that step, the queue port the API enqueues through, a
 that a step enqueues its successor only on success. Finalising an upload enqueues `transcribe`.
 
 - As an admin I want an upload to start the pipeline on its own, so nobody has to trigger anything by
-  hand ([3.21.2.1](docs/project/prd.md#L483)).
+  hand ([3.21.2.1](docs/project/prd.md#L494)).
 - As an operator I want a job that failed to say which step failed and why, in a row rather than in a
   log file, so the pipeline's state is something I can query.
 - As an operator I want a worker that was killed mid-job to recover on its own when it comes back,
@@ -54,11 +54,11 @@ that a step enqueues its successor only on success. Finalising an upload enqueue
   steps register **stub handlers that do nothing and succeed**; see the criteria and the assumption
   that names what that costs.
 - **Every admin-visible surface over the ledger** — Ticket 04 owns the pipeline status view
-  ([3.19.4](docs/project/prd.md#L432)) and the per-step re-run ([3.21.2.4](docs/project/prd.md#L486)). This ticket
+  ([3.19.4](docs/project/prd.md#L442)) and the per-step re-run ([3.21.2.4](docs/project/prd.md#L497)). This ticket
   ships no route, no screen and no policy action over `job`. The table is written by the API, read by
   the worker, and read by nothing else yet.
 - **Automatic retry, backoff, and a dead-letter queue.** A failure is terminal until a human
-  re-enqueues the step — which is what [3.21.2.3](docs/project/prd.md#L485) asks for and what Ticket 04 gives a
+  re-enqueues the step — which is what [3.21.2.3](docs/project/prd.md#L496) asks for and what Ticket 04 gives a
   button. The one automatic re-enqueue here is the startup sweep, and that is crash recovery, not
   retry.
 - **`LISTEN`/`NOTIFY`, or any wake-on-enqueue.** The worker polls. Seconds of dispatch latency are
@@ -69,7 +69,7 @@ that a step enqueues its successor only on success. Finalising an upload enqueue
   the seam they arrive behind; nothing in this ticket anticipates them further.
 - **Concurrency above 1, a worker pool, per-step concurrency, and job priority.** One process, one job
   at a time ([project architecture § Estimated running costs](docs/project/architecture.md#L343)).
-- **Scheduled or delayed jobs, cron, and back-catalogue batching** — [3.21.3](docs/project/prd.md#L490) is not
+- **Scheduled or delayed jobs, cron, and back-catalogue batching** — [3.21.3](docs/project/prd.md#L504) is not
   in this epic. A job is enqueued to run now.
 - **Process supervision, restart-on-failure, start-on-boot** — Story 7 Ticket 02. This ticket's worker
   is started by hand with `npm run worker`.
@@ -77,7 +77,7 @@ that a step enqueues its successor only on success. Finalising an upload enqueue
   [epic architecture § Extension points](docs/epics/epic-core-listening/architecture.md#L323) names it as a seam;
   nothing in this epic subscribes, and Story 3's publish path is where it lands.
 - **`provider_meta` content.** The column ships and stub handlers mark themselves in it; model,
-  version and spend arrive with the handler that has a provider to record ([§7](docs/project/prd.md#L742)).
+  version and spend arrive with the handler that has a provider to record ([§7](docs/project/prd.md#L779)).
 - **`transcript`, `segment` and `review_item` tables** — Ticket 03 and Story 3.
 - **Cancelling a running job**, and a `cancelled` status. There is no way to stop a job once claimed.
 
@@ -96,7 +96,7 @@ that a step enqueues its successor only on success. Finalising an upload enqueue
   - A new numbered SQL migration beside the existing five, and the table added to the Drizzle schema.
   - `recording_id` is a non-null foreign key to `recording`; `step` is the existing `pipeline_step`
     enum; `started_at`, `finished_at`, `error` and `provider_meta` are nullable and empty at enqueue.
-  - `provider_meta` is `jsonb`, because [§7](docs/project/prd.md#L742) wants spend measured per job and what a
+  - `provider_meta` is `jsonb`, because [§7](docs/project/prd.md#L779) wants spend measured per job and what a
     provider reports is not the same shape for two providers.
 - `status` is a `job_status` Postgres enum with exactly `pending`, `running`, `succeeded` and
   `failed`, derived from a single `JOB_STATUSES` constant in `@thp/shared` — verified by the existing
@@ -175,14 +175,14 @@ that a step enqueues its successor only on success. Finalising an upload enqueue
   after `transcribe` succeeds, and by a second that forces the enqueue to fail and asserts neither
   change landed.
 - A step that fails enqueues nothing — verified by failing `transcribe` and asserting no
-  `generate_draft` row exists ([3.21.2.3](docs/project/prd.md#L485)).
+  `generate_draft` row exists ([3.21.2.3](docs/project/prd.md#L496)).
 - The last step in the list enqueues nothing and is not an error — verified by succeeding
   `generate_draft` and asserting the queue is empty.
 - A successful step whose successor already has an unfinished job enqueues nothing rather than failing
   — verified by pre-enqueuing `generate_draft` and then succeeding `transcribe`.
 - The successor is read from the ordered step list and from nowhere else — verified by a test driving
   the chain from a reordered list and asserting the successor follows that list.
-  - Which is the whole of the *Pipeline step chain* seam: [§3.4](docs/project/prd.md#L88) inserting
+  - Which is the whole of the *Pipeline step chain* seam: [§3.4](docs/project/prd.md#L94) inserting
     `process_audio` before `transcribe` is an edit to one array.
 
 ### Crash recovery — the startup sweep
@@ -250,7 +250,7 @@ that a step enqueues its successor only on success. Finalising an upload enqueue
   is failed and re-enqueued. Correct only while exactly one worker process runs, which the deployment
   pins; the sweep logs that it assumes it.
 - **A step that succeeds always chains forward**, including when a human re-ran it, so a re-run
-  `transcribe` also regenerates the draft. [3.21.2.4](docs/project/prd.md#L486) is satisfied by not restarting
+  `transcribe` also regenerates the draft. [3.21.2.4](docs/project/prd.md#L497) is satisfied by not restarting
   from step 1, and the `job` columns stay as
   [epic architecture § Data model (epic)](docs/epics/epic-core-listening/architecture.md#L193) names them.
 - **`transcribe` and `generate_draft` ship as stub handlers that succeed**, so the chain runs green end
@@ -263,7 +263,7 @@ that a step enqueues its successor only on success. Finalising an upload enqueue
   request → job → provider call, and a column is the only form of that which survives the process
   boundary.
 - **No automatic retry.** A failed job stays failed until a human re-enqueues the step in Ticket 04 —
-  [3.21.2.3](docs/project/prd.md#L485)'s halt-and-flag, not a retry policy.
+  [3.21.2.3](docs/project/prd.md#L496)'s halt-and-flag, not a retry policy.
 
 ### Minor
 
@@ -350,7 +350,7 @@ line somebody will otherwise discover the hard way.
   unchanged.
 - **Both ends of the chain read the ordered list.** `FIRST_PIPELINE_STEP` is what finalising an upload
   enqueues and `nextPipelineStep` is what a succeeded step enqueues, so
-  [§3.4](docs/project/prd.md#L88) inserting `process_audio` is an edit to one array and to nothing
+  [§3.4](docs/project/prd.md#L94) inserting `process_audio` is an edit to one array and to nothing
   near the upload code.
 - **The correlation id is read from the ambient store by the queue port**, not threaded through
   `finaliseUpload`'s signature — the same store the logger reads, so a job and the request that caused

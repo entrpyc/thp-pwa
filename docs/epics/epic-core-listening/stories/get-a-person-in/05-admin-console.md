@@ -3,7 +3,7 @@
 Sources pulled for this ticket, and nothing else:
 [implementation plan § Ticket 5](docs/epics/epic-core-listening/implementation-plan.md#L134),
 [epic prd § In scope → 7](docs/epics/epic-core-listening/prd.md#L146),
-[3.19.9](docs/project/prd.md#L437), [3.19.1](docs/project/prd.md#L429),
+[3.19.9](docs/project/prd.md#L447), [3.19.1](docs/project/prd.md#L439),
 [epic prd § Epic flows → A](docs/epics/epic-core-listening/prd.md#L210), and the standing constraints at
 [implementation plan § Standing constraints](docs/epics/epic-core-listening/implementation-plan.md#L32).
 
@@ -59,7 +59,7 @@ suite drives, in `packages/web/tests/integration/admin-console.test.ts`, at phon
 - **Nothing overflows horizontally at 390px** — verified by comparing `scrollWidth` to the viewport
   at each of the three widths, on a console populated with a long display name and a long address.
 
-### Member list — [3.19.9](docs/project/prd.md#L437)
+### Member list — [3.19.9](docs/project/prd.md#L447)
 
 - **Every account is listed with name, address, role and whether it is active** — verified against a
   seeded set of admins and members, one of them deactivated.
@@ -227,7 +227,7 @@ top and bottom navigation ([Ticket 13](docs/epics/epic-core-listening/implementa
 ([Ticket 8](docs/epics/epic-core-listening/implementation-plan.md#L184)), Pending Reviews
 ([Ticket 10](docs/epics/epic-core-listening/implementation-plan.md#L215)), series ([Ticket 19](docs/epics/epic-core-listening/implementation-plan.md#L319)) —
 each arrives with its feature, and no placeholder for any of them is rendered now. Per-role
-dashboard gating ([3.19.1](docs/project/prd.md#L429)) — one flat surface until Contributor exists. Search,
+dashboard gating ([3.19.1](docs/project/prd.md#L439)) — one flat surface until Contributor exists. Search,
 filtering, sorting, pagination or bulk actions over the member list: five accounts, and every one of
 those is a feature nobody has asked for. An audit-log view — the gate transitions are logged, and
 reading them back is not in this epic. Editing another person's display name, avatars,

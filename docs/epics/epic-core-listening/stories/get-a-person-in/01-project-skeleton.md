@@ -6,7 +6,7 @@
 > [epic architecture § Primary datastore](docs/epics/epic-core-listening/architecture.md#L177),
 > [epic architecture § Key choices](docs/epics/epic-core-listening/architecture.md#L255),
 > [project architecture § Key technology choices](docs/project/architecture.md#L209),
-> [5.2.2](docs/project/prd.md#L706).
+> [5.2.2](docs/project/prd.md#L740).
 
 This ticket ships no product behaviour. Its whole value is that two boundaries — the client/API
 contract and the single-datastore choice — are correct on the first commit, because
@@ -42,7 +42,7 @@ contract and the single-datastore choice — are correct on the first commit, be
 - Every log line emitted while handling a request carries that request's correlation id — verified
   by capturing the logger during one request and asserting no line lacks the field.
 
-**The client/API boundary** — the [5.2.2](docs/project/prd.md#L706) requirement, and the reason this ticket
+**The client/API boundary** — the [5.2.2](docs/project/prd.md#L740) requirement, and the reason this ticket
 exists at all
 
 - The client calls an absolute API origin read from configuration, not a relative path — verified by

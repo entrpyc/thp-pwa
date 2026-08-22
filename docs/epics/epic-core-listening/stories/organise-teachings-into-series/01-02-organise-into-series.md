@@ -8,23 +8,23 @@ _Story: Organise teachings into series_
 > stay in two groups, in the plan's order, so the halves can still be read and run apart.
 >
 > Sections pulled, Ticket 01: [epic prd § In scope → 4](docs/epics/epic-core-listening/prd.md#L100);
-> [3.3.2](docs/project/prd.md#L79); [3.3.6](docs/project/prd.md#L83) — **create / rename / move only**;
-> [3.19.5](docs/project/prd.md#L433) minus artwork upload; [4.3](docs/project/prd.md#L528);
+> [3.3.2](docs/project/prd.md#L84); [3.3.6](docs/project/prd.md#L88) — **create / rename / move only**;
+> [3.19.5](docs/project/prd.md#L443) minus artwork upload; [4.3](docs/project/prd.md#L544);
 > [epic architecture § Data model (epic)](docs/epics/epic-core-listening/architecture.md#L193) — *The spine*.
-> Ticket 02: [3.3.4](docs/project/prd.md#L81); [3.3.5](docs/project/prd.md#L82) minus cover artwork;
+> Ticket 02: [3.3.4](docs/project/prd.md#L86); [3.3.5](docs/project/prd.md#L87) minus cover artwork;
 > [epic prd § In scope → 4](docs/epics/epic-core-listening/prd.md#L100);
 > [epic prd § Epic flows → C](docs/epics/epic-core-listening/prd.md#L210);
 > `pages/series-listing.png`, `pages/series-inner.png`.
 >
-> Carried in because this story touches them: [3.3.1](docs/project/prd.md#L78) and
-> [3.3.9](docs/project/prd.md#L86), the date-primary order this story must not displace and the recording
-> with no series it must keep showing; [3.2.2](docs/project/prd.md#L63) and
-> [3.2.11](docs/project/prd.md#L72), the gate every member read here obeys;
-> [3.2.5](docs/project/prd.md#L66), the progress row the series view renders and never writes;
+> Carried in because this story touches them: [3.3.1](docs/project/prd.md#L83) and
+> [3.3.9](docs/project/prd.md#L91), the date-primary order this story must not displace and the recording
+> with no series it must keep showing; [3.2.2](docs/project/prd.md#L65) and
+> [3.2.11](docs/project/prd.md#L74), the gate every member read here obeys;
+> [3.2.5](docs/project/prd.md#L68), the progress row the series view renders and never writes;
 > [3.1.2](docs/project/prd.md#L44) and [3.1.5](docs/project/prd.md#L47), the two rules every route here
-> obeys; [3.19.1](docs/project/prd.md#L429), the console this panel is the fifth of;
-> [3.3.3](docs/project/prd.md#L80), [3.3.7](docs/project/prd.md#L84), [3.3.8](docs/project/prd.md#L85),
-> [§3.10](docs/project/prd.md#L194), [§3.12](docs/project/prd.md#L257) — what the two references show that
+> obeys; [3.19.1](docs/project/prd.md#L439), the console this panel is the fifth of;
+> [3.3.3](docs/project/prd.md#L85), [3.3.7](docs/project/prd.md#L89), [3.3.8](docs/project/prd.md#L90),
+> [§3.10](docs/project/prd.md#L204), [§3.12](docs/project/prd.md#L267) — what the two references show that
 > this story does not ship;
 > [epic architecture § Extension points](docs/epics/epic-core-listening/architecture.md#L323) — the *Role enum
 > + policy module* row, which names series management as one of Contributor's four widened cases;
@@ -55,20 +55,20 @@ and the token layer — following the rule the member surface already set in Sto
 is dropped, not rendered dead.**
 
 **`2h 14m total` becomes the date range, and that is not a substitution of convenience.**
-[3.3.5](docs/project/prd.md#L82) names title, description, date range and count as what a series carries;
+[3.3.5](docs/project/prd.md#L87) names title, description, date range and count as what a series carries;
 the reference's running time is not on that list, and this epic stores no duration anywhere by deliberate
 choice. So the meta row reads `8 recordings · 12 Mar 2025 – 4 Jun 2025`, which is the requirement rather
 than a degraded version of the picture.
 
-**A series orders forwards; the library orders backwards.** [3.3.1](docs/project/prd.md#L78) makes newest-
-first the product's default reading and the library obeys it. [3.3.4](docs/project/prd.md#L81) asks for
+**A series orders forwards; the library orders backwards.** [3.3.1](docs/project/prd.md#L83) makes newest-
+first the product's default reading and the library obeys it. [3.3.4](docs/project/prd.md#L86) asks for
 *chronological* inside a series, and the reference numbers its rows `01.`–`08.` — a study is read forwards.
 Both orders are correct and they are opposite; this is stated here so it reads as a decision at validation
 rather than as a bug.
 
 **Two counts of the same series can legitimately differ.** The console counts every recording assigned to a
 series; the member's page counts only the published ones. That falls straight out of
-[3.2.2](docs/project/prd.md#L63), and it is why the count is a query rather than a column on the row.
+[3.2.2](docs/project/prd.md#L65), and it is why the count is a query rather than a column on the row.
 
 ## Goal
 
@@ -93,30 +93,30 @@ teaching in it in order with their own progress against each.
 Most of this list is visible in one of the two design references. That is the point of the list.
 
 **Deferred features the references show.** Series cover artwork, anywhere it appears
-([3.3.3](docs/project/prd.md#L80)) — the listing thumbnail and the series-page hero, which becomes a flat
+([3.3.3](docs/project/prd.md#L85)) — the listing thumbnail and the series-page hero, which becomes a flat
 `--color-bg-deep` band exactly as the recording page's did. The download control, on the series header and on
 every row. The `Scripture`, `Notes`, `Transcript` and `Mindmap` tabs of `pages/series-inner.png`, and the tab
 strip that holds them — the series page has one thing to show and needs no strip to show it. The *Search
-recordings* box ([§3.10](docs/project/prd.md#L194)). The per-row duration and the `2h 14m total` figure.
+recordings* box ([§3.10](docs/project/prd.md#L204)). The per-row duration and the `2h 14m total` figure.
 
-**Deferred series behaviour.** Reordering a series and merging two ([3.3.6](docs/project/prd.md#L83)) —
+**Deferred series behaviour.** Reordering a series and merging two ([3.3.6](docs/project/prd.md#L88)) —
 the plan's reference says *create / rename / move only*, and order inside a series is
 `recorded_at` and nothing else. Podcast-shaped metadata and any external-publication field
-([3.3.7](docs/project/prd.md#L84), [4.3](docs/project/prd.md#L528)'s *External publication status*) —
+([3.3.7](docs/project/prd.md#L89), [4.3](docs/project/prd.md#L544)'s *External publication status*) —
 they arrive with distribution, which is what drives their real requirements. Videos in the series view
-([3.3.8](docs/project/prd.md#L85)). The Contributor half of [3.3.6](docs/project/prd.md#L83) — this epic
+([3.3.8](docs/project/prd.md#L90)). The Contributor half of [3.3.6](docs/project/prd.md#L88) — this epic
 has two roles, and widening series management is one of the four cases
 [epic architecture § Extension points](docs/epics/epic-core-listening/architecture.md#L323) already names.
 
-**Not this story.** Deleting a series — [3.3.6](docs/project/prd.md#L83) names create, rename, reorder,
+**Not this story.** Deleting a series — [3.3.6](docs/project/prd.md#L88) names create, rename, reorder,
 merge and move, and no delete; nothing in this story removes a series, and a series an admin regrets is
-renamed or emptied. A recording in more than one series — [3.3.2](docs/project/prd.md#L79) says at most one,
+renamed or emptied. A recording in more than one series — [3.3.2](docs/project/prd.md#L84) says at most one,
 and the nullable foreign key is what makes that a property of the database rather than of a check. Any change
-to how the library orders itself — [3.3.1](docs/project/prd.md#L78) stands, and grouping the library by
+to how the library orders itself — [3.3.1](docs/project/prd.md#L83) stands, and grouping the library by
 series is explicitly not what "surfaced from the library" means here.
 
 **Reachable-for and not wanted.** Stored `recording_count` or `date_range` columns on `series` —
-[4.3](docs/project/prd.md#L528) calls both auto-calculated, and a denormalised count is a second answer to a
+[4.3](docs/project/prd.md#L544) calls both auto-calculated, and a denormalised count is a second answer to a
 question one query already answers. A slug column or a human-readable series URL — the id is what every other
 resource in this product is addressed by. A second visibility query: `packages/db/src/visibility.ts` is the
 only file allowed to compare `published_at`, and `tests/guards/visibility-boundary.test.ts` enforces it, so
@@ -140,7 +140,7 @@ filtering or a search box on either new screen.
   - One new migration under `packages/db/drizzle/`, added to the numbered sequence, plus the two table
     declarations in `packages/db/src/schema.ts`.
   - `recording.series_id` is nullable with an index, because a recording may have none
-    ([3.3.9](docs/project/prd.md#L86)) and every series read filters on it.
+    ([3.3.9](docs/project/prd.md#L91)) and every series read filters on it.
   - The absent columns are asserted rather than described, which is how this repository has kept every
     deferral honest so far.
 
@@ -150,7 +150,7 @@ filtering or a search box on either new screen.
   - `POST /api/v1/series` behind a new `series.create` policy action, admin-only in this epic.
   - The title is trimmed and required; the description is optional and may be empty; both are subject to the
     same generic field cap every other route applies.
-  - Two series may share a title — nothing in [3.3](docs/project/prd.md#L74) makes a title an identifier, and
+  - Two series may share a title — nothing in [3.3](docs/project/prd.md#L79) makes a title an identifier, and
     a uniqueness rule nobody asked for is a rule somebody has to discover.
 
 - **An admin renames a series and rewrites its description, and the recordings in it are unaffected** —
@@ -276,7 +276,7 @@ filtering or a search box on either new screen.
   - A library row gains its series name as a small link rendered **beside** the row's own link rather than
     inside it — an anchor within an anchor is not valid markup, and the row is a whole-row link today.
   - A recording with no series shows no label and is otherwise unchanged
-    ([3.3.9](docs/project/prd.md#L86)).
+    ([3.3.9](docs/project/prd.md#L91)).
 
 - **A recording that belongs to a series shows `home › series › recording` in the breadcrumb, whichever way
   the page was opened, and the series segment is a link** — verified by
@@ -321,7 +321,7 @@ filtering or a search box on either new screen.
   than rendered disabled, and the hero becomes a flat `--color-bg-deep` band — the rule the member surface
   set in Story 4.
 - `2h 14m total` in `pages/series-inner.png` is replaced by the date range
-  [3.3.5](docs/project/prd.md#L82) actually specifies, not by a stored duration.
+  [3.3.5](docs/project/prd.md#L87) actually specifies, not by a stored duration.
 
 ### Minor
 

@@ -6,8 +6,8 @@ _Story: Get a recording transcribed_
 > built as one ticket at the operator's instruction.** The plan cuts them apart; this doc puts them
 > back together, and the cost of that is stated below rather than discovered at review.
 >
-> Sections pulled, Ticket 04: [3.19.4](docs/project/prd.md#L432) (minus the processing column —
-> nothing to show there yet); [3.21.2.4](docs/project/prd.md#L486);
+> Sections pulled, Ticket 04: [3.19.4](docs/project/prd.md#L442) (minus the processing column —
+> nothing to show there yet); [3.21.2.4](docs/project/prd.md#L497);
 > [epic prd § In scope → 7](docs/epics/epic-core-listening/prd.md#L146);
 > [epic prd § Epic flows → B](docs/epics/epic-core-listening/prd.md#L210);
 > [epic architecture § Job ledger (in Postgres, not a broker)](docs/epics/epic-core-listening/architecture.md#L157).
@@ -15,12 +15,12 @@ _Story: Get a recording transcribed_
 > [03-transcription-into-timestamped-segments.md § Out of scope](docs/epics/epic-core-listening/stories/get-a-recording-transcribed/03-transcription-into-timestamped-segments.md#L88)
 > — the line this reverses; [epic architecture § Extension points](docs/epics/epic-core-listening/architecture.md#L323)
 > — *Segment row*; [epic architecture § Key choices](docs/epics/epic-core-listening/architecture.md#L255) — the
-> ASR-adapter row; [4.4](docs/project/prd.md#L539);
-> [project architecture § Data model](docs/project/architecture.md#L171); [§7](docs/project/prd.md#L742).
-> Carried in because this ticket touches them: [3.21.2.3](docs/project/prd.md#L485) and
-> [3.5.8](docs/project/prd.md#L119), which are the failures this screen exists to make legible;
-> [3.19.1](docs/project/prd.md#L429) and [3.19.2](docs/project/prd.md#L430), the panels this one sits
-> beside; [3.5.5](docs/project/prd.md#L116), whose corrections a re-run discards;
+> ASR-adapter row; [4.4](docs/project/prd.md#L555);
+> [project architecture § Data model](docs/project/architecture.md#L171); [§7](docs/project/prd.md#L779).
+> Carried in because this ticket touches them: [3.21.2.3](docs/project/prd.md#L496) and
+> [3.5.8](docs/project/prd.md#L125), which are the failures this screen exists to make legible;
+> [3.19.1](docs/project/prd.md#L439) and [3.19.2](docs/project/prd.md#L440), the panels this one sits
+> beside; [3.5.5](docs/project/prd.md#L122), whose corrections a re-run discards;
 > [implementation plan § Standing constraints](docs/epics/epic-core-listening/implementation-plan.md#L48);
 > [implementation plan § Design references](docs/epics/epic-core-listening/implementation-plan.md#L81) — the
 > admin-screen carve-out; [project architecture § Estimated running costs](docs/project/architecture.md#L343)
@@ -33,8 +33,8 @@ _Story: Get a recording transcribed_
 
 **This is the ticket that makes the story validatable.** Until it lands, "the pipeline works" is a
 claim about rows in a table nobody can see: a failed `transcribe` halts the chain
-([3.21.2.3](docs/project/prd.md#L485)) and a low-confidence transcript fails its job on purpose
-([3.5.8](docs/project/prd.md#L119)), and neither is visible anywhere. [3.19.4](docs/project/prd.md#L432)
+([3.21.2.3](docs/project/prd.md#L496)) and a low-confidence transcript fails its job on purpose
+([3.5.8](docs/project/prd.md#L125)), and neither is visible anywhere. [3.19.4](docs/project/prd.md#L442)
 asks for one query over the ledger, not for log-reading, and
 [epic architecture § Job ledger](docs/epics/epic-core-listening/architecture.md#L157) is explicit that the
 ledger being *queryable pipeline state* is half of why it is in Postgres at all.
@@ -52,7 +52,7 @@ changes; they are kept in separate criteria groups below so the halves can still
 architecture. It was added mid-build at the operator's instruction and Phase 3 was not revisited,
 which is a deliberate exception to
 [implementation plan § What this plan deliberately does not include](docs/epics/epic-core-listening/implementation-plan.md#L510).
-Amending [4.4](docs/project/prd.md#L539) is a Phase 3 edit and is out of scope here; until somebody
+Amending [4.4](docs/project/prd.md#L555) is a Phase 3 edit and is out of scope here; until somebody
 makes it, the next person reading the PRD against the schema finds a column the product never asked
 for.
 
@@ -70,28 +70,28 @@ one query over the job ledger, no log-reading. And a transcript records who was 
 segment, as the provider's anonymous speaker index.
 
 - As an admin I want to see what the pipeline is doing to every recording, so a failure is something
-  I read rather than something I discover ([3.19.4](docs/project/prd.md#L432),
+  I read rather than something I discover ([3.19.4](docs/project/prd.md#L442),
   [epic prd § Epic flows → B](docs/epics/epic-core-listening/prd.md#L210)).
 - As an admin I want to know *why* a step failed, in the same place I see that it failed
-  ([3.21.2.3](docs/project/prd.md#L485)).
+  ([3.21.2.3](docs/project/prd.md#L496)).
 - As an admin I want to re-run one step without re-running the whole pipeline — including running
   `generate_draft` on a transcript that failed the confidence gate but that I have read and judged
-  usable ([3.21.2.4](docs/project/prd.md#L486), [3.5.8](docs/project/prd.md#L119)).
+  usable ([3.21.2.4](docs/project/prd.md#L497), [3.5.8](docs/project/prd.md#L125)).
 - As an operator I want the transcript to carry which speaker the provider heard for each segment, so
-  the data exists before any surface that would read it ([4.4](docs/project/prd.md#L539) as this
+  the data exists before any surface that would read it ([4.4](docs/project/prd.md#L555) as this
   ticket widens it).
 
 ## Out of scope
 
-- **The processing column.** [3.19.4](docs/project/prd.md#L432) names processing, transcription and
-  generation; [§3.4](docs/project/prd.md#L88) is deferred whole, so there are two steps and the screen
+- **The processing column.** [3.19.4](docs/project/prd.md#L442) names processing, transcription and
+  generation; [§3.4](docs/project/prd.md#L94) is deferred whole, so there are two steps and the screen
   shows two. It reads `PIPELINE_STEPS`, so `process_audio` arriving is a column the screen grows on
   its own ([epic architecture § Extension points](docs/epics/epic-core-listening/architecture.md#L323) — *Pipeline
   step chain*).
-- **Pending Reviews** ([3.19.2](docs/project/prd.md#L430)) and the `review_item` table — Story 3. A
+- **Pending Reviews** ([3.19.2](docs/project/prd.md#L440)) and the `review_item` table — Story 3. A
   succeeded `generate_draft` produces nothing to review yet, and this screen says so rather than
   implying otherwise.
-- **Per-role gating of the console** ([3.19.1](docs/project/prd.md#L429)). The Contributor role is
+- **Per-role gating of the console** ([3.19.1](docs/project/prd.md#L439)). The Contributor role is
   deferred, so there is one flat operator surface behind an admin check, exactly as the two existing
   panels are.
 - **Naming a speaker, editing a speaker, or rendering one.** No screen shows the column, no payload
@@ -99,8 +99,8 @@ segment, as the provider's anonymous speaker index.
 - **Back-filling speakers onto transcripts already written.** Re-running `transcribe` replaces a
   transcript wholesale, so an existing recording gains speakers only when somebody re-runs it — and
   doing so discards any corrections Story 5 will let an admin make
-  ([3.5.5](docs/project/prd.md#L116)). No migration writes into existing segment rows.
-- **Amending [4.4](docs/project/prd.md#L539) or adding a feature requirement for speaker
+  ([3.5.5](docs/project/prd.md#L122)). No migration writes into existing segment rows.
+- **Amending [4.4](docs/project/prd.md#L555) or adding a feature requirement for speaker
   attribution.** A Phase 3 edit, named in the preamble, not made here.
 - **Automatic retry, backoff and a dead-letter queue.** A failed job stays failed until a human
   presses the button; the button is the whole of the recovery story, exactly as Ticket 02 settled.
@@ -116,7 +116,7 @@ segment, as the provider's anonymous speaker index.
   report; `running` is the whole of what is known.
 - **Pagination, filtering, sorting controls or search over the pipeline list.** There are five
   recordings.
-- **Replacing the audio on an existing recording** ([3.2.10](docs/project/prd.md#L71)) — the epic PRD
+- **Replacing the audio on an existing recording** ([3.2.10](docs/project/prd.md#L73)) — the epic PRD
   names per-step re-run as what covers failure recovery in the meantime.
 - **Word-level speaker attribution, or a second ASR provider.** A segment is a sentence and it has
   one speaker; the words inside it are still not persisted.
@@ -126,7 +126,7 @@ segment, as the provider's anonymous speaker index.
 - **Confirm the diarised rate on Deepgram's current pricing page** before implementation starts. The
   cost table is built on $0.0043/min monolingual Nova-3 pre-recorded
   ([project architecture § Estimated running costs](docs/project/architecture.md#L343)); if diarisation
-  adds to that, [§7](docs/project/prd.md#L742)'s measured spend and that table both change, and that
+  adds to that, [§7](docs/project/prd.md#L779)'s measured spend and that table both change, and that
   is a scope decision rather than something to absorb here.
 - **A real multi-voice recording** — a genuine teaching with at least one question from the room. The
   likely accuracy failure on this material is over-segmentation of one long teaching voice into
@@ -218,11 +218,11 @@ segment, as the provider's anonymous speaker index.
     recording, invitation and account actions already take.
 - **Re-running a step has no precondition on the steps before it** — verified by a test re-running
   `generate_draft` for a recording whose `transcribe` job failed, and asserting it is enqueued.
-  - This is [3.5.8](docs/project/prd.md#L119)'s escape hatch working as Ticket 03 designed it: the
+  - This is [3.5.8](docs/project/prd.md#L125)'s escape hatch working as Ticket 03 designed it: the
     admin reads a low-confidence transcript, judges it usable, and runs generation directly.
 - **Re-running a step re-runs what follows it, on success** — verified by an integration test running
   the real loop after a `transcribe` re-run and asserting `generate_draft` is enqueued behind it.
-  - The chain rule Ticket 02 built, unchanged. [3.21.2.4](docs/project/prd.md#L486)'s "without
+  - The chain rule Ticket 02 built, unchanged. [3.21.2.4](docs/project/prd.md#L497)'s "without
     re-running the whole pipeline" is satisfied by being able to start anywhere, not by severing the
     chain — a fresh transcript makes the existing draft wrong.
 - **Pressing re-run twice is harmless** — verified by a test issuing two re-runs for the same pair and
@@ -400,7 +400,7 @@ segment, as the provider's anonymous speaker index.
 - **Re-running `transcribe` takes a confirming press that names the recording; `generate_draft`
   does not.** The step that spends the provider again and replaces the transcript gets the second
   press, exactly as ending an account's access does; the harmless one stays a single tap, which is
-  also what keeps [3.5.8](docs/project/prd.md#L119)'s escape hatch one press. Which steps confirm is
+  also what keeps [3.5.8](docs/project/prd.md#L125)'s escape hatch one press. Which steps confirm is
   a `Record<PipelineStep, boolean>` in the panel, so a new step is a compiler error until somebody
   says whether re-running it destroys something.
 
@@ -451,6 +451,6 @@ segment, as the provider's anonymous speaker index.
 - **The `provider_meta` stub key is in `@thp/shared`; the marker stays in the worker.** The worker
   builds `STUB_PROVIDER_META` from the shared key, and a unit test asserts the marker the worker
   writes is the one the shared predicate recognises — so the two cannot drift.
-- **Nothing about [4.4](docs/project/prd.md#L539) was amended.** As the preamble said, that is a
+- **Nothing about [4.4](docs/project/prd.md#L555) was amended.** As the preamble said, that is a
   Phase 3 edit: the next person reading the PRD against the schema still finds a `speaker` column
   the product never asked for.

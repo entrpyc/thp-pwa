@@ -13,23 +13,23 @@ _Story: Run it in production_
 > — the deployment-topology paragraph; [epic architecture § Overview](docs/epics/epic-core-listening/architecture.md#L7);
 > [epic architecture § Primary datastore](docs/epics/epic-core-listening/architecture.md#L177);
 > [01-project-skeleton.md § Assumptions to confirm](docs/epics/epic-core-listening/stories/get-a-person-in/01-project-skeleton.md#L99)
-> — item 1; [§6](docs/project/prd.md#L724) Security.
+> — item 1; [§6](docs/project/prd.md#L758) Security.
 > Ticket 02: [project architecture § Estimated running costs](docs/project/architecture.md#L343) — where worker
 > concurrency 1 comes from; [epic architecture § Worker process](docs/epics/epic-core-listening/architecture.md#L139);
 > [epic architecture § Next.js application — API half](docs/epics/epic-core-listening/architecture.md#L123);
 > [01-project-skeleton.md § Assumptions to confirm](docs/epics/epic-core-listening/stories/get-a-person-in/01-project-skeleton.md#L99)
-> — item 2, the API origin; [5.2.2](docs/project/prd.md#L706).
+> — item 2, the API origin; [5.2.2](docs/project/prd.md#L740).
 > Ticket 03: [epic architecture § Primary datastore](docs/epics/epic-core-listening/architecture.md#L177);
 > [project architecture § Key technology choices](docs/project/architecture.md#L209) — the single-datastore row;
 > [project architecture § Estimated running costs](docs/project/architecture.md#L343) — the *Database backups* row;
-> [§6](docs/project/prd.md#L724) — *Storage*, "nothing expires".
+> [§6](docs/project/prd.md#L758) — *Storage*, "nothing expires".
 >
 > Carried in because this story touches them: [epic prd § In scope → 8](docs/epics/epic-core-listening/prd.md#L161),
-> the platform baseline this story is the whole of; [3.4.9](docs/project/prd.md#L102) and
+> the platform baseline this story is the whole of; [3.4.9](docs/project/prd.md#L108) and
 > [epic architecture § Media store](docs/epics/epic-core-listening/architecture.md#L164), the never-deleted original
 > that decides the backup bucket is a *second* bucket;
 > [epic architecture § Job ledger](docs/epics/epic-core-listening/architecture.md#L157) and
-> [3.21.2.4](docs/project/prd.md#L486), the at-least-once contract that makes killing the worker a safe drill;
+> [3.21.2.4](docs/project/prd.md#L497), the at-least-once contract that makes killing the worker a safe drill;
 > [epic architecture § Deliberately deferred](docs/epics/epic-core-listening/architecture.md#L341);
 > [implementation plan § Standing constraints](docs/epics/epic-core-listening/implementation-plan.md#L48);
 > [implementation plan § Summary](docs/epics/epic-core-listening/implementation-plan.md#L553) — the *Recovery is a
@@ -128,7 +128,7 @@ file stays exactly what it is, the development database and MinIO. The applicati
 either.
 
 **Backup scope.** No backup of the media bucket — the original upload is the one thing this product never
-deletes ([3.4.9](docs/project/prd.md#L102),
+deletes ([3.4.9](docs/project/prd.md#L108),
 [epic architecture § Media store](docs/epics/epic-core-listening/architecture.md#L164)), object storage is already
 durable, and a copy of 95 GB would cost more than every other line in the table combined. No second backup
 destination outside R2. No rehearsed *production* restore procedure beyond the scratch drill — restoring over
@@ -269,7 +269,7 @@ This group ends with **the platform answering and the application not yet deploy
     which is why it is asserted against files and not against a running process.
   - **If anything in the client turns out to assume same-host, fixing it is in scope here.** This is the
     criterion the absolute-origin rule has been held for since the first ticket of the epic
-    ([5.2.2](docs/project/prd.md#L706)), and fixing it here rather than in the packaging epic is the cheap
+    ([5.2.2](docs/project/prd.md#L740)), and fixing it here rather than in the packaging epic is the cheap
     version.
 
 - **The diagnostic routes are off in production** — verified by `npm run verify:production` check

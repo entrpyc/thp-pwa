@@ -298,7 +298,7 @@ needed — the prebuilt binary installed without a toolchain.
 2. **The integration harness picks the primary server's port before the build.**
    `NEXT_PUBLIC_API_ORIGIN` is inlined into the client bundle at build time and the browser suite
    drives that bundle for real; the client has no same-host fallback by design
-   ([5.2.2](docs/project/prd.md#L706)), so the origin has to be right at build time rather than at start.
+   ([5.2.2](docs/project/prd.md#L740)), so the origin has to be right at build time rather than at start.
 3. **`Secure` is set everywhere except `next dev`**, not "in production". The suites run the
    production build over `http://127.0.0.1`, which browsers treat as a secure context, so the flag
    is under test rather than switched off for testing.

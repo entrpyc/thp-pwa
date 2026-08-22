@@ -10,26 +10,26 @@ _Story: Review and publish a teaching_
 > groups so the parts can still be read apart.
 >
 > Sections pulled, Ticket 01: [epic prd § In scope → 3](docs/epics/epic-core-listening/prd.md#L77);
-> [3.6.1](docs/project/prd.md#L127); [3.6.2](docs/project/prd.md#L128);
-> [4.17.1](docs/project/prd.md#L681) (**description only** — topics, tags and scripture references deferred);
-> [4.17.5](docs/project/prd.md#L685); [3.21.2.2](docs/project/prd.md#L484); [4.5](docs/project/prd.md#L549);
+> [3.6.1](docs/project/prd.md#L135); [3.6.2](docs/project/prd.md#L136);
+> [4.17.1](docs/project/prd.md#L699) (**description only** — topics, tags and scripture references deferred);
+> [4.17.5](docs/project/prd.md#L703); [3.21.2.2](docs/project/prd.md#L495); [4.5](docs/project/prd.md#L567);
 > [epic architecture § Data model (epic)](docs/epics/epic-core-listening/architecture.md#L193) — *The review gate*;
 > [epic architecture § Worker process](docs/epics/epic-core-listening/architecture.md#L139);
 > [epic architecture § Extension points](docs/epics/epic-core-listening/architecture.md#L323) — *Review-gate `kind`*
 > and *Domain events*.
-> Ticket 02: [3.6.4](docs/project/prd.md#L130); [3.6.5](docs/project/prd.md#L131); [3.6.6](docs/project/prd.md#L132);
-> [3.6.7](docs/project/prd.md#L133); [3.6.10](docs/project/prd.md#L136); [4.17.2](docs/project/prd.md#L682);
-> [3.19.2](docs/project/prd.md#L430); [3.19.3](docs/project/prd.md#L431).
-> Ticket 03: [3.6.9](docs/project/prd.md#L135).
+> Ticket 02: [3.6.4](docs/project/prd.md#L138); [3.6.5](docs/project/prd.md#L139); [3.6.6](docs/project/prd.md#L140);
+> [3.6.7](docs/project/prd.md#L141); [3.6.10](docs/project/prd.md#L144); [4.17.2](docs/project/prd.md#L700);
+> [3.19.2](docs/project/prd.md#L440); [3.19.3](docs/project/prd.md#L441).
+> Ticket 03: [3.6.9](docs/project/prd.md#L143).
 > Ticket 04: [epic prd § In scope → 4](docs/epics/epic-core-listening/prd.md#L100);
-> [3.2.2](docs/project/prd.md#L63); [3.2.11](docs/project/prd.md#L72); [3.6.11](docs/project/prd.md#L137);
-> [3.6.12](docs/project/prd.md#L138); [4.17.3](docs/project/prd.md#L683);
+> [3.2.2](docs/project/prd.md#L65); [3.2.11](docs/project/prd.md#L74); [3.6.11](docs/project/prd.md#L145);
+> [3.6.12](docs/project/prd.md#L146); [4.17.3](docs/project/prd.md#L701);
 > [epic architecture § Data model (epic)](docs/epics/epic-core-listening/architecture.md#L193) — *The spine*.
 >
-> Carried in because this story touches them: [3.6.8](docs/project/prd.md#L134), the editor approve-with-edits
-> opens; [3.5.8](docs/project/prd.md#L119) and [3.21.2.3](docs/project/prd.md#L485), the reason a draft can be
-> absent; [3.21.2.4](docs/project/prd.md#L486), the re-run this story's regeneration sits beside;
-> [3.19.1](docs/project/prd.md#L429), the console these panels join; [3.1.2](docs/project/prd.md#L44) and
+> Carried in because this story touches them: [3.6.8](docs/project/prd.md#L142), the editor approve-with-edits
+> opens; [3.5.8](docs/project/prd.md#L125) and [3.21.2.3](docs/project/prd.md#L496), the reason a draft can be
+> absent; [3.21.2.4](docs/project/prd.md#L497), the re-run this story's regeneration sits beside;
+> [3.19.1](docs/project/prd.md#L439), the console these panels join; [3.1.2](docs/project/prd.md#L44) and
 > [3.1.5](docs/project/prd.md#L47), the two rules every route here obeys;
 > [epic architecture § Key choices](docs/epics/epic-core-listening/architecture.md#L255) — the generate-adapter row
 > and the one-call row;
@@ -85,7 +85,7 @@ recordings, against the $2 LLM row in
 where this epic runs one. The table is now conservative rather than wrong, so it needs no edit; regeneration
 is cheap enough that nothing in this story rations it.
 
-**"Per-field" has one field per kind in this epic.** [4.17.2](docs/project/prd.md#L682) wants accept/edit/discard
+**"Per-field" has one field per kind in this epic.** [4.17.2](docs/project/prd.md#L700) wants accept/edit/discard
 per field, and both kinds here carry exactly one — `summary`, `description`. The form is built generically
 over `fields` and `provenance` anyway, because that generality is what kinds 3–6 inherit
 ([epic architecture § Extension points](docs/epics/epic-core-listening/architecture.md#L323) — *Review-gate `kind`*).
@@ -100,15 +100,15 @@ admin reads them in a queue, accepts, edits, regenerates or discards each, and t
 recording — which is the only thing that makes anything visible to a member.
 
 - As an admin I want the machine to draft a summary and a description as soon as a teaching is transcribed,
-  so reviewing is editing rather than writing ([3.6.1](docs/project/prd.md#L127),
-  [4.17.1](docs/project/prd.md#L681)).
+  so reviewing is editing rather than writing ([3.6.1](docs/project/prd.md#L135),
+  [4.17.1](docs/project/prd.md#L699)).
 - As an admin I want one queue holding everything waiting on me, so finding work is not opening recordings
-  one at a time ([3.19.2](docs/project/prd.md#L430)).
+  one at a time ([3.19.2](docs/project/prd.md#L440)).
 - As an admin I want to accept, edit, regenerate or discard each draft, and to steer a regeneration with a
   sentence when the first pass missed the point
-  ([3.6.6](docs/project/prd.md#L132)–[3.6.10](docs/project/prd.md#L136)).
+  ([3.6.6](docs/project/prd.md#L140)–[3.6.10](docs/project/prd.md#L144)).
 - As an admin I want to decide when a teaching goes live, and to take it back down without losing anything
-  ([3.2.2](docs/project/prd.md#L63), [3.2.11](docs/project/prd.md#L72), [4.17.3](docs/project/prd.md#L683)).
+  ([3.2.2](docs/project/prd.md#L65), [3.2.11](docs/project/prd.md#L74), [4.17.3](docs/project/prd.md#L701)).
 - As a member I want to be refused everything that has not been published, by the API and not merely by the
   interface ([3.1.2](docs/project/prd.md#L44), [3.1.5](docs/project/prd.md#L47)).
 
@@ -118,10 +118,10 @@ recording — which is the only thing that makes anything visible to a member.
   scripts each add a `kind` value and a generation step in a later epic; the queue query does not change when
   they do ([epic architecture § Extension points](docs/epics/epic-core-listening/architecture.md#L323)). Nothing
   here anticipates them beyond the column that holds them.
-- **The in-app "ready for review" notification** ([3.6.3](docs/project/prd.md#L129)) and the "notified when the
-  new draft is ready" half of [3.6.9](docs/project/prd.md#L135). Both deferred with
-  [§3.17](docs/project/prd.md#L361); the queue is how an admin finds work in this epic. Domain events are
-  emitted and logged so [§3.17](docs/project/prd.md#L361) has something to subscribe to — **nothing subscribes,
+- **The in-app "ready for review" notification** ([3.6.3](docs/project/prd.md#L137)) and the "notified when the
+  new draft is ready" half of [3.6.9](docs/project/prd.md#L143). Both deferred with
+  [§3.17](docs/project/prd.md#L371); the queue is how an admin finds work in this epic. Domain events are
+  emitted and logged so [§3.17](docs/project/prd.md#L371) has something to subscribe to — **nothing subscribes,
   and no notification row exists.**
 - **Every member-facing screen.** The library, the recording page, the player and the transcript are Story 4
   and Story 5. This story ships the member-visible *read* and no interface over it — validation is that the
@@ -130,23 +130,23 @@ recording — which is the only thing that makes anything visible to a member.
   recording has no series and there is no column for one.
 - **Prompt caching.** The cost table's "cached once per recording and read by the remaining four" describes a
   five-pass future; this epic makes one call per recording, where a cache write costs 1.25× for no read.
-- **Bulk review** ([3.21.3.4](docs/project/prd.md#L493)) and back-catalogue items in the queue. Reviewing is one
+- **Bulk review** ([3.21.3.4](docs/project/prd.md#L507)) and back-catalogue items in the queue. Reviewing is one
   item at a time.
-- **Rich text.** [3.6.8](docs/project/prd.md#L134) says plain text with line breaks is sufficient. No editor
+- **Rich text.** [3.6.8](docs/project/prd.md#L142) says plain text with line breaks is sufficient. No editor
   toolbar, no markdown rendering, no formatting controls.
 - **Summary history, versioning, or diffing an edit against the draft.** The closed `review_item` holds what
   the machine said and the `summary` row holds what the admin approved; nothing computes the difference
   between them.
-- **A per-recording admin page.** [3.6.4](docs/project/prd.md#L130)'s "from the recording page" is served by a
+- **A per-recording admin page.** [3.6.4](docs/project/prd.md#L138)'s "from the recording page" is served by a
   control on the existing `/admin/recordings` row, because the recording page itself is Story 4 Ticket 01.
-- **Editing the description after publish.** [3.6.11](docs/project/prd.md#L137) is about the summary, and only
+- **Editing the description after publish.** [3.6.11](docs/project/prd.md#L145) is about the summary, and only
   the summary gets a post-publish edit path here.
 - **Automatic retry or backoff on a failed generation.** A failed job stays failed until a human presses
   re-run, exactly as Story 2 Ticket 02 settled.
 - **Streaming the generation anywhere.** The handler blocks on one request and writes rows; no screen watches
   a draft being written.
 - **Any quality score, confidence or gate on the generated text.** The confidence gate belongs to
-  transcription ([3.5.8](docs/project/prd.md#L119)); a draft's quality is a judgement the admin makes by reading
+  transcription ([3.5.8](docs/project/prd.md#L125)); a draft's quality is a judgement the admin makes by reading
   it.
 - **Pagination, filtering, sorting or search over the queue.** There are five recordings and at most ten open
   items.
@@ -187,9 +187,9 @@ recording — which is the only thing that makes anything visible to a member.
 - `summary` exists with exactly `(id, recording_id, content, published_at, created_at, updated_at)`, unique
   on `recording_id` — verified by the same migration test.
   - `published_at` nullable, not a status column: the same shape as `recording.published_at` and
-    `user.deactivated_at`, so [3.6.12](docs/project/prd.md#L138)'s return-to-draft is one write of null and
+    `user.deactivated_at`, so [3.6.12](docs/project/prd.md#L146)'s return-to-draft is one write of null and
     "published" is a fact about the column rather than a second thing to keep in step.
-  - Unique on `recording_id` because [4.5](docs/project/prd.md#L549) is one summary per recording, and the
+  - Unique on `recording_id` because [4.5](docs/project/prd.md#L567) is one summary per recording, and the
     database is what says so.
 - Transcription completing chains into `generate_draft`, and the step is no longer a stub — verified by an
   integration test running the real loop and asserting the job's `provider_meta` carries no stub marker and
@@ -206,17 +206,17 @@ recording — which is the only thing that makes anything visible to a member.
 - Two rows are written, one `summary` and one `recording_metadata` carrying the suggested description —
   verified by an integration test asserting the kinds and the `fields` contents.
 - Each row records the model, the model version and the prompt version that produced it — verified by a test
-  asserting all three are present and non-empty on both rows ([4.17.5](docs/project/prd.md#L685)).
+  asserting all three are present and non-empty on both rows ([4.17.5](docs/project/prd.md#L703)).
   - Prompt version is a named constant in the prompt module, bumped by hand when the prompt text changes; the
     value is meaningless as anything but a label, and deriving it would make it lie.
 - Per-field provenance records that each field was AI-suggested and that no admin has changed it — verified
   by a test asserting the provenance shape for both kinds.
 - The job's `provider_meta` carries model, version, token counts and cost — verified by a test asserting the
-  fields, in the shape the `transcribe` handler's already uses ([§7](docs/project/prd.md#L742) wants spend
+  fields, in the shape the `transcribe` handler's already uses ([§7](docs/project/prd.md#L779) wants spend
   measured rather than estimated).
 - **Nothing is member-visible.** No `summary` row is created, `recording.description` is untouched, and
   `published_at` stays null — verified by a test asserting all three after a successful generation
-  ([3.21.2.2](docs/project/prd.md#L484), [3.6.2](docs/project/prd.md#L128)).
+  ([3.21.2.2](docs/project/prd.md#L495), [3.6.2](docs/project/prd.md#L136)).
 - **Running the handler twice leaves one draft per kind** — verified by an integration test invoking it twice
   on the same recording and asserting two rows, not four.
   - Dispatch is at-least-once, so the write replaces open drafts for the kinds it generates rather than
@@ -265,7 +265,7 @@ recording — which is the only thing that makes anything visible to a member.
 - The queue lists items of both kinds together, newest recording first — verified by a Playwright test
   seeding both kinds and asserting the rendered rows and their order.
 - The review form shows the draft in full alongside the recording title, date and word count — verified by a
-  Playwright test asserting all four ([3.6.5](docs/project/prd.md#L131)).
+  Playwright test asserting all four ([3.6.5](docs/project/prd.md#L139)).
   - Word count is the transcript's, computed from the segment rows at read time. Nothing stores it; at ~900
     segments the sum is cheaper than a column somebody has to keep in step.
 - **Approve writes through to the canonical entity and closes the item** — verified by integration tests per
@@ -273,18 +273,18 @@ recording — which is the only thing that makes anything visible to a member.
   `recording.description`, and both leave the item `published` with `reviewed_by` and `reviewed_at` stamped.
 - **Edit then approve** writes the admin's text, not the machine's, and provenance records that an admin
   changed the field — verified by an integration test asserting the stored content and the provenance flag
-  ([3.6.8](docs/project/prd.md#L134), [4.17.5](docs/project/prd.md#L685)).
+  ([3.6.8](docs/project/prd.md#L142), [4.17.5](docs/project/prd.md#L703)).
   - Plain text with line breaks; the editor is a textarea.
 - **Discard closes the item with no replacement, and the recording remains publishable** — verified by an
   integration test asserting the item reads `discarded`, no `summary` row exists, `recording.description` is
-  untouched, and a publish immediately after succeeds ([3.6.10](docs/project/prd.md#L136)).
-  - The draft text stays in the closed row. What [3.6.10](docs/project/prd.md#L136) calls deletion is satisfied
+  untouched, and a publish immediately after succeeds ([3.6.10](docs/project/prd.md#L144)).
+  - The draft text stays in the closed row. What [3.6.10](docs/project/prd.md#L144) calls deletion is satisfied
     in the sense that matters — no summary exists and nothing is member-visible — while the row remains the
     record of what the machine proposed and who rejected it.
 - Acting on an item that is already closed is refused rather than silently re-applied — verified by API tests
   asserting the error code for approve, edit-approve and discard against a `published` and a `discarded` item.
 - The review form is reachable from the queue **and** from the `/admin/recordings` row — verified by a
-  Playwright test opening it from both and asserting the same form ([3.6.4](docs/project/prd.md#L130)).
+  Playwright test opening it from both and asserting the same form ([3.6.4](docs/project/prd.md#L138)).
 - Every gate transition is logged with actor, action, target and timestamp — verified by a test reading the
   log sink in the shape the existing transition tests use
   ([implementation plan § Standing constraints](docs/epics/epic-core-listening/implementation-plan.md#L48)).
@@ -299,7 +299,7 @@ recording — which is the only thing that makes anything visible to a member.
 - `job` carries a nullable `payload` column and no other new column — verified by the existing migration test
   asserting the exact column set.
   - **This reverses Story 2 Ticket 02's deliberate "no payload".** That decision rested on "a step's input is
-    the recording it names", which stops being true the moment [3.6.9](docs/project/prd.md#L135) steers one kind
+    the recording it names", which stops being true the moment [3.6.9](docs/project/prd.md#L143) steers one kind
     with a sentence. `jsonb`, null on every chained job, so the chain is unchanged.
 - An admin regenerates a draft, optionally supplying a short prompt — verified by an API integration test
   asserting the current item closes as `discarded` and a `generate_draft` job is enqueued carrying the kind
@@ -333,7 +333,7 @@ recording — which is the only thing that makes anything visible to a member.
 ### Ticket 04 — Publish and unpublish
 
 - An admin publishes a recording, setting `published_at`; unpublish clears it — verified by API integration
-  tests asserting the column after each ([3.2.2](docs/project/prd.md#L63), [3.2.11](docs/project/prd.md#L72)).
+  tests asserting the column after each ([3.2.2](docs/project/prd.md#L65), [3.2.11](docs/project/prd.md#L74)).
   - `POST /api/v1/recordings/{id}/publish` and `.../unpublish`. Publishing an already-published recording is
     a no-op answering with the existing timestamp, so pressing twice is harmless without the API inventing a
     conflict.
@@ -358,14 +358,14 @@ recording — which is the only thing that makes anything visible to a member.
   combinations: published recording with a published summary shows it; published recording with a draft,
   discarded or absent summary shows none; unpublished recording shows nothing at all.
 - An admin can edit a summary after publish — verified by an API integration test asserting the new content
-  and that `published_at` is unchanged ([3.6.11](docs/project/prd.md#L137)).
+  and that `published_at` is unchanged ([3.6.11](docs/project/prd.md#L145)).
 - An admin can return a published summary to draft — verified by an API integration test asserting
   `published_at` is null, the content is retained, and the member read no longer carries it
-  ([3.6.12](docs/project/prd.md#L138)).
+  ([3.6.12](docs/project/prd.md#L146)).
 - **Publishing has no precondition beyond the recording existing** — verified by integration tests publishing
   a recording with open draft items, one with a discarded summary, and one with no transcript at all, and
-  asserting each succeeds ([3.6.10](docs/project/prd.md#L136)).
-  - Nothing publishes automatically ([4.17.3](docs/project/prd.md#L683)); nothing blocks an admin who has
+  asserting each succeeds ([3.6.10](docs/project/prd.md#L144)).
+  - Nothing publishes automatically ([4.17.3](docs/project/prd.md#L701)); nothing blocks an admin who has
     decided either.
 - A publish or unpublish for an unknown recording answers `not_found` — verified by API tests asserting the
   code.
@@ -434,7 +434,7 @@ recording — which is the only thing that makes anything visible to a member.
   rather than answered with the unfinished job, which the partial unique index would otherwise hand back for
   the wrong kind.
 - **Discard closes the item as `discarded` and retains the draft text** in the closed row. No summary exists
-  and nothing is member-visible, which is what [3.6.10](docs/project/prd.md#L136) is protecting; the row stays
+  and nothing is member-visible, which is what [3.6.10](docs/project/prd.md#L144) is protecting; the row stays
   as the record of what was rejected.
 - **`GET /api/v1/recordings` widens to both roles** and is where the one visibility condition lives, guarded
   so no second implementation of it can be written. A member sees published rows without admin-only fields.

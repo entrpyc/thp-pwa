@@ -3,11 +3,11 @@ _Story: Get a recording transcribed_
 
 > Phase 6 artefact for [implementation plan § Ticket 01](docs/epics/epic-core-listening/implementation-plan.md#L123).
 > Sections pulled: [epic prd § In scope → 2](docs/epics/epic-core-listening/prd.md#L52);
-> [3.2.1](docs/project/prd.md#L62) — Admin-only in this epic;
+> [3.2.1](docs/project/prd.md#L64) — Admin-only in this epic;
 > [epic architecture § Media store](docs/epics/epic-core-listening/architecture.md#L164);
 > [epic architecture § Data model (epic)](docs/epics/epic-core-listening/architecture.md#L193) — *The spine*;
 > [epic architecture § Key choices](docs/epics/epic-core-listening/architecture.md#L255) — "Two inputs this epic needs
-> and nothing defines", item 2; [§6](docs/project/prd.md#L724) Security; [4.2](docs/project/prd.md#L513);
+> and nothing defines", item 2; [§6](docs/project/prd.md#L758) Security; [4.2](docs/project/prd.md#L529);
 > [project architecture § Key technology choices](docs/project/architecture.md#L209) — the object-storage row.
 > Carried in because this ticket touches them:
 > [epic architecture § Extension points](docs/epics/epic-core-listening/architecture.md#L323) (the allowlist, the second
@@ -17,7 +17,7 @@ _Story: Get a recording transcribed_
 **This is the first ticket that puts infrastructure outside the application under the product.** Until
 now every dependency was Postgres or SMTP. The object store is the third, and two of its properties
 are settled here and expensive to revisit later: **the bucket is never publicly readable**, and
-**nothing is ever deleted from it** ([3.4.9](docs/project/prd.md#L102)). Both are invisible from inside the
+**nothing is ever deleted from it** ([3.4.9](docs/project/prd.md#L108)). Both are invisible from inside the
 application — no route reads them, no type encodes them — which is why the acceptance criteria below
 drive them against a real S3-compatible store rather than asserting them in prose.
 
@@ -45,7 +45,7 @@ downstream is triggered.
 ## Out of scope
 
 - **The job ledger, the queue port and the worker** — Ticket 02. Finalising an upload enqueues
-  nothing; [3.5.1](docs/project/prd.md#L112)'s "transcription triggers on upload completing" is wired in Ticket 03,
+  nothing; [3.5.1](docs/project/prd.md#L118)'s "transcription triggers on upload completing" is wired in Ticket 03,
   and this ticket deliberately leaves that edge unconnected.
 - **Transcription, transcripts, segments** — Ticket 03.
 - **Playback of any kind** — no signed `GET` is minted, no range request is served, no `<audio>`
@@ -53,13 +53,13 @@ downstream is triggered.
 - **`description` generation, `summary`, `review_item`** — Story 3. The column ships nullable and
   nothing in this ticket writes it.
 - **Publish and unpublish** — Story 3 Ticket 04. `published_at` ships as a nullable column and
-  nothing writes it ([3.2.2](docs/project/prd.md#L63), [3.2.11](docs/project/prd.md#L72)).
+  nothing writes it ([3.2.2](docs/project/prd.md#L65), [3.2.11](docs/project/prd.md#L74)).
 - **Series** — Story 6. No `series` table and no `series_id` column; a recording with no series is the
-  only kind there is ([3.3.9](docs/project/prd.md#L86)).
-- **Duration, and any inspection of the media itself** — [§3.4](docs/project/prd.md#L88) is deferred whole
+  only kind there is ([3.3.9](docs/project/prd.md#L91)).
+- **Duration, and any inspection of the media itself** — [§3.4](docs/project/prd.md#L94) is deferred whole
   ([epic architecture § Deliberately deferred](docs/epics/epic-core-listening/architecture.md#L341)), and there is no
   FFmpeg, no probe and no processed rendition.
-- **Replacing the audio on an existing recording** ([3.2.10](docs/project/prd.md#L71)), and editing or deleting
+- **Replacing the audio on an existing recording** ([3.2.10](docs/project/prd.md#L73)), and editing or deleting
   a recording after it is created.
 - **Any delete path against the bucket** — no orphan sweeper, no lifecycle rule, no cleanup job.
 - **Resumable or multipart upload**, background upload, and resuming a part-finished upload across a
@@ -115,7 +115,7 @@ downstream is triggered.
   startup failure naming the variable — verified by a unit test over the reader, matching the mail
   env tests.
 
-### The bucket's access posture — [§6](docs/project/prd.md#L724) Security
+### The bucket's access posture — [§6](docs/project/prd.md#L758) Security
 
 - An object in the bucket is **not readable without a signature** — verified by an integration test
   that uploads an object and then fetches its unsigned URL, asserting the store refuses.
@@ -123,7 +123,7 @@ downstream is triggered.
   integration test issuing the `OPTIONS` preflight and asserting the response permits the method and
   the `content-type` header.
 - Nothing is deleted from the store — verified by a guard assertion that no delete operation exists on
-  the port's interface, so "the original is never deleted" ([3.4.9](docs/project/prd.md#L102)) is a property of
+  the port's interface, so "the original is never deleted" ([3.4.9](docs/project/prd.md#L108)) is a property of
   the type rather than of discipline.
 
 ### Requesting the grant — `POST /api/v1/recordings/uploads`
@@ -210,7 +210,7 @@ downstream is triggered.
   `docker-compose.yml`, so presigning, CORS and the unsigned-`GET` refusal are exercised for real
   rather than faked.
 - No `duration` column and no inspection of the media in this ticket; duration arrives with
-  transcription or with [§3.4](docs/project/prd.md#L88).
+  transcription or with [§3.4](docs/project/prd.md#L94).
 - Finalisation `HEAD`s the object and re-checks size and content type against the store's metadata,
   which is what "re-checked server-side" means when the bytes never pass through the application.
 - An object whose finalisation never arrives is orphaned and left in place; there is no sweeper and no
@@ -225,7 +225,7 @@ downstream is triggered.
 
 ### Minor
 
-- `recorded_at` is a SQL `date`, not a timestamp — [4.2](docs/project/prd.md#L513) calls it the date recorded
+- `recorded_at` is a SQL `date`, not a timestamp — [4.2](docs/project/prd.md#L529) calls it the date recorded
   and it is the primary sort key.
 - The key shape is `originals/<uuid>.<ext>`, with the uuid unrelated to the `recording.id`, so a
   refused finalisation retried later does not have to reuse anything.
@@ -335,7 +335,7 @@ downstream is triggered.
   preflight rather than by reading a bucket policy back. A deployment applies its rule on the bucket
   by hand — the ticket's user prerequisite.
 - **The store refuses every unsigned request with `403`, whether the object exists or not.** That is
-  the property [§6](docs/project/prd.md#L724) Security wanted, and it also means "was the refused
+  the property [§6](docs/project/prd.md#L758) Security wanted, and it also means "was the refused
   object left in place" cannot be asked without a signature — the test asks the port's own `head`.
 - Next.js keeps an empty `role="alert"` route announcer in every document, so `getByRole('alert')`
   is never zero. Every alert assertion in the browser tests is scoped to the upload region; an
@@ -348,4 +348,4 @@ downstream is triggered.
   processed rendition is a second key minted the same way and a preference at read time. Nothing in
   the port anticipates it today.
 - Ticket 02's queue port has nothing to attach to yet on purpose — `finaliseUpload` writes the row
-  and returns. That is the edge [3.5.1](docs/project/prd.md#L112) needs and Ticket 03 wires.
+  and returns. That is the edge [3.5.1](docs/project/prd.md#L118) needs and Ticket 03 wires.
