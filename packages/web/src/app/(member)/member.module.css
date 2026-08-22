@@ -1,0 +1,176 @@
+/*
+ * The member chrome — `top-navigation/default.png` and `top-navigation/menu-opened.png`.
+ *
+ * Everything here composes from tokens.css, which is the style guide's Quick token block; nothing
+ * declares a colour, a radius or a spacing value of its own, and tools/style-tokens.ts fails the
+ * build if it does.
+ *
+ * Two extrapolations the references do not state and this file decides:
+ *
+ * 1. **Circular controls take `--radius-pill`, not `50%`.** The guide lists a `--radius-circle`
+ *    token in its Radius table but not in its Quick token block, and the token layer *is* that
+ *    block. `999px` on a square box is a circle, so nothing is lost and the guard stays honest.
+ * 2. **The bar is the same at every width.** The reference is drawn at phone width and the layout
+ *    is already a row that fits one: home icon, crumbs, menu. What changes wider is only the
+ *    shell's maximum width, so a desktop reads a column of cards rather than a stretched one.
+ *
+ * Controls are `--space-8 + --space-3` tall at minimum — a thumb on a phone — matching the console.
+ */
+
+.screen {
+  min-height: 100vh;
+  background: var(--color-bg);
+  /* Bottom padding leaves the docked transport somewhere to sit without covering the last card. */
+  padding: var(--space-4) var(--space-4) calc(var(--space-8) * 4);
+}
+
+.shell {
+  width: 100%;
+  max-width: 48rem;
+  margin: 0 auto;
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-4);
+}
+
+.content {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-4);
+  min-width: 0;
+}
+
+/* ------------------------------------------------------------------ the breadcrumb bar and menu */
+
+.navRegion {
+  position: relative;
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-2);
+}
+
+/* One dark rounded bar, a step below the page, exactly as the reference draws it. */
+.navBar {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--space-3);
+  background: var(--color-bg-deep);
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-lg);
+  padding: var(--space-2) var(--space-3);
+  min-width: 0;
+}
+
+.crumbs {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: flex;
+  align-items: center;
+  gap: var(--space-2);
+  min-width: 0;
+  overflow: hidden;
+}
+
+.crumb {
+  display: flex;
+  align-items: center;
+  gap: var(--space-2);
+  min-width: 0;
+}
+
+.homeLink {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  min-width: calc(var(--space-8) + var(--space-3));
+  min-height: calc(var(--space-8) + var(--space-3));
+  border-radius: var(--radius-pill);
+  color: var(--color-text-muted);
+  text-decoration: none;
+}
+
+.homeLink:hover {
+  color: var(--color-text);
+}
+
+.separator {
+  color: var(--color-text-dim);
+}
+
+/* The current item, in the accent — the guide's breadcrumb rule, verbatim. */
+.crumbCurrent {
+  color: var(--color-primary-strong);
+  font-size: var(--fs-body);
+  font-weight: 500;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+/*
+ * Boxed on the right, as the reference has it. There is deliberately no search control beside it:
+ * §3.10 is deferred, and a magnifier that opens nothing is a promise this epic cannot keep.
+ */
+.menuButton {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  min-width: calc(var(--space-8) + var(--space-3));
+  min-height: calc(var(--space-8) + var(--space-3));
+  background: var(--color-surface-raised);
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-md);
+  color: var(--color-primary-icon);
+  cursor: pointer;
+}
+
+.menuButton:hover {
+  border-color: var(--color-border-strong);
+}
+
+/*
+ * `top-navigation/menu-opened.png`: a panel below the bar, rows divided by a hairline rather than
+ * by gaps. Four entries at most — Dashboard, All recordings, Admin console, Sign out — because
+ * *All series* and *All chapters* have no destination in this epic and are dropped rather than
+ * rendered dead.
+ */
+.menuPanel {
+  background: var(--color-surface);
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-lg);
+  overflow: hidden;
+}
+
+.menuList {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+}
+
+.menuLink {
+  display: flex;
+  align-items: center;
+  width: 100%;
+  min-height: calc(var(--space-8) + var(--space-3));
+  padding: var(--space-3) var(--space-5);
+  background: transparent;
+  border: none;
+  border-bottom: 1px solid var(--color-border);
+  color: var(--color-text);
+  font-family: inherit;
+  font-size: var(--fs-body);
+  text-align: left;
+  text-decoration: none;
+  cursor: pointer;
+}
+
+.menuLink:hover {
+  background: var(--color-surface-raised);
+}
+
+.menuSignOut .menuLink {
+  border-bottom: none;
+  color: var(--color-text-muted);
+}

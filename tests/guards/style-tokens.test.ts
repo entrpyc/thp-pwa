@@ -57,7 +57,14 @@ describe('no component declares what a token already covers', () => {
     expect(sheets).toContain('app/tokens.css');
     expect(sheets).toContain('app/globals.css');
     expect(sheets).toContain('app/sign-in/sign-in.module.css');
-    expect(sheets).toContain('app/home.module.css');
+    // `app/home.module.css` was here until Story 4 Ticket 01 retired the placeholder landing it
+    // styled. What replaced it is the member surface below — three stylesheets rather than one,
+    // and the ones that matter most for this check, because they carry every colour and radius the
+    // design references show.
+    expect(sheets).toContain('app/sign-out.module.css');
+    expect(sheets).toContain('app/(member)/member.module.css');
+    expect(sheets).toContain('app/(member)/transport.module.css');
+    expect(sheets).toContain('app/(member)/screens.module.css');
     expect(sheets).toContain('app/accept-invitation/accept-invitation.module.css');
     expect(sheets).toContain('app/forgot-password/forgot-password.module.css');
     expect(sheets).toContain('app/reset-password/reset-password.module.css');

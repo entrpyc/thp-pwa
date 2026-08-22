@@ -1,0 +1,331 @@
+/*
+ * The three member screens — the landing (`pages/dashboard.png`), the library
+ * (`pages/series-listing.png`, artwork dropped) and the recording page (`pages/recording.png`,
+ * hero artwork replaced by a flat band).
+ *
+ * One stylesheet for the three because they are one surface: the same card, the same list row and
+ * the same page head, and splitting them into three files is how the three drift apart. Everything
+ * composes from tokens.css.
+ *
+ * The extrapolations, each read off a rule in the guide rather than invented:
+ *
+ * 1. `.card` is the guide's card recipe verbatim — `--color-surface`, one hairline, `--radius-md`,
+ *    `--space-5` padding, no shadow.
+ * 2. `.rows` is the guide's list: one panel, rows divided by a hairline rather than by gaps.
+ * 3. `.hero` is `pages/recording.png`'s artwork band flattened to `--color-bg-deep`, the guide's
+ *    "alt page base on media/detail screens". It keeps the slot's height so a picture drops in
+ *    later without moving anything below it.
+ * 4. `.resumePlay` and `.detailPlay` are the guide's filled primary circle — one per screen.
+ * 5. `.hiddenTitle` is an unpainted `h1`. `pages/dashboard.png` has no page title, and a screen
+ *    with no heading at all is a screen a screen reader cannot summarise.
+ */
+
+/* ---------------------------------------------------------------------------- shared furniture */
+
+.hiddenTitle {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  margin: 0;
+  padding: 0;
+  overflow: hidden;
+  clip-path: inset(50%);
+  white-space: nowrap;
+}
+
+.pageHead {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-2);
+  padding: var(--space-4) 0 0;
+}
+
+.pageTitle {
+  margin: 0;
+  font-size: var(--fs-title);
+  font-weight: 700;
+  line-height: 1.2;
+  color: var(--color-text);
+}
+
+.pageLead {
+  margin: 0;
+  font-size: var(--fs-body);
+  color: var(--color-text-muted);
+}
+
+.card {
+  background: var(--color-surface);
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-md);
+  padding: var(--space-5);
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-4);
+}
+
+.cardTitle {
+  margin: 0;
+  font-size: var(--fs-card-title);
+  font-weight: 600;
+  color: var(--color-text);
+}
+
+.prose {
+  margin: 0;
+  font-size: var(--fs-body);
+  color: var(--color-text-muted);
+  /* Descriptions wrap in a detail view and are truncated in a list row — the guide's own split. */
+  white-space: pre-wrap;
+  overflow-wrap: anywhere;
+}
+
+.quiet {
+  margin: 0;
+  font-size: var(--fs-body);
+  color: var(--color-text-dim);
+}
+
+/*
+ * A failure reads by tone and weight, never by hue: principle 1 allows one accent, and there is no
+ * destructive colour anywhere in this product.
+ */
+.failure {
+  margin: 0;
+  background: var(--color-bg-deep);
+  border: 1px solid var(--color-border-strong);
+  border-radius: var(--radius-md);
+  padding: var(--space-4);
+  font-size: var(--fs-body);
+  color: var(--color-text);
+}
+
+/* ----------------------------------------------------------------------------------- the landing */
+
+.resume {
+  display: flex;
+  align-items: center;
+  gap: var(--space-5);
+  text-decoration: none;
+  min-width: 0;
+}
+
+.resumePlay {
+  flex: none;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: calc(var(--space-8) * 2);
+  height: calc(var(--space-8) * 2);
+  border: 1px solid var(--color-primary);
+  border-radius: var(--radius-pill);
+  background: var(--color-primary-soft);
+  color: var(--color-primary-icon);
+  font-size: var(--fs-card-title);
+}
+
+.resumeText {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-2);
+  min-width: 0;
+}
+
+.resumeName {
+  font-size: var(--fs-card-title);
+  font-weight: 600;
+  color: var(--color-text);
+}
+
+.resumeDescription {
+  font-size: var(--fs-body);
+  color: var(--color-text-muted);
+}
+
+/*
+ * "Resume at 01:23" — elapsed only. The reference prints `01:23 / 02:30`; nothing in this epic
+ * stores a duration, and the total the player learns from the element is not known before the
+ * teaching is opened.
+ */
+.resumeAt {
+  font-size: var(--fs-meta);
+  color: var(--color-text-dim);
+  font-variant-numeric: tabular-nums;
+}
+
+/* The reference's *View all series* row, keeping its place, its arrow and its accent. */
+.wayIn {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--space-4);
+  min-height: calc(var(--space-8) + var(--space-3));
+  background: var(--color-surface);
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-md);
+  padding: var(--space-4) var(--space-5);
+  text-decoration: none;
+}
+
+.wayIn:hover {
+  background: var(--color-surface-raised);
+}
+
+.wayInLabel {
+  font-size: var(--fs-body);
+  font-weight: 500;
+  color: var(--color-primary-strong);
+}
+
+.wayInArrow {
+  color: var(--color-primary-strong);
+}
+
+/* ----------------------------------------------------------------------------------- the library */
+
+.rows {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  background: var(--color-surface);
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-md);
+  overflow: hidden;
+}
+
+.row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--space-4);
+  padding: var(--space-4) var(--space-5);
+  border-bottom: 1px solid var(--color-border);
+  text-decoration: none;
+  min-width: 0;
+}
+
+.rows li:last-child .row {
+  border-bottom: none;
+}
+
+.row:hover {
+  background: var(--color-surface-raised);
+}
+
+.rowText {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-1);
+  min-width: 0;
+}
+
+.rowTitle {
+  font-size: var(--fs-card-title);
+  font-weight: 600;
+  color: var(--color-text);
+}
+
+/* One line in a list row, as the guide specifies. It wraps in the detail view instead. */
+.rowDescription {
+  font-size: var(--fs-body);
+  color: var(--color-text-muted);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.rowMeta {
+  font-size: var(--fs-meta);
+  color: var(--color-text-dim);
+}
+
+.rowChevron {
+  flex: none;
+  color: var(--color-text-dim);
+  font-size: var(--fs-card-title);
+}
+
+/* ---------------------------------------------------------------------------- the recording page */
+
+/*
+ * `pages/recording.png`'s hero, with the photograph removed. A flat band in the guide's alt page
+ * base, holding the back control where the reference holds it — so artwork drops into the same slot
+ * when [§3.3](docs/project/prd.md)'s covers arrive.
+ */
+.hero {
+  display: flex;
+  align-items: flex-start;
+  min-height: calc(var(--space-8) * 3);
+  background: var(--color-bg-deep);
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-lg);
+  padding: var(--space-4);
+}
+
+.back {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  min-width: calc(var(--space-8) + var(--space-3));
+  min-height: calc(var(--space-8) + var(--space-3));
+  background: var(--color-surface);
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-pill);
+  color: var(--color-text-muted);
+  font-size: var(--fs-card-title);
+  text-decoration: none;
+}
+
+.back:hover {
+  color: var(--color-text);
+  border-color: var(--color-border-strong);
+}
+
+.detailHead {
+  display: flex;
+  align-items: center;
+  gap: var(--space-5);
+  min-width: 0;
+}
+
+/* The one filled circle on this screen, exactly where `pages/recording.png` puts it. */
+.detailPlay {
+  flex: none;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: calc(var(--space-8) * 2);
+  height: calc(var(--space-8) * 2);
+  background: var(--color-primary);
+  border: none;
+  border-radius: var(--radius-pill);
+  color: var(--color-text);
+  font-size: var(--fs-card-title);
+  cursor: pointer;
+}
+
+.detailPlay:hover {
+  background: var(--color-primary-strong);
+}
+
+.detailText {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-2);
+  min-width: 0;
+}
+
+.detailTitle {
+  margin: 0;
+  font-size: var(--fs-title);
+  font-weight: 700;
+  line-height: 1.2;
+  color: var(--color-text);
+  overflow-wrap: anywhere;
+}
+
+.detailMeta {
+  margin: 0;
+  font-size: var(--fs-meta);
+  color: var(--color-text-dim);
+}

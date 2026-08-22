@@ -19,6 +19,8 @@ export interface UserRow {
   readonly updatedAt: Date;
   /** `null` while the account is active. Ticket 4's deactivation is this column and nothing else. */
   readonly deactivatedAt: Date | null;
+  /** One of the six steps. `1` for every account until its owner changes it (Story 4 Ticket 03). */
+  readonly preferredPlaybackSpeed: number;
 }
 
 export interface NewUser {

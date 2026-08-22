@@ -4,7 +4,7 @@ import { useRouter } from 'next/navigation';
 import { useState } from 'react';
 import { AUTH_SESSION_PATH } from '@thp/shared';
 import { apiFetch } from '@/client/api-client';
-import styles from './home.module.css';
+import styles from './sign-out.module.css';
 
 /**
  * Sign out.
@@ -13,8 +13,12 @@ import styles from './home.module.css';
  * only asks. `router.replace` then `router.refresh()` drops the rendered authenticated view rather
  * than leaving it in the back/forward cache, which is what makes pressing back after signing out
  * show sign-in instead of a stale screen.
+ *
+ * It has two homes and therefore no opinion about how it looks: the console header, and the member
+ * navigation menu that Story 4 Ticket 01 gave it. `className` is what each of those passes, and the
+ * outlined shape here is the fallback for a caller that passes nothing.
  */
-export function SignOutButton() {
+export function SignOutButton({ className }: { className?: string | undefined }) {
   const router = useRouter();
   const [signingOut, setSigningOut] = useState(false);
 
@@ -30,7 +34,12 @@ export function SignOutButton() {
   }
 
   return (
-    <button className={styles.signOut} type="button" onClick={onClick} disabled={signingOut}>
+    <button
+      className={className ?? styles.signOut}
+      type="button"
+      onClick={onClick}
+      disabled={signingOut}
+    >
       {signingOut ? 'Signing out…' : 'Sign out'}
     </button>
   );

@@ -232,7 +232,13 @@ describe('the reset-password screen', () => {
 
       // Straight to the authenticated landing. Never via the sign-in form.
       await page.waitForURL(`${baseUrl}/`, { timeout: 30_000 });
-      await expect.poll(() => page.getByText(account.email).count()).toBe(1);
+      // The landing's own content — the placeholder that printed the address retired with Story 4
+      // Ticket 01.
+      await expect
+        .poll(() => page.getByRole('link', { name: 'View all recordings' }).count(), {
+          timeout: 30_000,
+        })
+        .toBe(1);
       expect(new URL(page.url()).pathname).not.toBe('/sign-in');
     } finally {
       await page.context().close();

@@ -62,6 +62,13 @@ describe('every /api/v1 route not on the allowlist refuses an anonymous request'
     expect(paths).toContain(`${API_PREFIX}/auth/password-reset`);
     expect(paths).toContain(`${API_PREFIX}/auth/password-reset/complete`);
     expect(paths).toContain(`${API_PREFIX}/users`);
+    // Story 4's five. Named here so the sweep below is provably about them too: a route the
+    // discovery missed would be a route nothing asserted refuses an anonymous caller.
+    expect(paths).toContain(`${API_PREFIX}/recordings/sweep-probe-value`);
+    expect(paths).toContain(`${API_PREFIX}/recordings/sweep-probe-value/playback`);
+    expect(paths).toContain(`${API_PREFIX}/recordings/sweep-probe-value/progress`);
+    expect(paths).toContain(`${API_PREFIX}/recordings/resume`);
+    expect(paths).toContain(`${API_PREFIX}/users/me/playback-speed`);
     // The catch-all is discovered too, standing in for any path no route claims.
     expect(routes.some((route) => route.isCatchAll)).toBe(true);
   });

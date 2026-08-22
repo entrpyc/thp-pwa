@@ -120,6 +120,13 @@ export interface Actor {
   readonly email: string;
   readonly displayName: string;
   readonly role: Role;
+  /**
+   * The speed this account plays teachings at (Story 4 Ticket 03). Not an authorisation input and
+   * never consulted by {@link can} — it is here because the member layout renders the transport bar
+   * server-side and has to hand the player a starting rate, and the alternative is a second
+   * round trip on every page load to fetch one number the session lookup already read.
+   */
+  readonly preferredPlaybackSpeed: number;
 }
 
 /**
@@ -208,7 +215,13 @@ export function isPolicyAction(value: string): value is PolicyAction {
 
 /** The account row, as the rest of the request is allowed to see it. */
 export function toActor(row: UserRow): Actor {
-  return { id: row.id, email: row.email, displayName: row.displayName, role: row.role };
+  return {
+    id: row.id,
+    email: row.email,
+    displayName: row.displayName,
+    role: row.role,
+    preferredPlaybackSpeed: row.preferredPlaybackSpeed,
+  };
 }
 
 /**
@@ -217,7 +230,13 @@ export function toActor(row: UserRow): Actor {
  * (docs/project/prd.md, 3.1.5).
  */
 export function describeActor(actor: Actor): SessionUser {
-  return { id: actor.id, email: actor.email, displayName: actor.displayName, role: actor.role };
+  return {
+    id: actor.id,
+    email: actor.email,
+    displayName: actor.displayName,
+    role: actor.role,
+    preferredPlaybackSpeed: actor.preferredPlaybackSpeed,
+  };
 }
 
 /**

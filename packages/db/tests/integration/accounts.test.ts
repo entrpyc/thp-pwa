@@ -24,7 +24,7 @@ describe('the accounts schema', () => {
     await target?.drop();
   }, 60_000);
 
-  it('gives `user` exactly the columns steps 2 and 4 own', async () => {
+  it('gives `user` exactly the columns steps 2, 4 and Story 4 Ticket 03 own', async () => {
     const columns = await sql<{ column_name: string; is_nullable: string }[]>`
       select column_name, is_nullable
       from information_schema.columns
@@ -39,13 +39,14 @@ describe('the accounts schema', () => {
       'email',
       'id',
       'password_hash',
+      'preferred_playback_speed',
       'role',
       'updated_at',
     ]);
-    // `preferred_playback_speed` belongs to ticket 15, and an avatar is deferred outright. Their
-    // absence here is the point: columns arrive with the ticket that uses them, and a nullable one
-    // "for later" is how deferral quietly stops being deferral.
-    expect(columns.map((column) => column.column_name)).not.toContain('preferred_playback_speed');
+    // `preferred_playback_speed` arrived with Story 4 Ticket 03, which is the ticket that ships the
+    // speed control that writes it — columns arrive with the ticket that uses them. An avatar is
+    // still deferred outright, and its absence here is the point: a nullable column "for later" is
+    // how deferral quietly stops being deferral.
     for (const absent of ['avatar', 'avatar_url', 'avatar_key', 'image_url']) {
       expect(columns.map((column) => column.column_name)).not.toContain(absent);
     }

@@ -4,7 +4,7 @@ import { resolve } from 'node:path';
 import { afterAll, beforeAll, describe, expect, it, inject } from 'vitest';
 import postgres from 'postgres';
 import { MIGRATIONS_DIR, runMigrations } from '@thp/db';
-import { JOB_STATUSES, REVIEW_KINDS, REVIEW_STATUSES } from '@thp/shared';
+import { JOB_STATUSES, PLAYBACK_SPEEDS, REVIEW_KINDS, REVIEW_STATUSES } from '@thp/shared';
 import { createThrowawayDatabase, type ThrowawayDatabase } from '../../../../tests/setup/throwaway-db';
 
 interface Journal {
@@ -144,8 +144,8 @@ describe('migrations apply to an empty database by one command', () => {
 
       // Tables arrive with the ticket that uses them. Ticket 2 added accounts and sessions, ticket 3
       // invitations, ticket 4 password resets, Story 2 Ticket 01 `recording`, Ticket 02 `job` and
-      // Ticket 03 `transcript` and `segment`. Story 3 Ticket 01 adds `review_item` and `summary`,
-      // which are the last two tables of this epic.
+      // Ticket 03 `transcript` and `segment`. Story 3 Ticket 01 added `review_item` and `summary`,
+      // and Story 4 Ticket 04 adds `playback_progress` — the last table of this epic.
       const tables = await sql<{ tablename: string }[]>`
         select tablename from pg_tables where schemaname = 'public' order by tablename
       `;
@@ -153,6 +153,7 @@ describe('migrations apply to an empty database by one command', () => {
         'invitation',
         'job',
         'password_reset',
+        'playback_progress',
         'recording',
         'review_item',
         'segment',
@@ -1061,5 +1062,218 @@ describe('the job payload column, and nothing beside it', () => {
     // No back-fill, and no default: the chain still enqueues a successor with no payload, which is
     // what leaves the chain rule untouched by this column existing.
     expect(rows.map((row) => row.payload)).toEqual([null]);
+  });
+});
+
+/**
+ * **Playback state** (Story 4 Ticket 04) — one column on `user` and one new table.
+ *
+ * Asserted the way every migration in this file is: by **exact column sets, before and after**, so
+ * a column added "for later" is a failing test rather than a comment nobody reads. Three properties
+ * beyond the columns are asserted here because they are properties of the *database* and cannot be
+ * true by convention — the six speeds the check constraint admits, the composite primary key that
+ * makes one row per pairing, and cascades on both sides.
+ *
+ * `duration` is checked here too, on `recording`, and it is not a stray assertion: this is the
+ * story that would most plausibly have added one — the transport bar prints a total and the resume
+ * card wants one — and neither does. The player learns the duration from the media element, the
+ * card shows elapsed only, and the column stays deferred.
+ */
+describe('playback state, and nothing beside it', () => {
+  let target: ThrowawayDatabase;
+  let before: Map<string, string[]>;
+  let after: Map<string, string[]>;
+  let sql: ReturnType<typeof postgres>;
+  /** An account written before the column existed, to read back afterwards. */
+  let existingUserId: string;
+  let recordingId: string;
+
+  async function insertProgress(
+    userId: string,
+    recording: string,
+    positionMs: number,
+  ): Promise<void> {
+    await sql`
+      insert into playback_progress (user_id, recording_id, position_ms)
+      values (${userId}, ${recording}, ${positionMs})
+    `;
+  }
+
+  beforeAll(async () => {
+    target = await createThrowawayDatabase(inject('databaseUrl'), 'playback_migration');
+
+    const priorCount = journalCountBefore('0010_playback_state');
+    await runMigrations({ url: target.url, migrationsFolder: migrationsFolderUpTo(priorCount) });
+    before = await readColumnSets(target.url);
+
+    sql = postgres(target.url, { max: 2, onnotice: () => {} });
+    const [account] = await sql<{ id: string }[]>`
+      insert into "user" (email, password_hash, display_name, role)
+      values ('before-the-speed-column@example.test', 'hash', 'An older account', 'member')
+      returning id
+    `;
+    existingUserId = account?.id as string;
+
+    await runMigrations({ url: target.url, migrationsFolder: migrationsFolderUpTo(priorCount + 1) });
+    after = await readColumnSets(target.url);
+
+    const [written] = await sql<{ id: string }[]>`
+      insert into recording (original_media_key, title, recorded_at)
+      values ('originals/playback-migration.mp3', 'A teaching', '2026-08-16')
+      returning id
+    `;
+    recordingId = written?.id as string;
+  }, 120_000);
+
+  afterAll(async () => {
+    await sql?.end({ timeout: 5 });
+    await target?.drop();
+  }, 60_000);
+
+  it('did not exist before this migration and does after — otherwise the comparison is vacuous', () => {
+    expect(before.has('playback_progress')).toBe(false);
+    expect(before.get('user')).not.toContain('preferred_playback_speed');
+    expect(after.has('playback_progress')).toBe(true);
+    expect(after.get('user')).toContain('preferred_playback_speed');
+  });
+
+  it('adds one column to user, one table, and nothing anywhere else', () => {
+    for (const [table, columns] of before) {
+      const expected = table === 'user' ? [...columns, 'preferred_playback_speed'].sort() : columns;
+      expect(after.get(table), `${table} changed`).toEqual(expected);
+    }
+    expect([...after.keys()].sort()).toEqual([...before.keys(), 'playback_progress'].sort());
+  });
+
+  it('gives playback_progress exactly these columns, and none of the deferred ones', () => {
+    expect(after.get('playback_progress')).toEqual([
+      'position_ms',
+      'recording_id',
+      'updated_at',
+      'user_id',
+    ]);
+
+    // No `id`, because the pair is the identity. `completed_at`, `listened_at` and `play_count`
+    // belong to [3.2.7](docs/project/prd.md) and [3.2.8](docs/project/prd.md), which are deferred —
+    // this story writes one row per pairing and keeps no play log.
+    for (const deferred of ['id', 'completed_at', 'listened_at', 'play_count', 'duration_ms']) {
+      expect(
+        after.get('playback_progress'),
+        `${deferred} is deferred and must not exist`,
+      ).not.toContain(deferred);
+    }
+  });
+
+  it('still has no duration anywhere, which is why the resume card shows elapsed only', () => {
+    expect(after.get('recording')).not.toContain('duration');
+    expect(after.get('transcript')).not.toContain('duration');
+  });
+
+  it('records the position as integer milliseconds and the speed as a real', async () => {
+    const rows = await sql<{ table_name: string; column_name: string; data_type: string }[]>`
+      select table_name, column_name, data_type from information_schema.columns
+      where table_schema = 'public'
+        and (table_name, column_name) in
+            (('playback_progress', 'position_ms'), ('user', 'preferred_playback_speed'))
+      order by table_name
+    `;
+    expect(rows.map((row) => [row.table_name, row.column_name, row.data_type])).toEqual([
+      ['playback_progress', 'position_ms', 'integer'],
+      ['user', 'preferred_playback_speed', 'real'],
+    ]);
+  });
+
+  it('gives every account that already existed a speed of 1, with nobody back-filled by hand', async () => {
+    const rows = await sql<{ preferred_playback_speed: number }[]>`
+      select preferred_playback_speed from "user" where id = ${existingUserId}
+    `;
+    expect(rows.map((row) => row.preferred_playback_speed)).toEqual([1]);
+
+    const [column] = await sql<{ is_nullable: string; column_default: string | null }[]>`
+      select is_nullable, column_default from information_schema.columns
+      where table_schema = 'public' and table_name = 'user'
+        and column_name = 'preferred_playback_speed'
+    `;
+    expect(column?.is_nullable).toBe('NO');
+    expect(column?.column_default).toContain('1');
+  });
+
+  it('refuses a speed no control could produce', async () => {
+    // The six, at the database. A route that forgot to check still cannot write a seventh value,
+    // which is what makes "the column cannot hold a rate no control can produce" a property.
+    for (const rejected of [0, 0.6, 1.75, 3]) {
+      await expect(
+        sql`update "user" set preferred_playback_speed = ${rejected} where id = ${existingUserId}`,
+      ).rejects.toThrow();
+    }
+    for (const allowed of PLAYBACK_SPEEDS) {
+      await expect(
+        sql`update "user" set preferred_playback_speed = ${allowed} where id = ${existingUserId}`,
+      ).resolves.toBeTruthy();
+    }
+  });
+
+  it('keeps one row per person per teaching', async () => {
+    const [account] = await sql<{ id: string }[]>`
+      insert into "user" (email, password_hash, display_name, role)
+      values ('one-row-per-pair@example.test', 'hash', 'Listener', 'member')
+      returning id
+    `;
+    const userId = account?.id as string;
+
+    await insertProgress(userId, recordingId, 40 * 60 * 1000);
+    // The composite primary key is what makes the write an upsert rather than an append, and
+    // therefore what makes "resume where I was" a question with one answer.
+    await expect(insertProgress(userId, recordingId, 10 * 60 * 1000)).rejects.toThrow();
+
+    const rows = await sql<{ position_ms: number }[]>`
+      select position_ms from playback_progress
+      where user_id = ${userId} and recording_id = ${recordingId}
+    `;
+    expect(rows).toHaveLength(1);
+  });
+
+  it('refuses progress that belongs to no account or no recording', async () => {
+    await expect(
+      insertProgress('00000000-0000-0000-0000-000000000000', recordingId, 60_000),
+    ).rejects.toThrow();
+    await expect(
+      insertProgress(existingUserId, '00000000-0000-0000-0000-000000000000', 60_000),
+    ).rejects.toThrow();
+  });
+
+  it('cascades from both sides, because progress is a fact about a pairing', async () => {
+    const [account] = await sql<{ id: string }[]>`
+      insert into "user" (email, password_hash, display_name, role)
+      values ('cascades-away@example.test', 'hash', 'Listener', 'member')
+      returning id
+    `;
+    const [written] = await sql<{ id: string }[]>`
+      insert into recording (original_media_key, title, recorded_at)
+      values ('originals/playback-cascade.mp3', 'Another teaching', '2026-08-17')
+      returning id
+    `;
+    const userId = account?.id as string;
+    const otherRecording = written?.id as string;
+
+    // Scoped to this account's rows throughout: another test in this block left progress against
+    // the shared recording, and an unscoped count would be answering about that row instead.
+    await insertProgress(userId, otherRecording, 60_000);
+    await sql`delete from recording where id = ${otherRecording}`;
+    const afterRecordingGone = await sql`
+      select 1 from playback_progress where user_id = ${userId}
+    `;
+    expect(afterRecordingGone).toHaveLength(0);
+
+    await insertProgress(userId, recordingId, 60_000);
+    expect(await sql`select 1 from playback_progress where user_id = ${userId}`).toHaveLength(1);
+
+    // The delete itself is half the assertion: a restricting foreign key would throw here rather
+    // than take the row with it.
+    await sql`delete from "user" where id = ${userId}`;
+    const afterAccountGone = await sql`
+      select 1 from playback_progress where user_id = ${userId}
+    `;
+    expect(afterAccountGone).toHaveLength(0);
   });
 });

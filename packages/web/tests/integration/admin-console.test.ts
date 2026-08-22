@@ -294,8 +294,13 @@ describe('the console shell and its gate', () => {
   }, 60_000);
 
   it('is reachable without typing a URL, and only for an admin', async () => {
+    // The way in moved with Story 4 Ticket 01: the placeholder landing that used to carry this link
+    // is gone, and the entry now lives in the member navigation menu. It still grants nothing —
+    // `/admin` gates itself server-side and every route behind it refuses independently, which is
+    // what the rest of this suite drives directly.
     const adminPage = await signInAs(admin);
     try {
+      await adminPage.getByRole('button', { name: 'Menu' }).click();
       const link = adminPage.getByRole('link', { name: 'Admin console' });
       await expect.poll(() => link.count(), { timeout: 30_000 }).toBe(1);
       await link.click();
@@ -307,8 +312,9 @@ describe('the console shell and its gate', () => {
 
     const memberPage = await signInAs(member);
     try {
+      await memberPage.getByRole('button', { name: 'Menu' }).click();
       await expect
-        .poll(() => memberPage.getByText(`Signed in as ${member.displayName}`).count(), {
+        .poll(() => memberPage.getByRole('list', { name: 'Navigation' }).count(), {
           timeout: 30_000,
         })
         .toBe(1);

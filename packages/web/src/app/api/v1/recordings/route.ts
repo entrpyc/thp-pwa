@@ -1,7 +1,7 @@
 import type { RecordingListPayload } from '@thp/shared';
 import { permits } from '@/server/api/access';
 import { ApiSuccess, apiRoute } from '@/server/api/route';
-import { finaliseUpload, listRecordingsFor } from '@/server/recordings/service';
+import { finaliseUpload, listRecordingsFor, surfaceOf } from '@/server/recordings/service';
 
 export const runtime = 'nodejs';
 export const dynamic = 'force-dynamic';
@@ -38,7 +38,9 @@ export const POST = apiRoute(permits('recording.upload'), async (request, contex
  * One route rather than two so Story 4 Ticket 01 builds its library on this and does not invent a
  * second answer to "what may this person see".
  */
-export const GET = apiRoute(permits('recording.browse'), async (_request, context) => {
-  const payload: RecordingListPayload = { recordings: await listRecordingsFor(context.actor) };
+export const GET = apiRoute(permits('recording.browse'), async (request, context) => {
+  const payload: RecordingListPayload = {
+    recordings: await listRecordingsFor(context.actor, surfaceOf(request)),
+  };
   return payload;
 });

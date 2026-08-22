@@ -1,4 +1,5 @@
 import {
+  findVisibleRecording,
   insertRecording,
   isUniqueViolation,
   listVisibleRecordings,
@@ -11,6 +12,8 @@ import {
   MAX_UPLOAD_BYTES,
   MAX_UPLOAD_LABEL,
   ACCEPTED_AUDIO_LABEL,
+  LIBRARY_SURFACE,
+  RECORDING_SURFACE_PARAM,
   describeBytes,
   isAcceptedAudioType,
   isCalendarDate,
@@ -199,6 +202,35 @@ export async function finaliseUpload(actor: Actor, body: unknown): Promise<Recor
 }
 
 /**
+ * Which surface the caller says it is (Story 4 Ticket 01).
+ *
+ * `memberSurface: true` means "answer me the way you would answer a member", and it is a *request*
+ * rather than a permission — it can only ever narrow what comes back, never widen it.
+ */
+export interface Surface {
+  readonly memberSurface?: boolean;
+}
+
+/**
+ * Whether this read answers the console's question or a member's.
+ *
+ * **Two conditions, and the member surface wins.** The role decides what a caller *may* see; the
+ * surface decides what this screen is *for*. Without the second one, an admin opening the member
+ * library would get the console's answer — unpublished rows and object keys, in a screen whose
+ * whole job is to show what a member sees — and would have no way to check their own library
+ * without signing out.
+ */
+function readsAsOperator(actor: Actor, surface: Surface): boolean {
+  return surface.memberSurface === true ? false : can(actor, 'recording.list');
+}
+
+/** Read the surface off a request. The parameter is absent for every console call. */
+export function surfaceOf(request: Request): Surface {
+  const asked = new URL(request.url).searchParams.get(RECORDING_SURFACE_PARAM);
+  return { memberSurface: asked === LIBRARY_SURFACE };
+}
+
+/**
  * **One route, one answer to "what may this person see"** (Story 3 Ticket 04).
  *
  * `GET /api/v1/recordings` is authorised by `recording.browse`, which both roles hold. What
@@ -210,8 +242,11 @@ export async function finaliseUpload(actor: Actor, body: unknown): Promise<Recor
  * invent a second answer. The condition itself is not written here: `listVisibleRecordings` owns
  * it, guarded, and this function passes it a boolean.
  */
-export async function listRecordingsFor(actor: Actor): Promise<RecordingView[]> {
-  const asOperator = can(actor, 'recording.list');
+export async function listRecordingsFor(
+  actor: Actor,
+  surface: Surface = {},
+): Promise<RecordingView[]> {
+  const asOperator = readsAsOperator(actor, surface);
   const rows = await listVisibleRecordings({ includeUnpublished: asOperator });
 
   logger.info('recording.browse', {
@@ -223,6 +258,46 @@ export async function listRecordingsFor(actor: Actor): Promise<RecordingView[]> 
   });
 
   return rows.map((row) => (asOperator ? describeForOperator(row) : describeForMember(row)));
+}
+
+/**
+ * **One recording, or a refusal** (Story 4 Ticket 01).
+ *
+ * The same shape as one row of the list and the same rule behind it: the caller's answer to
+ * `recording.list` decides whether unpublished rows are reachable and whether the key and the
+ * creation time cross the wire, and `findVisibleRecording` owns the condition itself.
+ *
+ * **An unpublished id and an id that never existed answer identically.** Both are `not_found`, so
+ * the API does not report which ids exist — a member who guessed a uuid learns nothing from the
+ * difference between "not yours to read" and "no such thing".
+ */
+export async function readRecordingFor(
+  actor: Actor,
+  id: string,
+  surface: Surface = {},
+): Promise<RecordingView> {
+  const asOperator = readsAsOperator(actor, surface);
+  const row = await findVisibleRecording(id, { includeUnpublished: asOperator });
+
+  if (row === null) {
+    logger.warn('recording.browse.refused', {
+      actorId: actor.id,
+      action: 'recording.browse',
+      target: `recording:${id}`,
+      reason: 'not-visible',
+      code: 'not_found',
+    });
+    throw ApiError.notFound('There is no such teaching.');
+  }
+
+  logger.info('recording.browse', {
+    actorId: actor.id,
+    action: 'recording.browse',
+    target: `recording:${row.id}`,
+    asOperator,
+  });
+
+  return asOperator ? describeForOperator(row) : describeForMember(row);
 }
 
 /** Published, and nothing an operator would want that a listener has no business with. */

@@ -23,6 +23,59 @@ export const RECORDING_UPLOADS_PATH = '/recordings/uploads';
 export const ADMIN_RECORDINGS_PAGE_PATH = '/admin/recordings';
 
 /**
+ * The member landing, on the web origin. `pages/dashboard.png`.
+ *
+ * `/` rather than `/dashboard`: a signed-in member arriving at the root has arrived somewhere, and
+ * the placeholder screen that used to sit here retired with Story 4 Ticket 01.
+ */
+export const DASHBOARD_PAGE_PATH = '/';
+
+/** The member library, on the web origin. Every published teaching, newest recorded first. */
+export const MEMBER_LIBRARY_PAGE_PATH = '/recordings';
+
+/** One teaching's page, on the web origin. `pages/recording.png`. */
+export function recordingPagePath(recordingId: string): string {
+  return `${MEMBER_LIBRARY_PAGE_PATH}/${recordingId}`;
+}
+
+/** One recording, under the API prefix. */
+export function recordingPath(recordingId: string): string {
+  return `${RECORDINGS_PATH}/${recordingId}`;
+}
+
+/**
+ * **Which surface is asking** — the query parameter that makes "one route, two shapes" a request
+ * the caller states rather than a role the API infers (Story 4 Ticket 01).
+ *
+ * Without it, an admin opening the member library would see the console's answer: unpublished rows
+ * and object keys, in a screen that is supposed to show what a member sees. Inferring the shape
+ * from `recording.list` is what causes that, and it is why the member surface says so explicitly
+ * instead.
+ *
+ * Absent means the console's reading, so nothing that already calls this route changed. It is not
+ * a permission — a member asking for the console's shape still gets a member's rows, because the
+ * policy answers that question and this parameter never does.
+ */
+export const RECORDING_SURFACE_PARAM = 'surface';
+
+/**
+ * The value that asks for it.
+ *
+ * Named after the *screen* rather than the person at it, and not only because tools/role-usage.ts
+ * refuses a role spelled out in a string outside the policy module. An admin asking for this is not
+ * claiming to be a member — they are asking what the library shows.
+ */
+export const LIBRARY_SURFACE = 'library';
+
+/** The library, as a member reads it — published rows only, whatever the caller's role. */
+export const MEMBER_RECORDINGS_PATH = `${RECORDINGS_PATH}?${RECORDING_SURFACE_PARAM}=${LIBRARY_SURFACE}`;
+
+/** One teaching, as a member reads it. The read the recording page makes. */
+export function memberRecordingPath(recordingId: string): string {
+  return `${recordingPath(recordingId)}?${RECORDING_SURFACE_PARAM}=${LIBRARY_SURFACE}`;
+}
+
+/**
  * 200 MB, counted as 200 × 1024 × 1024 — the operator's ceiling, and the number the screen prints.
  *
  * What it implies, because it is discovered at the first upload otherwise: a 90-minute teaching
@@ -214,6 +267,16 @@ export interface RecordingListPayload {
 /** Payload of `GET /api/v1/recordings`, as the console reads it. */
 export interface AdminRecordingListPayload {
   readonly recordings: readonly RecordingSummary[];
+}
+
+/**
+ * Payload of `GET /api/v1/recordings/{id}`, as a member reads it.
+ *
+ * Wrapped rather than bare, matching the list — a payload that *is* the resource has nowhere to put
+ * the second thing it will one day carry, and the list already made that choice.
+ */
+export interface RecordingPayload {
+  readonly recording: RecordingView;
 }
 
 /**

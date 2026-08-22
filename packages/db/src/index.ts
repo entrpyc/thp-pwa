@@ -57,6 +57,12 @@ export {
 } from './jobs';
 export { MIGRATIONS_DIR, runMigrations, type RunMigrationsOptions } from './migrate';
 export {
+  findPlaybackProgress,
+  setPreferredPlaybackSpeed,
+  upsertPlaybackProgress,
+  type PlaybackProgressRow,
+} from './playback';
+export {
   readPipeline,
   type PipelineStepRow,
   type RecordingPipelineRow,
@@ -98,7 +104,10 @@ export {
   type SummaryRow,
 } from './summaries';
 export {
+  findResumeProgress,
+  findVisibleRecording,
   listVisibleRecordings,
+  type ResumeProgressRow,
   type VisibilityOptions,
   type VisibleRecordingRow,
 } from './visibility';

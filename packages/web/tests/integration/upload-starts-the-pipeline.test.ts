@@ -4,6 +4,7 @@ import {
   ACCEPTED_AUDIO_FORMATS,
   API_PREFIX,
   CORRELATION_ID_HEADER,
+  DEFAULT_PLAYBACK_SPEED,
   FIRST_PIPELINE_STEP,
   MAX_UPLOAD_BYTES,
   PIPELINE_STEPS,
@@ -246,6 +247,7 @@ describe('finalising an upload', () => {
       email: admin.email,
       displayName: admin.displayName,
       role: ROLE.admin,
+      preferredPlaybackSpeed: DEFAULT_PLAYBACK_SPEED,
     };
 
     try {

@@ -69,11 +69,15 @@ describe('the sign-in screen', () => {
       // Scoped to the heading rather than counting matches on the page. Signing in is a *soft*
       // navigation (`router.replace`), and Next.js copies the new page's `h1` into its
       // `#__next-route-announcer__` live region roughly 250ms afterwards — so an unscoped text
-      // locator finds the greeting twice from then on, and a count of 1 is a race the fast machine
-      // wins and the slow one loses. Asserting the heading is also what this test means.
+      // locator finds it twice from then on, and a count of 1 is a race the fast machine wins and
+      // the slow one loses. Asserting the heading is also what this test means.
+      //
+      // The heading used to read "Signed in as …". Story 4 Ticket 01 retired that placeholder, and
+      // `/` is now the member landing — whose title `pages/dashboard.png` deliberately does not
+      // paint, because the breadcrumb bar is the heading a member reads.
       await expect
         .poll(() => page.getByRole('heading', { level: 1 }).textContent())
-        .toBe(`Signed in as ${account.displayName}`);
+        .toBe('Dashboard');
     } finally {
       await page.context().close();
     }
@@ -196,6 +200,8 @@ describe('signing out', () => {
       await fillAndSubmit(page, account.email, account.password);
       await page.waitForURL(`${baseUrl}/`, { timeout: 30_000 });
 
+      // Sign-out moved into the member navigation menu when the placeholder landing retired.
+      await page.getByRole('button', { name: 'Menu' }).click();
       await page.getByRole('button', { name: 'Sign out' }).click();
       await page.waitForURL(`${baseUrl}/sign-in`, { timeout: 30_000 });
       await expect.poll(() => page.getByLabel('Email').count()).toBe(1);
@@ -220,7 +226,7 @@ describe('signing out', () => {
       // of it would break it silently.
       await expect
         .poll(() => page.getByRole('heading', { level: 1 }).textContent())
-        .toBe(`Signed in as ${account.displayName}`);
+        .toBe('Dashboard');
 
       // Visiting sign-in with a live session sends you on rather than asking again.
       await page.goto(`${baseUrl}/sign-in`, { waitUntil: 'domcontentloaded' });

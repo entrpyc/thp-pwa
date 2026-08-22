@@ -1,6 +1,6 @@
-import { desc, eq, isNotNull, sql } from 'drizzle-orm';
+import { and, desc, eq, isNotNull, sql } from 'drizzle-orm';
 import { getDatabase, queryable, type Executor } from './client';
-import { recording, summary } from './schema';
+import { playbackProgress, recording, summary } from './schema';
 
 /**
  * **The member visibility condition, written once.**
@@ -91,4 +91,90 @@ export async function listVisibleRecordings(
     .orderBy(desc(recording.recordedAt), desc(recording.createdAt));
 
   return rows as unknown as VisibleRecordingRow[];
+}
+
+/**
+ * One recording this caller may read, or `null` (Story 4 Ticket 01).
+ *
+ * **The same statement as the list, narrowed to an id** — both gates, the same left join, the same
+ * `includeUnpublished` boolean. Written here rather than beside the recording page's route for the
+ * reason the whole file exists: this is the fourth read path over these rows, and the fourth is
+ * exactly where a re-implemented rule gets forgotten.
+ *
+ * `null` covers both "no such recording" and "not published for you". The caller answers the two
+ * identically, so the API does not report which ids exist.
+ */
+export async function findVisibleRecording(
+  id: string,
+  options: VisibilityOptions,
+  executor: Executor = getDatabase(),
+): Promise<VisibleRecordingRow | null> {
+  const on = queryable(executor);
+
+  const visibleSummary = sql<
+    string | null
+  >`case when ${summary.publishedAt} is not null and ${recording.publishedAt} is not null
+      then ${summary.content} end`;
+
+  const rows = await on
+    .select({
+      id: recording.id,
+      title: recording.title,
+      recordedAt: recording.recordedAt,
+      publishedAt: recording.publishedAt,
+      description: recording.description,
+      summary: visibleSummary,
+      originalMediaKey: recording.originalMediaKey,
+      createdAt: recording.createdAt,
+    })
+    .from(recording)
+    .leftJoin(summary, eq(summary.recordingId, recording.id))
+    .where(
+      options.includeUnpublished
+        ? eq(recording.id, id)
+        : and(eq(recording.id, id), isNotNull(recording.publishedAt)),
+    )
+    .limit(1);
+
+  return (rows[0] as VisibleRecordingRow | undefined) ?? null;
+}
+
+/** What the landing's *Resume recording* card is built from. */
+export interface ResumeProgressRow {
+  readonly recordingId: string;
+  readonly title: string;
+  readonly description: string | null;
+  readonly positionMs: number;
+}
+
+/**
+ * The teaching this member was last part-way through, **still published**, or `null`
+ * (Story 4 Ticket 04, [3.2.5](docs/project/prd.md)).
+ *
+ * In this file rather than in `playback.ts` because of the join: choosing what to offer means
+ * asking whether the recording is still visible, and comparing `published_at` is this module's and
+ * nothing else's. A teaching taken back down by [3.2.11](docs/project/prd.md) does not reappear
+ * through a resume card — the row stays where it is, and re-publishing brings it back.
+ *
+ * Ordered by when the position was written, not by the recording's date: the card answers "what
+ * were you last listening to", which is a fact about the listening rather than about the teaching.
+ */
+export async function findResumeProgress(
+  userId: string,
+  executor: Executor = getDatabase(),
+): Promise<ResumeProgressRow | null> {
+  const rows = await queryable(executor)
+    .select({
+      recordingId: recording.id,
+      title: recording.title,
+      description: recording.description,
+      positionMs: playbackProgress.positionMs,
+    })
+    .from(playbackProgress)
+    .innerJoin(recording, eq(recording.id, playbackProgress.recordingId))
+    .where(and(eq(playbackProgress.userId, userId), isNotNull(recording.publishedAt)))
+    .orderBy(desc(playbackProgress.updatedAt))
+    .limit(1);
+
+  return (rows[0] as ResumeProgressRow | undefined) ?? null;
 }

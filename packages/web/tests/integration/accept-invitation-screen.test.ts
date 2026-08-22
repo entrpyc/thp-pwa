@@ -133,7 +133,14 @@ describe('the accept-invitation screen', () => {
 
       // Straight to the authenticated landing. Never via the sign-in form.
       await page.waitForURL(`${baseUrl}/`, { timeout: 30_000 });
-      await expect.poll(() => page.getByText(email).count()).toBe(1);
+      // The landing's own content, rather than the address the retired placeholder used to print:
+      // Story 4 Ticket 01 replaced that screen with `pages/dashboard.png`, which shows a member
+      // their library rather than their credentials.
+      await expect
+        .poll(() => page.getByRole('link', { name: 'View all recordings' }).count(), {
+          timeout: 30_000,
+        })
+        .toBe(1);
       expect(new URL(page.url()).pathname).not.toBe('/sign-in');
     } finally {
       await page.context().close();

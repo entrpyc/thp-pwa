@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { ROLE, ROLES } from '@thp/shared';
+import { DEFAULT_PLAYBACK_SPEED, ROLE, ROLES } from '@thp/shared';
 import {
   POLICY_ACTIONS,
   can,
@@ -10,7 +10,13 @@ import {
 } from '@/server/auth/policy';
 
 function actorWith(role: (typeof ROLES)[number]): Actor {
-  return { id: 'actor-1', email: 'a@example.test', displayName: 'A', role };
+  return {
+    id: 'actor-1',
+    email: 'a@example.test',
+    displayName: 'A',
+    role,
+    preferredPlaybackSpeed: DEFAULT_PLAYBACK_SPEED,
+  };
 }
 
 describe('the policy module answers (actor, action, resource)', () => {
@@ -58,6 +64,7 @@ describe('the policy module answers (actor, action, resource)', () => {
       createdAt: new Date(),
       updatedAt: new Date(),
       deactivatedAt: null,
+      preferredPlaybackSpeed: DEFAULT_PLAYBACK_SPEED,
     };
 
     const actor = toActor(row);
@@ -66,6 +73,7 @@ describe('the policy module answers (actor, action, resource)', () => {
       email: 'person@example.test',
       displayName: 'Person',
       role: ROLE.member,
+      preferredPlaybackSpeed: DEFAULT_PLAYBACK_SPEED,
     });
 
     const payload = describeActor(actor);
@@ -90,6 +98,7 @@ describe('an owned action is answered against the resource, not only the role', 
     email: 'owner@example.test',
     displayName: 'Owner',
     role: ROLE.member,
+    preferredPlaybackSpeed: DEFAULT_PLAYBACK_SPEED,
   };
   const somebodyElse: Actor = { ...owner, id: 'other-1', email: 'other@example.test' };
   const admin: Actor = { ...owner, id: 'admin-1', email: 'admin@example.test', role: ROLE.admin };

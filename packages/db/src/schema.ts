@@ -7,6 +7,7 @@ import {
   jsonb,
   pgEnum,
   pgTable,
+  primaryKey,
   real,
   text,
   timestamp,
@@ -14,8 +15,10 @@ import {
   uuid,
 } from 'drizzle-orm/pg-core';
 import {
+  DEFAULT_PLAYBACK_SPEED,
   JOB_STATUSES,
   PIPELINE_STEPS,
+  PLAYBACK_SPEEDS,
   REVIEW_KINDS,
   REVIEW_STATUSES,
   ROLES,
@@ -29,8 +32,8 @@ import {
  * **Tables arrive with the ticket that uses them.** Ticket 1 shipped the migration mechanism and the
  * two domain enums; ticket 2 added `user` and `session`; ticket 3 added `invitation`; ticket 4 added
  * `password_reset`. Story 2 Ticket 01 adds `recording`, Ticket 02 the `job` ledger beneath it, and
- * Ticket 03 `transcript` and `segment`. Story 3 Ticket 01 adds `review_item` and `summary`, which
- * are the last two tables of this epic.
+ * Ticket 03 `transcript` and `segment`. Story 3 Ticket 01 adds `review_item` and `summary`, and
+ * Story 4 Ticket 04 adds `playback_progress` — the last table of this epic.
  *
  * The enums are **derived** from the shared TypeScript constants rather than restated beside them.
  * That is what keeps "each enum is declared exactly once in the repository" true, and it is
@@ -48,9 +51,9 @@ export const reviewStatus = pgEnum('review_status', REVIEW_STATUSES);
 
 /**
  * An account. Columns arrive with the steps that use them: `deactivated_at` comes with ticket 4
- * (account lifecycle) and `preferred_playback_speed` with ticket 15, so the second is not here yet.
- * Neither is an avatar — docs/project/prd.md 3.1.12's is deferred, and a nullable column "for later" is how
- * deferral quietly stops being deferral.
+ * (account lifecycle) and `preferred_playback_speed` with Story 4 Ticket 03, which is where the
+ * speed control that writes it ships. There is still no avatar — docs/project/prd.md 3.1.12's is
+ * deferred, and a nullable column "for later" is how deferral quietly stops being deferral.
  *
  * `email` is stored normalised (trimmed, lowercased) by the application, and uniqueness is
  * enforced on `lower(email)` by the index below — at the database, so two accounts differing only
@@ -74,8 +77,31 @@ export const user = pgTable(
      * status somebody has to keep in step with it.
      */
     deactivatedAt: timestamp('deactivated_at', { withTimezone: true }),
+    /**
+     * **The speed this person hears every teaching at** (Story 4 Ticket 03,
+     * [3.2.4](docs/project/prd.md)).
+     *
+     * On the *user*, not on the recording, because the requirement is that a chosen speed persists
+     * across recordings — a column per pairing would make "the next teaching plays at 1.5x too"
+     * something the client had to remember rather than something the account is.
+     *
+     * `real` because it is a rate, not money. `NOT NULL DEFAULT 1` because every account that
+     * already exists plays at normal speed and nobody should have to be back-filled by hand. The
+     * check constraint is the six steps, **derived from the shared tuple** rather than restated —
+     * so the column cannot hold a rate no control can produce, and a seventh step is one edit
+     * there plus one migration.
+     */
+    preferredPlaybackSpeed: real('preferred_playback_speed')
+      .notNull()
+      .default(DEFAULT_PLAYBACK_SPEED),
   },
-  (table) => [uniqueIndex('user_email_lower_unique').on(sql`lower(${table.email})`)],
+  (table) => [
+    uniqueIndex('user_email_lower_unique').on(sql`lower(${table.email})`),
+    check(
+      'user_preferred_playback_speed_allowed',
+      sql`${table.preferredPlaybackSpeed} in (${sql.raw(PLAYBACK_SPEEDS.join(', '))})`,
+    ),
+  ],
 );
 
 /**
@@ -526,4 +552,47 @@ export const summary = pgTable(
     updatedAt: timestamp('updated_at', { withTimezone: true }).notNull().defaultNow(),
   },
   (table) => [uniqueIndex('summary_recording_unique').on(table.recordingId)],
+);
+
+/**
+ * **Where a member had got to** (Story 4 Ticket 04, [3.2.5](docs/project/prd.md)) — the only
+ * member-owned entity in this epic
+ * (docs/epics/epic-core-listening/architecture.md § Data model (epic), *Member-owned state*).
+ *
+ * **One row per (person, teaching)**, said by the composite primary key rather than by the code
+ * that writes it: the write is an upsert onto that pair, so there is no history to reconcile and
+ * "resume where I was" cannot become a question about which of several rows is the right one. That
+ * is also what makes the whole thing survive to another device — the row is keyed by the account,
+ * not by the browser.
+ *
+ * **Last-write-wins, plainly.** The architecture line above says "last-write-wins on the furthest
+ * position", which is two rules that disagree; taken as *furthest*, a member who scrubs back to
+ * re-hear something and then closes the tab is returned to where they had got to rather than where
+ * they were listening, which is the opposite of what 3.2.5 promises. This table stores whatever the
+ * newest write said. Amending that architecture line is a Phase 4 edit and not this story's work.
+ *
+ * **Cascades on both sides.** Progress is a fact about a pairing and is meaningless without either
+ * half — unlike an invitation, it is not a record of something that happened.
+ *
+ * What is absent is the design. No `id`, because the pair *is* the identity. No `completed_at` and
+ * no play log — [3.2.7](docs/project/prd.md) and [3.2.8](docs/project/prd.md) are deferred, and a
+ * column added "for later" is how deferral quietly stops being deferral. No `duration`, because
+ * nothing in this epic inspects the media and the player learns the total from the element. The
+ * migration test asserts the exact column set rather than trusting this comment.
+ */
+export const playbackProgress = pgTable(
+  'playback_progress',
+  {
+    userId: uuid('user_id')
+      .notNull()
+      .references(() => user.id, { onDelete: 'cascade' }),
+    recordingId: uuid('recording_id')
+      .notNull()
+      .references(() => recording.id, { onDelete: 'cascade' }),
+    /** Milliseconds from the start, matching the offsets `segment` already establishes. */
+    positionMs: integer('position_ms').notNull(),
+    /** When this position was written. What the resume card orders by. */
+    updatedAt: timestamp('updated_at', { withTimezone: true }).notNull().defaultNow(),
+  },
+  (table) => [primaryKey({ columns: [table.userId, table.recordingId] })],
 );

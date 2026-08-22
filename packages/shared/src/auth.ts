@@ -27,6 +27,16 @@ export interface SessionUser {
   readonly email: string;
   readonly displayName: string;
   readonly role: Role;
+  /**
+   * The speed this account plays teachings at (Story 4 Ticket 03,
+   * [3.2.4](docs/project/prd.md)).
+   *
+   * Here rather than behind a read of its own, for the reason `role` is: the session lookup has
+   * already read the row, and a second request to learn one number would mean the transport bar
+   * rendering at the wrong rate until it came back. Unlike `role` it decides nothing — it is a
+   * preference the interface applies, and the API refuses a value outside the six whoever sends it.
+   */
+  readonly preferredPlaybackSpeed: number;
 }
 
 /** Payload of `POST /api/v1/auth/session` and `GET /api/v1/auth/session`. */

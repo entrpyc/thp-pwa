@@ -1,0 +1,177 @@
+/*
+ * The transport — `bottom-navigation/default.png`.
+ *
+ * The reference is a rounded dark strip floating above the bottom edge: a title slot on the left,
+ * three circular controls in the middle with the play/pause filled purple, a thin track with a
+ * purple fill and a round thumb, and a speed pill on the right. That is what this is.
+ *
+ * Two extrapolations:
+ *
+ * 1. **Circles take `--radius-pill`**, for the reason `member.module.css` states — the token layer
+ *    is the guide's Quick token block and that block has no `--radius-circle`.
+ * 2. **The reference is drawn wide.** At phone width the four groups do not fit on one line, so the
+ *    bar wraps to two: title and speed on the first row, controls and track on the second. Nothing
+ *    is hidden and nothing is scrolled — the responsive standing constraint is that every control
+ *    stays reachable, not that the layout is identical.
+ */
+
+.dock {
+  position: fixed;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  padding: var(--space-3) var(--space-4);
+  pointer-events: none;
+}
+
+.bar {
+  width: 100%;
+  max-width: 48rem;
+  margin: 0 auto;
+  pointer-events: auto;
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: var(--space-3);
+  background: var(--color-surface);
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-lg);
+  padding: var(--space-3) var(--space-4);
+}
+
+/*
+ * The reference's left slot is a thumbnail; artwork is deferred, so the slot carries what a member
+ * actually needs — which teaching is playing.
+ */
+.nowPlaying {
+  margin: 0;
+  flex: 1 1 8rem;
+  min-width: 0;
+  color: var(--color-primary-strong);
+  font-size: var(--fs-meta);
+  font-weight: 500;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.controls {
+  display: flex;
+  align-items: center;
+  gap: var(--space-3);
+  order: 3;
+}
+
+/* The guide's outlined icon button. ±10s are transport, not a deferred feature. */
+.skip {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  min-width: calc(var(--space-8) + var(--space-2));
+  min-height: calc(var(--space-8) + var(--space-2));
+  background: transparent;
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-pill);
+  color: var(--color-primary-icon);
+  font-family: inherit;
+  font-size: var(--fs-meta);
+  cursor: pointer;
+}
+
+.skip:hover {
+  border-color: var(--color-border-strong);
+}
+
+/* The one filled circle on the bar — the guide's single primary action per screen. */
+.play {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  min-width: calc(var(--space-8) + var(--space-4));
+  min-height: calc(var(--space-8) + var(--space-4));
+  background: var(--color-primary);
+  border: none;
+  border-radius: var(--radius-pill);
+  color: var(--color-text);
+  font-size: var(--fs-body);
+  cursor: pointer;
+}
+
+.play:hover {
+  background: var(--color-primary-strong);
+}
+
+.track {
+  order: 4;
+  flex: 1 1 12rem;
+  display: flex;
+  align-items: center;
+  gap: var(--space-3);
+  min-width: 0;
+}
+
+.time {
+  color: var(--color-text-dim);
+  font-size: var(--fs-meta);
+  font-variant-numeric: tabular-nums;
+  white-space: nowrap;
+}
+
+/*
+ * A real range input, so scrubbing works from a keyboard and is announced as a slider. The guide's
+ * player recipe: a thin track, a purple filled portion and a round thumb. The fill is drawn by the
+ * accent-color property rather than by a second element, which is what keeps this one control.
+ */
+.scrubber {
+  flex: 1 1 auto;
+  min-width: 0;
+  height: 4px;
+  accent-color: var(--color-primary);
+  cursor: pointer;
+}
+
+.scrubber:disabled {
+  cursor: default;
+}
+
+/* The pill at the right of the reference, carrying the one thing it says: the rate. */
+.speed {
+  order: 2;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  min-height: calc(var(--space-8) + var(--space-2));
+  background: transparent;
+  border: 1px solid var(--color-border-strong);
+  border-radius: var(--radius-pill);
+  padding: var(--space-2) var(--space-4);
+  color: var(--color-primary-strong);
+  font-family: inherit;
+  font-size: var(--fs-meta);
+  font-weight: 600;
+  font-variant-numeric: tabular-nums;
+  cursor: pointer;
+}
+
+.speed:hover {
+  background: var(--color-primary-soft);
+}
+
+/* Wide enough for the reference's single row: title, controls, track, speed, in that order. */
+@media (min-width: 48rem) {
+  .bar {
+    flex-wrap: nowrap;
+  }
+
+  .controls {
+    order: 2;
+  }
+
+  .track {
+    order: 3;
+  }
+
+  .speed {
+    order: 4;
+  }
+}

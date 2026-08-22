@@ -5,6 +5,7 @@ export * from './health';
 export * from './invitations';
 export * from './jobs';
 export * from './passwords';
+export * from './playback';
 export * from './pipeline';
 export * from './recordings';
 export * from './reviews';

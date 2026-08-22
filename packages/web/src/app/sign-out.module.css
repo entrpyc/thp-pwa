@@ -1,0 +1,29 @@
+/*
+ * The sign-out control's own shape, for a caller that does not give it one.
+ *
+ * It was `home.module.css`'s until Story 4 Ticket 01 retired the placeholder landing that file
+ * styled. The console header still renders the button bare, so the outlined-pill shape had to
+ * survive the deletion — composed from the guide's outlined button, as it always was.
+ */
+
+.signOut {
+  align-self: flex-start;
+  background: transparent;
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-pill);
+  padding: var(--space-2) var(--space-4);
+  color: var(--color-text-muted);
+  font-family: inherit;
+  font-size: var(--fs-body);
+  cursor: pointer;
+}
+
+.signOut:hover {
+  border-color: var(--color-border-strong);
+  color: var(--color-text);
+}
+
+.signOut:disabled {
+  cursor: progress;
+  color: var(--color-text-dim);
+}
