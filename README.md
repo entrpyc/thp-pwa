@@ -49,6 +49,8 @@ without a session.
 | `npm run build`      | Production build.                                                             |
 | `npm start`          | Serve the production build.                                                   |
 | `npm run db:generate`| Regenerate SQL migrations after changing the Drizzle schema.                  |
+| `npm run check:origin`| Assert the built client calls the origin it was built for. Runs in CI after the build — see **Deployment**. |
+| `npm run verify:production`| Read the deployed box and report one PASS/FAIL line per check. Run on the host; `-- --remote-only` works from anywhere. |
 
 Every command reads one `.env` at the repository root — [scripts/with-env.mjs](scripts/with-env.mjs)
 loads it before handing off, so there is no second env file inside a package. (`THP_SKIP_DOTENV=1`
@@ -366,3 +368,171 @@ Three things worth knowing before the first real recording:
   `next dev` for one project directory, and the artefact under test should be the one that ships.
   The `/api/v1/diagnostics/*` routes used by those tests are `404` in production unless
   `ENABLE_DIAGNOSTIC_ROUTES=true` is set, which only the test harness does.
+
+## Deployment
+
+The one deployment: **`https://thp.indepthwebsolutions.com`**, on a Contabo Ubuntu VPS at
+`167.86.71.60` — 4 vCPU, 8 GB RAM, 100 GB SSD, running the app, the worker and Postgres together.
+Co-location is a deployment fact, not a structural one; the three stay separate processes.
+
+Two commands matter after the first setup:
+
+| Command                      | What it does                                                                         |
+| :--------------------------- | :----------------------------------------------------------------------------------- |
+| `./scripts/deploy.sh`        | Pull, install, migrate, build, check the origin, restart, verify. The whole deploy.   |
+| `npm run verify:production`  | Reads the box and prints one PASS/FAIL line per check. Repairs nothing.               |
+
+`npm run verify:production -- --remote-only` runs just the checks that need nothing but HTTP, so
+they can be run from a laptop. `-- --kill-drill` kills the worker and watches pm2 bring it back.
+`-- --smoke --audio=<file>` drives a real upload through the real pipeline and **spends real money**.
+
+### Two things that bite silently
+
+**Build after `.env`, never before.** `NEXT_PUBLIC_API_ORIGIN` is inlined into the client at build
+time. A build made before `.env` holds the production origin produces a site that looks perfectly
+correct on the box and calls `localhost` from every visitor's browser. `npm run check:origin` is
+what catches it — it runs in CI after `npm run build`, and again inside `deploy.sh`.
+
+**The certificate already exists.** Let's Encrypt issued for this host on 14 Aug 2026, and certbot
+manages the nginx TLS lines. Do **not** re-run `certbot --nginx -d thp.indepthwebsolutions.com`;
+confirm with `certbot certificates` and prove renewal with `certbot renew --dry-run`.
+[deploy/nginx/thp.conf](deploy/nginx/thp.conf) is the shape to diff the live block against — take
+the proxy headers and `client_max_body_size` from it, and leave certbot's lines alone. This box
+serves other sites, so nothing here edits an existing nginx file and the block never claims
+`default_server`.
+
+### First setup
+
+Everything below is done once, on the box, over SSH.
+
+**1 — The host.** Create a service user, disable SSH password and root login, turn on the firewall.
+
+```bash
+sudo adduser --disabled-password thp
+sudo sed -i 's/^#\?PasswordAuthentication.*/PasswordAuthentication no/' /etc/ssh/sshd_config
+sudo sed -i 's/^#\?PermitRootLogin.*/PermitRootLogin no/' /etc/ssh/sshd_config
+sudo systemctl reload ssh          # keep this session open until a second one logs in
+sudo ufw allow 22,80,443/tcp && sudo ufw enable
+```
+
+Contabo images commonly ship with root password login enabled, so both `sed` lines are changes
+rather than confirmations. Check `/etc/ssh/sshd_config.d/` too — a cloud image often sets
+`PasswordAuthentication` in a drop-in, and a drop-in wins over the main file.
+
+**2 — PostgreSQL 17 with pgvector available.** Ubuntu 20.04 and 22.04 both ship nginx 1.18 and
+**neither ships PostgreSQL 17**, so it comes from PGDG:
+
+```bash
+sudo apt install -y postgresql-common
+sudo /usr/share/postgresql-common/pgdg/apt.postgresql.org.sh
+sudo apt install -y postgresql-17 postgresql-17-pgvector pgbackrest
+sudo -u postgres createuser thp --pwprompt
+sudo -u postgres createdb thp --owner=thp
+```
+
+The `vector` extension must be **installed and available but not enabled** — the state
+[epic architecture § Primary datastore](docs/epics/epic-core-listening/architecture.md#L177) requires,
+and `verify:production` asserts both halves. Then bind Postgres to localhost in
+`/etc/postgresql/17/main/postgresql.conf`:
+
+```
+listen_addresses = 'localhost'
+```
+
+**3 — nginx.** Diff the live block against [deploy/nginx/thp.conf](deploy/nginx/thp.conf), copy
+across the `proxy_set_header` lines and `client_max_body_size`, then
+`sudo nginx -t && sudo systemctl reload nginx`. `X-Forwarded-Proto` is the one that matters most:
+without it every request looks like plain HTTP to the process behind the proxy.
+
+**4 — Buckets and keys.** In the Cloudflare dashboard, two buckets and two tokens:
+
+- **Media** — public access off, and a **CORS rule allowing `PUT` and its preflight from
+  `https://thp.indepthwebsolutions.com`, with `content-type` on the allowed headers.** Without that
+  rule the browser cannot upload at all, and the screen genuinely cannot say why — a browser is not
+  told the reason a cross-origin `PUT` was refused.
+- **Backups** — its own token, **scoped to that bucket only**. Retention deletes from this one every
+  night by design, and the media bucket is the one nothing may ever delete from.
+
+Production keys for Deepgram, MiniMax and Resend belong here too, separate from any development key.
+The Resend sending domain must be verified, or the first invitation is filed as spam.
+
+**5 — The checkout and its secrets.**
+
+```bash
+sudo -u thp git clone <repo> /home/thp/app && cd /home/thp/app
+cp .env.example .env && chmod 600 .env      # then fill it in
+```
+
+Production `.env` differs from the template in: `NEXT_PUBLIC_API_ORIGIN=https://thp.indepthwebsolutions.com`,
+`THP_MOCK_EXTERNAL=false`, `MEDIA_*` pointing at R2, real `ASR_API_KEY`, `GENERATE_API_KEY` and
+`MAIL_*`, and `SEED_ADMIN_*`. `ENABLE_DIAGNOSTIC_ROUTES` stays unset.
+
+**6 — Build and supervise.**
+
+```bash
+npm ci && npm run migrate && npm run build
+pm2 start ecosystem.config.cjs
+pm2 startup systemd            # run the command it prints
+pm2 save                       # after both are online, not before
+pm2 install pm2-logrotate
+npm run seed:admin
+npm run verify:production
+```
+
+`pm2 save` records what is *running*, not what the config file says — saving before both apps are up
+gives you a reboot that comes back missing one. And the worker is `exec_mode: 'fork'` with
+`instances: 1` in [ecosystem.config.cjs](ecosystem.config.cjs) for a reason that is not stylistic:
+cluster mode runs a second worker, and the boot sweep reclaims every job a dead worker left
+`running` — so a second copy would reclaim jobs the first one is still running.
+
+`pm2-logrotate` is not optional on a 100 GB disk. Media lives in object storage and never touches
+this disk; pm2's logs are the thing that grows.
+
+**7 — Prove it.** Reboot the box, wait, and run `npm run verify:production` again without touching
+anything. Then `-- --kill-drill`, then `-- --smoke --audio=<a short file>`. The smoke run is the
+only thing that exercises a presigned `PUT` from the real origin through the real CORS rule, and an
+ASR provider fetching the object *itself* from a bucket it can reach — the boundary that makes MinIO
+unusable for real transcription, and therefore the one thing no local run has ever tested.
+
+### Backups
+
+`pgBackRest` takes a nightly full backup at 02:00 UTC and archives WAL continuously to the backups
+bucket. About **$0.10/month**: under 1 GB of database, so 1–3 GB stored at $0.015/GB-month, plus
+roughly 8,700 WAL pushes at $4.50 per million Class A operations.
+
+```bash
+sudo install -o root -g postgres -m 640 deploy/pgbackrest/pgbackrest.conf /etc/pgbackrest/pgbackrest.conf
+# fill in the endpoint, bucket and key, then:
+sudo -u postgres pgbackrest --stanza=thp stanza-create
+```
+
+In `postgresql.conf`, then restart Postgres:
+
+```
+archive_mode = on
+archive_command = 'pgbackrest --stanza=thp archive-push %p'
+archive_timeout = 300
+```
+
+`archive_timeout = 300` bounds worst-case data loss to five minutes on an idle database, and is what
+the cost estimate above is built on.
+
+```bash
+sudo cp deploy/systemd/thp-backup.service deploy/systemd/thp-backup.timer /etc/systemd/system/
+sudo cp deploy/systemd/thp-backup-check.service deploy/systemd/thp-backup-check.timer /etc/systemd/system/
+sudo systemctl daemon-reload
+sudo systemctl enable --now thp-backup.timer thp-backup-check.timer
+sudo -u postgres pgbackrest --stanza=thp --type=full backup   # don't wait for 02:00
+sudo ./scripts/restore-drill.sh
+```
+
+**An unverified backup is not a backup.** [scripts/restore-drill.sh](scripts/restore-drill.sh)
+restores the newest backup onto a scratch cluster on port 5433, compares its migration journal and
+four row counts against production, then removes the scratch cluster and writes a dated receipt. It
+refuses to run if its target directory or port is the live one — a drill must not be one typo away
+from being the incident it rehearses. `verify:production` fails once that receipt is more than 90
+days old, because a backup verified once in 2026 is an unverified backup in 2027.
+
+The morning after setup, confirm the 02:00 timer actually fired: `pgbackrest info` should show two
+full backups, not one. A timer that never fires is the only failure here that cannot be detected on
+the day it ships.

@@ -18,6 +18,8 @@
     "migrate": "node --import tsx scripts/with-env.mjs packages/db/src/cli/migrate.ts",
     "seed:admin": "node --import tsx scripts/with-env.mjs packages/web/src/server/auth/cli/seed-admin.ts",
     "db:generate": "npm run generate --workspace @thp/db",
+    "check:origin": "node --import tsx scripts/with-env.mjs scripts/check-origin.ts",
+    "verify:production": "node --import tsx scripts/with-env.mjs scripts/verify-production.ts",
     "test": "vitest run",
     "test:watch": "vitest"
   },

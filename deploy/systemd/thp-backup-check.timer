@@ -1,0 +1,12 @@
+# Daily, well clear of the 02:00 backup.
+
+[Unit]
+Description=Daily pgBackRest check
+
+[Timer]
+OnCalendar=*-*-* 09:00:00 UTC
+Persistent=true
+RandomizedDelaySec=300
+
+[Install]
+WantedBy=timers.target

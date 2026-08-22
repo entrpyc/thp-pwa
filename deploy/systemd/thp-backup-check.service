@@ -1,0 +1,19 @@
+# `pgbackrest check` — does the archive command actually work, and is the repository reachable?
+#
+# Separate from the backup itself and run daily, because **an archive that silently stopped is the
+# failure this whole group exists to prevent**. A nightly full that succeeds tells you nothing
+# about whether WAL has been reaching the repository in between, and the gap between "the archive
+# broke" and "somebody noticed" is exactly the window a restore would come up short in.
+
+[Unit]
+Description=pgBackRest check of the thp stanza
+Requires=postgresql.service
+After=postgresql.service network-online.target
+
+[Service]
+Type=oneshot
+User=postgres
+ExecStart=/usr/bin/pgbackrest --stanza=thp check
+
+[Install]
+WantedBy=multi-user.target

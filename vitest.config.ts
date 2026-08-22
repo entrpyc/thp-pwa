@@ -11,7 +11,13 @@ export default defineConfig({
         test: {
           name: 'unit',
           environment: 'node',
-          include: ['tests/guards/**/*.test.ts', 'packages/*/tests/unit/**/*.test.ts'],
+          include: [
+            'tests/guards/**/*.test.ts',
+            // Repository-level unit tests that belong to no package — the deployment scripts under
+            // scripts/, whose parsers are the only part of them a test can reach.
+            'tests/unit/**/*.test.ts',
+            'packages/*/tests/unit/**/*.test.ts',
+          ],
         },
       },
       {

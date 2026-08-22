@@ -1,3 +1,4 @@
+import { isExternalMocked } from '@thp/shared/mock';
 import { normaliseOrigin } from '@/client/config';
 
 /**
@@ -27,7 +28,13 @@ export const MAIL_TRANSPORTS = ['smtp', 'capture', 'failing'] as const;
 
 export type MailTransportName = (typeof MAIL_TRANSPORTS)[number];
 
+/**
+ * `THP_MOCK_EXTERNAL` is read first and **wins over an explicitly named transport** — see
+ * `@thp/shared/mock`. It resolves to `capture` rather than `failing`, because a mocked development
+ * environment should still let a developer open the rendered invitation.
+ */
 export function readTransportName(env: EnvSource = process.env): MailTransportName {
+  if (isExternalMocked(env)) return 'capture';
   const configured = (env['MAIL_TRANSPORT'] ?? 'smtp').trim().toLowerCase();
   if ((MAIL_TRANSPORTS as readonly string[]).includes(configured)) {
     return configured as MailTransportName;

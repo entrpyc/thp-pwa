@@ -80,6 +80,13 @@ jobs:
       - name: Build
         run: npm run build
 
+      # `NEXT_PUBLIC_API_ORIGIN` is inlined at build time, so "the client calls the right origin" is
+      # a property of the build output rather than of the environment — and the failure it catches
+      # is silent: a build made before `.env` held the production origin serves a site that looks
+      # correct and calls localhost from every visitor's browser. Nothing else notices.
+      - name: The built client calls the origin it was built for
+        run: npm run check:origin
+
       - name: Upload server logs on failure
         if: failure()
         uses: actions/upload-artifact@v4

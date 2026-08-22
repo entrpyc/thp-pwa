@@ -1,0 +1,23 @@
+# The nightly full backup. Paired with thp-backup.timer, which is what schedules it.
+#
+# A oneshot service rather than a cron line, so `systemctl status thp-backup` and
+# `journalctl -u thp-backup` answer "did last night's backup work" without anyone hunting for a log
+# file. Goes to /etc/systemd/system/.
+
+[Unit]
+Description=pgBackRest full backup of the thp stanza
+# Backing up a stopped database is a backup of nothing worth having.
+Requires=postgresql.service
+After=postgresql.service network-online.target
+
+[Service]
+Type=oneshot
+User=postgres
+ExecStart=/usr/bin/pgbackrest --stanza=thp --type=full backup
+# The archive keeps running between backups; a failed nightly full is not an emergency on its own,
+# and `verify:production`'s `backup` check is what notices that the newest full has gone stale.
+Nice=10
+IOSchedulingClass=idle
+
+[Install]
+WantedBy=multi-user.target

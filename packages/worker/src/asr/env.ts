@@ -8,6 +8,8 @@
  * a default *provider* is, and it is the real one, exactly as `MAIL_TRANSPORT` defaults to `smtp`.
  */
 
+import { isExternalMocked } from '@thp/shared/mock';
+
 export type EnvSource = Readonly<Record<string, string | undefined>>;
 
 /**
@@ -22,7 +24,12 @@ export const ASR_PROVIDERS = ['deepgram', 'fake'] as const;
 
 export type AsrProviderName = (typeof ASR_PROVIDERS)[number];
 
+/**
+ * `THP_MOCK_EXTERNAL` is read first and **wins over an explicitly named provider** — see
+ * `@thp/shared/mock` for why the switch can have no exceptions and still mean anything.
+ */
 export function readAsrProvider(env: EnvSource = process.env): AsrProviderName {
+  if (isExternalMocked(env)) return 'fake';
   const configured = (env['ASR_PROVIDER'] ?? 'deepgram').trim().toLowerCase();
   if ((ASR_PROVIDERS as readonly string[]).includes(configured)) {
     return configured as AsrProviderName;

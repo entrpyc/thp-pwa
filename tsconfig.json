@@ -17,6 +17,7 @@
     "packages/worker/tests/**/*.ts",
     "packages/worker/src/**/*.ts",
     "tools/**/*.ts",
+    "scripts/**/*.ts",
     "tests/**/*.ts",
     "vitest.config.ts",
     "packages/web/.next/types/**/*.ts"

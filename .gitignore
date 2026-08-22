@@ -7,3 +7,14 @@ dist/
 coverage/
 .DS_Store
 .tmp/
+# The restore-drill receipt, written on the box by scripts/restore-drill.sh and read by
+# `verify:production`'s restore-drill-age check. It belongs to one machine, and the `secrets` check
+# requires the checkout's working tree to be clean — an untracked receipt would fail it.
+.restore-drill
+
+# Next regenerates this on every build and points it at a different types directory depending on
+# whether `next dev` or `next build` ran last — so tracking it means `npm run build` dirties the
+# working tree. That matters here rather than being untidy: scripts/deploy.sh refuses to run on a
+# dirty tree and `verify:production`'s `secrets` check asserts a clean one, so a tracked copy makes
+# every deploy after the first refuse. Next writes it back whenever it is missing.
+packages/web/next-env.d.ts

@@ -1,0 +1,17 @@
+# 02:00 UTC, nightly.
+#
+# `Persistent=true` so a box that was off at 02:00 takes the backup when it comes back, rather than
+# silently skipping a night — the failure this whole arrangement exists to prevent is the one
+# nobody notices.
+
+[Unit]
+Description=Nightly pgBackRest full backup
+
+[Timer]
+OnCalendar=*-*-* 02:00:00 UTC
+Persistent=true
+# A few minutes of jitter, so this and the check timer never contend for the same two vCPU.
+RandomizedDelaySec=300
+
+[Install]
+WantedBy=timers.target
