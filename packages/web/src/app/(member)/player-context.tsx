@@ -99,10 +99,30 @@ export interface PlayerApi {
 
 const PlayerContext = createContext<PlayerApi | null>(null);
 
-/** The breadcrumb's current item — set by whichever page has one, cleared when it unmounts. */
-const BreadcrumbContext = createContext<{
+/**
+ * **The breadcrumb trail** — set by whichever page has one, cleared when it unmounts.
+ *
+ * Widened in Story 6 from a single current title to an **optional parent plus a current**, which is
+ * the shape `top-navigation/default.png` has always drawn: a recording in a series reads
+ * `home › series › recording`, and the parent is a link because getting back to the series in one
+ * press is the whole point of the segment. A recording in no series keeps today's two-segment
+ * trail, so nothing about the library or the landing changed.
+ */
+export interface BreadcrumbParent {
+  readonly label: string;
+  readonly href: string;
+}
+
+export interface BreadcrumbTrail {
+  readonly parent: BreadcrumbParent | null;
   readonly current: string | null;
-  setCurrent(title: string | null): void;
+}
+
+const EMPTY_TRAIL: BreadcrumbTrail = { parent: null, current: null };
+
+const BreadcrumbContext = createContext<{
+  readonly trail: BreadcrumbTrail;
+  setTrail(trail: BreadcrumbTrail): void;
 } | null>(null);
 
 export function usePlayer(): PlayerApi {
@@ -111,18 +131,34 @@ export function usePlayer(): PlayerApi {
   return value;
 }
 
-/** Name this page in the breadcrumb for as long as it is mounted. */
-export function useBreadcrumbTitle(title: string | null): void {
+/**
+ * Name this page in the breadcrumb for as long as it is mounted.
+ *
+ * `parentLabel` and `parentHref` are passed apart rather than as an object so the effect's
+ * dependencies are the two strings themselves — an object literal rebuilt on every render would
+ * re-run the effect on every render and clear the trail it had just set.
+ */
+export function useBreadcrumbTrail(
+  current: string | null,
+  parentLabel: string | null = null,
+  parentHref: string | null = null,
+): void {
   const context = useContext(BreadcrumbContext);
-  const setCurrent = context?.setCurrent;
+  const setTrail = context?.setTrail;
   useEffect(() => {
-    setCurrent?.(title);
-    return () => setCurrent?.(null);
-  }, [setCurrent, title]);
+    setTrail?.({
+      parent:
+        parentLabel === null || parentHref === null
+          ? null
+          : { label: parentLabel, href: parentHref },
+      current,
+    });
+    return () => setTrail?.(EMPTY_TRAIL);
+  }, [setTrail, current, parentLabel, parentHref]);
 }
 
-export function useBreadcrumbCurrent(): string | null {
-  return useContext(BreadcrumbContext)?.current ?? null;
+export function useBreadcrumbTrailValue(): BreadcrumbTrail {
+  return useContext(BreadcrumbContext)?.trail ?? EMPTY_TRAIL;
 }
 
 /** How often the near-expiry check runs. Cheap — it compares two numbers. */
@@ -142,7 +178,7 @@ export function PlayerProvider({
   const [currentMs, setCurrentMs] = useState(0);
   const [durationMs, setDurationMs] = useState(0);
   const [speed, setSpeed] = useState(initialSpeed);
-  const [breadcrumb, setBreadcrumb] = useState<string | null>(null);
+  const [breadcrumb, setBreadcrumb] = useState<BreadcrumbTrail>(EMPTY_TRAIL);
   const [transcript, setTranscript] = useState<LoadedTranscript | null>(null);
   const [captionsOn, setCaptionsOn] = useState(false);
 
@@ -480,7 +516,7 @@ export function PlayerProvider({
   );
 
   const crumb = useMemo(
-    () => ({ current: breadcrumb, setCurrent: setBreadcrumb }),
+    () => ({ trail: breadcrumb, setTrail: setBreadcrumb }),
     [breadcrumb],
   );
 

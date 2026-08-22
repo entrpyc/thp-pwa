@@ -97,6 +97,14 @@ export {
   type ReviewItemRow,
 } from './reviews';
 export {
+  findSeriesById,
+  insertSeries,
+  setRecordingSeries,
+  updateSeries,
+  type NewSeries,
+  type SeriesRow,
+} from './series';
+export {
   findSummaryByRecording,
   publishSummary,
   setSummaryPublication,
@@ -106,10 +114,15 @@ export {
 export {
   findResumeProgress,
   findVisibleRecording,
+  findVisibleSeries,
   listVisibleRecordings,
+  listVisibleSeries,
   type ResumeProgressRow,
   type VisibilityOptions,
   type VisibleRecordingRow,
+  type VisibleSeriesDetail,
+  type VisibleSeriesRecordingRow,
+  type VisibleSeriesRow,
 } from './visibility';
 export {
   findLiveSessionByTokenHash,

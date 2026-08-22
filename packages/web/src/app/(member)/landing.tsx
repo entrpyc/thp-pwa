@@ -3,7 +3,7 @@
 import Link from 'next/link';
 import { useEffect, useState } from 'react';
 import {
-  MEMBER_LIBRARY_PAGE_PATH,
+  MEMBER_SERIES_PAGE_PATH,
   RESUME_PATH,
   formatTimecode,
   recordingPagePath,
@@ -18,9 +18,11 @@ import styles from './screens.module.css';
  *
  * The reference has three cards. One ships:
  *
- * - **Resume recording** — this story's, and the marquee behaviour behind it.
- * - **View all series** → **View all recordings**. Series arrive in Story 6; the row keeps its
- *   place, its arrow and its accent, and changes only where it goes.
+ * - **Resume recording** — Story 4's, and the marquee behaviour behind it.
+ * - **View all series**. Story 4 shipped this row pointing at the library, because series did not
+ *   exist yet; Story 6 gives it the destination the reference draws. *All recordings* did not
+ *   disappear with it — it is an entry in the menu, beside *All series*, which is where
+ *   `top-navigation/menu-opened.png` puts both.
  * - **My notes** — [§3.12](docs/project/prd.md) is deferred whole, so the card is **dropped**
  *   rather than rendered empty. An empty card is a promise; a missing one is a screen that will
  *   grow.
@@ -72,8 +74,8 @@ export function Landing() {
         </section>
       ) : null}
 
-      <Link className={styles.wayIn} href={MEMBER_LIBRARY_PAGE_PATH}>
-        <span className={styles.wayInLabel}>View all recordings</span>
+      <Link className={styles.wayIn} href={MEMBER_SERIES_PAGE_PATH}>
+        <span className={styles.wayInLabel}>View all series</span>
         <span className={styles.wayInArrow} aria-hidden="true">
           →
         </span>

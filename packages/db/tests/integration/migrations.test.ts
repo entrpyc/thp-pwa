@@ -157,6 +157,7 @@ describe('migrations apply to an empty database by one command', () => {
         'recording',
         'review_item',
         'segment',
+        'series',
         'session',
         'summary',
         'transcript',
@@ -1275,5 +1276,161 @@ describe('playback state, and nothing beside it', () => {
       select 1 from playback_progress where user_id = ${userId}
     `;
     expect(afterAccountGone).toHaveLength(0);
+  });
+});
+
+/**
+ * The `series` table and the one column it puts on `recording` — asserted by **exact column set**,
+ * for the reason every block above is: what is absent is the design.
+ *
+ * `recording_count` and `date_range` are auto-calculated ([4.3](docs/project/prd.md)) and must
+ * therefore not be columns; artwork is deferred ([3.3.3](docs/project/prd.md)); reordering is
+ * deferred, so there is no position column; podcast and external-publication fields arrive with
+ * distribution. A `toContain` assertion would not notice any of them arriving.
+ */
+describe('series, and nothing beside it', () => {
+  let target: ThrowawayDatabase;
+  let before: Map<string, string[]>;
+  let after: Map<string, string[]>;
+  let sql: ReturnType<typeof postgres>;
+  /** A recording written before the column existed, to read back afterwards. */
+  let existingRecordingId: string;
+  let seriesId: string;
+
+  beforeAll(async () => {
+    target = await createThrowawayDatabase(inject('databaseUrl'), 'series_migration');
+
+    const priorCount = journalCountBefore('0011_series');
+    await runMigrations({ url: target.url, migrationsFolder: migrationsFolderUpTo(priorCount) });
+    before = await readColumnSets(target.url);
+
+    sql = postgres(target.url, { max: 2, onnotice: () => {} });
+    const [written] = await sql<{ id: string }[]>`
+      insert into recording (original_media_key, title, recorded_at)
+      values ('originals/before-series.mp3', 'A teaching from before series', '2026-05-04')
+      returning id
+    `;
+    existingRecordingId = written?.id as string;
+
+    await runMigrations({ url: target.url, migrationsFolder: migrationsFolderUpTo(priorCount + 1) });
+    after = await readColumnSets(target.url);
+
+    const [created] = await sql<{ id: string }[]>`
+      insert into series (title, description) values ('The Book of Romans', 'A verse-by-verse study.')
+      returning id
+    `;
+    seriesId = created?.id as string;
+  }, 120_000);
+
+  afterAll(async () => {
+    await sql?.end({ timeout: 5 });
+    await target?.drop();
+  }, 60_000);
+
+  it('did not exist before this migration and does after — otherwise the comparison is vacuous', () => {
+    expect(before.has('series')).toBe(false);
+    expect(before.get('recording')).not.toContain('series_id');
+    expect(after.has('series')).toBe(true);
+    expect(after.get('recording')).toContain('series_id');
+  });
+
+  it('adds one column to recording, one table, and nothing anywhere else', () => {
+    for (const [table, columns] of before) {
+      const expected = table === 'recording' ? [...columns, 'series_id'].sort() : columns;
+      expect(after.get(table), `${table} changed`).toEqual(expected);
+    }
+    expect([...after.keys()].sort()).toEqual([...before.keys(), 'series'].sort());
+  });
+
+  it('gives series exactly these columns, and none of the deferred ones', () => {
+    expect(after.get('series')).toEqual(['created_at', 'description', 'id', 'title']);
+
+    // Every one of these is deferred with a named home. A count or a range as a *column* would also
+    // be a second answer to a question one query already answers — and the console's count and a
+    // member's count of the same series legitimately differ (3.2.2), which a column cannot express.
+    for (const deferred of [
+      'recording_count',
+      'date_range',
+      'first_recorded_at',
+      'last_recorded_at',
+      'artwork_key',
+      'artwork_url',
+      'cover_image',
+      'position',
+      'sort_order',
+      'slug',
+      'podcast_feed_url',
+      'external_published_at',
+      'published_at',
+    ]) {
+      expect(after.get('series'), `${deferred} is deferred and must not exist`).not.toContain(
+        deferred,
+      );
+    }
+  });
+
+  it('gives recording exactly one new column and no artwork or duration of its own', () => {
+    expect(after.get('recording')).toEqual([
+      'created_at',
+      'description',
+      'id',
+      'original_media_key',
+      'published_at',
+      'recorded_at',
+      'series_id',
+      'title',
+    ]);
+  });
+
+  it('leaves every recording that already existed in no series, with nobody back-filled', async () => {
+    const rows = await sql<{ series_id: string | null }[]>`
+      select series_id from recording where id = ${existingRecordingId}
+    `;
+    expect(rows.map((row) => row.series_id)).toEqual([null]);
+
+    // Nullable is the whole of "at most one, and usually none" (3.3.2, 3.3.9): a recording with no
+    // series is the ordinary case rather than a state somebody has to represent.
+    const [column] = await sql<{ is_nullable: string }[]>`
+      select is_nullable from information_schema.columns
+      where table_schema = 'public' and table_name = 'recording' and column_name = 'series_id'
+    `;
+    expect(column?.is_nullable).toBe('YES');
+  });
+
+  it('indexes series_id, because every series read filters on it', async () => {
+    const rows = await sql<{ indexdef: string }[]>`
+      select indexdef from pg_indexes
+      where schemaname = 'public' and tablename = 'recording'
+    `;
+    expect(rows.some((row) => row.indexdef.includes('series_id'))).toBe(true);
+  });
+
+  it('refuses a recording pointed at a series that does not exist', async () => {
+    await expect(
+      sql`
+        update recording set series_id = '00000000-0000-0000-0000-000000000000'
+        where id = ${existingRecordingId}
+      `,
+    ).rejects.toThrow();
+  });
+
+  it('sets the column null when a series is deleted, and never takes the recording with it', async () => {
+    await sql`update recording set series_id = ${seriesId} where id = ${existingRecordingId}`;
+    // The delete itself is half the assertion: a cascading foreign key would take the teaching with
+    // the grouping, which is the one thing this column must never do.
+    await sql`delete from series where id = ${seriesId}`;
+
+    const rows = await sql<{ id: string; series_id: string | null; title: string }[]>`
+      select id, series_id, title from recording where id = ${existingRecordingId}
+    `;
+    expect(rows).toHaveLength(1);
+    expect(rows[0]?.series_id).toBeNull();
+    expect(rows[0]?.title).toBe('A teaching from before series');
+  });
+
+  it('lets two series share a title — nothing makes a title an identifier', async () => {
+    await expect(
+      sql`insert into series (title) values ('Life of David'), ('Life of David')`,
+    ).resolves.toBeTruthy();
   });
 });

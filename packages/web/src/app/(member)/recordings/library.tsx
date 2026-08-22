@@ -5,6 +5,7 @@ import { useEffect, useState } from 'react';
 import {
   MEMBER_RECORDINGS_PATH,
   recordingPagePath,
+  seriesPagePath,
   type RecordingListPayload,
   type RecordingView,
 } from '@thp/shared';
@@ -30,8 +31,14 @@ import styles from '../screens.module.css';
  * not anything on this screen.
  *
  * No search box, no filter and no pagination: [§3.10](docs/project/prd.md) is deferred and there
- * are five recordings. No per-recording progress column — [3.3.4](docs/project/prd.md) arrives with
- * Story 6.
+ * are five recordings. No per-recording progress column — that is the *series* page's
+ * ([3.3.4](docs/project/prd.md)), and this list is ordered by date rather than by study.
+ *
+ * **The library is not regrouped by series** (Story 6). [3.3.1](docs/project/prd.md) stands and
+ * this list still reads newest-recorded first; what a row gains is its series *name*, rendered
+ * **beside** the row's own link rather than inside it, because an anchor within an anchor is not
+ * valid markup and the row is a whole-row link. A recording in no series shows no label and is
+ * otherwise unchanged ([3.3.9](docs/project/prd.md)).
  */
 
 /** One fixed rendering of a date, matching the console's, so the product reads one way. */
@@ -82,7 +89,7 @@ export function Library() {
       {recordings !== null && recordings.length > 0 ? (
         <ul className={styles.rows} aria-label="Recordings">
           {recordings.map((recording) => (
-            <li key={recording.id}>
+            <li key={recording.id} className={styles.rowGroup}>
               <Link className={styles.row} href={recordingPagePath(recording.id)}>
                 <span className={styles.rowText}>
                   <span className={styles.rowTitle}>{recording.title}</span>
@@ -95,6 +102,11 @@ export function Library() {
                   ›
                 </span>
               </Link>
+              {recording.series === null ? null : (
+                <Link className={styles.rowSeries} href={seriesPagePath(recording.series.id)}>
+                  {recording.series.title}
+                </Link>
+              )}
             </li>
           ))}
         </ul>

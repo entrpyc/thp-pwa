@@ -174,7 +174,7 @@ describe('a member presses play and hears the recording', () => {
       const landing = await fresh.newPage();
       await landing.goto(`${baseUrl}${DASHBOARD_PAGE_PATH}`, { waitUntil: 'domcontentloaded' });
       await expect
-        .poll(() => landing.getByRole('link', { name: 'View all recordings' }).count(), {
+        .poll(() => landing.getByRole('link', { name: 'View all series' }).count(), {
           timeout: 30_000,
         })
         .toBe(1);

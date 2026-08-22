@@ -306,7 +306,7 @@ describe('the landing offers the teaching the member was part-way through', () =
       // The way into the library is what tells us the landing has finished rendering; the card is
       // absent rather than merely not yet there.
       await expect
-        .poll(() => page.getByRole('link', { name: 'View all recordings' }).count(), {
+        .poll(() => page.getByRole('link', { name: 'View all series' }).count(), {
           timeout: 30_000,
         })
         .toBe(1);

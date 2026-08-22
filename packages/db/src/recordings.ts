@@ -19,6 +19,12 @@ export interface RecordingRow {
   readonly publishedAt: Date | null;
   /** Generated in Story 3. Nothing in this epic's Story 2 writes it. */
   readonly description: string | null;
+  /**
+   * The series this recording is in, or `null` (Story 6 Ticket 01). Written by
+   * {@link setRecordingSeries} in `series.ts` and by nothing else, which is what makes "moving a
+   * recording loses nothing" a property of one statement rather than of a convention.
+   */
+  readonly seriesId: string | null;
   readonly createdAt: Date;
 }
 

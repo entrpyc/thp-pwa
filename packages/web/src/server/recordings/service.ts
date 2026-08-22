@@ -69,6 +69,9 @@ export function describeRecording(row: RecordingRow): RecordingSummary {
     publishedAt: row.publishedAt === null ? null : row.publishedAt.toISOString(),
     description: row.description,
     summary: null,
+    // A recording one request old is in no series by construction — assignment is a later press on
+    // the row this creation puts in the list.
+    series: null,
     createdAt: row.createdAt.toISOString(),
   };
 }
@@ -309,6 +312,12 @@ function describeForMember(row: VisibleRecordingRow): RecordingView {
     publishedAt: row.publishedAt === null ? null : row.publishedAt.toISOString(),
     description: row.description,
     summary: row.summary,
+    // Both surfaces get it: the console's row renders its picker from it, and a member's row
+    // renders the library's series label and the recording page's breadcrumb parent from it.
+    series:
+      row.seriesId === null || row.seriesTitle === null
+        ? null
+        : { id: row.seriesId, title: row.seriesTitle },
   };
 }
 

@@ -41,4 +41,9 @@ export const rules: PolicyRules = {
   'recording.browse': { roles: { admin: true, member: true } },
   'transcript.correct': { roles: { admin: true, member: false } },
   'summary.regenerate': { roles: { admin: true, member: false } },
+  'series.create': { roles: { admin: true, member: false } },
+  'series.update': { roles: { admin: true, member: false } },
+  'series.assign': { roles: { admin: true, member: false } },
+  'series.list': { roles: { admin: true, member: false } },
+  'series.browse': { roles: { admin: true, member: true } },
 };

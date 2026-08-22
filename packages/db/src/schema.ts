@@ -33,7 +33,8 @@ import {
  * two domain enums; ticket 2 added `user` and `session`; ticket 3 added `invitation`; ticket 4 added
  * `password_reset`. Story 2 Ticket 01 adds `recording`, Ticket 02 the `job` ledger beneath it, and
  * Ticket 03 `transcript` and `segment`. Story 3 Ticket 01 adds `review_item` and `summary`, and
- * Story 4 Ticket 04 adds `playback_progress` — the last table of this epic.
+ * Story 4 Ticket 04 adds `playback_progress`. Story 6 Ticket 01 adds `series` — the last table
+ * of this epic, and the only one that is a new entity rather than a column.
  *
  * The enums are **derived** from the shared TypeScript constants rather than restated beside them.
  * That is what keeps "each enum is declared exactly once in the repository" true, and it is
@@ -221,6 +222,33 @@ export const passwordReset = pgTable(
 );
 
 /**
+ * A named series of teachings (Story 6 Ticket 01) — the **left-hand end** of the spine
+ * docs/epics/epic-core-listening/architecture.md § Data model draws as
+ * `Series 1—* Recording 1—1 Transcript 1—* Segment`, and the only entity this story adds.
+ *
+ * **Four columns, and the absences are the design.** No `recording_count` and no `date_range`:
+ * docs/project/prd.md 4.3 calls both auto-calculated, and a denormalised count is a second answer
+ * to a question one query already answers — the console's count and a member's count of the same
+ * series legitimately differ (3.2.2), which a column could not express. No `artwork_key`, because
+ * 3.3.3 is deferred and both design references draw covers this epic does not ship. No `position`
+ * or `sort_order`, because reordering a series is deferred and the order inside one is
+ * `recorded_at` and nothing else. No slug, because the id is what every other resource here is
+ * addressed by. No podcast or external-publication field — those arrive with distribution
+ * (3.3.7, 4.3), which is what drives their real requirements.
+ *
+ * **The title is not unique.** Nothing in docs/project/prd.md 3.3 makes a title an identifier, and
+ * a uniqueness rule nobody asked for is a rule somebody has to discover. The migration test
+ * asserts the exact column set rather than trusting this comment.
+ */
+export const series = pgTable('series', {
+  id: uuid('id').primaryKey().defaultRandom(),
+  title: text('title').notNull(),
+  /** Optional, and empty is stored as `null` — one representation of "nothing written here". */
+  description: text('description'),
+  createdAt: timestamp('created_at', { withTimezone: true }).notNull().defaultNow(),
+});
+
+/**
  * A recording (Story 2 Ticket 01) — the first row in the spine
  * docs/epics/epic-core-listening/architecture.md § Data model draws as
  * `Series 1—* Recording 1—1 Transcript 1—* Segment`.
@@ -228,11 +256,12 @@ export const passwordReset = pgTable(
  * **What is absent is the design.** There is no `duration`, because nothing inspects the media in
  * this epic ([§3.4](docs/project/prd.md) is deferred whole); no `processed_media_key`, because no
  * processed rendition exists and that column is the named seam
- * (docs/epics/epic-core-listening/architecture.md § Extension points, "Second media pointer"); and
- * no `series_id`, because series arrive in Story 6 and a recording with no series is the only kind
- * there is (docs/project/prd.md, 3.3.9). A nullable column added "for later" is how deferral
- * quietly stops being deferral, so the migration test asserts the exact column set rather than
- * trusting this comment.
+ * (docs/epics/epic-core-listening/architecture.md § Extension points, "Second media pointer").
+ * `series_id` **arrived in Story 6 Ticket 01** — see the column — and it arrived with the routes
+ * and the screens that write and read it rather than "for later", which is the whole distinction
+ * this paragraph is about. A nullable column added ahead of a use is how deferral quietly stops
+ * being deferral, so the migration test asserts the exact column set rather than trusting this
+ * comment.
  *
  * Two columns *are* here and nothing writes them, and they are here for a different reason:
  * `published_at` and `description` are what the row means, not what a later step adds to it.
@@ -262,9 +291,27 @@ export const recording = pgTable(
     publishedAt: timestamp('published_at', { withTimezone: true }),
     /** Generated in Story 3. Nothing in this ticket writes it. */
     description: text('description'),
+    /**
+     * **The series this recording is in, or none** (Story 6 Ticket 01,
+     * docs/project/prd.md 3.3.2 and 3.3.9).
+     *
+     * A nullable foreign key is the whole of "at most one series": there is no join table, so a
+     * recording in two series is not a rule a check enforces but a row the database cannot hold.
+     * Nullable because most recordings have no series and 3.3.9 makes that ordinary rather than
+     * exceptional. Indexed because every series read filters on it.
+     *
+     * `on delete set null` rather than cascade: a series is a grouping of recordings, and deleting
+     * one must never take teachings with it. **No delete route ships in this story** — 3.3.6 names
+     * create, rename, reorder, merge and move and no delete — so this is the behaviour of a hand
+     * at the database, which is exactly the hand that most needs it to be safe.
+     */
+    seriesId: uuid('series_id').references(() => series.id, { onDelete: 'set null' }),
     createdAt: timestamp('created_at', { withTimezone: true }).notNull().defaultNow(),
   },
-  (table) => [uniqueIndex('recording_original_media_key_unique').on(table.originalMediaKey)],
+  (table) => [
+    uniqueIndex('recording_original_media_key_unique').on(table.originalMediaKey),
+    index('recording_series_id_idx').on(table.seriesId),
+  ],
 );
 
 /**

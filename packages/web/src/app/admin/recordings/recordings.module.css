@@ -235,6 +235,42 @@
   color: var(--color-text-dim);
 }
 
+/*
+ * The series picker on each row (Story 6). A native `<select>` for the same reason the file
+ * control is native: it is the version a phone's own picker understands, and this screen is used
+ * standing up after a service. It takes the field recipe — the raised surface, the hairline and
+ * `--radius-sm` — and the label above it is metadata, so it reads at `--fs-meta` on
+ * `--color-text-dim` like every other label in a row.
+ */
+.seriesPicker {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-1);
+  min-width: 0;
+}
+
+.seriesLabel {
+  font-size: var(--fs-meta);
+  color: var(--color-text-dim);
+}
+
+.select {
+  min-height: calc(var(--space-8) + var(--space-3));
+  max-width: 100%;
+  background: var(--color-surface-raised);
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-sm);
+  padding: var(--space-2) var(--space-3);
+  color: var(--color-text);
+  font-family: inherit;
+  font-size: var(--fs-body);
+}
+
+.select:disabled {
+  cursor: progress;
+  color: var(--color-text-dim);
+}
+
 /* ----------------------------------------------------------------------------------- a phone */
 
 @media (max-width: 48rem) {

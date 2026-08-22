@@ -121,6 +121,25 @@ export const POLICY_ACTIONS = [
    */
   'transcript.correct',
   'summary.regenerate',
+  /**
+   * **The five series actions** (Story 6). Five rather than one `series.manage`, and the same split
+   * every group above takes: naming a study, wording it, and deciding which teaching belongs to it
+   * are the same question only while there are two roles.
+   *
+   * The split is not decoration here. Widening series management to Contributor is one of the four
+   * cases docs/epics/epic-core-listening/architecture.md § Extension points already names, and
+   * "widen four cases" is only true if the cases exist to be widened.
+   *
+   * `series.list` / `series.browse` are the `recording.list` / `recording.browse` pair again, and
+   * they mean the same two things: *see the console's list of every series* and *read the series a
+   * member may read*. One route answers both, and which answer it gives is decided by the surface
+   * parameter plus this pair — never by a role read at the call site.
+   */
+  'series.create',
+  'series.update',
+  'series.assign',
+  'series.list',
+  'series.browse',
 ] as const;
 
 export type PolicyAction = (typeof POLICY_ACTIONS)[number];
@@ -222,6 +241,19 @@ const RULES: PolicyRules = {
   // transcript and does not write to it — refused by the API, not merely absent from the screen.
   'transcript.correct': { roles: { admin: true, member: false } },
   'summary.regenerate': { roles: { admin: true, member: false } },
+  // Naming a study, wording it, and putting a teaching into it. Admin-only **in this epic**;
+  // [3.3.6](docs/project/prd.md) widens all three to Contributor when that role arrives, and
+  // widening them is three lines here and nothing else anywhere.
+  'series.create': { roles: { admin: true, member: false } },
+  'series.update': { roles: { admin: true, member: false } },
+  'series.assign': { roles: { admin: true, member: false } },
+  // The console's reading of the series list. The same question `recording.list` asks about
+  // teachings, and it is not what admits a member to the series screens.
+  'series.list': { roles: { admin: true, member: false } },
+  // Both roles, exactly as `recording.browse`. What a member sees through it is decided by the
+  // visibility condition, not here — the policy answers "may this person ask", and the query
+  // answers "about which rows".
+  'series.browse': { roles: { admin: true, member: true } },
 };
 
 export function isPolicyAction(value: string): value is PolicyAction {

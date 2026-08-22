@@ -193,27 +193,41 @@
   overflow: hidden;
 }
 
+/*
+ * The hairline divides the **list item**, not the link inside it: a library row is a whole-row
+ * link plus, when there is one, a series link beside it (Story 6), and a border on the link alone
+ * would draw a line between the two halves of one row.
+ */
+.rowGroup {
+  border-bottom: 1px solid var(--color-border);
+}
+
+.rows li:last-child {
+  border-bottom: none;
+}
+
 .row {
   display: flex;
   align-items: center;
   justify-content: space-between;
   gap: var(--space-4);
   padding: var(--space-4) var(--space-5);
-  border-bottom: 1px solid var(--color-border);
   text-decoration: none;
   min-width: 0;
-}
-
-.rows li:last-child .row {
-  border-bottom: none;
 }
 
 .row:hover {
   background: var(--color-surface-raised);
 }
 
+/*
+ * `flex: 1` so the chevron stays at the right edge whatever else the row carries. The library row
+ * has two children and the series row has three — the leading `01.` — and without this the row's
+ * `space-between` would push the number away from the title it belongs to.
+ */
 .rowText {
   display: flex;
+  flex: 1 1 auto;
   flex-direction: column;
   gap: var(--space-1);
   min-width: 0;
@@ -243,6 +257,41 @@
   flex: none;
   color: var(--color-text-dim);
   font-size: var(--fs-card-title);
+}
+
+/*
+ * The series a library row belongs to (Story 6) — the guide's link recipe at metadata size,
+ * **outside** the row's own anchor because an anchor inside an anchor is not valid markup. It sits
+ * under the row rather than inside it, with the row's left padding, so it reads as belonging to the
+ * row above it.
+ */
+.rowSeries {
+  display: inline-block;
+  padding: 0 var(--space-5) var(--space-3);
+  font-size: var(--fs-meta);
+  font-weight: 500;
+  color: var(--color-primary-strong);
+  text-decoration: none;
+  max-width: 100%;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.rowSeries:hover {
+  text-decoration: underline;
+}
+
+/*
+ * `01.`, `02.` — the position of a recording inside its series (Story 6), where the reference draws
+ * the same number. Metadata weight and colour, tabular so the numbers line up down the column, and
+ * `aria-hidden` in the markup because the order is already the reading order.
+ */
+.rowNumber {
+  flex: none;
+  font-size: var(--fs-meta);
+  color: var(--color-text-dim);
+  font-variant-numeric: tabular-nums;
 }
 
 /* ---------------------------------------------------------------------------- the recording page */
@@ -328,6 +377,22 @@
   margin: 0;
   font-size: var(--fs-meta);
   color: var(--color-text-dim);
+}
+
+/*
+ * A series' description under its title (Story 6), clamped to two lines — which is exactly what
+ * `pages/series-inner.png` shows. A detail view lets a description wrap, and this one wraps twice
+ * and then stops; the full text of a study's blurb belongs on the console row that wrote it.
+ */
+.seriesDescription {
+  margin: 0;
+  font-size: var(--fs-body);
+  color: var(--color-text-muted);
+  display: -webkit-box;
+  -webkit-box-orient: vertical;
+  -webkit-line-clamp: 2;
+  line-clamp: 2;
+  overflow: hidden;
 }
 
 /*

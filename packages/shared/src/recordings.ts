@@ -226,6 +226,18 @@ export interface CreateRecordingRequest {
 }
 
 /**
+ * The series a recording belongs to, as it travels **on the recording itself** (Story 6).
+ *
+ * Declared here rather than in `series.ts` because it is a field of {@link RecordingView} and
+ * `series.ts` already reads this file for its paths — one direction, no cycle. Two fields and no
+ * more: everything else about a series is what opening the series page is for.
+ */
+export interface RecordingSeriesRef {
+  readonly id: string;
+  readonly title: string;
+}
+
+/**
  * A recording as **anyone permitted to see it** may — which from Story 3 Ticket 04 includes a
  * member, because `GET /api/v1/recordings` answers both roles from one query and one visibility
  * condition ([3.2.2](docs/project/prd.md), [3.1.2](docs/project/prd.md)).
@@ -244,6 +256,15 @@ export interface RecordingView {
   readonly description: string | null;
   /** The approved summary, when it and the recording are both published. Otherwise `null`. */
   readonly summary: string | null;
+  /**
+   * The series this recording is in, or `null` for the majority that are in none
+   * ([3.3.9](docs/project/prd.md)) — Story 6.
+   *
+   * On the recording rather than fetched by whatever needs it, so the library row's series label
+   * and the recording page's `home › series › recording` trail are both facts about the row rather
+   * than about the navigation that reached it.
+   */
+  readonly series: RecordingSeriesRef | null;
 }
 
 /**

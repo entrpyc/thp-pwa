@@ -235,7 +235,7 @@ describe('the reset-password screen', () => {
       // The landing's own content — the placeholder that printed the address retired with Story 4
       // Ticket 01.
       await expect
-        .poll(() => page.getByRole('link', { name: 'View all recordings' }).count(), {
+        .poll(() => page.getByRole('link', { name: 'View all series' }).count(), {
           timeout: 30_000,
         })
         .toBe(1);

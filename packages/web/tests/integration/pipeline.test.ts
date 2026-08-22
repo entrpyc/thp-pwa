@@ -322,6 +322,9 @@ describe('what the read answers with', () => {
       'originalMediaKey',
       'publishedAt',
       'recordedAt',
+      // Story 6's, and still not a speaker: the payload gained the series a recording is in and
+      // nothing else.
+      'series',
       'summary',
       'title',
     ]);

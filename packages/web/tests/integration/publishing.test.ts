@@ -283,6 +283,9 @@ describe('what a member is answered', () => {
       'id',
       'publishedAt',
       'recordedAt',
+      // Story 6. The series a teaching belongs to is member-facing — it is the library row's label
+      // and the recording page's breadcrumb parent — so it crosses on both surfaces.
+      'series',
       'summary',
       'title',
     ]);
@@ -302,6 +305,7 @@ describe('what a member is answered', () => {
       'originalMediaKey',
       'publishedAt',
       'recordedAt',
+      'series',
       'summary',
       'title',
     ]);

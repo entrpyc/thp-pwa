@@ -6,9 +6,10 @@ import {
   ADMIN_PAGE_PATH,
   DASHBOARD_PAGE_PATH,
   MEMBER_LIBRARY_PAGE_PATH,
+  MEMBER_SERIES_PAGE_PATH,
 } from '@thp/shared';
 import { SignOutButton } from '../sign-out-button';
-import { useBreadcrumbCurrent } from './player-context';
+import { useBreadcrumbTrailValue } from './player-context';
 import styles from './member.module.css';
 
 /**
@@ -20,8 +21,10 @@ import styles from './member.module.css';
  *
  * - **No search control.** [§3.10](docs/project/prd.md) is deferred whole, and a magnifier that
  *   opened nothing would be a promise this epic cannot keep.
- * - **No *All series* and no *All chapters*.** Series arrive in Story 6; chapters have no model in
- *   this epic at all.
+ * - **No *All chapters*.** Chapters have no model in this epic at all. *All series* **arrived in
+ *   Story 6** and sits where the reference puts it — between *Dashboard* and *All recordings* —
+ *   which is what the dropped-not-disabled rule buys: a destination lands in a slot that already
+ *   exists rather than needing one carved for it.
  * - **Nothing disabled.** A greyed control is a thing the next epic has to find and un-disable, and
  *   in the meantime it tells a member the product is broken rather than unfinished. A deferred
  *   destination is **dropped**, and what survives is the layout, the tone and the token layer — so
@@ -31,8 +34,10 @@ import styles from './member.module.css';
  * `/admin` gates itself server-side and every route behind it refuses independently
  * ([3.1.5](docs/project/prd.md)).
  *
- * The breadcrumb is home → the current page's title, and the series segment
- * `top-navigation/default.png` shows between them is Story 6's to insert.
+ * The breadcrumb is home → an optional parent → the current page's title. The parent is the series
+ * segment `top-navigation/default.png` draws, inserted in Story 6, and it is a **link** rather than
+ * text: getting back to the series in one press is the whole of what the segment is for. A page
+ * with no parent renders exactly the two segments it always did.
  */
 
 function HomeIcon() {
@@ -65,7 +70,7 @@ function MenuIcon() {
 
 export function TopNavigation({ canSeeConsole }: { canSeeConsole: boolean }) {
   const [open, setOpen] = useState(false);
-  const current = useBreadcrumbCurrent();
+  const { parent, current } = useBreadcrumbTrailValue();
 
   return (
     <div className={styles.navRegion}>
@@ -76,6 +81,16 @@ export function TopNavigation({ canSeeConsole }: { canSeeConsole: boolean }) {
               <HomeIcon />
             </Link>
           </li>
+          {parent === null ? null : (
+            <li className={styles.crumb}>
+              <span className={styles.separator} aria-hidden="true">
+                ›
+              </span>
+              <Link className={styles.crumbLink} href={parent.href}>
+                {parent.label}
+              </Link>
+            </li>
+          )}
           {current === null ? null : (
             <li className={styles.crumb}>
               <span className={styles.separator} aria-hidden="true">
@@ -105,6 +120,16 @@ export function TopNavigation({ canSeeConsole }: { canSeeConsole: boolean }) {
             <li>
               <Link className={styles.menuLink} href={DASHBOARD_PAGE_PATH} onClick={() => setOpen(false)}>
                 Dashboard
+              </Link>
+            </li>
+            {/* Between Dashboard and All recordings, exactly where `menu-opened.png` draws it. */}
+            <li>
+              <Link
+                className={styles.menuLink}
+                href={MEMBER_SERIES_PAGE_PATH}
+                onClick={() => setOpen(false)}
+              >
+                All series
               </Link>
             </li>
             <li>

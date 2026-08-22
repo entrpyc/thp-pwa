@@ -198,7 +198,9 @@ describe('the summary controls', () => {
         .toBe(1);
 
       await row.getByRole('button', { name: 'Edit summary' }).click();
-      await row.getByLabel('Summary').fill('The wording an admin preferred.');
+      // Exact, because the row's series picker is labelled *Series for <title>* and this run's
+      // title happens to contain the word "Summary" — a substring match would find two controls.
+      await row.getByLabel('Summary', { exact: true }).fill('The wording an admin preferred.');
       await row.getByRole('button', { name: 'Save summary' }).click();
 
       await expect

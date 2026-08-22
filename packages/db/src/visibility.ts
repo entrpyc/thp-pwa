@@ -1,6 +1,6 @@
-import { and, desc, eq, isNotNull, sql } from 'drizzle-orm';
+import { and, asc, desc, eq, isNotNull, sql } from 'drizzle-orm';
 import { getDatabase, queryable, type Executor } from './client';
-import { playbackProgress, recording, summary } from './schema';
+import { playbackProgress, recording, series, summary } from './schema';
 
 /**
  * **The member visibility condition, written once.**
@@ -9,12 +9,12 @@ import { playbackProgress, recording, summary } from './schema';
  * else — enforced by tests/guards/visibility-boundary.test.ts, which refuses a `published_at` null
  * predicate anywhere outside it.
  *
- * The guard exists because of what comes next rather than what exists now. Story 4's library and
- * recording page, Story 5's player and transcript, and Story 6's series listing are four more read
- * paths over the same rows, and a rule re-implemented per route is a rule that will be forgotten
- * on the fourth one — the failure being *a teaching nobody published becoming readable*, which is
- * the one failure this product cannot take back. A guard makes "written once" checkable rather
- * than reviewed.
+ * The guard existed because of what came next rather than what existed then, and **the fifth and
+ * sixth read paths are now in this file**: Story 4's library and recording page, Story 5's player
+ * and transcript, and Story 6's series listing and series page. A rule re-implemented per route is
+ * a rule that gets forgotten on the fourth one — the failure being *a teaching nobody published
+ * becoming readable*, which is the one failure this product cannot take back. A guard makes
+ * "written once" checkable rather than reviewed.
  *
  * **Two gates, not one.** A recording is visible when `recording.published_at` is set
  * ([3.2.2](docs/project/prd.md)). Its *summary* is visible only when the summary's own
@@ -40,6 +40,9 @@ export interface VisibleRecordingRow {
   /** Admin-only at every call site. Never a URL. */
   readonly originalMediaKey: string;
   readonly createdAt: Date;
+  /** The series this recording is in, or `null` for the many in none (Story 6). */
+  readonly seriesId: string | null;
+  readonly seriesTitle: string | null;
 }
 
 export interface VisibilityOptions {
@@ -82,9 +85,14 @@ export async function listVisibleRecordings(
       summary: visibleSummary,
       originalMediaKey: recording.originalMediaKey,
       createdAt: recording.createdAt,
+      seriesId: recording.seriesId,
+      seriesTitle: series.title,
     })
     .from(recording)
     .leftJoin(summary, eq(summary.recordingId, recording.id))
+    // Left, not inner: a recording in no series is the ordinary case (3.3.9), and an inner join
+    // here would silently empty the library.
+    .leftJoin(series, eq(series.id, recording.seriesId))
     // The row gate. `undefined` is drizzle's "no predicate", so the admin read is the same
     // statement without a `where` rather than a second query somebody has to keep in step.
     .where(options.includeUnpublished ? undefined : isNotNull(recording.publishedAt))
@@ -126,9 +134,14 @@ export async function findVisibleRecording(
       summary: visibleSummary,
       originalMediaKey: recording.originalMediaKey,
       createdAt: recording.createdAt,
+      seriesId: recording.seriesId,
+      seriesTitle: series.title,
     })
     .from(recording)
     .leftJoin(summary, eq(summary.recordingId, recording.id))
+    // Left, not inner: a recording in no series is the ordinary case (3.3.9), and an inner join
+    // here would silently empty the library.
+    .leftJoin(series, eq(series.id, recording.seriesId))
     .where(
       options.includeUnpublished
         ? eq(recording.id, id)
@@ -177,4 +190,161 @@ export async function findResumeProgress(
     .limit(1);
 
   return (rows[0] as ResumeProgressRow | undefined) ?? null;
+}
+
+/**
+ * A series, with the two things about it that are **counted rather than stored** (Story 6).
+ *
+ * `recordingCount`, `firstRecordedAt` and `lastRecordedAt` are aggregates over the recordings the
+ * caller may see, computed in the same statement that reads the series. That is why the console's
+ * answer for a series and a member's answer for the same series can legitimately differ, and it is
+ * why [4.3](docs/project/prd.md)'s "auto-calculated" is a query rather than a column somebody has
+ * to remember to keep in step.
+ */
+export interface VisibleSeriesRow {
+  readonly id: string;
+  readonly title: string;
+  readonly description: string | null;
+  readonly recordingCount: number;
+  /** `YYYY-MM-DD`, or `null` when the series holds nothing this caller may see. */
+  readonly firstRecordedAt: string | null;
+  readonly lastRecordedAt: string | null;
+}
+
+/** One row of a series page — a recording, with this member's own position in it. */
+export interface VisibleSeriesRecordingRow {
+  readonly id: string;
+  readonly title: string;
+  readonly description: string | null;
+  /** `YYYY-MM-DD`. */
+  readonly recordedAt: string;
+  /** This member's stored position, or `null` when they have never started it. */
+  readonly positionMs: number | null;
+}
+
+/** A series and the recordings in it, as one caller may read them. */
+export interface VisibleSeriesDetail {
+  readonly series: VisibleSeriesRow;
+  readonly recordings: readonly VisibleSeriesRecordingRow[];
+}
+
+/**
+ * Series this caller may read (Story 6 Ticket 02) — **the fifth read path over these rows**, and
+ * the reason this module exists rather than a query beside the route that wants it.
+ *
+ * One statement, and `includeUnpublished` decides three things at once:
+ *
+ * - **Which recordings are counted.** The join carries the row gate, so a member's count and date
+ *   range are over published recordings only ([3.2.2](docs/project/prd.md)) and the console's are
+ *   over everything assigned.
+ * - **Whether an empty series comes back.** The console has to see one — it is where an empty
+ *   series becomes fillable — and a member must not, because a series with nothing published in it
+ *   is a series with nothing to open. That is the `having` below.
+ * - **Nothing about who may ask.** The policy module answers that, and this boolean never widens
+ *   what a caller may see.
+ *
+ * Ordered by the most recent recording in the series, newest first — the product's one answer to
+ * "what is most recent" ([3.3.1](docs/project/prd.md)) applied to a series rather than a teaching.
+ * A series holding nothing sorts last (`nulls last`) and then by title, so the console's empty
+ * series are appended in a readable order rather than scattered.
+ */
+export async function listVisibleSeries(
+  options: VisibilityOptions,
+  executor: Executor = getDatabase(),
+): Promise<VisibleSeriesRow[]> {
+  // The row gate, carried on the *join* rather than in a `where`: a series with no visible
+  // recording must still reach the `having` below to be counted as empty, and a `where` would drop
+  // it before it got there.
+  const counted = options.includeUnpublished
+    ? eq(recording.seriesId, series.id)
+    : and(eq(recording.seriesId, series.id), isNotNull(recording.publishedAt));
+
+  const rows = await queryable(executor)
+    .select({
+      id: series.id,
+      title: series.title,
+      description: series.description,
+      recordingCount: sql<number>`count(${recording.id})::int`,
+      firstRecordedAt: sql<string | null>`min(${recording.recordedAt})::text`,
+      lastRecordedAt: sql<string | null>`max(${recording.recordedAt})::text`,
+    })
+    .from(series)
+    .leftJoin(recording, counted)
+    .groupBy(series.id, series.title, series.description)
+    .having(options.includeUnpublished ? undefined : sql`count(${recording.id}) > 0`)
+    .orderBy(sql`max(${recording.recordedAt}) desc nulls last`, asc(series.title));
+
+  return rows as unknown as VisibleSeriesRow[];
+}
+
+/**
+ * One series and everything in it this caller may read, or `null` (Story 6 Ticket 02).
+ *
+ * **The same gate as the list, plus this member's own progress.** The join onto
+ * `playback_progress` is on `(user_id, recording_id)` for the requesting account and nobody else's,
+ * which is the whole of "and only their own" — two members reading the same series row get two
+ * different positions out of one query and neither can see the other's.
+ *
+ * **Oldest recorded first**, the reverse of the library. Both orders are correct and they are
+ * opposite: [3.3.1](docs/project/prd.md) makes newest-first the product's default reading and
+ * [3.3.4](docs/project/prd.md) asks for chronological inside a series, because a study is read
+ * forwards. There is no ordering column and no numbering here — the `01.`–`08.` the reference
+ * draws is the row's position in this order, computed for display by whatever renders it.
+ *
+ * `null` covers "no such series" and "nothing in it you may see" alike, so the API does not report
+ * which ids exist.
+ */
+export async function findVisibleSeries(
+  id: string,
+  userId: string,
+  options: VisibilityOptions,
+  executor: Executor = getDatabase(),
+): Promise<VisibleSeriesDetail | null> {
+  const on = queryable(executor);
+
+  const found = await on.select().from(series).where(eq(series.id, id)).limit(1);
+  const row = found[0] as { id: string; title: string; description: string | null } | undefined;
+  if (row === undefined) return null;
+
+  const rows = await on
+    .select({
+      id: recording.id,
+      title: recording.title,
+      description: recording.description,
+      recordedAt: recording.recordedAt,
+      positionMs: playbackProgress.positionMs,
+    })
+    .from(recording)
+    .leftJoin(
+      playbackProgress,
+      and(
+        eq(playbackProgress.recordingId, recording.id),
+        eq(playbackProgress.userId, userId),
+      ),
+    )
+    .where(
+      options.includeUnpublished
+        ? eq(recording.seriesId, id)
+        : and(eq(recording.seriesId, id), isNotNull(recording.publishedAt)),
+    )
+    .orderBy(asc(recording.recordedAt), asc(recording.createdAt));
+
+  const recordings = rows as unknown as VisibleSeriesRecordingRow[];
+
+  // A series holding nothing this caller may see answers exactly as one that never existed. The
+  // console asks with the gate open and does get an empty series back, which is the one caller
+  // that has a reason to look at one.
+  if (recordings.length === 0 && !options.includeUnpublished) return null;
+
+  return {
+    series: {
+      id: row.id,
+      title: row.title,
+      description: row.description,
+      recordingCount: recordings.length,
+      firstRecordedAt: recordings[0]?.recordedAt ?? null,
+      lastRecordedAt: recordings[recordings.length - 1]?.recordedAt ?? null,
+    },
+    recordings,
+  };
 }

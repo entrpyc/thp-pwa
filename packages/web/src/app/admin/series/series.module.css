@@ -1,0 +1,149 @@
+/*
+ * The series panel.
+ *
+ * There is no `pages/admin.png`; this panel takes the same carve-out every other admin screen has,
+ * so it is composed from docs/design referencess png/style-guide.md and the token layer. It
+ * **invents nothing at all**: the panel, the section, the field, the label, the input, the solid
+ * submit, the list row, the outlined action and the error line every one `composes` from
+ * `admin.module.css`, so the extrapolations documented there are stated once and the five panels
+ * cannot drift.
+ *
+ * The two rules below that are not a `composes` are both taken from a rule in the guide rather
+ * than invented:
+ *
+ * 1. `.textarea` — the field recipe at prose height: the guide's input surface, hairline and
+ *    `--radius-sm`, with the body line-height a description is read at. The same recipe the
+ *    recordings panel's summary editor takes, and for the same reason.
+ * 2. `.rowDescription` — the guide's one-line list-row description, truncated with an ellipsis. The
+ *    full text is what the member's series page wraps; a console row is a scan.
+ */
+
+.panel {
+  composes: panel from '../admin.module.css';
+}
+
+.section {
+  composes: section from '../admin.module.css';
+}
+
+.sectionTitle {
+  composes: sectionTitle from '../admin.module.css';
+}
+
+.sectionNote {
+  composes: sectionNote from '../admin.module.css';
+}
+
+.empty {
+  composes: empty from '../admin.module.css';
+}
+
+.failure {
+  composes: failure from '../admin.module.css';
+}
+
+.done {
+  composes: done from '../admin.module.css';
+}
+
+.field {
+  composes: field from '../admin.module.css';
+}
+
+.label {
+  composes: label from '../admin.module.css';
+}
+
+.input {
+  composes: input from '../admin.module.css';
+}
+
+.submit {
+  composes: submit from '../admin.module.css';
+  /* The two containers below stretch their children so the fields fill the panel; the press is the
+     one child that should stay its own width. */
+  align-self: flex-start;
+}
+
+.list {
+  composes: list from '../admin.module.css';
+}
+
+.listRow {
+  composes: row from '../admin.module.css';
+}
+
+.rowIdentity {
+  composes: rowIdentity from '../admin.module.css';
+}
+
+.rowName {
+  composes: rowName from '../admin.module.css';
+}
+
+.rowMeta {
+  composes: rowMeta from '../admin.module.css';
+}
+
+.rowControls {
+  composes: rowControls from '../admin.module.css';
+}
+
+.action {
+  composes: action from '../admin.module.css';
+}
+
+.rowRefusal {
+  composes: rowRefusal from '../admin.module.css';
+}
+
+/*
+ * A column rather than the recordings panel's row: two fields and a press, and a title beside a
+ * description on one line reads as two halves of one thing rather than as two things.
+ * `align-items: stretch` is what lets the shared `.field` fill the panel here — it is written for
+ * a row and would collapse to its content in a column.
+ */
+.form {
+  display: flex;
+  flex-direction: column;
+  align-items: stretch;
+  gap: var(--space-4);
+}
+
+.editor {
+  flex: 1 1 100%;
+  display: flex;
+  flex-direction: column;
+  align-items: stretch;
+  gap: var(--space-2);
+  min-width: 0;
+}
+
+/* One line in a list row, as the guide specifies. It wraps on the member's series page instead. */
+.rowDescription {
+  margin: 0;
+  font-size: var(--fs-body);
+  color: var(--color-text-muted);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  max-width: 100%;
+}
+
+.textarea {
+  width: 100%;
+  background: var(--color-surface-raised);
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-sm);
+  padding: var(--space-3) var(--space-4);
+  color: var(--color-text);
+  font-family: inherit;
+  font-size: var(--fs-body);
+  line-height: 1.6;
+  resize: vertical;
+}
+
+.textarea:disabled {
+  cursor: progress;
+  color: var(--color-text-dim);
+}

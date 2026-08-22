@@ -9,9 +9,11 @@ import {
 import {
   createDatabase,
   insertRecording,
+  insertSeries,
   publishSummary,
   setRecordingDescription,
   setRecordingPublication,
+  setRecordingSeries,
   setSummaryPublication,
   type DatabaseHandle,
 } from '@thp/db';
@@ -50,6 +52,8 @@ const VIEWPORTS = [
 const DESKTOP = { width: 1280, height: 900 };
 
 const PUBLISHED_TITLE = `Screen published ${RUN}`;
+/** The series the older teaching is put into, so a labelled row and an unlabelled one both exist. */
+const SERIES_TITLE = `Screen library series ${RUN}`;
 const OLDER_TITLE = `Screen older ${RUN}`;
 const HIDDEN_TITLE = `Screen unpublished ${RUN}`;
 
@@ -104,6 +108,11 @@ beforeAll(async () => {
   const olderId = await newRecording(OLDER_TITLE, '2026-03-01');
   hiddenId = await newRecording(HIDDEN_TITLE, '2026-08-01');
 
+  // One of the two published teachings is in a series and the other is in none, which is what makes
+  // "no label on a recording with no series" a comparison rather than an absence.
+  const seriesId = (await insertSeries({ title: SERIES_TITLE, description: null }, handle)).id;
+  await setRecordingSeries(olderId, seriesId, handle);
+
   await setRecordingDescription(publishedId, 'What this teaching is about.', handle);
   await publishSummary(publishedId, 'The approved summary a member reads.', handle);
   await setSummaryPublication(publishedId, true, handle);
@@ -133,13 +142,15 @@ describe('the placeholder home screen is gone', () => {
         .toBe(0);
       expect(await page.getByText(member.email).count()).toBe(0);
 
-      // What replaced it: the landing's way into the library, where the reference puts *View all
-      // series*.
+      // What replaced it: the landing's one way-in row. Story 4 shipped it pointing at the
+      // library because series did not exist; Story 6 gives it the destination
+      // `pages/dashboard.png` actually draws, and *All recordings* moved into the menu.
       await expect
-        .poll(() => page.getByRole('link', { name: 'View all recordings' }).count(), {
+        .poll(() => page.getByRole('link', { name: 'View all series' }).count(), {
           timeout: 30_000,
         })
         .toBe(1);
+      expect(await page.getByRole('link', { name: 'View all recordings' }).count()).toBe(0);
     } finally {
       await page.context().close();
     }
@@ -150,7 +161,12 @@ describe('the library at /recordings', () => {
   it('walks from the landing to the library to a teaching', async () => {
     const page = await signInAs(member);
     try {
-      await page.getByRole('link', { name: 'View all recordings' }).click();
+      // Through the menu, which is where *All recordings* lives from Story 6.
+      await page.getByRole('button', { name: 'Menu' }).click();
+      await page
+        .getByRole('list', { name: 'Navigation' })
+        .getByRole('link', { name: 'All recordings' })
+        .click();
       await page.waitForURL(`${baseUrl}${MEMBER_LIBRARY_PAGE_PATH}`, { timeout: 30_000 });
       await expect
         .poll(() => page.getByRole('heading', { level: 1, name: 'Recordings' }).count(), {
@@ -175,6 +191,30 @@ describe('the library at /recordings', () => {
 
       await page.getByRole('link', { name: new RegExp(PUBLISHED_TITLE) }).click();
       await page.waitForURL(`${baseUrl}${recordingPagePath(publishedId)}`, { timeout: 30_000 });
+    } finally {
+      await page.context().close();
+    }
+  }, 180_000);
+
+  it('labels a row with its series, and leaves a row with none unchanged', async () => {
+    const page = await signInAs(member);
+    try {
+      await page.goto(`${baseUrl}${MEMBER_LIBRARY_PAGE_PATH}`, { waitUntil: 'domcontentloaded' });
+      const rows = page.getByRole('list', { name: 'Recordings' }).getByRole('listitem');
+      await expect.poll(() => rows.count(), { timeout: 30_000 }).toBeGreaterThan(1);
+
+      // The label is a link **beside** the row's own link rather than inside it — an anchor within
+      // an anchor is not valid markup, and the row is a whole-row link.
+      const labelled = rows.filter({ hasText: OLDER_TITLE }).first();
+      expect(await labelled.getByRole('link', { name: SERIES_TITLE }).count()).toBe(1);
+      expect(
+        await labelled.getByRole('link', { name: new RegExp(OLDER_TITLE) }).count(),
+      ).toBe(1);
+
+      // 3.3.9 — a recording in no series shows no label and is otherwise the same row.
+      const unlabelled = rows.filter({ hasText: PUBLISHED_TITLE }).first();
+      expect(await unlabelled.getByRole('link').count()).toBe(1);
+      expect((await unlabelled.textContent()) ?? '').not.toContain(SERIES_TITLE);
     } finally {
       await page.context().close();
     }
@@ -293,10 +333,11 @@ describe('the top navigation', () => {
       const current = page.locator('[aria-current="page"]');
       await expect.poll(() => current.count(), { timeout: 30_000 }).toBe(1);
       expect(await current.textContent()).toBe(PUBLISHED_TITLE);
-      // The series segment the reference draws between the two is Story 6's to insert.
-      expect(await page.getByRole('navigation', { name: 'Breadcrumb' }).textContent()).not.toContain(
-        'Series',
-      );
+      // This teaching is in no series, so the trail is still the two segments it always was. The
+      // series segment the reference draws between them is asserted in series-screen.test.ts.
+      expect(
+        await page.getByRole('navigation', { name: 'Breadcrumb' }).getByRole('listitem').count(),
+      ).toBe(2);
     } finally {
       await page.context().close();
     }
@@ -305,7 +346,12 @@ describe('the top navigation', () => {
   it('offers a member exactly Dashboard, All recordings and Sign out', async () => {
     const page = await signInAs(member);
     try {
-      expect(await menuEntries(page)).toEqual(['Dashboard', 'All recordings', 'Sign out']);
+      expect(await menuEntries(page)).toEqual([
+        'Dashboard',
+        'All series',
+        'All recordings',
+        'Sign out',
+      ]);
     } finally {
       await page.context().close();
     }
@@ -318,6 +364,7 @@ describe('the top navigation', () => {
       // itself server-side and every route behind it refuses independently.
       expect(await menuEntries(page)).toEqual([
         'Dashboard',
+        'All series',
         'All recordings',
         'Admin console',
         'Sign out',
@@ -342,7 +389,9 @@ describe('the top navigation', () => {
 
       // Absent from the DOM, not merely hidden or disabled — which is the whole decision. A greyed
       // control is a promise this epic cannot keep and a thing the next epic has to un-disable.
-      for (const absent of ['All series', 'All chapters', 'Search', 'My notes']) {
+      // *All series* left this list in Story 6 — it is a live destination now, which is exactly
+      // what dropping rather than disabling was for. The rest stay deferred.
+      for (const absent of ['All chapters', 'Search', 'My notes']) {
         expect(await page.getByText(absent, { exact: false }).count(), absent).toBe(0);
       }
       expect(await page.getByRole('searchbox').count()).toBe(0);

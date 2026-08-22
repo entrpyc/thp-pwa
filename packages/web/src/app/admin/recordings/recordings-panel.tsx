@@ -9,17 +9,21 @@ import {
   RECORDINGS_PATH,
   RECORDING_UPLOADS_PATH,
   REVIEW_RECORDING_PARAM,
+  SERIES_PATH,
   checkChosenFile,
   contentTypeForExtension,
   describeBytes,
   extensionOf,
   isAcceptedAudioExtension,
   recordingPublishPath,
+  recordingSeriesPath,
   recordingSummaryPath,
   recordingSummaryUnpublishPath,
   recordingUnpublishPath,
   type AdminRecordingListPayload,
   type RecordingSummary,
+  type SeriesListPayload,
+  type SeriesView,
   type UploadGrantPayload,
 } from '@thp/shared';
 import { ApiClientError, apiFetch } from '@/client/api-client';
@@ -94,6 +98,14 @@ export function RecordingsPanel() {
 
   const [recordings, setRecordings] = useState<readonly RecordingSummary[] | null>(null);
   const [listError, setListError] = useState<string | null>(null);
+  /**
+   * Every series, for the picker on each row (Story 6).
+   *
+   * Fetched once for the panel rather than once per row — there is one list and every row offers
+   * the same choices. Empty until it arrives, and a failure leaves the picker offering *No series*
+   * alone rather than breaking the list beside it.
+   */
+  const [series, setSeries] = useState<readonly SeriesView[]>([]);
 
   const loadRecordings = useCallback(async (): Promise<void> => {
     try {
@@ -113,6 +125,12 @@ export function RecordingsPanel() {
   useEffect(() => {
     void loadRecordings();
   }, [loadRecordings]);
+
+  useEffect(() => {
+    void apiFetch<SeriesListPayload>(SERIES_PATH, { credentials: 'include' })
+      .then((payload) => setSeries(payload.series))
+      .catch(() => setSeries([]));
+  }, []);
 
   /**
    * The refusal that costs nothing. `checkChosenFile` is the shared rule — the same one the API
@@ -336,7 +354,12 @@ export function RecordingsPanel() {
         ) : (
           <ul className={styles.list}>
             {recordings.map((entry) => (
-              <RecordingRow key={entry.id} entry={entry} onChanged={loadRecordings} />
+              <RecordingRow
+                key={entry.id}
+                entry={entry}
+                series={series}
+                onChanged={loadRecordings}
+              />
             ))}
           </ul>
         )}
@@ -346,7 +369,7 @@ export function RecordingsPanel() {
 }
 
 /** What a row is doing, so the buttons can say it and two presses cannot overlap. */
-type RowBusy = 'publish' | 'unpublish' | 'summary' | 'summaryDown' | null;
+type RowBusy = 'publish' | 'unpublish' | 'summary' | 'summaryDown' | 'series' | null;
 
 /**
  * One recording, and everything an admin does to it after the pipeline has finished.
@@ -369,9 +392,12 @@ type RowBusy = 'publish' | 'unpublish' | 'summary' | 'summaryDown' | null;
  */
 function RecordingRow({
   entry,
+  series,
   onChanged,
 }: {
   entry: RecordingSummary;
+  /** Every series, for the picker. The same list for every row — there is only one. */
+  series: readonly SeriesView[];
   onChanged: () => Promise<void>;
 }) {
   const [busy, setBusy] = useState<RowBusy>(null);
@@ -419,6 +445,39 @@ function RecordingRow({
 
       <div className={styles.rowControls}>
         <span className={styles.chip}>{live ? 'Live' : 'Not published'}</span>
+
+        {/*
+          **Assignment lives here, not on the Series panel** — the epic's flow B assigns a series
+          while reviewing a teaching, immediately before publishing it, and this is the screen the
+          admin is already on. One press on change: there is no separate save, because a picker with
+          a save button beside it is two presses for one decision.
+        */}
+        <label className={styles.seriesPicker}>
+          <span className={styles.seriesLabel}>Series</span>
+          <select
+            className={styles.select}
+            name="seriesId"
+            aria-label={`Series for ${entry.title}`}
+            disabled={busy !== null}
+            value={entry.series?.id ?? ''}
+            onChange={(event) =>
+              void send('series', recordingSeriesPath(entry.id), {
+                method: 'PUT',
+                headers: { 'content-type': 'application/json' },
+                body: JSON.stringify({ seriesId: event.target.value === '' ? null : event.target.value }),
+              })
+            }
+          >
+            {/* The empty value is a real choice, not a placeholder: a recording in no series is the
+                ordinary case (3.3.9), and this is how it is put back into it. */}
+            <option value="">No series</option>
+            {series.map((one) => (
+              <option key={one.id} value={one.id}>
+                {one.title}
+              </option>
+            ))}
+          </select>
+        </label>
 
         {/*
           Into the queue, filtered to this recording — 3.6.4's second entry point, and the reason no

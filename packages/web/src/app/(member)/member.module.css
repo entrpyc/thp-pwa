@@ -99,6 +99,25 @@
   color: var(--color-text-dim);
 }
 
+/*
+ * An ancestor segment — the series a recording is in (Story 6). Muted rather than accented,
+ * because the guide reserves the accent for the *current* item; this one is a way back, and it
+ * takes the accent on hover to say so.
+ */
+.crumbLink {
+  color: var(--color-text-muted);
+  font-size: var(--fs-body);
+  font-weight: 500;
+  text-decoration: none;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.crumbLink:hover {
+  color: var(--color-primary-strong);
+}
+
 /* The current item, in the accent — the guide's breadcrumb rule, verbatim. */
 .crumbCurrent {
   color: var(--color-primary-strong);

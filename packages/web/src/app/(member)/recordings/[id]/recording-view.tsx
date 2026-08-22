@@ -6,12 +6,13 @@ import {
   MEMBER_LIBRARY_PAGE_PATH,
   memberRecordingPath,
   recordingProgressPath,
+  seriesPagePath,
   type PlaybackProgressPayload,
   type RecordingPayload,
   type RecordingView as Recording,
 } from '@thp/shared';
 import { ApiClientError, apiFetch } from '@/client/api-client';
-import { useBreadcrumbTitle, usePlayer } from '../../player-context';
+import { useBreadcrumbTrail, usePlayer } from '../../player-context';
 import { TranscriptPanel } from './transcript-panel';
 import styles from '../../screens.module.css';
 
@@ -51,7 +52,18 @@ export function RecordingScreen({
   const [failure, setFailure] = useState<string | null>(null);
   const [transcriptOpen, setTranscriptOpen] = useState(false);
 
-  useBreadcrumbTitle(recording?.title ?? null);
+  /**
+   * `home › series › recording` when this teaching is in one, and today's two segments when it is
+   * not (Story 6). The series comes off the recording payload rather than off the navigation that
+   * reached the page, so opening a teaching from a link draws the same trail as walking to it.
+   */
+  useBreadcrumbTrail(
+    recording?.title ?? null,
+    recording?.series?.title ?? null,
+    recording?.series === undefined || recording.series === null
+      ? null
+      : seriesPagePath(recording.series.id),
+  );
 
   const { open } = player;
   useEffect(() => {

@@ -137,7 +137,7 @@ describe('the accept-invitation screen', () => {
       // Story 4 Ticket 01 replaced that screen with `pages/dashboard.png`, which shows a member
       // their library rather than their credentials.
       await expect
-        .poll(() => page.getByRole('link', { name: 'View all recordings' }).count(), {
+        .poll(() => page.getByRole('link', { name: 'View all series' }).count(), {
           timeout: 30_000,
         })
         .toBe(1);

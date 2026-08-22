@@ -347,8 +347,94 @@ filtering or a search box on either new screen.
 
 ## Edge cases
 
-_Filled in during implementation — leave empty here._
+**The console**
+
+- The Recordings panel reads the list of series **once, when the panel loads**. A series created in
+  another tab is missing from every row's picker until the page is reloaded — the admin sees a
+  picker that simply does not offer the study they just named.
+- Two series may share a title, and the picker shows two identical entries. An admin cannot tell
+  them apart from the row and has to pick one and check the count on the Series panel.
+- The picker is a plain `<select>` with no search. With a few dozen series it is a long scroll on a
+  phone.
+- The Series panel has no delete. A series an admin regrets exists forever; the only remedies are
+  renaming it or emptying it, and an emptied series stays in the console list showing `0 recordings`.
+- Two admins renaming the same series at once: last write wins silently, and the one who lost sees
+  their wording replaced on the next reload with no warning. The same holds for two admins assigning
+  the same recording to different series.
+- Deleting a series directly in the database is safe but silent: its recordings survive with no
+  series, and nothing tells the admin which teachings just lost their grouping.
+- A description longer than 512 characters is refused with a generic sentence rather than a
+  character count, so an admin who pasted a long blurb has to guess how much to cut.
+
+**The member surface**
+
+- Order inside a series is `recorded_at` alone, with the creation time breaking a tie. Two teachings
+  recorded on the same day appear in the order they were uploaded and **cannot be reordered** — an
+  admin who wants them the other way round has to change one recording's date.
+- The `01.`–`NN` numbers are positions, not stored labels. Assigning a recording into the middle of
+  a series **renumbers every row after it**, so a member who wrote down "number 4" finds a different
+  teaching there.
+- Past ninety-nine the number renders as `100.` rather than a padded three digits, so the column
+  stops lining up in a series that long.
+- A member sitting on a series page when its last published recording is taken down sees no change
+  until they navigate; the next load answers "There is no such series" rather than saying the series
+  emptied.
+- Neither series screen paginates or filters. Every series with a published recording is one page,
+  and so is every recording in one.
+- A very long series title on a library row is truncated with an ellipsis and has no tooltip.
+- `GET /api/v1/series/{id}` **without** the surface parameter answers an admin with unpublished
+  recordings. That is the console's reading and is deliberate; no screen calls it that way today, so
+  the only way to see it is by hand.
+- The series listing has no empty state distinct from a failure: a member for whom nothing is
+  published reads "No series have been published yet", which is also what they would read if every
+  series happened to be empty.
 
 ## Implementation notes
 
-_Filled in during implementation — leave empty here._
+### Assumptions — major (confirmed with the operator)
+
+- none. Planning settled every user-facing decision this ticket needed; nothing came up in the code
+  that changed the target architecture, the cost of running it, or what a person sees.
+
+### Assumptions — minor
+
+- The generic 512-character field cap covers the description as well as the title, exactly as the
+  criterion says. No longer ceiling was invented for prose.
+- An empty description is stored as `null`, so "nothing written here" has one representation rather
+  than two.
+- `PUT /api/v1/recordings/{id}/series` answers with a bare `{ id, seriesId }` rather than the whole
+  recording — the picker needs to know the write landed and re-reads the list for everything else.
+- The `series.assign` log line's target is `series:<id>`, or `series:none` when the recording is
+  taken out of one, with the recording id carried alongside as its own field.
+- `findVisibleSeries` takes the requesting account's id as a parameter, because the progress join is
+  per-caller. The list read does not, because a listing shows no progress.
+- The member series listing is fetched with `?surface=library`; the console's Series panel calls the
+  same route with no parameter, matching the recordings pair exactly.
+- The breadcrumb hook widened from `useBreadcrumbTitle(title)` to
+  `useBreadcrumbTrail(current, parentLabel, parentHref)`. The parent is passed as two strings rather
+  than an object so the effect's dependencies are stable.
+- The library's hairline divider moved from the row's link onto the list item, because a row is now
+  a link plus an optional series link and a border on the link alone would draw a line between them.
+- Both series screens declare their own `en-GB` day formatter, matching what the library, the
+  console and the recording page already do.
+- `Intl` renders September as `Sept` in `en-GB`, so a range can read `11 Mar 2026 – 2 Sept 2026`.
+  Consistent everywhere, and the tests assert that spelling rather than working around it.
+
+### Other notes
+
+- **The exact-column-set migration tests were the reason two absences stayed absent.** Adding
+  `series` meant touching `packages/db/tests/integration/migrations.test.ts`'s table list and adding
+  a before-and-after block; the block asserts `recording_count`, `date_range`, artwork, `position`,
+  `slug` and the podcast fields are all missing, which is what stops the next person adding one "for
+  later".
+- **Three existing tests asserted an exact payload key set** — `publishing.test.ts` twice and
+  `pipeline.test.ts` once — and all three had to gain `series`. That is the mechanism working: a new
+  field on `RecordingView` cannot cross the wire unnoticed.
+- **The landing's way-in row changed destination**, so four screen tests that used it as a "you are
+  signed in" marker now look for *View all series*. Worth knowing before reading their diffs.
+- **`describeSeriesMeta` is written twice** — once in the console panel, once in
+  `series-listing.tsx`, which the series page imports. They are the same sentence for two different
+  surfaces; if a third appears, that is the moment to move it into `@thp/shared`.
+- The console's picker loading its series list once (first edge case above) is the one gap that
+  would be cheap to close — reloading the list alongside the recordings list — and it was left out
+  because no acceptance criterion asks for it.
