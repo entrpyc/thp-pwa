@@ -12,6 +12,7 @@ import {
 } from '@thp/shared';
 import { ApiClientError, apiFetch } from '@/client/api-client';
 import { useBreadcrumbTitle, usePlayer } from '../../player-context';
+import { TranscriptPanel } from './transcript-panel';
 import styles from '../../screens.module.css';
 
 /**
@@ -21,9 +22,12 @@ import styles from '../../screens.module.css';
  *
  * - **The hero artwork becomes a flat `--color-bg-deep` band** carrying the back control. Artwork is
  *   deferred, and the band keeps the slot so a picture drops into it later without moving anything.
- * - **No tab strip.** `Chapter`, `Scripture`, `Notes` and `Mindmap` have no data in this epic and
- *   `Transcript` arrives in Story 5 — so the strip ships then, holding one tab, rather than now
- *   holding five that lead nowhere. Summary and description render directly in the page body.
+ * - **A tab strip holding one tab.** The reference draws five — `Chapter`, `Scripture`, `Notes`,
+ *   `Transcript`, `Mindmap` — and only `Transcript` has data (Story 5). The other four are dropped
+ *   rather than rendered disabled, which is the line the whole member surface draws for a deferred
+ *   destination. Summary and description render directly in the page body, above the strip.
+ * - **The tab starts closed.** A member who never opens it downloads no transcript; pressing it is
+ *   what asks for one, and pressing it again puts it away.
  * - **No chapter list, no chapter search, no download control.** All deferred; all dropped rather
  *   than disabled.
  *
@@ -34,10 +38,18 @@ import styles from '../../screens.module.css';
  * The back control returns to the library rather than to browser history, so it behaves the same
  * when the page was opened from a link rather than navigated to.
  */
-export function RecordingScreen({ recordingId }: { recordingId: string }) {
+export function RecordingScreen({
+  recordingId,
+  canCorrect,
+}: {
+  recordingId: string;
+  /** Whether to render the correction affordance. It grants nothing — the API refuses a member. */
+  canCorrect: boolean;
+}) {
   const player = usePlayer();
   const [recording, setRecording] = useState<Recording | null>(null);
   const [failure, setFailure] = useState<string | null>(null);
+  const [transcriptOpen, setTranscriptOpen] = useState(false);
 
   useBreadcrumbTitle(recording?.title ?? null);
 
@@ -125,6 +137,27 @@ export function RecordingScreen({ recordingId }: { recordingId: string }) {
               <p className={styles.prose}>{recording.description}</p>
             </section>
           )}
+
+          {/*
+            `pages/recording.png`'s strip, same pill shape and same spacing, holding the one tab
+            this epic has data for. A tablist of one is still a tablist — when `Scripture`, `Notes`,
+            `Chapter` and `Mindmap` arrive they are entries here, not a different control.
+          */}
+          <div className={styles.tabs} role="tablist" aria-label="Teaching contents">
+            <button
+              className={styles.tab}
+              type="button"
+              role="tab"
+              aria-selected={transcriptOpen}
+              onClick={() => setTranscriptOpen((open) => !open)}
+            >
+              Transcript
+            </button>
+          </div>
+
+          {transcriptOpen ? (
+            <TranscriptPanel recordingId={recordingId} canCorrect={canCorrect} />
+          ) : null}
         </>
       )}
     </>

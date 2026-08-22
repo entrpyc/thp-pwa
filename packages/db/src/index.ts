@@ -122,11 +122,16 @@ export {
   type SessionRow,
 } from './sessions';
 export {
+  correctSegment,
+  findSegmentById,
+  findSegmentNeighbours,
   findTranscriptByRecording,
   listSegments,
   replaceTranscript,
   type NewSegmentText,
   type NewTranscript,
+  type SegmentCorrection,
+  type SegmentNeighbours,
   type SegmentRow,
   type TranscriptRow,
 } from './transcripts';

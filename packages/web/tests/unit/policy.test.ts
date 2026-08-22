@@ -129,6 +129,34 @@ describe('an owned action is answered against the resource, not only the role', 
   });
 });
 
+describe('the two Story 5 actions are in the table, denied by default and per role', () => {
+  it.each(['transcript.correct', 'summary.regenerate'] as const)(
+    'permits %s for an admin and refuses it for a member',
+    (action) => {
+      expect(can(actorWith(ROLE.admin), action)).toBe(true);
+      expect(can(actorWith(ROLE.member), action)).toBe(false);
+    },
+  );
+
+  it('answers them from the rules table rather than from a call site', () => {
+    // Both are real actions the module knows, which is what makes "added to the table" a fact
+    // rather than a claim — an action checked at a call site would not be in this list at all.
+    expect(isPolicyAction('transcript.correct')).toBe(true);
+    expect(isPolicyAction('summary.regenerate')).toBe(true);
+    // And the nearby names nobody wrote a rule for are still denied, for both roles.
+    for (const role of ROLES) {
+      expect(can(actorWith(role), 'transcript.read'), role).toBe(false);
+      expect(can(actorWith(role), 'transcript.delete'), role).toBe(false);
+      expect(can(actorWith(role), 'summary.generate'), role).toBe(false);
+    }
+  });
+
+  it('refuses them to an anonymous caller', () => {
+    expect(can(null, 'transcript.correct')).toBe(false);
+    expect(can(null, 'summary.regenerate')).toBe(false);
+  });
+});
+
 describe('the admin account actions are the API’s refusal, not the console’s', () => {
   it.each([
     'account.list',

@@ -1,4 +1,4 @@
-import { asc, eq } from 'drizzle-orm';
+import { and, asc, desc, eq, gte, lte, ne, sql } from 'drizzle-orm';
 import { getDatabase, queryable, withTransaction, type Executor } from './client';
 import { segment, transcript } from './schema';
 
@@ -134,4 +134,100 @@ export async function listSegments(
     .where(eq(segment.transcriptId, transcriptId))
     .orderBy(asc(segment.startMs));
   return rows as SegmentRow[];
+}
+
+/** One segment by id, or `null`. The parent transcript is on the row, so the caller can place it. */
+export async function findSegmentById(
+  id: string,
+  executor: Executor = getDatabase(),
+): Promise<SegmentRow | null> {
+  const rows = await queryable(executor).select().from(segment).where(eq(segment.id, id)).limit(1);
+  return (rows[0] as SegmentRow | undefined) ?? null;
+}
+
+/** The segment either side of this one, in playback order. `null` at the ends of the transcript. */
+export interface SegmentNeighbours {
+  readonly previous: SegmentRow | null;
+  readonly next: SegmentRow | null;
+}
+
+/**
+ * The segments immediately before and after `id` within its transcript (Story 5 Ticket 01–02).
+ *
+ * **Two one-row queries rather than a scan**, both served by `segment_transcript_start_idx`: the
+ * last row ordered before this one's start, and the first ordered after it. That index is the same
+ * one the follow-along read uses, which is why the correction rule costs nothing to check.
+ *
+ * The self-exclusion is by id rather than by a strict comparison on `start_ms`, because a
+ * correction that leaves the start where it is must still not find the segment itself as its own
+ * neighbour.
+ *
+ * **Take an executor that is a transaction** when the answer is about to be acted on — the caller
+ * is choosing whether a write is legal, and a read outside the write's transaction has a window in
+ * it.
+ */
+export async function findSegmentNeighbours(
+  row: SegmentRow,
+  executor: Executor = getDatabase(),
+): Promise<SegmentNeighbours> {
+  const on = queryable(executor);
+  const sameTranscript = eq(segment.transcriptId, row.transcriptId);
+
+  const [before, after] = await Promise.all([
+    on
+      .select()
+      .from(segment)
+      .where(and(sameTranscript, lte(segment.startMs, row.startMs), ne(segment.id, row.id)))
+      .orderBy(desc(segment.startMs))
+      .limit(1),
+    on
+      .select()
+      .from(segment)
+      .where(and(sameTranscript, gte(segment.startMs, row.startMs), ne(segment.id, row.id)))
+      .orderBy(asc(segment.startMs))
+      .limit(1),
+  ]);
+
+  return {
+    previous: (before[0] as SegmentRow | undefined) ?? null,
+    next: (after[0] as SegmentRow | undefined) ?? null,
+  };
+}
+
+/** A correction, as the caller that has already checked it supplies it. */
+export interface SegmentCorrection {
+  readonly id: string;
+  readonly text: string;
+  readonly startMs: number;
+  readonly endMs: number;
+  /** Who made it. Written with the timestamp, on every accepted correction. */
+  readonly correctedByUserId: string;
+}
+
+/**
+ * Apply a correction, stamping `corrected_at` and `corrected_by_user_id` — the two columns Story 2
+ * shipped unwritten ([3.5.5](docs/project/prd.md)).
+ *
+ * The timestamp is `now()` from the database rather than a `Date` from this process, so the record
+ * of when a line was fixed is the transaction's clock and not a caller's.
+ */
+export async function correctSegment(
+  input: SegmentCorrection,
+  executor: Executor = getDatabase(),
+): Promise<SegmentRow> {
+  const rows = await queryable(executor)
+    .update(segment)
+    .set({
+      text: input.text,
+      startMs: input.startMs,
+      endMs: input.endMs,
+      correctedAt: sql`now()`,
+      correctedByUserId: input.correctedByUserId,
+    })
+    .where(eq(segment.id, input.id))
+    .returning();
+
+  const row = rows[0] as SegmentRow | undefined;
+  if (!row) throw new Error('correctSegment returned no row');
+  return row;
 }

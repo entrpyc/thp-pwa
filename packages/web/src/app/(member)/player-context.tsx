@@ -15,7 +15,10 @@ import {
   nextPlaybackSpeed,
   recordingPlaybackPath,
   recordingProgressPath,
+  recordingTranscriptPath,
   type PlaybackGrantPayload,
+  type TranscriptPayload,
+  type TranscriptSegmentView,
 } from '@thp/shared';
 import { apiFetch } from '@/client/api-client';
 import { shouldRenewGrant } from '@/client/playback/renewal';
@@ -42,6 +45,12 @@ import { shouldWriteProgress, type ProgressEventKind } from '@/client/playback/c
  * - **The position, and how often it is pushed.** The *decision* is
  *   {@link shouldWriteProgress} — a pure function — so the cadence is assertable without a clock;
  *   this file is only the wiring that calls it.
+ * - **The transcript, and whether captions are on** (Story 5). Here rather than on the recording
+ *   page because the caption pill **outlives that page**: a member who turns captions on and walks
+ *   back to the library keeps seeing the current line, and a transcript owned by the page would
+ *   have gone with it. Fetched on first need — the tab mounted, or captions turned on — so a member
+ *   who does neither downloads nothing, and cleared when a different teaching is opened so the pill
+ *   can never caption the wrong one.
  *
  * **Opening a recording never plays it.** A member who opens a teaching on a phone in company has
  * not asked for sound. The page loads the media, restores the stored position once metadata has
@@ -53,6 +62,17 @@ export interface LoadedRecording {
   readonly title: string;
 }
 
+/**
+ * The loaded teaching's transcript, once something has asked for it.
+ *
+ * `segments` is empty for a published teaching that has none — an answer, not a failure, and what
+ * the tab's empty state renders from.
+ */
+export interface LoadedTranscript {
+  readonly recordingId: string;
+  readonly segments: readonly TranscriptSegmentView[];
+}
+
 export interface PlayerApi {
   readonly loaded: LoadedRecording | null;
   readonly playing: boolean;
@@ -60,12 +80,21 @@ export interface PlayerApi {
   /** `0` until the element has told us; nothing stores a duration, so this is the only source. */
   readonly durationMs: number;
   readonly speed: number;
+  /** The loaded teaching's transcript, or `null` until something has needed it. */
+  readonly transcript: LoadedTranscript | null;
+  /** Whether the caption pill is showing. Off by default, and session state — never written to `user`. */
+  readonly captionsOn: boolean;
   /** Load a teaching and seek to `startAtMs`, without playing. Re-opening the current one is a no-op. */
   open(recording: LoadedRecording, startAtMs: number | null): void;
   toggle(): void;
   seekToMs(ms: number): void;
   skipMs(deltaMs: number): void;
   cycleSpeed(): void;
+  /** Fetch the transcript if nothing has yet. Safe to call on every mount — it asks once. */
+  requestTranscript(): void;
+  setCaptions(on: boolean): void;
+  /** Put a corrected line back in the loaded transcript, so the list and the pill agree with it. */
+  applyCorrection(segment: TranscriptSegmentView): void;
 }
 
 const PlayerContext = createContext<PlayerApi | null>(null);
@@ -114,6 +143,8 @@ export function PlayerProvider({
   const [durationMs, setDurationMs] = useState(0);
   const [speed, setSpeed] = useState(initialSpeed);
   const [breadcrumb, setBreadcrumb] = useState<string | null>(null);
+  const [transcript, setTranscript] = useState<LoadedTranscript | null>(null);
+  const [captionsOn, setCaptionsOn] = useState(false);
 
   /** The live grant. A ref because the renewal ticker reads it without re-subscribing. */
   const grant = useRef<PlaybackGrantPayload | null>(null);
@@ -143,6 +174,14 @@ export function PlayerProvider({
    * "in the same play state" mean the state the member chose.
    */
   const wantsPlay = useRef(false);
+  /**
+   * The recording whose transcript has been asked for.
+   *
+   * A ref rather than derived from `transcript`, because it has to be set the moment the request
+   * goes out rather than when it comes back — the tab mounting and captions being turned on in the
+   * same second are two callers, and they must produce one request.
+   */
+  const transcriptAskedFor = useRef<string | null>(null);
 
   const pointAt = useCallback(async (recordingId: string): Promise<void> => {
     const element = audioRef.current;
@@ -169,6 +208,10 @@ export function PlayerProvider({
       wantsPlay.current = false;
       seekOnLoad.current = startAtMs;
       playOnLoad.current = false;
+      // A different teaching: the transcript in hand describes the previous one, so the pill would
+      // caption the wrong words until a new one arrived.
+      transcriptAskedFor.current = null;
+      setTranscript(null);
       void pointAt(recording.id).catch(() => {
         // Nothing to say on screen: the bar is a transport, not an error surface. The play control
         // simply does nothing until a grant arrives, and the next renewal tick tries again.
@@ -348,6 +391,57 @@ export function PlayerProvider({
     }).catch(() => undefined);
   }, []);
 
+  /**
+   * Fetch the loaded teaching's transcript, once.
+   *
+   * Both callers — the tab mounting and captions being turned on — call this unconditionally, and
+   * the ref is what turns "whoever needs it first" into one request. A failure leaves it unasked
+   * so the next mount tries again; there is nothing to say on screen, because a transcript that did
+   * not arrive is a tab with nothing in it rather than a broken player.
+   */
+  const requestTranscript = useCallback((): void => {
+    const recording = loadedRef.current;
+    if (recording === null || transcriptAskedFor.current === recording.id) return;
+    transcriptAskedFor.current = recording.id;
+
+    void apiFetch<TranscriptPayload>(recordingTranscriptPath(recording.id), {
+      credentials: 'include',
+    })
+      .then((payload) => {
+        // The teaching may have changed while this was in flight; a late answer about the previous
+        // one must not become the pill's words.
+        if (loadedRef.current?.id !== recording.id) return;
+        setTranscript({
+          recordingId: recording.id,
+          segments: payload.transcript?.segments ?? [],
+        });
+      })
+      .catch(() => {
+        if (transcriptAskedFor.current === recording.id) transcriptAskedFor.current = null;
+      });
+  }, []);
+
+  const setCaptions = useCallback(
+    (on: boolean): void => {
+      setCaptionsOn(on);
+      if (on) requestTranscript();
+    },
+    [requestTranscript],
+  );
+
+  const applyCorrection = useCallback((corrected: TranscriptSegmentView): void => {
+    setTranscript((held) =>
+      held === null
+        ? held
+        : {
+            ...held,
+            // Replaced in place rather than re-sorted: the neighbour rule the API enforces means a
+            // correction can never move a line past the one beside it, so the order still holds.
+            segments: held.segments.map((one) => (one.id === corrected.id ? corrected : one)),
+          },
+    );
+  }, []);
+
   const player = useMemo<PlayerApi>(
     () => ({
       loaded,
@@ -355,13 +449,34 @@ export function PlayerProvider({
       currentMs,
       durationMs,
       speed,
+      transcript,
+      captionsOn,
       open,
       toggle,
       seekToMs,
       skipMs,
       cycleSpeed,
+      requestTranscript,
+      setCaptions,
+      applyCorrection,
     }),
-    [loaded, playing, currentMs, durationMs, speed, open, toggle, seekToMs, skipMs, cycleSpeed],
+    [
+      loaded,
+      playing,
+      currentMs,
+      durationMs,
+      speed,
+      transcript,
+      captionsOn,
+      open,
+      toggle,
+      seekToMs,
+      skipMs,
+      cycleSpeed,
+      requestTranscript,
+      setCaptions,
+      applyCorrection,
+    ],
   );
 
   const crumb = useMemo(

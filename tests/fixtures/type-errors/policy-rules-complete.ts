@@ -11,7 +11,8 @@ import type { PolicyRules } from '@/server/auth/policy';
  * file needing an edit for both is that mechanism doing its job. Story 2 Ticket 01 adds the two
  * recording actions, and Ticket 04–05 the two pipeline actions. Story 3 adds eight — three for the
  * review gate, four for publication, and `recording.browse`, the first action in the product a
- * member may take over somebody else's content. The same edit was required every time.
+ * member may take over somebody else's content. Story 5 adds two — correcting a transcript, and
+ * asking for a summary built on the correction. The same edit was required every time.
  */
 export const rules: PolicyRules = {
   'session.read': { roles: { admin: true, member: true } },
@@ -38,4 +39,6 @@ export const rules: PolicyRules = {
   'summary.edit': { roles: { admin: true, member: false } },
   'summary.unpublish': { roles: { admin: true, member: false } },
   'recording.browse': { roles: { admin: true, member: true } },
+  'transcript.correct': { roles: { admin: true, member: false } },
+  'summary.regenerate': { roles: { admin: true, member: false } },
 };

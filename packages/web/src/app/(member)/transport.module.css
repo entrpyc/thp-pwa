@@ -22,6 +22,15 @@
   bottom: 0;
   padding: var(--space-3) var(--space-4);
   pointer-events: none;
+  /*
+   * Three stacked things now, bottom-anchored: the side toolbar of `menu-opened.png`, the caption
+   * pill of `subtitles.png`, and the bar itself. A column rather than absolute positioning, so
+   * turning captions on lifts the pill above the bar without either overlapping it.
+   */
+  display: flex;
+  flex-direction: column;
+  align-items: stretch;
+  gap: var(--space-3);
 }
 
 .bar {
@@ -157,7 +166,116 @@
   background: var(--color-primary-soft);
 }
 
-/* Wide enough for the reference's single row: title, controls, track, speed, in that order. */
+/*
+ * The `···` at the right of `bottom-navigation/default.png` — an outlined circle, the same recipe
+ * as the ±10s controls, because it is the same kind of control.
+ */
+.more {
+  order: 1;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  min-width: calc(var(--space-8) + var(--space-2));
+  min-height: calc(var(--space-8) + var(--space-2));
+  background: transparent;
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-pill);
+  color: var(--color-primary-icon);
+  font-family: inherit;
+  font-size: var(--fs-body);
+  cursor: pointer;
+}
+
+.more:hover {
+  border-color: var(--color-border-strong);
+}
+
+/*
+ * The side toolbar of `bottom-navigation/menu-opened.png` — the guide's *Side toolbar*: a floating
+ * rounded strip docked to the right edge, holding evenly spaced purple icon buttons.
+ *
+ * The reference draws seven; this epic has data for one. It sits in the dock's column rather than
+ * being absolutely positioned against the viewport, so it stacks above the bar at every width
+ * instead of covering the content on a phone.
+ */
+.toolbar {
+  align-self: flex-end;
+  pointer-events: auto;
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-3);
+  background: var(--color-surface);
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-lg);
+  padding: var(--space-3);
+}
+
+.tool {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  min-width: calc(var(--space-8) + var(--space-2));
+  min-height: calc(var(--space-8) + var(--space-2));
+  background: transparent;
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-sm);
+  color: var(--color-primary-icon);
+  font-family: inherit;
+  font-size: var(--fs-meta);
+  font-weight: 600;
+  cursor: pointer;
+}
+
+.tool[aria-pressed='true'] {
+  border-color: var(--color-primary-strong);
+  background: var(--color-primary-soft);
+}
+
+/*
+ * The caption pill of `bottom-navigation/subtitles.png`, and the guide's *Player* recipe for it:
+ * its own floating pill above the controls — surface fill, muted text, trailing `×`.
+ */
+.caption {
+  width: 100%;
+  max-width: 48rem;
+  margin: 0 auto;
+  pointer-events: auto;
+  display: flex;
+  align-items: center;
+  gap: var(--space-3);
+  background: var(--color-surface);
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-pill);
+  padding: var(--space-3) var(--space-5);
+}
+
+.captionText {
+  flex: 1 1 auto;
+  min-width: 0;
+  color: var(--color-text-muted);
+  font-size: var(--fs-body);
+}
+
+.captionDismiss {
+  flex: none;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  min-width: var(--space-6);
+  min-height: var(--space-6);
+  background: transparent;
+  border: none;
+  color: var(--color-text-muted);
+  font-family: inherit;
+  font-size: var(--fs-body);
+  cursor: pointer;
+}
+
+.captionDismiss:hover {
+  color: var(--color-text);
+}
+
+/* Wide enough for the reference's single row: title, controls, track, `···`, speed, in that order. */
 @media (min-width: 48rem) {
   .bar {
     flex-wrap: nowrap;
@@ -171,7 +289,11 @@
     order: 3;
   }
 
-  .speed {
+  .more {
     order: 4;
+  }
+
+  .speed {
+    order: 5;
   }
 }

@@ -11,3 +11,4 @@ export * from './recordings';
 export * from './reviews';
 export * from './roles';
 export * from './segment';
+export * from './transcripts';

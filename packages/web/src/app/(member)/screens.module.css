@@ -329,3 +329,31 @@
   font-size: var(--fs-meta);
   color: var(--color-text-dim);
 }
+
+/*
+ * `pages/recording.png`'s tab strip, holding the one tab this epic has data for. The guide's
+ * *Tab (pill)* recipe verbatim, including the selected state — so the four deferred tabs drop into
+ * the same row later without restyling anything.
+ */
+.tabs {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--space-3);
+}
+
+.tab {
+  background: transparent;
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-pill);
+  padding: var(--space-3) var(--space-5);
+  color: var(--color-text-muted);
+  font-family: inherit;
+  font-size: var(--fs-body);
+  cursor: pointer;
+}
+
+.tab[aria-selected='true'] {
+  border-color: var(--color-primary-strong);
+  background: var(--color-primary-soft);
+  color: var(--color-text);
+}

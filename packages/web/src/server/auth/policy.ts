@@ -110,6 +110,17 @@ export const POLICY_ACTIONS = [
    * unpublished teaching or an object key.
    */
   'recording.browse',
+  /**
+   * The two Story 5 actions, split for the reason every group above is: correcting what the machine
+   * misheard and spending a provider call to re-draft the summary from the corrected words are the
+   * same question only while there are two roles.
+   *
+   * `transcript.correct` is admin-only **in this epic**; [3.5.5](docs/project/prd.md) widens it to
+   * Contributor when that role arrives, and widening it is one case in the table below — which is
+   * the whole of what an action in this list costs and the whole of what it buys.
+   */
+  'transcript.correct',
+  'summary.regenerate',
 ] as const;
 
 export type PolicyAction = (typeof POLICY_ACTIONS)[number];
@@ -207,6 +218,10 @@ const RULES: PolicyRules = {
   // Both roles. What a member sees through it is decided by the visibility condition, not here —
   // the policy answers "may this person ask", and the query answers "about which rows".
   'recording.browse': { roles: { admin: true, member: true } },
+  // Fixing a misheard name, and asking for a summary built on the fix. A member reads the
+  // transcript and does not write to it — refused by the API, not merely absent from the screen.
+  'transcript.correct': { roles: { admin: true, member: false } },
+  'summary.regenerate': { roles: { admin: true, member: false } },
 };
 
 export function isPolicyAction(value: string): value is PolicyAction {

@@ -1,0 +1,245 @@
+/*
+ * The `Transcript` tab of `pages/recording.png`, and the correction form inside it.
+ *
+ * Its own stylesheet rather than more of `screens.module.css`: that file is the three member
+ * screens' shared furniture — the card, the list row, the page head — and this is one tab's
+ * contents. Everything here still composes from `tokens.css`.
+ *
+ * The extrapolations, each read off a rule in the guide rather than invented:
+ *
+ * 1. `.lines` is the guide's list — one panel, rows divided by a hairline — given a bounded height
+ *    so the transcript can follow the audio inside itself instead of scrolling the page.
+ * 2. The highlighted row takes the guide's selected-tab treatment: `--color-primary-soft` behind
+ *    `--color-text`. It is the accent the guide already allows, not a colour invented here.
+ * 3. `.primary` is the guide's filled button and `.secondary` its outlined one, the same pair the
+ *    admin console composes from — one primary action per group.
+ */
+
+.panel {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-4);
+}
+
+.quiet {
+  margin: 0;
+  font-size: var(--fs-body);
+  color: var(--color-text-dim);
+}
+
+.failure {
+  margin: 0;
+  background: var(--color-bg-deep);
+  border: 1px solid var(--color-border-strong);
+  border-radius: var(--radius-md);
+  padding: var(--space-4);
+  font-size: var(--fs-body);
+  color: var(--color-text);
+}
+
+/*
+ * Bounded, so the follow-along scrolls the transcript rather than the screen. `50vh` keeps the
+ * transport and the page head in view on a phone and still shows a dozen lines on a desktop.
+ */
+.lines {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  max-height: 50vh;
+  overflow-y: auto;
+  background: var(--color-surface);
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-md);
+}
+
+.line {
+  display: flex;
+  align-items: flex-start;
+  gap: var(--space-3);
+  border-bottom: 1px solid var(--color-border);
+  padding: 0 var(--space-4) 0 0;
+}
+
+.lines li:last-child {
+  border-bottom: none;
+}
+
+/* A real button, so the transcript is walkable and operable from a keyboard. */
+.lineButton {
+  flex: 1 1 auto;
+  min-width: 0;
+  display: flex;
+  align-items: flex-start;
+  gap: var(--space-4);
+  background: transparent;
+  border: none;
+  padding: var(--space-3) var(--space-4);
+  text-align: left;
+  font-family: inherit;
+  cursor: pointer;
+}
+
+.lineButton:hover {
+  background: var(--color-surface-raised);
+}
+
+.lineButton[aria-current='true'] {
+  background: var(--color-primary-soft);
+}
+
+.lineTime {
+  flex: none;
+  color: var(--color-text-dim);
+  font-size: var(--fs-meta);
+  font-variant-numeric: tabular-nums;
+}
+
+.lineText {
+  min-width: 0;
+  color: var(--color-text-muted);
+  font-size: var(--fs-body);
+  overflow-wrap: anywhere;
+}
+
+.lineButton[aria-current='true'] .lineText {
+  color: var(--color-text);
+}
+
+/* The admin-only affordance. Hidden from a member; the API is what refuses them. */
+.correct {
+  flex: none;
+  align-self: center;
+  background: transparent;
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-pill);
+  padding: var(--space-1) var(--space-3);
+  color: var(--color-primary-strong);
+  font-family: inherit;
+  font-size: var(--fs-meta);
+  cursor: pointer;
+}
+
+.correct:hover {
+  background: var(--color-primary-soft);
+}
+
+/* Revealed only while a member's own scroll has suspended the following. */
+.jump {
+  align-self: flex-start;
+  background: transparent;
+  border: 1px solid var(--color-border-strong);
+  border-radius: var(--radius-pill);
+  padding: var(--space-2) var(--space-4);
+  color: var(--color-primary-strong);
+  font-family: inherit;
+  font-size: var(--fs-meta);
+  font-weight: 600;
+  cursor: pointer;
+}
+
+.jump:hover {
+  background: var(--color-primary-soft);
+}
+
+.form {
+  flex: 1 1 auto;
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-3);
+  padding: var(--space-4);
+}
+
+.field {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-2);
+  min-width: 0;
+}
+
+.fieldLabel {
+  font-size: var(--fs-meta);
+  color: var(--color-text-muted);
+}
+
+.textArea,
+.input {
+  width: 100%;
+  background: var(--color-surface-raised);
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-sm);
+  padding: var(--space-3);
+  color: var(--color-text);
+  font-family: inherit;
+  font-size: var(--fs-body);
+}
+
+.timings {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--space-3);
+}
+
+.timings .field {
+  flex: 1 1 8rem;
+}
+
+.formActions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--space-3);
+}
+
+.primary {
+  background: var(--color-primary);
+  border: none;
+  border-radius: var(--radius-pill);
+  padding: var(--space-2) var(--space-5);
+  color: var(--color-text);
+  font-family: inherit;
+  font-size: var(--fs-body);
+  font-weight: 600;
+  cursor: pointer;
+}
+
+.primary:hover {
+  background: var(--color-primary-strong);
+}
+
+.primary:disabled {
+  cursor: default;
+  opacity: 0.6;
+}
+
+.secondary {
+  background: transparent;
+  border: 1px solid var(--color-border-strong);
+  border-radius: var(--radius-pill);
+  padding: var(--space-2) var(--space-5);
+  color: var(--color-text-muted);
+  font-family: inherit;
+  font-size: var(--fs-body);
+  cursor: pointer;
+}
+
+.secondary:hover {
+  color: var(--color-text);
+}
+
+.offer {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-3);
+  margin: 0;
+  background: var(--color-surface);
+  border: 1px solid var(--color-border-strong);
+  border-radius: var(--radius-md);
+  padding: var(--space-4);
+  font-size: var(--fs-body);
+  color: var(--color-text-muted);
+}
+
+.offerText {
+  margin: 0;
+  color: var(--color-text);
+}

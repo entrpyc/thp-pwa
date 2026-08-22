@@ -159,8 +159,9 @@ describe('a member presses play and hears the recording', () => {
       expect(await bar.getByRole('slider', { name: 'Position' }).count()).toBe(1);
       expect(await bar.textContent()).toContain(TITLE);
 
-      // The `···` control opens a menu whose every item is deferred; Story 5 gives it its first.
-      expect(await bar.getByRole('button', { name: '···' }).count()).toBe(0);
+      // The `···` control. It shipped absent in Story 4 because every item behind it was deferred;
+      // Story 5 gave it its first — captions — so it is on the bar from there.
+      expect(await bar.getByRole('button', { name: 'More player controls' }).count()).toBe(1);
     } finally {
       await page.context().close();
     }
