@@ -82,6 +82,34 @@ export const POLICY_ACTIONS = [
    */
   'pipeline.read',
   'pipeline.rerun',
+  /**
+   * The three review-gate actions (Story 3 Tickets 02–03), split for the reason every group above
+   * is: reading the queue, acting on an item, and spending a provider call to draft it again are
+   * the same question only while there are two roles. The day a Contributor may read what is
+   * waiting without being able to approve it, the split stops being decoration.
+   */
+  'review.list',
+  'review.resolve',
+  'review.regenerate',
+  /**
+   * Publishing, and the summary's own gate (Story 3 Ticket 04). Four rather than one
+   * `recording.publish`, because a summary has a publication state the recording does not share
+   * ([3.6.12](docs/project/prd.md)) — taking a summary down and taking a teaching down are not the
+   * same act and should not be the same permission.
+   */
+  'recording.publish',
+  'recording.unpublish',
+  'summary.edit',
+  'summary.unpublish',
+  /**
+   * **The first action in the product a member may take over somebody else's content.**
+   *
+   * Reading the published library. Deliberately not a widening of `recording.list`: that action is
+   * "see the console's list of everything uploaded", and the two answer different questions about
+   * the same rows — which is exactly why one route can serve both without a member ever seeing an
+   * unpublished teaching or an object key.
+   */
+  'recording.browse',
 ] as const;
 
 export type PolicyAction = (typeof POLICY_ACTIONS)[number];
@@ -159,6 +187,19 @@ const RULES: PolicyRules = {
   // epic; a member has nothing to see here and nothing to press.
   'pipeline.read': { roles: { admin: true, member: false } },
   'pipeline.rerun': { roles: { admin: true, member: false } },
+  // The review gate is operator work whole: a member has nothing waiting on them, and a draft they
+  // could read would be a draft nobody approved.
+  'review.list': { roles: { admin: true, member: false } },
+  'review.resolve': { roles: { admin: true, member: false } },
+  'review.regenerate': { roles: { admin: true, member: false } },
+  // Deciding what is live, and deciding what the summary of a live teaching says.
+  'recording.publish': { roles: { admin: true, member: false } },
+  'recording.unpublish': { roles: { admin: true, member: false } },
+  'summary.edit': { roles: { admin: true, member: false } },
+  'summary.unpublish': { roles: { admin: true, member: false } },
+  // Both roles. What a member sees through it is decided by the visibility condition, not here —
+  // the policy answers "may this person ask", and the query answers "about which rows".
+  'recording.browse': { roles: { admin: true, member: true } },
 };
 
 export function isPolicyAction(value: string): value is PolicyAction {

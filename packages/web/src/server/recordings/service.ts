@@ -1,9 +1,10 @@
 import {
   insertRecording,
   isUniqueViolation,
-  listRecordings,
+  listVisibleRecordings,
   withTransaction,
   type RecordingRow,
+  type VisibleRecordingRow,
 } from '@thp/db';
 import {
   FIRST_PIPELINE_STEP,
@@ -15,11 +16,12 @@ import {
   isCalendarDate,
   type CreateRecordingRequest,
   type RecordingSummary,
+  type RecordingView,
   type UploadGrantPayload,
   type UploadGrantRequest,
 } from '@thp/shared';
 import { ApiError } from '@/server/api/errors';
-import type { Actor } from '@/server/auth/policy';
+import { can, type Actor } from '@/server/auth/policy';
 import { queue } from '@/server/jobs/queue';
 import { UPLOAD_GRANT_SECONDS, mediaStore, mintOriginalKey } from '@thp/media';
 import { logger } from '@/server/observability/logger';
@@ -48,6 +50,13 @@ import { logger } from '@/server/observability/logger';
 /** The most a field can be before we stop reading it. The same ceiling the account service uses. */
 const MAX_FIELD_LENGTH = 512;
 
+/**
+ * A freshly written row, as the admin who wrote it reads it back.
+ *
+ * `summary` is always `null` here and the key is present anyway: what the API answers a creation
+ * with has to be the same shape the list answers with, or a client would have two ideas of what a
+ * recording is. A recording one request old has no approved summary by construction.
+ */
 export function describeRecording(row: RecordingRow): RecordingSummary {
   return {
     id: row.id,
@@ -56,6 +65,7 @@ export function describeRecording(row: RecordingRow): RecordingSummary {
     originalMediaKey: row.originalMediaKey,
     publishedAt: row.publishedAt === null ? null : row.publishedAt.toISOString(),
     description: row.description,
+    summary: null,
     createdAt: row.createdAt.toISOString(),
   };
 }
@@ -188,15 +198,52 @@ export async function finaliseUpload(actor: Actor, body: unknown): Promise<Recor
   return describeRecording(row);
 }
 
-export async function listAllRecordings(actor: Actor): Promise<RecordingSummary[]> {
-  const rows = await listRecordings();
-  logger.info('recording.list', {
+/**
+ * **One route, one answer to "what may this person see"** (Story 3 Ticket 04).
+ *
+ * `GET /api/v1/recordings` is authorised by `recording.browse`, which both roles hold. What
+ * separates the two answers is a second question asked here — whether the caller *also* satisfies
+ * `recording.list`, the console's action — and that question decides exactly two things: whether
+ * unpublished rows are included, and whether the object key and the creation time cross the wire.
+ *
+ * It is one route rather than two so Story 4 Ticket 01 builds its library on this and does not
+ * invent a second answer. The condition itself is not written here: `listVisibleRecordings` owns
+ * it, guarded, and this function passes it a boolean.
+ */
+export async function listRecordingsFor(actor: Actor): Promise<RecordingView[]> {
+  const asOperator = can(actor, 'recording.list');
+  const rows = await listVisibleRecordings({ includeUnpublished: asOperator });
+
+  logger.info('recording.browse', {
     actorId: actor.id,
-    action: 'recording.list',
+    action: 'recording.browse',
     target: 'recording:*',
     count: rows.length,
+    asOperator,
   });
-  return rows.map(describeRecording);
+
+  return rows.map((row) => (asOperator ? describeForOperator(row) : describeForMember(row)));
+}
+
+/** Published, and nothing an operator would want that a listener has no business with. */
+function describeForMember(row: VisibleRecordingRow): RecordingView {
+  return {
+    id: row.id,
+    title: row.title,
+    recordedAt: row.recordedAt,
+    publishedAt: row.publishedAt === null ? null : row.publishedAt.toISOString(),
+    description: row.description,
+    summary: row.summary,
+  };
+}
+
+/** The same, plus the two fields the console needs and a member never receives. */
+function describeForOperator(row: VisibleRecordingRow): RecordingSummary {
+  return {
+    ...describeForMember(row),
+    originalMediaKey: row.originalMediaKey,
+    createdAt: row.createdAt.toISOString(),
+  };
 }
 
 /**

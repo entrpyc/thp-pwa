@@ -10,7 +10,7 @@ import {
 } from '@thp/db';
 import { PIPELINE_STEPS, type PipelineStep } from '@thp/shared';
 import { setLogSink, type LogLine } from '@thp/shared/observability/logger';
-import { STUB_PROVIDER_META, type HandlerRegistry } from '../../src/handlers';
+import type { HandlerRegistry } from '../../src/handlers';
 import { startWorkerLoop, type WorkerLoop } from '../../src/loop';
 import { createThrowawayDatabase, type ThrowawayDatabase } from '../../../../tests/setup/throwaway-db';
 
@@ -42,9 +42,12 @@ describe('the worker loop', () => {
    * default registry is the right one is asserted in run-job.test.ts, and that it works end to end
    * in packages/web/tests/integration/upload-starts-the-pipeline.test.ts.
    */
+  /** What a handler returns is evidence, not an outcome — any object will do to prove it lands. */
+  const EVIDENCE = { model: 'a-fake-handler' } as const;
+
   const succeeds: HandlerRegistry = {
-    transcribe: () => STUB_PROVIDER_META,
-    generate_draft: () => STUB_PROVIDER_META,
+    transcribe: () => EVIDENCE,
+    generate_draft: () => EVIDENCE,
   };
 
   async function queueJob(step: PipelineStep = 'transcribe'): Promise<JobRow> {
@@ -238,7 +241,7 @@ describe('the worker loop', () => {
     `;
     // The whole pipeline, in the order the shared list declares it.
     expect(rows.map((row) => row.step)).toEqual([...PIPELINE_STEPS]);
-    for (const row of rows) expect(row.provider_meta).toEqual(STUB_PROVIDER_META);
+    for (const row of rows) expect(row.provider_meta).toEqual(EVIDENCE);
 
     // This recording's claims: the loop drains whatever else the earlier tests left queued, which
     // is the behaviour under test rather than noise to be avoided.

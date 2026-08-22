@@ -1,7 +1,7 @@
 import type { RecordingListPayload } from '@thp/shared';
 import { permits } from '@/server/api/access';
 import { ApiSuccess, apiRoute } from '@/server/api/route';
-import { finaliseUpload, listAllRecordings } from '@/server/recordings/service';
+import { finaliseUpload, listRecordingsFor } from '@/server/recordings/service';
 
 export const runtime = 'nodejs';
 export const dynamic = 'force-dynamic';
@@ -25,11 +25,20 @@ export const POST = apiRoute(permits('recording.upload'), async (request, contex
 });
 
 /**
- * Every recording, newest `recorded_at` first — the order decided by the query, so the client has
- * no second answer to "what is most recent". No pagination and no filters: there are five
- * recordings, and a control nobody needs is a control somebody has to maintain.
+ * Every recording **this caller may see**, newest `recorded_at` first — the order decided by the
+ * query, so the client has no second answer to "what is most recent". No pagination and no
+ * filters: there are five recordings, and a control nobody needs is a control somebody has to
+ * maintain.
+ *
+ * **Both roles, one route** (Story 3 Ticket 04). `recording.browse` is what admits the caller; what
+ * separates the two answers is whether they also satisfy `recording.list`, and the service asks
+ * that question once. A member sees published rows without the object key — refused by the API,
+ * not merely absent from an interface (docs/project/prd.md, 3.1.2, 3.1.5).
+ *
+ * One route rather than two so Story 4 Ticket 01 builds its library on this and does not invent a
+ * second answer to "what may this person see".
  */
-export const GET = apiRoute(permits('recording.list'), async (_request, context) => {
-  const payload: RecordingListPayload = { recordings: await listAllRecordings(context.actor) };
+export const GET = apiRoute(permits('recording.browse'), async (_request, context) => {
+  const payload: RecordingListPayload = { recordings: await listRecordingsFor(context.actor) };
   return payload;
 });

@@ -1,5 +1,6 @@
 import type { JobRow, ProviderMeta } from '@thp/db';
-import { STUB_PROVIDER_META_KEY, type PipelineStep } from '@thp/shared';
+import type { PipelineStep } from '@thp/shared';
+import { createGenerateDraftHandler, type GenerateDraftDependencies } from './generate-draft';
 import { createTranscribeHandler, type TranscribeDependencies } from './transcribe';
 
 /**
@@ -33,36 +34,32 @@ export type JobHandler = (
 export type HandlerRegistry = Readonly<Partial<Record<PipelineStep, JobHandler>>>;
 
 /**
- * The marker a stub handler leaves behind.
- *
- * **This is what keeps the ledger honest.** With a stub in place a recording reads as fully
- * processed while having no draft, and the difference between "this step ran" and "this step exists
- * yet" would otherwise be invisible — a row that succeeded looks the same either way. The marker
- * makes it a query. Ticket 03 replaced the `transcribe` stub and its marker went with it; Story 3
- * does the same for `generate_draft`, which is the last one left.
- *
- * Ticket 04–05 is the reader. The **key** moved to `@thp/shared` when the pipeline panel started
- * reading it, so the process that writes the marker and the screen that renders *not built yet*
- * state it once rather than twice; the marker itself stays here, because what a stub records is
- * the worker's business.
+ * What this worker is built with. Two steps, two sets of dependencies, kept apart so a test can
+ * hand in a fake provider for one without having to satisfy the other.
  */
-export const STUB_PROVIDER_META: ProviderMeta = { [STUB_PROVIDER_META_KEY]: true };
+export interface WorkerDependencies extends TranscribeDependencies, GenerateDraftDependencies {}
 
 /**
- * The steps this worker runs: `transcribe` for real, `generate_draft` still a stub.
+ * The steps this worker runs — **both of them for real.**
  *
- * A function rather than a constant, because the real handler has dependencies — a provider, a
+ * Ticket 03 of Story 2 replaced the `transcribe` stub; Story 3 Ticket 01 replaces
+ * `generate_draft`, and with it goes `STUB_PROVIDER_META` and the last reason `/admin/pipeline` had
+ * to say *not built yet* about anything. `isStubProviderMeta` stays in `@thp/shared` because the
+ * panel still reads it: a job written while the stub existed is still in the ledger and still says
+ * so, and a screen that stopped being able to tell would be lying about history.
+ *
+ * A function rather than a constant, because the real handlers have dependencies — a provider, a
  * bucket — and a module-level value would read the environment at import time. So a worker with
  * nothing but drafts to run would refuse to start over an ASR key it never uses, and every test
  * importing this module would need one.
  *
  * Listed one by one rather than generated from `PIPELINE_STEPS`, because a step silently acquiring
- * a stub the day it is added to the list is exactly the failure the "no handler" case exists to
+ * a handler the day it is added to the list is exactly the failure the "no handler" case exists to
  * make loud.
  */
-export function createHandlers(deps: TranscribeDependencies = {}): HandlerRegistry {
+export function createHandlers(deps: WorkerDependencies = {}): HandlerRegistry {
   return {
     transcribe: createTranscribeHandler(deps),
-    generate_draft: () => STUB_PROVIDER_META,
+    generate_draft: createGenerateDraftHandler(deps),
   };
 }

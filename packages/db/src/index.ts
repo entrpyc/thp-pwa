@@ -74,10 +74,34 @@ export {
 export {
   findRecordingById,
   insertRecording,
-  listRecordings,
+  setRecordingDescription,
+  setRecordingPublication,
   type NewRecording,
   type RecordingRow,
 } from './recordings';
+export {
+  closeReviewItem,
+  findOpenDraft,
+  findReviewItem,
+  listPendingReviews,
+  replaceOpenDrafts,
+  type CloseReviewItem,
+  type NewReviewItem,
+  type PendingReviewRow,
+  type ReviewItemRow,
+} from './reviews';
+export {
+  findSummaryByRecording,
+  publishSummary,
+  setSummaryPublication,
+  updateSummaryContent,
+  type SummaryRow,
+} from './summaries';
+export {
+  listVisibleRecordings,
+  type VisibilityOptions,
+  type VisibleRecordingRow,
+} from './visibility';
 export {
   findLiveSessionByTokenHash,
   insertSession,

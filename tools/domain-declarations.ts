@@ -1,6 +1,6 @@
 import { readFileSync } from 'node:fs';
 import { relative, resolve, sep } from 'node:path';
-import { JOB_STATUSES, PIPELINE_STEPS, ROLES } from '@thp/shared';
+import { JOB_STATUSES, PIPELINE_STEPS, REVIEW_KINDS, REVIEW_STATUSES, ROLES } from '@thp/shared';
 import { walkFiles } from './fs-walk';
 
 export interface DomainDeclaration {
@@ -35,6 +35,18 @@ export const DOMAIN_DECLARATIONS: readonly DomainDeclaration[] = [
     members: JOB_STATUSES,
   },
   { name: 'JobStatus', canonicalFile: 'packages/shared/src/jobs.ts' },
+  {
+    name: 'REVIEW_KINDS',
+    canonicalFile: 'packages/shared/src/reviews.ts',
+    members: REVIEW_KINDS,
+  },
+  { name: 'ReviewKind', canonicalFile: 'packages/shared/src/reviews.ts' },
+  {
+    name: 'REVIEW_STATUSES',
+    canonicalFile: 'packages/shared/src/reviews.ts',
+    members: REVIEW_STATUSES,
+  },
+  { name: 'ReviewStatus', canonicalFile: 'packages/shared/src/reviews.ts' },
   { name: 'Segment', canonicalFile: 'packages/shared/src/segment.ts' },
 ];
 

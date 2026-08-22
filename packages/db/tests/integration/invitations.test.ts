@@ -86,12 +86,20 @@ describe('the invitation schema', () => {
     `;
     expect(column?.udt_name).toBe('user_role');
 
-    // And there is exactly one such enum in the database, so "declared once" is a fact rather than
-    // a naming coincidence.
+    // And there is exactly one `user_role` in the database — no second copy under another name —
+    // so "declared once" is a fact rather than a naming coincidence. The list grows as later
+    // tickets add their own enums; what must never grow is the number of role enums.
     const enums = await sql<{ typname: string }[]>`
       select typname from pg_type where typtype = 'e' order by typname
     `;
-    expect(enums.map((row) => row.typname)).toEqual(['job_status', 'pipeline_step', 'user_role']);
+    expect(enums.map((row) => row.typname)).toEqual([
+      'job_status',
+      'pipeline_step',
+      'review_kind',
+      'review_status',
+      'user_role',
+    ]);
+    expect(enums.filter((row) => row.typname.includes('role'))).toHaveLength(1);
   });
 
   it('stores the email normalised, whatever casing it was written with', async () => {

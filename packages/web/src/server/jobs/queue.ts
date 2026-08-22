@@ -40,6 +40,11 @@ export interface EnqueueRequest {
    * request that caused it are one query apart. Passed explicitly only outside a request.
    */
   readonly correlationId?: string;
+  /**
+   * What this run is being asked for (Story 3 Ticket 03). Absent everywhere but a steered
+   * regeneration, which is what keeps the chain's enqueue unchanged.
+   */
+  readonly payload?: unknown;
 }
 
 export interface Queue {
@@ -61,6 +66,21 @@ export interface Queue {
    * detail to have hidden here in advance.
    */
   enqueue(input: EnqueueRequest, executor?: Executor): Promise<EnqueuedJob>;
+
+  /**
+   * The job already in flight for this recording and step, or `null`.
+   *
+   * A **read** on a port whose doc says it wraps only the enqueue half, and the exception is
+   * deliberate rather than an oversight. Story 3 Ticket 03 has to refuse a second regeneration
+   * while one is unfinished ([3.6.9](docs/project/prd.md)): the partial unique index would
+   * otherwise turn the second enqueue into a silent no-op that hands the caller back a job
+   * generating a *different kind*, which is a wrong answer dressed as success.
+   *
+   * Asking through the port rather than reaching for the ledger keeps tools/queue-boundary.ts
+   * satisfied and keeps the one-door property true — a broker adapter answers this from whatever it
+   * uses for in-flight work.
+   */
+  findUnfinished(recordingId: string, step: PipelineStep): Promise<EnqueuedJob | null>;
 }
 
 /**

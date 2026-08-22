@@ -3,7 +3,7 @@ import postgres from 'postgres';
 import {
   createDatabase,
   insertRecording,
-  listRecordings,
+  listVisibleRecordings,
   runMigrations,
   type DatabaseHandle,
 } from '@thp/db';
@@ -83,7 +83,12 @@ describe('the recording schema', () => {
           await insertRecording({ originalMediaKey: key, title: key, recordedAt: day }, ordered);
         }
 
-        expect((await listRecordings(ordered)).map((row) => row.recordedAt)).toEqual([
+        // The one read of this table, with the gate open — which is what the console gets.
+        expect(
+          (await listVisibleRecordings({ includeUnpublished: true }, ordered)).map(
+            (row) => row.recordedAt,
+          ),
+        ).toEqual([
           '2026-06-01',
           '2026-02-15',
           '2025-11-30',

@@ -112,7 +112,7 @@ export async function readPipeline(
     })
     .from(recording)
     .leftJoin(latest, eq(latest.recordingId, recording.id))
-    // `created_at` breaks the tie for the same reason `listRecordings` uses it: a `date` has no
+    // `created_at` breaks the tie for the same reason the recordings list uses it: a `date` has no
     // time of day, and two teachings recorded on the same Sunday would otherwise come back in
     // whatever order the planner chose that second.
     .orderBy(desc(recording.recordedAt), desc(recording.createdAt))) as unknown as JoinedRow[];

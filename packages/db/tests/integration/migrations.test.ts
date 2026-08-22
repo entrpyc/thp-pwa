@@ -4,7 +4,7 @@ import { resolve } from 'node:path';
 import { afterAll, beforeAll, describe, expect, it, inject } from 'vitest';
 import postgres from 'postgres';
 import { MIGRATIONS_DIR, runMigrations } from '@thp/db';
-import { JOB_STATUSES } from '@thp/shared';
+import { JOB_STATUSES, REVIEW_KINDS, REVIEW_STATUSES } from '@thp/shared';
 import { createThrowawayDatabase, type ThrowawayDatabase } from '../../../../tests/setup/throwaway-db';
 
 interface Journal {
@@ -46,8 +46,13 @@ async function readColumnSets(url: string): Promise<Map<string, string[]>> {
  *
  * This is what makes "existing tables are untouched" a **before and after** rather than a list of
  * columns somebody typed out and could equally have typed out wrong. The database is migrated to
- * the state before the new migration, photographed, migrated the rest of the way, and photographed
- * again.
+ * the state before the new migration, photographed, migrated **exactly one migration further**, and
+ * photographed again.
+ *
+ * One further, not all the way: each block below is about one migration, and photographing the end
+ * state instead would make every earlier block fail the moment a later migration alters a table it
+ * had already seen — which Story 3 Ticket 03 does to `job`. The comparison has to be bounded by the
+ * migration it is about.
  */
 function migrationsFolderUpTo(count: number): string {
   const folder = mkdtempSync(resolve(tmpdir(), 'thp-migrations-'));
@@ -125,14 +130,22 @@ describe('migrations apply to an empty database by one command', () => {
     try {
       const types = await sql<{ typname: string }[]>`
         select typname from pg_type
-        where typname in ('user_role', 'pipeline_step', 'job_status')
+        where typname in
+              ('user_role', 'pipeline_step', 'job_status', 'review_kind', 'review_status')
         order by typname
       `;
-      expect(types.map((row) => row.typname)).toEqual(['job_status', 'pipeline_step', 'user_role']);
+      expect(types.map((row) => row.typname)).toEqual([
+        'job_status',
+        'pipeline_step',
+        'review_kind',
+        'review_status',
+        'user_role',
+      ]);
 
       // Tables arrive with the ticket that uses them. Ticket 2 added accounts and sessions, ticket 3
       // invitations, ticket 4 password resets, Story 2 Ticket 01 `recording`, Ticket 02 `job` and
-      // Ticket 03 `transcript` and `segment` — `review_item` and the rest are still ahead.
+      // Ticket 03 `transcript` and `segment`. Story 3 Ticket 01 adds `review_item` and `summary`,
+      // which are the last two tables of this epic.
       const tables = await sql<{ tablename: string }[]>`
         select tablename from pg_tables where schemaname = 'public' order by tablename
       `;
@@ -141,8 +154,10 @@ describe('migrations apply to an empty database by one command', () => {
         'job',
         'password_reset',
         'recording',
+        'review_item',
         'segment',
         'session',
+        'summary',
         'transcript',
         'user',
       ]);
@@ -174,7 +189,7 @@ describe('the recording table, and nothing beside it', () => {
     await runMigrations({ url: target.url, migrationsFolder: migrationsFolderUpTo(priorCount) });
     before = await readColumnSets(target.url);
 
-    await runMigrations({ url: target.url });
+    await runMigrations({ url: target.url, migrationsFolder: migrationsFolderUpTo(priorCount + 1) });
     after = await readColumnSets(target.url);
   }, 120_000);
 
@@ -290,7 +305,7 @@ describe('the job ledger, and nothing beside it', () => {
     await runMigrations({ url: target.url, migrationsFolder: migrationsFolderUpTo(priorCount) });
     before = await readColumnSets(target.url);
 
-    await runMigrations({ url: target.url });
+    await runMigrations({ url: target.url, migrationsFolder: migrationsFolderUpTo(priorCount + 1) });
     after = await readColumnSets(target.url);
 
     sql = postgres(target.url, { max: 2, onnotice: () => {} });
@@ -321,10 +336,11 @@ describe('the job ledger, and nothing beside it', () => {
       'step',
     ]);
 
-    // A retry count, a schedule, a worker's name and a payload all belong to things this epic
-    // deliberately does not have: automatic retry, docs/project/prd.md 3.21.3's batching, a worker
-    // pool, and a job whose input is not the recording it names.
-    for (const deferred of ['max_attempts', 'scheduled_for', 'worker_id', 'payload', 'updated_at']) {
+    // A retry count, a schedule and a worker's name all belong to things this epic deliberately
+    // does not have: automatic retry, docs/project/prd.md 3.21.3's batching, and a worker pool.
+    // `payload` was on this list too and is not any more — Story 3 Ticket 03 reversed that decision
+    // in its own migration, which is the block at the end of this file.
+    for (const deferred of ['max_attempts', 'scheduled_for', 'worker_id', 'updated_at']) {
       expect(after.get('job'), `${deferred} is deferred and must not exist`).not.toContain(deferred);
     }
   });
@@ -479,7 +495,7 @@ describe('the transcript and its segments, and nothing beside them', () => {
     await runMigrations({ url: target.url, migrationsFolder: migrationsFolderUpTo(priorCount) });
     before = await readColumnSets(target.url);
 
-    await runMigrations({ url: target.url });
+    await runMigrations({ url: target.url, migrationsFolder: migrationsFolderUpTo(priorCount + 1) });
     after = await readColumnSets(target.url);
 
     sql = postgres(target.url, { max: 2, onnotice: () => {} });
@@ -515,14 +531,14 @@ describe('the transcript and its segments, and nothing beside them', () => {
   });
 
   it('gives the segment exactly these columns, and no embedding', () => {
-    // `speaker` arrived in Ticket 04–05, as its own migration over this table — see the block
-    // below, which is what proves nothing was written into the rows already there.
+    // `speaker` is **not** here, and that is the assertion: it arrived in Ticket 04–05 as its own
+    // migration over this table, and this block is bounded by the migration it is about — see the
+    // block below, which is what proves nothing was written into the rows already there.
     expect(after.get('segment')).toEqual([
       'corrected_at',
       'corrected_by_user_id',
       'end_ms',
       'id',
-      'speaker',
       'start_ms',
       'text',
       'transcript_id',
@@ -672,7 +688,7 @@ describe('the speaker column, and nothing beside it', () => {
     `;
     existingSegmentId = segment?.id as string;
 
-    await runMigrations({ url: target.url });
+    await runMigrations({ url: target.url, migrationsFolder: migrationsFolderUpTo(priorCount + 1) });
     after = await readColumnSets(target.url);
   }, 120_000);
 
@@ -713,5 +729,337 @@ describe('the speaker column, and nothing beside it', () => {
     // No back-fill, by design: a recording already transcribed gains speakers only when somebody
     // re-runs `transcribe`, and doing that discards any corrections Story 5 will let an admin make.
     expect(rows.map((row) => row.speaker)).toEqual([null]);
+  });
+});
+
+/**
+ * `review_item` and `summary` — **the review gate** (Story 3 Ticket 01), and the last two tables of
+ * this epic.
+ *
+ * Asserted the way every table since `recording` is: by their **exact column sets**, before and
+ * after, so a column added "for later" is a failing test rather than a comment nobody reads. The
+ * one that matters most here is a *second* `review_item`-shaped table — a `scripture_reference` or
+ * a `tag_suggestion` — which would be the first crack in the property
+ * docs/project/architecture.md § Cross-cutting concerns is protecting: everything waiting on an
+ * admin is one query over one column, not a union of six.
+ *
+ * Four properties beyond the columns are asserted here rather than in the query layer, because they
+ * are properties of the *database*: the two enums admit exactly what the shared constants declare,
+ * a recording has at most one summary, a closed item survives the admin who closed it, and both
+ * tables go when the recording does.
+ */
+describe('the review gate, and nothing beside it', () => {
+  let target: ThrowawayDatabase;
+  /** Column sets as of the migration *before* this one, and after it. */
+  let before: Map<string, string[]>;
+  let after: Map<string, string[]>;
+  let sql: ReturnType<typeof postgres>;
+  let seeded = 0;
+
+  async function newRecording(): Promise<string> {
+    seeded += 1;
+    const key = `originals/review-gate-${seeded}.mp3`;
+    const [row] = await sql<{ id: string }[]>`
+      insert into recording (original_media_key, title, recorded_at)
+      values (${key}, 'A teaching', '2026-08-16')
+      returning id
+    `;
+    return row?.id as string;
+  }
+
+  async function newAdmin(): Promise<string> {
+    seeded += 1;
+    const [row] = await sql<{ id: string }[]>`
+      insert into "user" (email, password_hash, display_name, role)
+      values (${`gate-${seeded}@example.test`}, 'not-a-hash', 'An admin', 'admin')
+      returning id
+    `;
+    return row?.id as string;
+  }
+
+  /** Insert by hand. What the query layer does with these tables is its own suite. */
+  async function insertItem(
+    recordingId: string,
+    kind = 'summary',
+    status = 'draft',
+    reviewedBy: string | null = null,
+  ): Promise<string> {
+    const [row] = await sql<{ id: string }[]>`
+      insert into review_item (recording_id, kind, status, fields, provenance, reviewed_by)
+      values (
+        ${recordingId},
+        ${kind}::review_kind,
+        ${status}::review_status,
+        ${sql.json({ summary: 'What the machine wrote.' })},
+        ${sql.json({ model: 'fake', fields: { summary: { aiSuggested: true } } })},
+        ${reviewedBy}
+      )
+      returning id
+    `;
+    return row?.id as string;
+  }
+
+  async function insertSummary(recordingId: string): Promise<string> {
+    const [row] = await sql<{ id: string }[]>`
+      insert into summary (recording_id, content) values (${recordingId}, 'Approved text.')
+      returning id
+    `;
+    return row?.id as string;
+  }
+
+  beforeAll(async () => {
+    target = await createThrowawayDatabase(inject('databaseUrl'), 'review_gate_migration');
+
+    const priorCount = journalCountBefore('0008_review_gate');
+    await runMigrations({ url: target.url, migrationsFolder: migrationsFolderUpTo(priorCount) });
+    before = await readColumnSets(target.url);
+
+    await runMigrations({ url: target.url, migrationsFolder: migrationsFolderUpTo(priorCount + 1) });
+    after = await readColumnSets(target.url);
+
+    sql = postgres(target.url, { max: 2, onnotice: () => {} });
+  }, 120_000);
+
+  afterAll(async () => {
+    await sql?.end({ timeout: 5 });
+    await target?.drop();
+  }, 60_000);
+
+  it('did not exist before this migration and do after — otherwise the comparison is vacuous', () => {
+    expect(before.has('review_item')).toBe(false);
+    expect(before.has('summary')).toBe(false);
+    expect(after.has('review_item')).toBe(true);
+    expect(after.has('summary')).toBe(true);
+  });
+
+  it('gives review_item exactly these columns, and none of the deferred ones', () => {
+    expect(after.get('review_item')).toEqual([
+      'created_at',
+      'fields',
+      'id',
+      'kind',
+      'provenance',
+      'recording_id',
+      'reviewed_at',
+      'reviewed_by',
+      'status',
+    ]);
+
+    // `job_id` would tie a draft to the run that produced it, which is findable by correlation id
+    // already. `superseded_by` would thread a history nothing reads — a regeneration discards and
+    // writes fresh. `summary` and `description` as columns is the shape `fields` exists to avoid,
+    // and is what a per-artefact table would degrade into.
+    for (const deferred of ['job_id', 'superseded_by', 'updated_at', 'summary', 'description']) {
+      expect(after.get('review_item'), `${deferred} must not exist`).not.toContain(deferred);
+    }
+  });
+
+  it('gives summary exactly these columns, and no status beside its timestamp', () => {
+    expect(after.get('summary')).toEqual([
+      'content',
+      'created_at',
+      'id',
+      'published_at',
+      'recording_id',
+      'updated_at',
+    ]);
+
+    // `status` would be a second reading of `published_at` that a clock can make disagree with it.
+    // `version` and `previous_content` are summary history, which this story explicitly does not
+    // build — the closed review item holds what the machine said.
+    for (const deferred of ['status', 'version', 'previous_content', 'reviewed_by']) {
+      expect(after.get('summary'), `${deferred} must not exist`).not.toContain(deferred);
+    }
+  });
+
+  it('admits exactly the kinds and statuses the shared constants declare, in their order', async () => {
+    const kinds = await sql<{ enumlabel: string }[]>`
+      select enumlabel from pg_enum
+      join pg_type on pg_type.oid = pg_enum.enumtypid
+      where pg_type.typname = 'review_kind' order by pg_enum.enumsortorder
+    `;
+    expect(kinds.map((row) => row.enumlabel)).toEqual([...REVIEW_KINDS]);
+
+    const statuses = await sql<{ enumlabel: string }[]>`
+      select enumlabel from pg_enum
+      join pg_type on pg_type.oid = pg_enum.enumtypid
+      where pg_type.typname = 'review_status' order by pg_enum.enumsortorder
+    `;
+    expect(statuses.map((row) => row.enumlabel)).toEqual([...REVIEW_STATUSES]);
+  });
+
+  it('holds the draft and its provenance as jsonb, since a later kind carries other fields', async () => {
+    const rows = await sql<{ column_name: string; data_type: string }[]>`
+      select column_name, data_type from information_schema.columns
+      where table_schema = 'public' and table_name = 'review_item'
+        and column_name in ('fields', 'provenance')
+      order by column_name
+    `;
+    expect(rows.map((row) => [row.column_name, row.data_type])).toEqual([
+      ['fields', 'jsonb'],
+      ['provenance', 'jsonb'],
+    ]);
+  });
+
+  it('starts an item as a draft with nobody having reviewed it', async () => {
+    const id = await insertItem(await newRecording());
+    const [row] = await sql<
+      { status: string; reviewed_by: string | null; reviewed_at: Date | null }[]
+    >`select status::text as status, reviewed_by, reviewed_at from review_item where id = ${id}`;
+
+    expect(row?.status).toBe('draft');
+    expect(row?.reviewed_by).toBeNull();
+    expect(row?.reviewed_at).toBeNull();
+  });
+
+  it('refuses an item or a summary that belongs to no recording', async () => {
+    await expect(insertItem('00000000-0000-0000-0000-000000000000')).rejects.toThrow();
+    await expect(insertSummary('00000000-0000-0000-0000-000000000000')).rejects.toThrow();
+  });
+
+  it('refuses a second summary for the same recording', async () => {
+    // docs/project/prd.md 4.5 is one summary per recording, so the database says it too — which is
+    // what makes approving a second draft an update rather than a history nobody asked for.
+    const recordingId = await newRecording();
+    await insertSummary(recordingId);
+    await expect(insertSummary(recordingId)).rejects.toThrow();
+  });
+
+  it('keeps drafts of different kinds for one recording', async () => {
+    // Two kinds are two rows, not two columns — which is the whole of why there is one table.
+    const recordingId = await newRecording();
+    await expect(insertItem(recordingId, 'summary')).resolves.toBeTruthy();
+    await expect(insertItem(recordingId, 'recording_metadata')).resolves.toBeTruthy();
+  });
+
+  it('keeps a closed item when the admin who closed it is deleted', async () => {
+    // A closed item is a record of something that happened, and it should survive the account of
+    // the person it happened by — the same split `invitation` takes between subject and author.
+    const adminId = await newAdmin();
+    const id = await insertItem(await newRecording(), 'summary', 'published', adminId);
+
+    await sql`delete from "user" where id = ${adminId}`;
+
+    const [row] = await sql<{ status: string; reviewed_by: string | null }[]>`
+      select status::text as status, reviewed_by from review_item where id = ${id}
+    `;
+    expect(row?.status).toBe('published');
+    expect(row?.reviewed_by).toBeNull();
+  });
+
+  it('takes both tables with the recording they are about', async () => {
+    const recordingId = await newRecording();
+    await insertItem(recordingId);
+    await insertSummary(recordingId);
+
+    await sql`delete from recording where id = ${recordingId}`;
+
+    const [items] = await sql<{ count: string }[]>`
+      select count(*)::text as count from review_item where recording_id = ${recordingId}
+    `;
+    const [summaries] = await sql<{ count: string }[]>`
+      select count(*)::text as count from summary where recording_id = ${recordingId}
+    `;
+    expect([items?.count, summaries?.count]).toEqual(['0', '0']);
+  });
+
+  it('leaves every table that already existed exactly as it was', () => {
+    for (const [table, columns] of before) {
+      expect(after.get(table), `${table} changed`).toEqual(columns);
+    }
+    expect([...before.keys()].sort()).toEqual([
+      'invitation',
+      'job',
+      'password_reset',
+      'recording',
+      'segment',
+      'session',
+      'transcript',
+      'user',
+    ]);
+  });
+});
+
+/**
+ * `job.payload` — one column, added by its own migration (Story 3 Ticket 03).
+ *
+ * **This is the one reversal in the epic, and the block exists to make it visible.** Story 2
+ * Ticket 02 asserted `payload` *must not exist*, on the reasoning that a step's input is the
+ * recording it names. That stopped being true when docs/project/prd.md 3.6.9 asked an admin to
+ * steer one *kind* of draft with a sentence: neither the kind nor the sentence has anywhere else to
+ * live.
+ *
+ * Asserted before and after like every migration since `recording`, and with the one property this
+ * one shares with the speaker column: **nothing is written into the rows that already exist.** A
+ * job enqueued before this migration still carries no payload afterwards, which is what makes
+ * "null on every chained job" a fact about the database rather than a claim in a comment.
+ */
+describe('the job payload column, and nothing beside it', () => {
+  let target: ThrowawayDatabase;
+  let before: Map<string, string[]>;
+  let after: Map<string, string[]>;
+  let sql: ReturnType<typeof postgres>;
+  /** A job written before the column existed, to read back afterwards. */
+  let existingJobId: string;
+
+  beforeAll(async () => {
+    target = await createThrowawayDatabase(inject('databaseUrl'), 'job_payload_migration');
+
+    const priorCount = journalCountBefore('0009_job_payload');
+    await runMigrations({ url: target.url, migrationsFolder: migrationsFolderUpTo(priorCount) });
+    before = await readColumnSets(target.url);
+
+    sql = postgres(target.url, { max: 2, onnotice: () => {} });
+    const [written] = await sql<{ id: string }[]>`
+      insert into recording (original_media_key, title, recorded_at)
+      values ('originals/before-the-payload-column.mp3', 'An older teaching', '2026-08-09')
+      returning id
+    `;
+    const [queued] = await sql<{ id: string }[]>`
+      insert into job (recording_id, step, status, attempt, correlation_id)
+      values (${written?.id as string}, 'generate_draft', 'pending', 1, 'a-known-correlation-id')
+      returning id
+    `;
+    existingJobId = queued?.id as string;
+
+    await runMigrations({ url: target.url, migrationsFolder: migrationsFolderUpTo(priorCount + 1) });
+    after = await readColumnSets(target.url);
+  }, 120_000);
+
+  afterAll(async () => {
+    await sql?.end({ timeout: 5 });
+    await target?.drop();
+  }, 60_000);
+
+  it('did not exist before this migration and does after — otherwise the comparison is vacuous', () => {
+    expect(before.get('job')).not.toContain('payload');
+    expect(after.get('job')).toContain('payload');
+  });
+
+  it('adds exactly one column to job and nothing anywhere else', () => {
+    // The whole of the schema change: one nullable jsonb. No index, no constraint, no second column
+    // "for later", and no table but this one touched.
+    for (const [table, columns] of before) {
+      const expected = table === 'job' ? [...columns, 'payload'].sort() : columns;
+      expect(after.get(table), `${table} changed`).toEqual(expected);
+    }
+    expect([...after.keys()].sort()).toEqual([...before.keys()].sort());
+  });
+
+  it('is nullable jsonb, because what a step is asked for has no fixed shape', async () => {
+    const rows = await sql<{ data_type: string; is_nullable: string }[]>`
+      select data_type, is_nullable from information_schema.columns
+      where table_schema = 'public' and table_name = 'job' and column_name = 'payload'
+    `;
+    expect(rows.map((row) => [row.data_type, row.is_nullable])).toEqual([['jsonb', 'YES']]);
+  });
+
+  it('writes nothing into the jobs that were already there', async () => {
+    const rows = await sql<{ payload: unknown }[]>`
+      select payload from job where id = ${existingJobId}
+    `;
+    // No back-fill, and no default: the chain still enqueues a successor with no payload, which is
+    // what leaves the chain rule untouched by this column existing.
+    expect(rows.map((row) => row.payload)).toEqual([null]);
   });
 });

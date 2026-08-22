@@ -3,6 +3,7 @@ import {
   ADMIN_PAGE_PATH,
   ADMIN_PIPELINE_PAGE_PATH,
   ADMIN_RECORDINGS_PAGE_PATH,
+  ADMIN_REVIEWS_PAGE_PATH,
 } from '@thp/shared';
 import type { Actor } from '@/server/auth/policy';
 import { SignOutButton } from '../sign-out-button';
@@ -21,11 +22,12 @@ import styles from './admin.module.css';
  * independently.
  */
 
-/** The panels, in the order they are read. A fourth is one entry. */
+/** The panels, in the order they are read. A fifth is one entry — the fourth was. */
 const PANELS = [
   { id: 'users', href: ADMIN_PAGE_PATH, label: 'User management' },
   { id: 'recordings', href: ADMIN_RECORDINGS_PAGE_PATH, label: 'Recordings' },
   { id: 'pipeline', href: ADMIN_PIPELINE_PAGE_PATH, label: 'Pipeline' },
+  { id: 'reviews', href: ADMIN_REVIEWS_PAGE_PATH, label: 'Pending Reviews' },
 ] as const;
 
 export type PanelId = (typeof PANELS)[number]['id'];

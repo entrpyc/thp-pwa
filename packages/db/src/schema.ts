@@ -13,7 +13,14 @@ import {
   uniqueIndex,
   uuid,
 } from 'drizzle-orm/pg-core';
-import { JOB_STATUSES, PIPELINE_STEPS, ROLES, UNFINISHED_JOB_STATUSES } from '@thp/shared';
+import {
+  JOB_STATUSES,
+  PIPELINE_STEPS,
+  REVIEW_KINDS,
+  REVIEW_STATUSES,
+  ROLES,
+  UNFINISHED_JOB_STATUSES,
+} from '@thp/shared';
 
 /**
  * The Drizzle schema. Server-only by construction: this package is never imported by a client
@@ -22,7 +29,8 @@ import { JOB_STATUSES, PIPELINE_STEPS, ROLES, UNFINISHED_JOB_STATUSES } from '@t
  * **Tables arrive with the ticket that uses them.** Ticket 1 shipped the migration mechanism and the
  * two domain enums; ticket 2 added `user` and `session`; ticket 3 added `invitation`; ticket 4 added
  * `password_reset`. Story 2 Ticket 01 adds `recording`, Ticket 02 the `job` ledger beneath it, and
- * Ticket 03 `transcript` and `segment` — `review_item` and the rest are still absent.
+ * Ticket 03 `transcript` and `segment`. Story 3 Ticket 01 adds `review_item` and `summary`, which
+ * are the last two tables of this epic.
  *
  * The enums are **derived** from the shared TypeScript constants rather than restated beside them.
  * That is what keeps "each enum is declared exactly once in the repository" true, and it is
@@ -33,6 +41,10 @@ export const userRole = pgEnum('user_role', ROLES);
 export const pipelineStep = pgEnum('pipeline_step', PIPELINE_STEPS);
 
 export const jobStatus = pgEnum('job_status', JOB_STATUSES);
+
+export const reviewKind = pgEnum('review_kind', REVIEW_KINDS);
+
+export const reviewStatus = pgEnum('review_status', REVIEW_STATUSES);
 
 /**
  * An account. Columns arrive with the steps that use them: `deactivated_at` comes with ticket 4
@@ -256,8 +268,8 @@ export const recording = pgTable(
  * `finished_at` are the three transitions and the row has no fourth. No `worker_id`, because
  * concurrency is pinned to 1 and the startup sweep is what recovers an abandoned job. No
  * `scheduled_for`, because docs/project/prd.md 3.21.3 is not in this epic and a job is enqueued to
- * run now. No `payload`, because a step's input is the recording it names. The migration test
- * asserts the exact column set rather than trusting this comment.
+ * run now. `payload` arrived in Story 3 Ticket 03 and is the one reversal — see the column. The
+ * migration test asserts the exact column set rather than trusting this comment.
  */
 export const job = pgTable(
   'job',
@@ -286,6 +298,21 @@ export const job = pgTable(
     finishedAt: timestamp('finished_at', { withTimezone: true }),
     /** What the handler wants recorded about how it ran. Null at enqueue. */
     providerMeta: jsonb('provider_meta'),
+    /**
+     * **What this run of the step was asked for** (Story 3 Ticket 03).
+     *
+     * This column **reverses Ticket 02's explicit "no payload"**, and the reversal is stated here
+     * rather than left to be discovered. That decision rested on "a step's input is the recording
+     * it names", which stops being true the moment [3.6.9](docs/project/prd.md) steers one *kind*
+     * of draft with a sentence: neither the kind nor the sentence has anywhere else to live, and
+     * the alternatives — a column per parameter, or a second table keyed by job — are worse
+     * versions of `jsonb`.
+     *
+     * **Null on every chained job**, which is what keeps the chain rule untouched: `runJob`
+     * enqueues a successor with no payload, and a handler reading `null` does the whole of its
+     * step. Only the regenerate route ever writes one.
+     */
+    payload: jsonb('payload'),
   },
   (table) => [
     /**
@@ -414,4 +441,89 @@ export const segment = pgTable(
      */
     index('segment_transcript_start_idx').on(table.transcriptId, table.startMs),
   ],
+);
+
+/**
+ * **The review gate** (Story 3 Ticket 01) — one table for every AI artefact this product will ever
+ * generate, not one table per artefact
+ * (docs/epics/epic-core-listening/architecture.md § Data model (epic)).
+ *
+ * That is the whole design, and it buys one property:
+ * docs/project/architecture.md § Cross-cutting concerns asks that "everything waiting on an admin"
+ * stay **one query over one column** rather than degrading into a union of six. Scripture
+ * references, tags, topics, mind maps and video scripts each add a value to `review_kind` in a
+ * later epic and change nothing here — not the queue read, not the form, not a route.
+ *
+ * `fields` and `provenance` are `jsonb` for the same reason: [4.17.2](docs/project/prd.md) wants
+ * accept/edit/discard *per field*, and a column per field per artefact would make that a migration
+ * every time a kind arrives. Both kinds in this epic carry exactly one field — `summary` and
+ * `description` — and the form is built generically over the objects anyway, because that
+ * generality is what kinds 3–6 inherit. `provenance` holds, per field, that it was AI-suggested
+ * and whether an admin changed it ([4.17.5](docs/project/prd.md)), plus the model, the model
+ * version and the prompt version that produced the row.
+ *
+ * `recording_id` cascades: a draft about a recording that is gone is not a record of anything.
+ * `reviewed_by` **sets null** instead, because a closed item *is* a record of something that
+ * happened and it should survive the admin's account being removed — the same split `invitation`
+ * already takes between its subject and its author.
+ *
+ * What is absent is the design. No `updated_at`: `created_at` and `reviewed_at` are the two
+ * transitions an item has. No `job_id`, because a draft is about the recording rather than about
+ * the run that produced it, and the run is already findable by correlation id. No `superseded_by`,
+ * because a regeneration discards the old item and writes a fresh one rather than threading a
+ * history nothing reads. The migration test asserts the exact column set rather than trusting this
+ * comment.
+ */
+export const reviewItem = pgTable('review_item', {
+  id: uuid('id').primaryKey().defaultRandom(),
+  recordingId: uuid('recording_id')
+    .notNull()
+    .references(() => recording.id, { onDelete: 'cascade' }),
+  /** `summary` or `recording_metadata` in this epic. A later artefact is a value, not a table. */
+  kind: reviewKind('kind').notNull(),
+  /** `draft` is the only open state, and therefore the whole of the Pending Reviews query. */
+  status: reviewStatus('status').notNull().default('draft'),
+  /** The draft itself, keyed by field name. */
+  fields: jsonb('fields').notNull(),
+  /** Per field, whether it was AI-suggested and whether an admin changed it. */
+  provenance: jsonb('provenance').notNull(),
+  createdAt: timestamp('created_at', { withTimezone: true }).notNull().defaultNow(),
+  /** Who closed it. Null while it is a draft, and null again if that account is ever deleted. */
+  reviewedBy: uuid('reviewed_by').references(() => user.id, { onDelete: 'set null' }),
+  reviewedAt: timestamp('reviewed_at', { withTimezone: true }),
+});
+
+/**
+ * A teaching's approved summary (Story 3 Ticket 01) — **its own table, and its own gate.**
+ *
+ * Not a column on `recording`, because a summary has a publication state the recording does not
+ * share: [3.6.12](docs/project/prd.md) asks an admin to be able to return a published summary to
+ * draft *without* taking the teaching down. So a summary is member-visible only when **both**
+ * `summary.published_at` and `recording.published_at` are set — two gates, and the description
+ * deliberately has only one because it is a column on the recording and rides its state.
+ *
+ * `published_at` is nullable rather than a status column, the same shape `recording.published_at`
+ * and `user.deactivated_at` already take: return-to-draft is one write of `null`, and "published"
+ * is a fact about the column rather than a second thing to keep in step with it.
+ *
+ * **Unique on `recording_id`**, because [4.5](docs/project/prd.md) is one summary per recording and
+ * the database is what says so — approving a second draft updates this row rather than growing a
+ * history beside it. What the machine proposed stays in the closed `review_item`; nothing here
+ * computes the difference between the two.
+ */
+export const summary = pgTable(
+  'summary',
+  {
+    id: uuid('id').primaryKey().defaultRandom(),
+    recordingId: uuid('recording_id')
+      .notNull()
+      .references(() => recording.id, { onDelete: 'cascade' }),
+    /** Plain text with line breaks ([3.6.8](docs/project/prd.md)). No markup, no rendering. */
+    content: text('content').notNull(),
+    /** The second gate. Null means a draft summary exists and no member can read it. */
+    publishedAt: timestamp('published_at', { withTimezone: true }),
+    createdAt: timestamp('created_at', { withTimezone: true }).notNull().defaultNow(),
+    updatedAt: timestamp('updated_at', { withTimezone: true }).notNull().defaultNow(),
+  },
+  (table) => [uniqueIndex('summary_recording_unique').on(table.recordingId)],
 );

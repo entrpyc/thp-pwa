@@ -168,6 +168,73 @@
   overflow-wrap: anywhere;
 }
 
+/* ------------------------------------------------------------------- publication (Story 3) */
+
+/*
+ * The row's controls, all composed. Publishing is the panel's one solid fill on a row that is not
+ * live and a plain pill on one that is — the guide's principle 3, applied to the fact that the
+ * interesting press on an unpublished teaching is *publish it* and on a published one is nothing.
+ *
+ * `.summaryEditor` is the only new shape: a multi-line field taking the whole width of the row,
+ * the same `flex: 1 1 100%` break the shared confirmation block uses. The textarea itself wears the
+ * field recipe verbatim and adds only a readable line height and a vertical resize.
+ */
+.action {
+  composes: action from '../admin.module.css';
+  /* An `<a>` wearing a button's recipe: the Review link is navigation, not an action, and should
+     read as the same control without pretending to be a button. */
+  display: inline-flex;
+  align-items: center;
+  text-decoration: none;
+}
+
+.actionStrong {
+  composes: actionStrong from '../admin.module.css';
+}
+
+.confirm {
+  composes: confirm from '../admin.module.css';
+}
+
+.confirmText {
+  composes: confirmText from '../admin.module.css';
+}
+
+.confirmActions {
+  composes: confirmActions from '../admin.module.css';
+}
+
+.rowRefusal {
+  composes: rowRefusal from '../admin.module.css';
+}
+
+.summaryEditor {
+  flex: 1 1 100%;
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: var(--space-2);
+  min-width: 0;
+}
+
+.textarea {
+  width: 100%;
+  background: var(--color-surface-raised);
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-sm);
+  padding: var(--space-3) var(--space-4);
+  color: var(--color-text);
+  font-family: inherit;
+  font-size: var(--fs-body);
+  line-height: 1.6;
+  resize: vertical;
+}
+
+.textarea:disabled {
+  cursor: progress;
+  color: var(--color-text-dim);
+}
+
 /* ----------------------------------------------------------------------------------- a phone */
 
 @media (max-width: 48rem) {
@@ -181,11 +248,17 @@
   }
 
   .field,
-  .fieldTight {
+  .fieldTight,
+  .summaryEditor {
     flex: 0 0 auto;
   }
 
   .submit {
     width: 100%;
+  }
+
+  /* A row's controls stack too, and each one takes the width rather than sitting half-empty. */
+  .rowControls {
+    justify-content: flex-start;
   }
 }

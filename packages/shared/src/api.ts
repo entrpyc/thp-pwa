@@ -67,6 +67,17 @@ export const CORRELATION_ID_HEADER = 'x-correlation-id';
  *   going to become a recording; start it again* — and because the alternative is three codes a
  *   screen would branch on identically. What the client says next comes from `message`; the title
  *   and date it was refused with are still in the form.
+ *
+ * Story 3 adds two, and both exist because the alternative is answering an admin with something
+ * that looks like success:
+ *
+ * - `review_closed` — that draft has already been approved, discarded or regenerated away. A
+ *   refusal rather than a silent re-apply, so a console cannot report an action it did not take;
+ *   the same argument `account_state_conflict` is made on.
+ * - `generation_in_flight` — a draft for that recording is already being generated. Distinct from
+ *   a conflict on the item, because the thing in the way belongs to the *recording*: the partial
+ *   unique index allows one unfinished `generate_draft`, and handing the caller back that job
+ *   would hand them work for a different kind than the one they asked to regenerate.
  */
 export const API_ERROR_CODES = [
   'unauthenticated',
@@ -84,6 +95,8 @@ export const API_ERROR_CODES = [
   'account_state_conflict',
   'last_admin',
   'upload_invalid',
+  'review_closed',
+  'generation_in_flight',
   'not_found',
   'internal_error',
   'service_unavailable',

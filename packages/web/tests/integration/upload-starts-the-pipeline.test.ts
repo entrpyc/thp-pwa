@@ -28,6 +28,7 @@ import type { Actor } from '@/server/auth/policy';
 import { startWorkerLoop } from '../../../worker/src/loop';
 import { createHandlers } from '../../../worker/src/handlers';
 import { fakeTranscriber, type FakeScript } from '../../../worker/src/asr';
+import { fakeGenerator } from '../../../worker/src/generate';
 import { closeTestDatabase, signedInAccount, type TestAccount } from '../support/accounts';
 
 /**
@@ -236,6 +237,7 @@ describe('finalising an upload', () => {
     const refusing: Queue = {
       name: 'refusing',
       enqueue: (): Promise<EnqueuedJob> => Promise.reject(new Error('the ledger refused this job')),
+      findUnfinished: (): Promise<EnqueuedJob | null> => Promise.resolve(null),
     };
     const restoreQueue = setQueue(refusing);
     const silence = setLogSink(() => {});
@@ -270,6 +272,12 @@ describe('finalising an upload', () => {
   }, 120_000);
 });
 
+/** What the drafting provider would have written. The second of two fakes in this suite. */
+const DRAFT = {
+  summary: 'The teaching stays with the second chapter throughout.',
+  description: 'A close reading of the second chapter.',
+};
+
 /** What the provider would have said. The only thing in this suite that is not real. */
 const SCRIPT: FakeScript = {
   language: 'en',
@@ -302,7 +310,11 @@ describe('presign, PUT, finalise, worker', () => {
     const loop = startWorkerLoop({
       executor: handle,
       pollIntervalMs: 20,
-      handlers: createHandlers({ transcriber: fakeTranscriber(SCRIPT), executor: handle }),
+      handlers: createHandlers({
+        transcriber: fakeTranscriber(SCRIPT),
+        generator: fakeGenerator(DRAFT),
+        executor: handle,
+      }),
     });
     try {
       await waitFor('the pipeline to finish', async () => {
@@ -323,10 +335,13 @@ describe('presign, PUT, finalise, worker', () => {
       expect(row.correlation_id).toBe(correlationId);
     }
 
-    // `transcribe` did real work and says what it cost; `generate_draft` is still a stub and says
-    // so, which is what keeps the ledger honest about which steps exist yet.
+    // **Both steps did real work**, and each says what it cost. Story 3 Ticket 01 replaced the
+    // last stub, so there is no longer a row in this ledger that succeeded without doing anything —
+    // which is what `/admin/pipeline` stops having to say *not built yet* about.
     expect(rows[0]?.provider_meta).toMatchObject({ model: 'fake', durationSeconds: 372.5 });
-    expect(rows[1]?.provider_meta).toEqual({ stub: true });
+    expect(rows[1]?.provider_meta).toMatchObject({ model: 'fake', costUsd: 0 });
+    expect(rows[1]?.provider_meta).not.toHaveProperty('stub');
+    expect(rows[1]?.provider_meta).toHaveProperty('promptVersion');
 
     // And the point of the whole chain: the recording has a transcript.
     const transcript = await findTranscriptByRecording(created.body.id, handle);

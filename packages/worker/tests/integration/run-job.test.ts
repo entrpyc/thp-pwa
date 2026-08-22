@@ -11,7 +11,7 @@ import {
 } from '@thp/db';
 import { setLogSink, type LogLine } from '@thp/shared/observability/logger';
 import { PIPELINE_STEPS, type PipelineStep } from '@thp/shared';
-import { STUB_PROVIDER_META, createHandlers, type HandlerRegistry } from '../../src/handlers';
+import { createHandlers, type HandlerRegistry } from '../../src/handlers';
 import { runJob } from '../../src/run-job';
 import { createThrowawayDatabase, type ThrowawayDatabase } from '../../../../tests/setup/throwaway-db';
 
@@ -21,8 +21,8 @@ import { createThrowawayDatabase, type ThrowawayDatabase } from '../../../../tes
  * The loop is driven with **fake handlers** rather than with real steps, which is the whole point
  * of the registry being a constructor argument: "a handler that throws fails the job and does not
  * take the worker with it" is a property of the runner, and asserting it through a real provider
- * would be asserting something else. The two stubs this ticket ships are exercised at the end, on
- * their own terms.
+ * would be asserting something else. The registry the worker actually runs with is asserted at the
+ * end, on its own terms.
  */
 describe('running a claimed job', () => {
   let target: ThrowawayDatabase;
@@ -188,10 +188,10 @@ describe('running a claimed job', () => {
 /**
  * The registry the worker actually runs with.
  *
- * `transcribe` does real work from Story 2 Ticket 03 and is asserted in its own suite; what is
- * worth asserting here is that **every step still has a handler**, and that the one that is still a
- * stub says so. The marker is what tells a reader of the ledger a step *exists* rather than *ran* —
- * with it gone from `transcribe`, a succeeded row there means a transcript was written.
+ * Both steps do real work from Story 3 Ticket 01, and each is asserted in its own suite. What is
+ * worth asserting here is that **every step still has a handler** and that building the registry
+ * reads no provider key — and, now that the last stub is gone, that no handler marks itself as one.
+ * A succeeded row in the ledger means the step genuinely ran.
  */
 describe('the handlers this worker registers', () => {
   it('registers every step of the pipeline', () => {
@@ -200,10 +200,14 @@ describe('the handlers this worker registers', () => {
     expect(Object.keys(createHandlers()).sort()).toEqual([...PIPELINE_STEPS].sort());
   });
 
-  it('still marks the one step that has no implementation behind it', () => {
-    const handlers = createHandlers();
-    expect(handlers.generate_draft?.({} as JobRow)).toEqual(STUB_PROVIDER_META);
-    expect(STUB_PROVIDER_META).toEqual({ stub: true });
+  it('registers no stub — the last one went with Story 3 Ticket 01', async () => {
+    // The marker was a **worker** concern and the worker no longer writes one, so the constant it
+    // wrote is gone from this module. The key and the reader stay in `@thp/shared` because the
+    // panel still needs them: rows written while the stub existed are still in the ledger and still
+    // say so, and a screen that stopped being able to tell would be lying about history.
+    const handlers: Record<string, unknown> = await import('../../src/handlers');
+    expect('STUB_PROVIDER_META' in handlers).toBe(false);
+    expect(createHandlers().generate_draft).toBeTypeOf('function');
   });
 
   it('builds without reading a provider key, so a worker starts before one is configured', () => {

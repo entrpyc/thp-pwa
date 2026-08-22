@@ -4,15 +4,21 @@ import { useCallback, useEffect, useId, useRef, useState, type ChangeEvent, type
 import {
   ACCEPTED_AUDIO_EXTENSIONS,
   ACCEPTED_AUDIO_LABEL,
+  ADMIN_REVIEWS_PAGE_PATH,
   MAX_UPLOAD_LABEL,
   RECORDINGS_PATH,
   RECORDING_UPLOADS_PATH,
+  REVIEW_RECORDING_PARAM,
   checkChosenFile,
   contentTypeForExtension,
   describeBytes,
   extensionOf,
   isAcceptedAudioExtension,
-  type RecordingListPayload,
+  recordingPublishPath,
+  recordingSummaryPath,
+  recordingSummaryUnpublishPath,
+  recordingUnpublishPath,
+  type AdminRecordingListPayload,
   type RecordingSummary,
   type UploadGrantPayload,
 } from '@thp/shared';
@@ -91,7 +97,7 @@ export function RecordingsPanel() {
 
   const loadRecordings = useCallback(async (): Promise<void> => {
     try {
-      const payload = await apiFetch<RecordingListPayload>(RECORDINGS_PATH, {
+      const payload = await apiFetch<AdminRecordingListPayload>(RECORDINGS_PATH, {
         credentials: 'include',
       });
       // Rendered in the order the API sent, never re-sorted here: the query orders by the date
@@ -312,7 +318,8 @@ export function RecordingsPanel() {
             Recordings
           </h2>
           <p className={styles.sectionNote}>
-            Everything uploaded, most recently recorded first. None of it is visible to members yet.
+            Everything uploaded, most recently recorded first. A teaching is visible to members only once
+            it is published here — approving its drafts does not do it.
           </p>
         </div>
 
@@ -329,27 +336,211 @@ export function RecordingsPanel() {
         ) : (
           <ul className={styles.list}>
             {recordings.map((entry) => (
-              <li key={entry.id} className={styles.listRow}>
-                <div className={styles.rowIdentity}>
-                  <p className={styles.rowName}>{entry.title}</p>
-                  <p className={styles.rowMeta}>
-                    Recorded <time dateTime={entry.recordedAt}>{formatDay(entry.recordedAt)}</time>
-                  </p>
-                  {/* The key, because the one property the suite cannot prove against the real
-                      bucket is proven by an operator pasting this into a browser. */}
-                  <p className={styles.rowKey}>{entry.originalMediaKey}</p>
-                </div>
-
-                <div className={styles.rowControls}>
-                  <span className={styles.chip}>
-                    {entry.publishedAt === null ? 'Not published' : 'Published'}
-                  </span>
-                </div>
-              </li>
+              <RecordingRow key={entry.id} entry={entry} onChanged={loadRecordings} />
             ))}
           </ul>
         )}
       </section>
     </div>
+  );
+}
+
+/** What a row is doing, so the buttons can say it and two presses cannot overlap. */
+type RowBusy = 'publish' | 'unpublish' | 'summary' | 'summaryDown' | null;
+
+/**
+ * One recording, and everything an admin does to it after the pipeline has finished.
+ *
+ * **The row is where publication lives** (Story 3 Ticket 04). No per-recording admin page exists —
+ * docs/project/prd.md 3.6.4's "from the recording page" is served by the Review link below, because
+ * the recording page itself is Story 4 — so this row carries the whole of it: whether the teaching
+ * is live, the press that changes that, the summary's own gate, and the way into the queue.
+ *
+ * Three things worth stating:
+ *
+ * 1. **Unpublish takes a confirming press and publish does not.** The same line every other panel
+ *    draws: taking a teaching away from people who may be part-way through it is the direction that
+ *    costs something.
+ * 2. **The summary controls only appear when there is one.** A recording whose draft was discarded
+ *    has no summary, is still publishable (3.6.10), and should not be offered a control that would
+ *    answer `not_found`.
+ * 3. **The chip says live, not published.** "Published" is what the column is called; *live* is
+ *    what an admin is actually asking about when they scan the list.
+ */
+function RecordingRow({
+  entry,
+  onChanged,
+}: {
+  entry: RecordingSummary;
+  onChanged: () => Promise<void>;
+}) {
+  const [busy, setBusy] = useState<RowBusy>(null);
+  const [note, setNote] = useState<string | null>(null);
+  const [confirming, setConfirming] = useState(false);
+  const [editing, setEditing] = useState(false);
+  const [draft, setDraft] = useState(entry.summary ?? '');
+
+  const live = entry.publishedAt !== null;
+  // The payload only ever carries a summary that is published *and* on a published recording, so
+  // this is the honest question the row can ask: is there one a member can read right now.
+  const summaryVisible = entry.summary !== null;
+
+  async function send(what: RowBusy, path: string, init: RequestInit): Promise<void> {
+    if (busy !== null) return;
+    setBusy(what);
+    setNote(null);
+    setConfirming(false);
+    try {
+      await apiFetch(path, { credentials: 'include', ...init });
+      setEditing(false);
+      await onChanged();
+    } catch (caught) {
+      // Refused: the press cost nothing else, and what was typed stays where it is.
+      setNote(describeFailure(caught));
+    } finally {
+      setBusy(null);
+    }
+  }
+
+  /** Four of the five controls are a bare `POST` to a named sub-resource and carry no body. */
+  const POST = { method: 'POST' as const };
+
+  return (
+    <li className={styles.listRow}>
+      <div className={styles.rowIdentity}>
+        <p className={styles.rowName}>{entry.title}</p>
+        <p className={styles.rowMeta}>
+          Recorded <time dateTime={entry.recordedAt}>{formatDay(entry.recordedAt)}</time>
+        </p>
+        {/* The key, because the one property the suite cannot prove against the real
+            bucket is proven by an operator pasting this into a browser. */}
+        <p className={styles.rowKey}>{entry.originalMediaKey}</p>
+      </div>
+
+      <div className={styles.rowControls}>
+        <span className={styles.chip}>{live ? 'Live' : 'Not published'}</span>
+
+        {/*
+          Into the queue, filtered to this recording — 3.6.4's second entry point, and the reason no
+          per-recording admin page had to exist for it.
+        */}
+        <a
+          className={styles.action}
+          href={`${ADMIN_REVIEWS_PAGE_PATH}?${REVIEW_RECORDING_PARAM}=${entry.id}`}
+        >
+          Review drafts
+        </a>
+
+        {live ? (
+          <button
+            className={styles.action}
+            type="button"
+            disabled={busy !== null}
+            onClick={() => setConfirming(true)}
+          >
+            {busy === 'unpublish' ? 'Taking down…' : 'Unpublish'}
+          </button>
+        ) : (
+          <button
+            className={styles.submit}
+            type="button"
+            disabled={busy !== null}
+            onClick={() => void send('publish', recordingPublishPath(entry.id), POST)}
+          >
+            {busy === 'publish' ? 'Publishing…' : 'Publish'}
+          </button>
+        )}
+
+        {summaryVisible ? (
+          <>
+            <button
+              className={styles.action}
+              type="button"
+              disabled={busy !== null}
+              onClick={() => {
+                setDraft(entry.summary ?? '');
+                setEditing(!editing);
+              }}
+            >
+              {editing ? 'Cancel edit' : 'Edit summary'}
+            </button>
+            <button
+              className={styles.action}
+              type="button"
+              disabled={busy !== null}
+              onClick={() =>
+                void send('summaryDown', recordingSummaryUnpublishPath(entry.id), POST)
+              }
+            >
+              {busy === 'summaryDown' ? 'Taking down…' : 'Summary to draft'}
+            </button>
+          </>
+        ) : null}
+      </div>
+
+      {editing ? (
+        <div className={styles.summaryEditor}>
+          <label className={styles.label} htmlFor={`summary-${entry.id}`}>
+            Summary
+          </label>
+          <textarea
+            className={styles.textarea}
+            id={`summary-${entry.id}`}
+            name="content"
+            rows={10}
+            disabled={busy !== null}
+            value={draft}
+            onChange={(event) => setDraft(event.target.value)}
+          />
+          <button
+            className={styles.submit}
+            type="button"
+            disabled={busy !== null}
+            onClick={() =>
+              void send('summary', recordingSummaryPath(entry.id), {
+                method: 'PUT',
+                headers: { 'content-type': 'application/json' },
+                body: JSON.stringify({ content: draft }),
+              })
+            }
+          >
+            {busy === 'summary' ? 'Saving…' : 'Save summary'}
+          </button>
+        </div>
+      ) : null}
+
+      {/*
+        The confirming press, and only for the direction that takes something away from people who
+        may be part-way through it. It says what unpublishing does *not* do, which is the fact an
+        admin hesitating over this button actually needs.
+      */}
+      {confirming ? (
+        <div className={styles.confirm}>
+          <p className={styles.confirmText}>
+            Unpublish “{entry.title}”? Members stop seeing it immediately. Nothing is deleted — the
+            summary, the transcript and everything else stay exactly as they are.
+          </p>
+          <div className={styles.confirmActions}>
+            <button
+              className={styles.actionStrong}
+              type="button"
+              disabled={busy !== null}
+              onClick={() => void send('unpublish', recordingUnpublishPath(entry.id), POST)}
+            >
+              Yes, unpublish it
+            </button>
+            <button className={styles.action} type="button" onClick={() => setConfirming(false)}>
+              Cancel
+            </button>
+          </div>
+        </div>
+      ) : null}
+
+      {note === null ? null : (
+        <p className={styles.rowRefusal} role="alert">
+          {note}
+        </p>
+      )}
+    </li>
   );
 }

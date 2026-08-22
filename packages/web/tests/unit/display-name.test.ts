@@ -60,8 +60,14 @@ describe('no avatar exists anywhere', () => {
         readFileSync(file, 'utf8')
           .split('\n')
           .forEach((line, index) => {
-            // A comment saying the avatar is deferred is not an avatar. Only code counts.
-            const code = line.replace(/\/\/.*$/, '').replace(/^\s*\*.*$/, '');
+            // A comment saying the avatar is deferred is not an avatar. Only code counts. The
+            // trailing `\r` is trimmed first: `.` does not match a carriage return, so on a file
+            // checked out with CRLF endings the doc-comment pattern would fail to anchor and every
+            // explanation of the deferral would read as a violation of it.
+            const code = line
+              .replace(/\r$/, '')
+              .replace(/\/\/.*$/, '')
+              .replace(/^\s*\*.*$/, '');
             if (FORBIDDEN.some((pattern) => pattern.test(code))) {
               offenders.push(`${file}:${index + 1}  ${code.trim()}`);
             }

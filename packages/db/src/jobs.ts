@@ -30,12 +30,19 @@ export interface JobRow {
   readonly startedAt: Date | null;
   readonly finishedAt: Date | null;
   readonly providerMeta: unknown;
+  /** What this run was asked for. `null` on every chained job — see the column. */
+  readonly payload: unknown;
 }
 
 export interface NewJob {
   readonly recordingId: string;
   readonly step: PipelineStep;
   readonly correlationId: string;
+  /**
+   * Optional, and absent everywhere but a steered regeneration (Story 3 Ticket 03). The chain
+   * enqueues its successor without one, which is what leaves the chain rule untouched.
+   */
+  readonly payload?: unknown;
 }
 
 /**
@@ -71,6 +78,7 @@ export async function enqueueJob(
       status: 'pending',
       attempt: nextAttempt,
       correlationId: input.correlationId,
+      payload: input.payload ?? null,
     })
     .onConflictDoNothing()
     .returning();
@@ -234,7 +242,7 @@ export async function sweepRunning(
  * nothing is available *to me*, which is the same thing as far as the caller is concerned.
  *
  * Oldest first, `enqueued_at` ascending with `id` as the tiebreak — for the same reason
- * `listRecordings` breaks its tie: two rows written in the same millisecond would otherwise come
+ * the recordings list breaks its tie: two rows written in the same millisecond would otherwise come
  * back in whatever order the planner chose that second.
  *
  * `null` when the queue is empty, which is not an error. It is what a worker sees most of the time.

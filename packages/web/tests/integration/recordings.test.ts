@@ -8,7 +8,7 @@ import {
   RECORDING_UPLOADS_PATH,
   ROLE,
   isApiErrorBody,
-  type RecordingListPayload,
+  type AdminRecordingListPayload,
   type RecordingSummary,
   type UploadGrantPayload,
 } from '@thp/shared';
@@ -137,8 +137,12 @@ async function finalise(
   });
 }
 
-async function listRecordings(cookie = adminCookie): Promise<Answer<RecordingListPayload>> {
-  return call<RecordingListPayload>(RECORDINGS_URL, { cookie });
+/**
+ * The console's read. From Story 3 Ticket 04 the route answers both roles, so the payload shape is
+ * the caller's — an admin cookie is what makes the wider one the right type here.
+ */
+async function listRecordings(cookie = adminCookie): Promise<Answer<AdminRecordingListPayload>> {
+  return call<AdminRecordingListPayload>(RECORDINGS_URL, { cookie });
 }
 
 async function countFor(key: string): Promise<number> {
@@ -472,10 +476,14 @@ describe('the recordings list', () => {
     expect([...all].sort().reverse()).toEqual(all);
   }, 180_000);
 
-  it('refuses a member and an anonymous caller', async () => {
+  it('answers a member now, and still refuses an anonymous caller', async () => {
+    // **Widened in Story 3 Ticket 04.** `GET /api/v1/recordings` is `recording.browse`, which both
+    // roles hold — one route, so Story 4's library does not invent a second answer to "what may
+    // this person see". What a member actually gets back is asserted in publishing.test.ts, over
+    // the four combinations of the two gates; here the point is only that the door is now open to
+    // them and still shut to nobody.
     const asMember = await listRecordings(memberCookie);
-    expect(asMember.status).toBe(403);
-    expect(asMember.code).toBe('forbidden');
+    expect(asMember.status).toBe(200);
 
     const anonymous = await call(RECORDINGS_URL);
     expect(anonymous.status).toBe(401);

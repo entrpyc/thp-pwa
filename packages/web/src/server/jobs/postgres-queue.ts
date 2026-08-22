@@ -1,4 +1,5 @@
-import { enqueueJob, type Executor } from '@thp/db';
+import { enqueueJob, findUnfinishedJob, type Executor } from '@thp/db';
+import type { PipelineStep } from '@thp/shared';
 import { correlationIdForJob, type EnqueueRequest, type EnqueuedJob, type Queue } from './queue';
 
 /**
@@ -24,18 +25,38 @@ export function buildQueue(): Queue {
           recordingId: input.recordingId,
           step: input.step,
           correlationId: correlationIdForJob(input.correlationId),
+          payload: input.payload,
         },
         // `undefined` here means "the process's pool", which is what the ledger's default says.
         executor,
       );
 
-      return {
-        id: row.id,
-        recordingId: row.recordingId,
-        step: row.step,
-        attempt: row.attempt,
-        correlationId: row.correlationId,
-      };
+      return narrow(row);
     },
+
+    async findUnfinished(
+      recordingId: string,
+      step: PipelineStep,
+    ): Promise<EnqueuedJob | null> {
+      const row = await findUnfinishedJob(recordingId, step);
+      return row === null ? null : narrow(row);
+    },
+  };
+}
+
+/** The ledger's row, narrowed to what the port declares. */
+function narrow(row: {
+  readonly id: string;
+  readonly recordingId: string;
+  readonly step: PipelineStep;
+  readonly attempt: number;
+  readonly correlationId: string;
+}): EnqueuedJob {
+  return {
+    id: row.id,
+    recordingId: row.recordingId,
+    step: row.step,
+    attempt: row.attempt,
+    correlationId: row.correlationId,
   };
 }

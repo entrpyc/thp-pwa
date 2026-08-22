@@ -1,0 +1,187 @@
+/*
+ * The Pending Reviews panel.
+ *
+ * There is no `pages/admin.png`; this panel takes the same carve-out every other admin screen has,
+ * so it is composed from docs/design referencess png/style-guide.md and the token layer. It
+ * **invents almost nothing**: the section, the field, the label, the input, the solid submit, the
+ * list row, the chip, the confirming press and the refusal line all `composes` from
+ * `admin.module.css`, so the extrapolations documented there are stated once and the four panels
+ * cannot drift.
+ *
+ * Two things a review form needs that no existing panel does:
+ *
+ * 1. `.textarea` — a multi-line field, which is what a summary is. It takes the field recipe from
+ *    the shared input verbatim — raised surface, hairline border, `--radius-sm` — and adds only
+ *    `resize: vertical` and a line height that makes several paragraphs readable rather than
+ *    dense. A summary read in a single-line box is a summary nobody reads.
+ * 2. `.provenance` — the model, its version and the prompt version under the draft, in `--fs-meta`
+ *    on `--color-text-dim`. It is metadata about the text rather than part of it, so it takes the
+ *    dimmest tone the guide has; docs/project/prd.md 4.17.5 wants it readable, not prominent.
+ *
+ * `.form` occupies the full width of a row and stacks, because a draft opened inside a list row is
+ * a panel within a row rather than a control beside one — the same `flex: 1 1 100%` the shared
+ * confirmation block already uses to break a row onto its own line.
+ */
+
+.panel {
+  composes: panel from '../admin.module.css';
+}
+
+.section {
+  composes: section from '../admin.module.css';
+}
+
+.sectionTitle {
+  composes: sectionTitle from '../admin.module.css';
+}
+
+.sectionNote {
+  composes: sectionNote from '../admin.module.css';
+}
+
+.empty {
+  composes: empty from '../admin.module.css';
+}
+
+.failure {
+  composes: failure from '../admin.module.css';
+}
+
+/* ----------------------------------------------------------------------------------- the rows */
+
+.list {
+  composes: list from '../admin.module.css';
+}
+
+.listRow {
+  composes: row from '../admin.module.css';
+}
+
+.rowIdentity {
+  composes: rowIdentity from '../admin.module.css';
+}
+
+.rowName {
+  composes: rowName from '../admin.module.css';
+}
+
+.rowMeta {
+  composes: rowMeta from '../admin.module.css';
+}
+
+.rowControls {
+  composes: rowControls from '../admin.module.css';
+}
+
+.chip {
+  composes: chip from '../admin.module.css';
+}
+
+.action {
+  composes: action from '../admin.module.css';
+}
+
+.actionStrong {
+  composes: actionStrong from '../admin.module.css';
+}
+
+.submit {
+  composes: submit from '../admin.module.css';
+}
+
+.confirm {
+  composes: confirm from '../admin.module.css';
+}
+
+.confirmText {
+  composes: confirmText from '../admin.module.css';
+}
+
+.confirmActions {
+  composes: confirmActions from '../admin.module.css';
+}
+
+.rowRefusal {
+  composes: rowRefusal from '../admin.module.css';
+}
+
+/* ----------------------------------------------------------------------------------- the form */
+
+/* A panel within a row: it takes the whole width and stacks, like the confirmation block does. */
+.form {
+  flex: 1 1 100%;
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-4);
+  min-width: 0;
+}
+
+.field {
+  display: flex;
+  flex-direction: column;
+  align-items: stretch;
+  gap: var(--space-2);
+  min-width: 0;
+}
+
+.label {
+  composes: label from '../admin.module.css';
+}
+
+.input {
+  composes: input from '../admin.module.css';
+}
+
+/* The field recipe, given room. Vertical resize only — a horizontal one breaks the row's layout. */
+.textarea {
+  width: 100%;
+  background: var(--color-surface-raised);
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-sm);
+  padding: var(--space-3) var(--space-4);
+  color: var(--color-text);
+  font-family: inherit;
+  font-size: var(--fs-body);
+  line-height: 1.6;
+  resize: vertical;
+}
+
+.textarea:disabled {
+  cursor: progress;
+  color: var(--color-text-dim);
+}
+
+/* About the text rather than part of it, so the dimmest tone the guide has. */
+.provenance {
+  margin: 0;
+  font-size: var(--fs-meta);
+  color: var(--color-text-dim);
+  overflow-wrap: anywhere;
+}
+
+.formActions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--space-2);
+}
+
+/* ------------------------------------------------------------------------------------ a phone */
+
+@media (max-width: 48rem) {
+  /*
+   * The same collapse `admin.module.css` makes: a row becomes a column, and every `flex-basis`
+   * along it has to be dropped with it or a handful of drafts become a handful of screenfuls.
+   */
+  .rowIdentity,
+  .form {
+    flex: 0 0 auto;
+  }
+
+  .rowControls {
+    justify-content: flex-start;
+  }
+
+  .formActions > * {
+    flex: 1 1 auto;
+  }
+}

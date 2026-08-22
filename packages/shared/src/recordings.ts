@@ -173,28 +173,92 @@ export interface CreateRecordingRequest {
 }
 
 /**
- * A recording as an admin is allowed to see it.
+ * A recording as **anyone permitted to see it** may — which from Story 3 Ticket 04 includes a
+ * member, because `GET /api/v1/recordings` answers both roles from one query and one visibility
+ * condition ([3.2.2](docs/project/prd.md), [3.1.2](docs/project/prd.md)).
  *
- * `publishedAt` and `description` are here and are always `null` in this ticket: the columns exist
- * because the payload an admin reads is the row, and nothing writes either until Story 3.
+ * `summary` is the approved, published summary and is `null` unless **both** gates are open — the
+ * summary's own `published_at` and the recording's. The description has no second gate: it is a
+ * column on the recording and rides the recording's publish state.
  */
-export interface RecordingSummary {
+export interface RecordingView {
   readonly id: string;
   readonly title: string;
   /** `YYYY-MM-DD`. */
   readonly recordedAt: string;
+  /** ISO 8601, or `null` while unpublished. Only an admin ever sees the `null`. */
+  readonly publishedAt: string | null;
+  readonly description: string | null;
+  /** The approved summary, when it and the recording are both published. Otherwise `null`. */
+  readonly summary: string | null;
+}
+
+/**
+ * The same recording with what only an operator has business with.
+ *
+ * The service adds these two — and unpublished rows — only when the caller satisfies
+ * `recording.list`, which is what keeps "one route, one answer to what may this person see" true
+ * without a second endpoint for the console.
+ */
+export interface RecordingSummary extends RecordingView {
   /** Where the original sits in the store. Admin-only, and never a URL. */
   readonly originalMediaKey: string;
-  /** ISO 8601, or `null` while unpublished. Nothing in this ticket writes it. */
-  readonly publishedAt: string | null;
-  /** Generated in Story 3. Nothing in this ticket writes it. */
-  readonly description: string | null;
   readonly createdAt: string;
 }
 
-/** Payload of `GET /api/v1/recordings`. */
+/** Payload of `GET /api/v1/recordings`, as a member reads it. */
 export interface RecordingListPayload {
+  readonly recordings: readonly RecordingView[];
+}
+
+/** Payload of `GET /api/v1/recordings`, as the console reads it. */
+export interface AdminRecordingListPayload {
   readonly recordings: readonly RecordingSummary[];
+}
+
+/**
+ * Where a recording is made visible, and where it is taken back down
+ * ([3.2.2](docs/project/prd.md), [3.2.11](docs/project/prd.md)).
+ *
+ * `POST` to a named sub-resource rather than a `PATCH` of the row, for the same reason
+ * deactivation is a sub-resource of an account: what this does is not edit a recording.
+ */
+export function recordingPublishPath(recordingId: string): string {
+  return `${RECORDINGS_PATH}/${recordingId}/publish`;
+}
+
+export function recordingUnpublishPath(recordingId: string): string {
+  return `${RECORDINGS_PATH}/${recordingId}/unpublish`;
+}
+
+/** Where an approved summary is edited after publish ([3.6.11](docs/project/prd.md)). */
+export function recordingSummaryPath(recordingId: string): string {
+  return `${RECORDINGS_PATH}/${recordingId}/summary`;
+}
+
+/** Where a published summary is returned to draft ([3.6.12](docs/project/prd.md)). */
+export function recordingSummaryUnpublishPath(recordingId: string): string {
+  return `${RECORDINGS_PATH}/${recordingId}/summary/unpublish`;
+}
+
+/** Body of `PUT /api/v1/recordings/{id}/summary`. Plain text with line breaks. */
+export interface EditSummaryRequest {
+  readonly content: string;
+}
+
+/**
+ * Payload of the four publish controls — the recording's gate and its summary's, as they now read.
+ *
+ * One shape for all four because a console pressing any of them wants the same answer: is this
+ * live, and is its summary. Publishing an already-published recording answers with the timestamp
+ * it already had, so pressing twice is harmless without the API inventing a conflict.
+ */
+export interface PublicationPayload {
+  readonly id: string;
+  /** ISO 8601, or `null`. */
+  readonly publishedAt: string | null;
+  /** ISO 8601 when the summary is published, `null` when it is a draft or does not exist. */
+  readonly summaryPublishedAt: string | null;
 }
 
 /** `YYYY-MM-DD`, and a date the calendar actually has. */

@@ -7,5 +7,6 @@ export * from './jobs';
 export * from './passwords';
 export * from './pipeline';
 export * from './recordings';
+export * from './reviews';
 export * from './roles';
 export * from './segment';

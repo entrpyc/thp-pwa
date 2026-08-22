@@ -31,6 +31,7 @@ import {
 import { startWorkerLoop } from '../../../worker/src/loop';
 import { createHandlers } from '../../../worker/src/handlers';
 import { fakeTranscriber, type FakeScript } from '../../../worker/src/asr';
+import { fakeGenerator } from '../../../worker/src/generate';
 import { closeTestDatabase, signedInAccount, type TestAccount } from '../support/accounts';
 import { logOffset, waitForLogLines } from '../support/log-reader';
 
@@ -321,6 +322,7 @@ describe('what the read answers with', () => {
       'originalMediaKey',
       'publishedAt',
       'recordedAt',
+      'summary',
       'title',
     ]);
 
@@ -428,7 +430,11 @@ describe('running one step again', () => {
     const loop = startWorkerLoop({
       executor: handle,
       pollIntervalMs: 20,
-      handlers: createHandlers({ transcriber: fakeTranscriber(DIARISED_SCRIPT), executor: handle }),
+      handlers: createHandlers({
+        transcriber: fakeTranscriber(DIARISED_SCRIPT),
+        generator: fakeGenerator(DRAFT),
+        executor: handle,
+      }),
     });
     try {
       await waitFor('the re-run to chain forward and the successor to run', async () => {
@@ -546,8 +552,14 @@ const DIARISED_SCRIPT: FakeScript = {
   ],
 };
 
+/** What the drafting provider would have written. The second of two fakes in this suite. */
+const DRAFT = {
+  summary: 'The teaching stays with the second chapter throughout.',
+  description: 'A close reading of the second chapter.',
+};
+
 describe('upload, transcribe, generate_draft', () => {
-  it('leaves both steps succeeded, the draft marked not built yet, and segments carrying speakers', async () => {
+  it('leaves both steps succeeded, neither of them a stub, and segments carrying speakers', async () => {
     const captured: LogLine[] = [];
     const restoreSink = setLogSink((line) => captured.push(line));
 
@@ -558,7 +570,11 @@ describe('upload, transcribe, generate_draft', () => {
     const loop = startWorkerLoop({
       executor: handle,
       pollIntervalMs: 20,
-      handlers: createHandlers({ transcriber: fakeTranscriber(DIARISED_SCRIPT), executor: handle }),
+      handlers: createHandlers({
+        transcriber: fakeTranscriber(DIARISED_SCRIPT),
+        generator: fakeGenerator(DRAFT),
+        executor: handle,
+      }),
     });
     try {
       await waitFor('the pipeline to finish', async () => {
@@ -576,10 +592,11 @@ describe('upload, transcribe, generate_draft', () => {
     const row = await pipelineOf(recording.id);
     expect(stepOf(row, 'transcribe').status).toBe('succeeded');
     expect(stepOf(row, 'generate_draft').status).toBe('succeeded');
-    // Succeeded, and not built yet — the difference between "this step ran" and "this step exists
-    // yet", which a bare row cannot tell.
+    // **Neither is a stub any more.** Story 3 Ticket 01 replaced the last one, so the panel stops
+    // having to say *not built yet* about anything — a succeeded row here means the step genuinely
+    // ran. The screen keeps the ability to say it, for rows written while the stub existed.
     expect(stepOf(row, 'transcribe').stub).toBe(false);
-    expect(stepOf(row, 'generate_draft').stub).toBe(true);
+    expect(stepOf(row, 'generate_draft').stub).toBe(false);
 
     const transcript = await findTranscriptByRecording(recording.id, handle);
     const segments = await listSegments(transcript?.id ?? '', handle);

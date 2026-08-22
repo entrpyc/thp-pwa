@@ -12,7 +12,7 @@ import {
   recordingRerunPath,
   type RecordingPipeline,
 } from '@thp/shared';
-import { STUB_PROVIDER_META } from '../../../worker/src/handlers';
+
 
 /**
  * The pipeline panel's contract, in the four places it has to be a value rather than a convention.
@@ -75,11 +75,11 @@ describe('whether there is anything left to ask about', () => {
 });
 
 describe('the stub marker is stated once', () => {
-  it('is the key the worker writes and the panel reads', () => {
-    // The worker builds its marker from this key rather than spelling one, which is what stops the
-    // process that writes it and the screen that renders "not built yet" from drifting apart.
-    expect(isStubProviderMeta(STUB_PROVIDER_META)).toBe(true);
-    expect(Object.keys(STUB_PROVIDER_META)).toEqual([STUB_PROVIDER_META_KEY]);
+  it('is the key rows written while a stub existed still carry', () => {
+    // The worker stopped writing this marker when the last stub went (Story 3 Ticket 01). The key
+    // and the reader stay here because rows written while it existed are still in the ledger, and a
+    // panel that could no longer tell them apart would be lying about history.
+    expect(isStubProviderMeta({ [STUB_PROVIDER_META_KEY]: true })).toBe(true);
   });
 
   it('says no to a real handler’s provider_meta, and to nothing at all', () => {

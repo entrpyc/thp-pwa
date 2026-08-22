@@ -1,4 +1,4 @@
-import { desc, eq } from 'drizzle-orm';
+import { eq } from 'drizzle-orm';
 import { getDatabase, queryable, type Executor } from './client';
 import { recording } from './schema';
 
@@ -70,18 +70,59 @@ export async function findRecordingById(
 }
 
 /**
- * Every recording, **newest `recorded_at` first** — the order the admin list is read in, decided
- * here rather than in the client so one answer to "what is most recent" exists.
+ * **There is no plain `listRecordings` here, and that is deliberate.**
  *
- * `created_at` breaks the tie, because a `date` has no time of day and two teachings recorded on
- * the same Sunday would otherwise come back in whatever order the planner chose that second.
+ * Story 3 Ticket 04 moved the read to `visibility.ts`, because every list of recordings this
+ * product will ever serve has to answer "which of these may this person see" — and a second
+ * unfiltered read beside it is the shape in which that rule gets forgotten. The console's list is
+ * that same query with the gate open, which is what keeps one answer to "what is most recent" and
+ * one answer to "who may see it".
  */
-export async function listRecordings(
+
+/**
+ * Open or close the recording's gate ([3.2.2](docs/project/prd.md),
+ * [3.2.11](docs/project/prd.md)).
+ *
+ * One write of a timestamp, or one write of `null` — which is the whole reason `published_at` is a
+ * nullable column rather than a status. **Unpublishing deletes nothing**: the summary, the
+ * transcript, the segments, the jobs and the review items are all untouched, so re-publishing is
+ * the same write with a timestamp and nothing has to be rebuilt.
+ *
+ * Publishing a recording that is already published is deliberately **not** a no-op at this level —
+ * it re-stamps. The caller is what decides to leave the original timestamp alone, because "when
+ * did this go live" is a fact a second press should not quietly move.
+ *
+ * `null` back means there is no such recording, which the caller turns into `not_found`.
+ */
+export async function setRecordingPublication(
+  id: string,
+  publishedAt: Date | null,
   executor: Executor = getDatabase(),
-): Promise<RecordingRow[]> {
+): Promise<RecordingRow | null> {
   const rows = await queryable(executor)
-    .select()
-    .from(recording)
-    .orderBy(desc(recording.recordedAt), desc(recording.createdAt));
-  return rows as RecordingRow[];
+    .update(recording)
+    .set({ publishedAt })
+    .where(eq(recording.id, id))
+    .returning();
+  return (rows[0] as RecordingRow | undefined) ?? null;
+}
+
+/**
+ * Write the description an admin approved ([4.17.1](docs/project/prd.md)).
+ *
+ * A column on the recording rather than a row of its own, because unlike the summary it has no
+ * second gate: it rides the recording's publish state. Approving the `recording_metadata` draft is
+ * what calls this, and nothing else does.
+ */
+export async function setRecordingDescription(
+  id: string,
+  description: string,
+  executor: Executor = getDatabase(),
+): Promise<RecordingRow | null> {
+  const rows = await queryable(executor)
+    .update(recording)
+    .set({ description })
+    .where(eq(recording.id, id))
+    .returning();
+  return (rows[0] as RecordingRow | undefined) ?? null;
 }

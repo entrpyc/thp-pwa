@@ -7,6 +7,7 @@ import {
   API_PREFIX,
   PIPELINE_POLL_INTERVAL_MS,
   PIPELINE_PATH,
+  STUB_PROVIDER_META_KEY,
   ROLE,
   type PipelineStep,
 } from '@thp/shared';
@@ -18,7 +19,7 @@ import {
   insertRecording,
   type DatabaseHandle,
 } from '@thp/db';
-import { STUB_PROVIDER_META } from '../../../worker/src/handlers';
+
 import { closeTestDatabase, signedInAccount, type TestAccount } from '../support/accounts';
 
 /**
@@ -99,7 +100,14 @@ async function seedStep(
     await sql`update job set status = 'running', started_at = now() where id = ${job.id}`;
   }
   if (status === 'succeeded') {
-    await completeJob(job.id, options.stub === true ? STUB_PROVIDER_META : { model: 'fake' }, handle);
+    await completeJob(
+      job.id,
+      // A row as it was written **while the stub existed**. The worker stopped writing this marker
+      // in Story 3 Ticket 01; rows carrying it are still in the ledger, and the panel still has to
+      // read them as *not built yet* rather than as a step that ran.
+      options.stub === true ? { [STUB_PROVIDER_META_KEY]: true } : { model: 'fake' },
+      handle,
+    );
   }
   if (status === 'failed') {
     await failJob(job.id, options.reason ?? 'it failed', handle);
