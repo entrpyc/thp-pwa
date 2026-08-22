@@ -27,7 +27,7 @@ auto-advancing is exactly the skimming risk the checkpoints exist to prevent.
   moves when an epic finishes; the next epic is a new folder beside it.
 - Current epic: [docs/epics/epic-core-listening/](docs/epics/epic-core-listening/).
 
-Cross-document links are repo-root-relative with a line anchor — `[3.2.4](docs/project/prd.md#L65)`
+Cross-document links are repo-root-relative with a line anchor — `[3.2.4](docs/project/prd.md#L67)`
 — and are resolved by locating the heading, never guessed.
 
 ## Designing pages

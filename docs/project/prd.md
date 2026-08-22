@@ -43,15 +43,17 @@ It is built as a Progressive Web App on a single codebase, reachable from any br
 - **3.1.1** Every user has an individual account identified by email address, with password authentication.
 - **3.1.2** All content in the product requires an authenticated session. There is no anonymous or public view of any recording, video, summary, note or mind map — with the single exception of an explicitly shared mind map link (3.8.13).
 - **3.1.3** New members join by admin invitation only. An admin enters an email address and assigns a role; the invitee receives an invitation and sets their own password to activate the account.
-- **3.1.4** Invitations expire after a fixed window and can be revoked or re-sent by an admin before they are accepted.
+- **3.1.4** Invitations expire seven days after they are issued, and can be revoked or re-sent by an admin before they are accepted. Re-sending issues a fresh link and restarts the seven days rather than extending the original, so a forgotten invitation cannot be quietly kept alive.
 - **3.1.5** An admin can change any user's role at any time. Permissions are enforced server-side on every request, never only in the interface.
-- **3.1.6** A user can reset a forgotten password through an email-based flow without admin involvement.
-- **3.1.7** An admin can deactivate an account. A deactivated account cannot sign in, but its authored content is retained.
+- **3.1.6** A user can reset a forgotten password through an email-based flow without admin involvement. A reset link is valid for one hour and can be used once, and a second request inside a minute sends no second message. The response to a reset request is identical whether or not the address has an account, so the flow never discloses who is a member.
+- **3.1.7** An admin can deactivate an account, and can reactivate it again later. Deactivation ends that account's sessions and cancels its outstanding reset links immediately rather than at their next expiry, so access stops at the moment the admin presses it. A deactivated account cannot sign in, but its authored content is retained.
 - **3.1.8** A member can permanently delete their own account from within the app, without contacting an admin (5.2.6).
 - **3.1.9** When an account is deleted, that user's private content is deleted with it: private notes (3.12.3), personal mind maps (3.8.5), questionnaire responses (3.13.8), Flow Tracker sessions (3.14.8) and Highlights (3.15).
 - **3.1.10** Public content authored by a deleted account — public timestamp notes and their replies (3.12) — is retained and re-attributed to a removed-member placeholder, so existing threads stay coherent.
 - **3.1.11** At least one Admin account must exist at all times. The system prevents removal or demotion of the last remaining admin.
-- **3.1.12** A user has a profile carrying their display name and optional avatar, shown as the author of their public notes (3.12) and SOS signals (3.16).
+- **3.1.12** A user has a profile carrying their display name and optional avatar, shown as the author of their public notes (3.12) and SOS signals (3.16). A display name is up to 80 characters and is edited by its owner alone — an admin can end an account or change its role, and cannot rename the person behind it.
+- **3.1.13** Signing in creates a server-side session, held by the client as an opaque token in an HTTP-only cookie that carries nothing about the user. A session lasts 30 days and is extended each time it is used; signing out revokes it, as does deactivation (3.1.7). Passwords are held only as hashes and are never recoverable, only reset (3.1.6).
+- **3.1.14** The first Admin account is created by an operator command at deployment, from credentials held on the host rather than in the product. Re-running that command against an existing account never resets its password. Every account after the first arrives by invitation (3.1.3), which is what makes 3.1.11's guarantee true from the first minute the product runs.
 
 ### 3.2 Audio recordings & playback
 
@@ -59,17 +61,20 @@ It is built as a Progressive Web App on a single codebase, reachable from any br
 
 **Functional requirements**
 
-- **3.2.1** Admins and Contributors upload teaching recordings as audio files, accepting the common formats produced by consumer and semi-professional capture equipment.
+- **3.2.1** Admins and Contributors upload teaching recordings as audio files, accepting MP3, M4A, AAC, WAV and FLAC up to 200 MB per file — which covers a 90-minute teaching as a compressed export, and covers the lossless formats only for shorter recordings. The browser sends the bytes straight to media storage under a short-lived, single-purpose upload grant rather than through the application, and the recording is created only once the stored object has been checked against the same limits the screen stated before the file was chosen.
 - **3.2.2** A recording is not visible to members until an admin explicitly publishes it (see 4.17.3).
 - **3.2.3** Members stream any published recording.
-- **3.2.4** Playback speed is adjustable across 0.5x, 0.75x, 1x, 1.25x, 1.5x and 2x, and the chosen speed persists across recordings for that user.
-- **3.2.5** Playback position is tracked per user per recording, and playback resumes from the last position on any device that user signs in from.
+- **3.2.4** Playback speed is adjustable across 0.5x, 0.75x, 1x, 1.25x, 1.5x and 2x. The chosen speed is a property of the account rather than of the session, so it persists across recordings and across every device that user signs in from.
+- **3.2.5** Playback position is tracked per user per recording, and playback resumes from the last position on any device that user signs in from. The position is written while listening rather than only on leaving — at most once every ten seconds — and a position under five seconds is not stored at all, so opening a teaching and closing it again leaves no resume point behind.
 - **3.2.6** Audio continues playing when the app is backgrounded or the device is locked, with transport controls available from the device lock screen and notification area.
 - **3.2.7** Each user has a listening history recording which teachings they played, when, and how far through they got.
 - **3.2.8** A recording is marked completed for a user once they reach the end, and completed teachings are visually distinguishable when browsing.
-- **3.2.9** Members can scrub to any position in a recording.
+- **3.2.9** Members can scrub to any position in a recording, and can jump ten seconds backwards or forwards from the transport controls.
 - **3.2.10** Admins and Contributors can replace the audio file on an existing recording. This re-runs processing (3.4) and transcription (3.5) while preserving the recording's notes, metadata and member progress.
 - **3.2.11** An admin can unpublish a recording, removing it from member view without deleting it or its associated content.
+- **3.2.12** A member's landing offers the teaching they were most recently listening to, showing how far they had got. Opening it restores that position and deliberately does not start playing — a member who tapped a card has not asked for sound.
+- **3.2.13** Audio is streamed through a signed URL minted per request after an authorisation check and valid for an hour, never from a publicly addressable location. The player renews the grant before it expires, so a teaching longer than an hour plays through without interruption and without the client ever learning where the file lives.
+- **3.2.14** The transport travels with the member: it is docked to every member screen, so playback continues while they move between the library, a series and a recording rather than stopping when they navigate.
 
 ### 3.3 Content organisation & series
 
@@ -78,12 +83,13 @@ It is built as a Progressive Web App on a single codebase, reachable from any br
 - **3.3.1** Recordings are organised primarily by date recorded, newest first — the order in which teachings are naturally consumed.
 - **3.3.2** Recordings that belong together are grouped into a named series. A recording belongs to at most one series.
 - **3.3.3** Each series has cover artwork uploaded by an admin, used as its visual identity throughout the app and as the podcast artwork for external distribution (5.3.2).
-- **3.3.4** A series view lists every recording in that series chronologically, with the member's progress (3.2.5) shown per recording.
-- **3.3.5** Series carry their own title, description, date range and recording count (see 4.3).
+- **3.3.4** A series view lists every recording in that series chronologically — oldest first, the reverse of the date-ordered library at 3.3.1, because a study is read forwards — numbered by position, with the member's own progress (3.2.5) shown per recording.
+- **3.3.5** Series carry their own title, description, date range and recording count (see 4.3). The date range and the count are computed from the recordings the reader is entitled to see rather than stored, so a member's count covers published recordings only while an admin's covers everything in the series.
 - **3.3.6** Admins and Contributors can create, rename, reorder and merge series, and can move a recording between series without losing its notes, metadata or member progress.
 - **3.3.7** Series metadata is structured to satisfy podcast feed requirements from the point of creation, so a series can be published externally (3.20.2) without restructuring.
 - **3.3.8** The series view surfaces the videos derived from that series' recordings alongside the recordings themselves (3.11.5.2).
-- **3.3.9** A recording can exist without a series and still appear in date-ordered browsing.
+- **3.3.9** A recording can exist without a series and still appear in date-ordered browsing. Most do, which is why belonging to no series is an ordinary state rather than an exception.
+- **3.3.10** A recording that belongs to a series carries the series name wherever it is listed, and its page offers a route back to the series it came from. The date-ordered library is not regrouped by series — 3.3.1 stands, and the series name is a label on the row rather than a second ordering.
 
 ### 3.4 Audio processing & quality
 
@@ -109,14 +115,16 @@ It is built as a Progressive Web App on a single codebase, reachable from any br
 
 **Functional requirements**
 
-- **3.5.1** Every recording is automatically transcribed once audio processing (3.4) completes.
+- **3.5.1** Every recording is automatically transcribed as soon as its audio is ready — on upload completing while audio processing (3.4) does not yet exist, and on processing completing once that step sits ahead of transcription in the pipeline (3.21.1).
 - **3.5.2** The transcript is segmented and timestamped, so any passage of text maps back to a position in the audio.
-- **3.5.3** Members can read the transcript on the recording page, and the transcript view follows along with playback, highlighting the currently spoken segment.
-- **3.5.4** Selecting any point in the transcript seeks the audio to that position.
-- **3.5.5** Admins and Contributors can correct transcript text, which is necessary for names, scripture citations and terminology specific to the ministry.
-- **3.5.6** Correcting a transcript offers to regenerate the artefacts derived from it — summary (3.6), mind map (3.8.1), scripture references (3.7.1), tags (4.17.1) and cross-references (3.9.1).
-- **3.5.7** The transcript records which language was detected and transcribed.
-- **3.5.8** If transcription fails or returns low confidence, the recording is flagged for admin attention (3.19.4) rather than proceeding to downstream generation on bad input.
+- **3.5.3** Members can read the transcript on the recording page, and the transcript view follows along with playback, highlighting the currently spoken segment. The view scrolls itself to keep the highlight in sight, and stops following the moment a member scrolls it themselves — offering a control to jump back to the current line rather than fighting them for the scroll position.
+- **3.5.4** Selecting any point in the transcript seeks the audio to that position. Seeking from the transcript does not start playback: a member reading a paused teaching has not asked for sound.
+- **3.5.5** Admins and Contributors can correct transcript text, which is necessary for names, scripture citations and terminology specific to the ministry. A correction restates what the line says and where it starts and ends; the speaker index (3.5.9) is not something a correction can change. Every correction records who made it and when.
+- **3.5.6** Correcting a transcript offers to regenerate the artefacts derived from it — summary (3.6), mind map (3.8.1), scripture references (3.7.1), tags (4.17.1) and cross-references (3.9.1). The regeneration is offered and never performed unasked: declining it leaves the recording exactly as it was, and the offer covers only those artefacts that exist at the time.
+- **3.5.7** The transcript records the language it was transcribed in. That language is currently pinned to English rather than detected, because the monolingual model is the more accurate one for a library that is entirely English. Detection returns as a requirement when non-English teachings do, and the field is already there to hold the answer.
+- **3.5.8** If transcription fails, the recording is flagged for admin attention (3.19.4) rather than proceeding to downstream generation on bad input. If it succeeds but comes back below the accepted confidence threshold, the transcript is still written and still readable — so an admin can judge it and correct it (3.5.5) — but the pipeline halts there and is flagged, and nothing downstream is generated until an admin re-runs the step on words a human has accepted.
+- **3.5.9** Each segment carries the transcription provider's anonymous speaker index where one was returned. It is an index and never a name: nothing in the product resolves it to a person, and the same voice is not the same index across two recordings. It is not editable, and a segment the provider attributes to nobody carries none.
+- **3.5.10** While listening, a member can turn on captions and see the currently spoken line above the transport controls, on whichever screen they are on. Captions are off by default, and a silence between segments shows nothing rather than holding the previous line.
 
 ### 3.6 AI summaries
 
@@ -127,15 +135,17 @@ It is built as a Progressive Web App on a single codebase, reachable from any br
 - **3.6.1** One AI summary is generated per recording, triggered automatically when transcription (3.5.1) completes.
 - **3.6.2** A summary is created in draft state. Members never see draft summaries.
 - **3.6.3** Admins are notified in-app when a summary is ready for review (3.17.2).
-- **3.6.4** Summaries are reviewed from a Pending Reviews queue in the admin dashboard (3.19.2), and also directly from the recording page when signed in as an admin.
+- **3.6.4** Summaries are reviewed from a single Pending Reviews queue in the admin dashboard (3.19.2). A recording's row in the admin recordings list links straight to that recording's own pending items, so reviewing one teaching's drafts is one step away from the recording without a second review surface existing to drift from the first.
 - **3.6.5** The review interface shows the summary in full alongside the recording title, date and word count.
 - **3.6.6** Reviewing an admin has four actions available: approve, edit then approve, regenerate, or discard.
 - **3.6.7** **Approve** publishes the summary immediately, making it visible to all members on the recording page.
 - **3.6.8** **Edit then approve** opens an inline text editor. Plain text with line breaks is sufficient; no rich formatting is required.
-- **3.6.9** **Regenerate** discards the current draft and triggers a new generation pass. The admin can optionally supply a short prompt to steer the regeneration, and is notified when the new draft is ready.
+- **3.6.9** **Regenerate** discards the current draft and triggers a new generation pass. The admin can optionally supply a short prompt to steer the regeneration, and is notified when the new draft is ready. The steering prompt is a sentence rather than a second prompt and is capped accordingly; it is recorded alongside the draft it produced (4.17.5); and only one generation can be in flight for a recording at a time, so pressing twice cannot spend twice.
 - **3.6.10** **Discard** permanently deletes the summary with no replacement. The recording remains publishable without one.
 - **3.6.11** After publishing, an admin can still edit the summary text or unpublish it.
-- **3.6.12** Unpublishing returns a summary to draft state — it is not deleted, and is no longer visible to members.
+- **3.6.12** Unpublishing returns a summary to draft state — it is not deleted, and is no longer visible to members. The recording itself stays live, so a summary can be taken down without taking the teaching down with it.
+- **3.6.13** The summary and the AI-suggested description (4.17.1) are two items of the same review queue, acted on independently. The summary carries a publication state of its own (3.6.12); the description has no second gate and becomes visible with the recording that carries it.
+- **3.6.14** What the machine proposed is retained on a reviewed item after it is approved, edited or discarded, together with the model, the model version, the prompt version and any steering prompt used. A rejected draft leaves a record rather than nothing (4.17.5).
 
 ### 3.7 Scripture references
 
@@ -429,7 +439,7 @@ It is built as a Progressive Web App on a single codebase, reachable from any br
 - **3.19.1** A dashboard available to Admins and Contributors, with each user seeing only the capabilities their role permits (3.1).
 - **3.19.2** A Pending Reviews queue collecting everything awaiting admin action: draft summaries (3.6.4), suggested metadata and scripture references (4.17.2), and back-catalogue items (3.21.3.4).
 - **3.19.3** Recording upload and the metadata review form (4.17.2), including the publish action (3.2.2).
-- **3.19.4** A processing status view showing which recordings are in processing, transcription or generation, and which have failed (3.4.11, 3.5.8).
+- **3.19.4** A processing status view showing which recordings are in processing, transcription or generation, which have failed and why each failure happened, with a control to re-run any single step (3.21.2.4). Every run of a step is kept rather than overwritten, so an admin reads the latest attempt and can still see that it was the third. The view refreshes itself while work is in flight and stops asking once nothing is running.
 - **3.19.5** Series management (3.3.6), including artwork upload.
 - **3.19.6** Video creation entry point and generation status (3.11.4.1).
 - **3.19.7** Questionnaire authoring (3.13.2) and Flow Tracker question bank curation (3.14.11).
@@ -438,6 +448,7 @@ It is built as a Progressive Web App on a single codebase, reachable from any br
 - **3.19.10** Audio processing settings and sound profile configuration (3.4.6).
 - **3.19.11** External publishing status and queues (3.20.6).
 - **3.19.12** SOS oversight: view open signals, close them, remove them (3.16.9, 3.16.11).
+- **3.19.13** Every automated step records what it cost to run — provider, model, billed quantity, spend and the provider's own request id — against the recording that caused it, so the running cost of the library is measured rather than estimated.
 
 ### 3.20 External distribution
 
@@ -484,6 +495,9 @@ It is built as a Progressive Web App on a single codebase, reachable from any br
 - **3.21.2.2** Steps 3 through 7 produce drafts only. The pipeline does not advance past step 8 without the admin confirmation required by 4.17.3.
 - **3.21.2.3** A failure at any automated step halts that recording's pipeline and flags it (3.19.4) rather than publishing partial results.
 - **3.21.2.4** An admin can re-run any individual automated step for a recording without re-running the whole pipeline.
+- **3.21.2.5** Nothing retries by itself. A failed step stays failed until an admin re-runs it, so a failure that spends money at a provider cannot repeat unattended overnight.
+- **3.21.2.6** Every step is executed at least once and every step is idempotent, so a run that is interrupted leaves no partial result. Work left behind by a process that stopped mid-step is reclaimed rather than lost, and becomes re-runnable through 3.21.2.4.
+- **3.21.2.7** Re-running a step re-runs the steps that depend on it: re-transcribing a recording regenerates the draft summary and description built on the old words, and discards the transcript corrections made against them. That is why a re-run of that particular step asks for confirmation and the others do not.
 
 #### 3.21.3 Back-catalogue processing
 
@@ -506,8 +520,10 @@ It is built as a Progressive Web App on a single codebase, reachable from any br
 | Display name | User-set | Shown on public notes and SOS signals (3.1.12) |
 | Avatar | User-set | Optional |
 | Role | Admin-set | Admin, Contributor or Member (3.1) |
-| Status | Admin-set | Invited, active or deactivated (3.1.7) |
+| Status | Admin-set | Invited, active or deactivated; deactivation is reversible (3.1.7) |
 | Notification preferences | User-set | Per event category (3.17.13) |
+| Preferred playback speed | User-set | One of the six steps at 3.2.4, applied to every recording on every device |
+| Password | User-set | Held only as a hash; reset, never recovered (3.1.6, 3.1.13) |
 | Date joined | Auto-set | On invitation acceptance |
 
 ### 4.2 Recording
@@ -520,10 +536,10 @@ It is built as a Progressive Web App on a single codebase, reachable from any br
 | Scripture references | AI-suggested, admin-editable | Structured citations (3.7.3) |
 | Date recorded | Admin-set | Primary sort key (3.3.1) |
 | Series | Admin-set | Optional (3.3.9) |
-| Duration | Auto-extracted | From the audio file, not editable |
+| Duration | Not stored | Read from the media by the player at playback time. Nothing inspects the file on upload, so no list shows a running time and no progress is expressed as a percentage |
 | Publication status | Admin-set | Draft or published (3.2.2, 3.2.11) |
-| Original audio | Auto-retained | Unmodified upload (3.4.9) |
-| Processed audio | Auto-generated | Output of 3.4 |
+| Original audio | Auto-retained | Unmodified upload, held in object storage that is never publicly addressable and reachable only through a signed URL (3.4.9, 3.2.13) |
+| Processed audio | Auto-generated | Output of 3.4. Until that step exists, the original is what is streamed |
 
 ### 4.3 Series
 
@@ -532,8 +548,8 @@ It is built as a Progressive Web App on a single codebase, reachable from any br
 | Title | Admin-set | Also the podcast feed title (3.20.10) |
 | Description | Admin-written | Series themes and goals |
 | Cover artwork | Admin-uploaded | Series poster and podcast artwork (3.3.3) |
-| Date range | Auto-calculated | Earliest to latest recording |
-| Recording count | Auto-calculated | — |
+| Date range | Auto-calculated | Earliest to latest recording the reader may see |
+| Recording count | Auto-calculated | Over the recordings the reader may see, so a member counts published recordings only (3.3.5) |
 | External publication status | Auto-tracked | Per platform (3.20.7) |
 
 ### 4.4 Transcript
@@ -543,7 +559,9 @@ It is built as a Progressive Web App on a single codebase, reachable from any br
 | Source recording | Auto-set | One transcript per recording |
 | Segments | Auto-generated | Each with start and end timestamps (3.5.2) |
 | Text | Auto-generated, admin-correctable | 3.5.5 |
-| Language | Auto-detected | 3.5.7 |
+| Language | Pinned | English, recorded on the transcript rather than detected (3.5.7) |
+| Speaker | Auto-generated | The provider's anonymous index, per segment, nullable and never editable (3.5.9) |
+| Corrected by / at | Auto-set | Recorded per segment when a human changes it (3.5.5) |
 | Confidence | Auto-generated | Drives the flag at 3.5.8 |
 
 ### 4.5 AI summary
@@ -554,8 +572,8 @@ It is built as a Progressive Web App on a single codebase, reachable from any br
 | Text | AI-generated, admin-editable | Plain text with line breaks (3.6.8) |
 | Status | Admin-set | Draft or published (3.6.2, 3.6.12) |
 | Date generated | Auto-set | Reset on regeneration |
-| Generated by | Auto-set | Which model and run produced it |
-| Regeneration prompt | Admin-set | Optional steer (3.6.9) |
+| Generated by | Auto-set | Which model, which model version and which prompt version produced it (4.17.5) |
+| Regeneration prompt | Admin-set | Optional steer, retained with the draft it produced (3.6.9) |
 
 ### 4.6 Scripture reference
 
@@ -682,7 +700,23 @@ Mind maps carry no title: the source recording or video title labels them in the
 - **4.17.2** The admin sees suggestions pre-filled in the review form and can accept, edit or discard each field individually.
 - **4.17.3** Nothing publishes automatically. An admin must confirm before a recording goes live (3.2.2, 3.21.2.2).
 - **4.17.4** Back-catalogue batches follow the bulk review path defined at 3.21.3.4.
-- **4.17.5** Every AI-suggested field records that it was AI-suggested and whether an admin changed it.
+- **4.17.5** Every AI-suggested field records that it was AI-suggested and whether an admin changed it, alongside the model, model version and prompt version that produced it and any steering prompt used (3.6.14).
+- **4.17.6** Every AI artefact awaiting review is the same kind of item, distinguished by what kind of artefact it holds. Summary and description are the two kinds today; scripture references, tags, mind maps and video scripts become further kinds of the same item rather than queues of their own, which is what keeps 3.19.2 one queue and one review form however many artefacts the pipeline learns to produce.
+
+### 4.18 Pipeline job
+
+*One row per run of one automated step, and the record the pipeline status view (3.19.4) reads.*
+
+| Field | Set by | Notes |
+| :---- | :---- | :---- |
+| Recording | Auto-set | Which teaching the step belongs to |
+| Step | Auto-set | Which stage of the pipeline (3.21.1) |
+| Status | Auto-set | Pending, running, succeeded or failed. There is no retrying state, because nothing retries by itself (3.21.2.5) |
+| Attempt | Auto-set | Which run of that step this is. Every run is its own record; earlier ones are kept |
+| Error | Auto-set | Why the latest attempt failed, shown on the pipeline view (3.19.4) |
+| Enqueued / started / finished | Auto-set | The three timestamps the pipeline view reads |
+| Provider metadata | Auto-set | Model, billed quantity, spend and the provider's request id (3.19.13) |
+| Correlation id | Auto-set | Ties the job back to the request that caused it (§6, Auditability) |
 
 ## 5. Platform & distribution
 
@@ -730,13 +764,16 @@ Mind maps carry no title: the source recording or video title labels them in the
 | Processing latency | The automated pipeline (3.21.2.1) completes within a few hours of upload, so a recording uploaded after a session is reviewable the same day. |
 | Storage | Permanent retention of original and processed audio, transcripts, generated videos, mind maps, notes and all member-generated content. Nothing expires. |
 | Availability | Downloaded content remains fully usable during any outage. Degradation is graceful: a failure in AI generation or external publishing never blocks listening. |
-| Security | Authentication required for all content. Role-based access enforced server-side. Media storage is not publicly addressable. |
+| Security | Authentication required for all content. Role-based access enforced server-side. Media storage is not publicly addressable. Every authorisation decision is evaluated in one place, against an actor, an action and a resource, and denies by default — a capability nobody wrote a rule for is refused rather than permitted. The unauthenticated surface is an enumerated list of routes rather than a convention, and no entry on it returns content. Passwords are held only as hashes; sessions are server-side and revocable on the spot; media is reached only through short-lived signed URLs issued after the authorisation check has already passed. |
 | Privacy | Private member content — private notes, personal mind maps, questionnaire responses, Flow Tracker sessions, Highlights — is never visible to other members or to admins, and never surfaces in another member's search results (3.10.9). |
 | Audio quality | One consistent sound profile across the entire library, with output suitable for both in-app playback and podcast distribution. |
 | Offline capability | Offline is a first-class mode, not a fallback. Members can complete a full listening session with no connectivity and sync cleanly on return. |
 | API-first | The product's capabilities are exposed through an API layer rather than being embedded in the interface, so store-packaged builds, the browser PWA and external publishing all work against the same contract. |
 | Content integrity | AI-generated content accurately reflects the teaching it derives from. Every AI output passes an admin review gate before any member sees it (4.17.3). |
-| Auditability | External publishes (3.20.8) and admin actions on member content (3.12.10, 3.16.11) are logged with actor and timestamp. |
+| Auditability | External publishes (3.20.8) and admin actions on member content (3.12.10, 3.16.11) are logged with actor and timestamp. Every request and every pipeline job carries one correlation id through the application, the worker and the logs, so a single action is followable end to end across both processes. |
+| Operability | The product answers a health check that reflects a real database round-trip and is readable without a session, so monitoring never needs a credential. Both processes are supervised, start on boot and restart on failure. Logs are structured and carry the correlation id of the request or job that produced them. |
+| Durability | The database is backed up nightly with continuous write-ahead archiving to object storage held separately from the media bucket, and a restore is proven by drill rather than assumed. An unverified backup is not a backup. |
+| Cost accountability | Every provider call records what it spent — model, billed quantity, cost and the provider's request id — against the job that made it, so running cost is measured rather than estimated. A single switch puts every external provider into a local mock, so no development or test run can reach a paid one by accident. |
 | Accessibility | Text is legible at increased system font sizes, controls are reachable by keyboard on desktop, and media controls carry accessible labels. |
 
 ## 7. Technical feasibility & high-level approach
@@ -747,12 +784,12 @@ Mind maps carry no title: the source recording or video title labels them in the
 
 **What makes it possible.**
 
-- Speech-to-text with word- or segment-level timestamps — the single capability everything downstream depends on (3.5).
-- A general-purpose language model for summarisation, tagging, scripture identification, mind map extraction and video script assembly (3.6, 3.7, 3.8, 3.11.3.1).
+- Speech-to-text with word- or segment-level timestamps — the single capability everything downstream depends on (3.5). **Deepgram**'s pre-recorded API on the English Nova-3 model is what fills it today, behind a one-file adapter, with the provider handed a short-lived signed location to fetch the audio from rather than the bytes themselves.
+- A general-purpose language model for summarisation, tagging, scripture identification, mind map extraction and video script assembly (3.6, 3.7, 3.8, 3.11.3.1). **MiniMax M3**, over its Anthropic-compatible endpoint, fills it today behind the same shape of adapter; structured output is taken as a forced tool call, and a model that answers in prose instead fails the step visibly rather than writing something nobody asked for.
 - Semantic similarity over text segments, which is what makes cross-referencing (3.9) and meaning-based search (3.10) the same underlying capability rather than two separate builds.
 - Generative video with text-to-speech, for reels and summary videos (3.11).
 - Audio processing capable of noise reduction, clarity enhancement and loudness normalisation as a repeatable profile (3.4).
-- Transactional email delivery, for the two flows that cannot complete without it: invitation (3.1.3) and password reset (3.1.6). **Resend**, sent over SMTP so the provider is configuration rather than code. This is the one provider named in this document, and it is named because the choice is settled and consequence-free: no notification in 3.17 uses email — both channels there are push (3.17.1) and in-app (3.17.2) — so email volume never grows with content or activity, only with new accounts. Dozens of messages a month at 100 members and at 1,000, which sits inside Resend's free tier at both ends.
+- Transactional email delivery, for the two flows that cannot complete without it: invitation (3.1.3) and password reset (3.1.6). **Resend**, sent over SMTP so the provider is configuration rather than code. It is named here because the choice is settled and consequence-free: no notification in 3.17 uses email — both channels there are push (3.17.1) and in-app (3.17.2) — so email volume never grows with content or activity, only with new accounts. Dozens of messages a month at 100 members and at 1,000, which sits inside Resend's free tier at both ends.
 - Web platform capabilities the PWA leans on directly: service workers and local storage for offline (3.18), background audio with lock-screen controls (3.2.6), and web push (3.17.1).
 - External dependencies outside our control: Spotify's podcast ingestion, the Instagram, TikTok and LinkedIn publishing APIs (3.20), a source of Bible verse text (3.7.4), and the Apple and Google app store review processes (5.2).
 
@@ -767,4 +804,6 @@ Mind maps carry no title: the source recording or video title labels them in the
 - **Transcription accuracy on ministry-specific language.** Names, places and theological terminology are where speech-to-text degrades, and every downstream artefact inherits that error. The admin correction path (3.5.5) is a genuine requirement, not a convenience.
 - **Cost at back-catalogue scale.** Running years of recordings through transcription, summarisation and embedding is a one-off cost concentrated in a short window (3.21.3.3), and needs to be sized before committing.
 
-**Deliberately not decided here.** Which speech-to-text, language, embedding, video and text-to-speech providers are used; how media is stored and delivered; the application, API and job-orchestration stack; how the PWA is packaged for the two app stores; the persistence and search infrastructure; and how offline synchronisation resolves conflicts. Each of these has several viable answers, and they belong to the architecture phase. Transactional email is the single exception above, and it is an exception precisely because it is not one of these: it carries no product consequence, no meaningful cost and no quality risk, so leaving it open would have bought nothing.
+**Since settled, and recorded here because the product now runs on them.** Speech-to-text is Deepgram Nova-3 and drafting is MiniMax M3, both named above; transactional email is Resend over SMTP. Media is held in S3-compatible object storage that is never publicly addressable, written by the browser under a presigned upload grant and read only through a short-lived signed URL. The application, its API and the job orchestration are one codebase plus a single worker process, and the job ledger is itself the queue — there is no broker, which is what makes enqueueing a step transactional with the write that caused it and makes the status view at 3.19.4 one query rather than a log read. Persistence is a single PostgreSQL database with pgvector installed but not yet enabled, so cross-referencing and search (3.9, 3.10) can be built on the datastore that already holds the content and its access rules. Each of these sits behind a narrow adapter, which is what keeps replacing one of them a one-file change rather than a re-architecture.
+
+**Still deliberately not decided here.** Which embedding, video and text-to-speech providers are used; how the PWA is packaged for the two app stores; whether search needs infrastructure beyond the datastore above; and how offline synchronisation resolves conflicts. Each of these has several viable answers, and they belong to the architecture phase of the epic that first needs one.
