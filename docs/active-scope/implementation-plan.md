@@ -4,7 +4,7 @@ _Planned: 2026-08-24_
 
 ## Status
 
-6/121 criteria met. Groups complete: none.
+14/121 criteria met. Groups complete: none.
 _Maintained by implementation — see the checkboxes for detail._
 
 ## Background to research
@@ -117,26 +117,67 @@ codebase that decides which notes a given reader may see.
 
 **Acceptance criteria**
 
-- [ ] **1.2.1** `packages/db/src/notes.ts` creates a note and returns its row, taking an `Executor`
+- [x] **1.2.1** `packages/db/src/notes.ts` creates a note and returns its row, taking an `Executor`
   so a caller can pull the write into a transaction — verified by
   `packages/db/tests/integration/notes.test.ts`
   - the shape `transcripts.ts` and `playback.ts` already take
-- [ ] **1.2.2** The store reads a recording's notes for a given reader ordered by `timestamp_ms`
+- [x] **1.2.2** The store reads a recording's notes for a given reader ordered by `timestamp_ms`
   ascending then `created_at` ascending, giving one total order identical across repeated calls —
   verified by `packages/db/tests/integration/notes.test.ts`
   - the order matches the `(recording_id, timestamp_ms, created_at)` index exactly
-- [ ] **1.2.3** The read returns every public note on the recording plus the reader's own private
+- [x] **1.2.3** The read returns every public note on the recording plus the reader's own private
   ones, and no other member's private note in any position — verified by
   `packages/db/tests/integration/notes.test.ts`
   - the private-note condition `visibility = 'public' or author_id = :me`, in the query
-- [ ] **1.2.4** The store states the private-note condition itself rather than taking a pre-filtered
+- [x] **1.2.4** The store states the private-note condition itself rather than taking a pre-filtered
   set, and no statement in it compares `recording.published_at` — the publication gate is
   `visibility.ts`'s — verified by `tests/guards/visibility-boundary.test.ts`
   - the store is handed a recording id the caller has already gated
-- [ ] **1.2.5** No Drizzle type crosses the package boundary: the module's exports are row types in
+- [x] **1.2.5** No Drizzle type crosses the package boundary: the module's exports are row types in
   and row types out — verified by `tests/guards/import-boundary.test.ts`
 
-**Record**
+**Record** — _updated 2026-08-24_
+
+- **Edge cases:** the read never asks whether the recording exists — a list for a deleted or
+  invented id comes back empty, which a member reads as a teaching nobody has annotated rather than
+  as a wrong link
+- **Edge cases:** tombstones come back as ordinary rows — once Task 5.1 or a hand at the console
+  writes one, the list carries an entry whose text is `null` and the panel renders a blank note.
+  Task 5.2 is where that is filtered
+- **Edge cases:** `insertNote` checks nothing before writing — a create naming a recording or an
+  author that does not exist surfaces as a raw Postgres foreign-key error, not a refusal, until Task
+  1.4's service gates it. The same for an impossible shape: the table refuses it and the caller sees
+  a constraint violation
+- **Edge cases:** the reader id is taken on trust — an unknown or empty reader id reads as "somebody
+  who has written nothing" and gets every public note, which is what an unauthenticated read would
+  look like if a route ever forgot its session. Only `apiRoute`'s access rule stops that
+- **Edge cases:** the read is complete and unpaged — a recording carrying thousands of notes returns
+  all of them in one array and the tab takes as long as that takes. Deliberate (active-scope prd
+  7.7), and the Performance NFR's 200-note bar is what to re-read when it stops being true
+- **Assumptions, major (confirmed):** the read answers **top-level notes only** —
+  `where parent_id is null` — so the order is the `(recording_id, timestamp_ms, created_at)` index
+  exactly; a reply carries no position and has no place in a list ordered by one. Task 3.1 adds a
+  second read for a note's thread
+- **Assumptions, major (confirmed):** `NoteRow` carries **every stored column except the two
+  generated ones**, `deletedBy` included. The store answers what is stored; § 4.5's wire contract
+  is what drops `deletedBy` before a member sees it (3.5.8), so Tasks 5.1 and 5.2 widen nothing
+- **Assumptions, minor:** `insertNote` and `listNotesForReader` follow the house `insertX` /
+  `listX` naming; the reads name their columns through one `NOTE_COLUMNS` object rather than
+  `select *`, which is what Task 1.1's record asked for; no `findNoteById` was written — no
+  criterion here needs one and Task 1.4 is where the first caller appears
+- **Reworked:** 1.2.2 — the tie-break assertion passed with `asc(note.createdAt)` removed, because
+  Postgres happened to return the tied rows in insertion order. Rewritten to plant three notes at
+  one moment whose `created_at` order is deliberately not their insertion order, so an
+  `order by timestamp_ms` on its own cannot pass it
+- **False positives fixed:** 1 — twenty deliberate breaks in all, nineteen caught first time
+- **Operator steps:** none
+- **Notes:** `insertNote`, `listNotesForReader`, `NewNote` and `NoteRow` are exported from
+  `@thp/db`. Task 1.4 reads `MAX_NOTE_LENGTH` from `@thp/shared` and refuses over-long text before
+  reaching the store — the table's constraint is the backstop, not the message. Task 3.1's thread
+  read must state the private-note condition **in this module**; the guard from Task 1.3 will refuse
+  it anywhere else. `tools/import-boundary.ts` gained `checkStoreExportSurface` and a
+  `STORE_MODULE_FILES` list — a store module for `note_reaction` or `note_pin` (Tasks 4.1, 6.2)
+  must be added to that list or its export surface is unchecked
 
 ### Task 1.3 — The note-privacy guard
 
@@ -150,19 +191,55 @@ not inside it.
 
 **Acceptance criteria**
 
-- [ ] **1.3.1** A predicate over `note.visibility` or `note.author_id` written anywhere outside
+- [x] **1.3.1** A predicate over `note.visibility` or `note.author_id` written anywhere outside
   `packages/db/src/notes.ts` fails the guard — verified by `tests/guards/note-privacy.test.ts`
   - `tools/note-privacy.ts`, modelled on `tools/visibility-boundary.ts`, walking the source tree
   - the test plants a violation in a fixture and asserts the guard reports it
-- [ ] **1.3.2** The guard fails when `packages/db/src/notes.ts` stops stating the condition, so a pass
+  - _(amended at implementation)_ `packages/db/src/schema.ts` is exempt alongside the owning
+    module: its `note_reply_is_public` check constraint spells `visibility = 'public'` and decides
+    what may be **stored**, never who may read it — the same carve-out
+    `tools/visibility-boundary.ts` makes for writing a publication timestamp. The exemption list is
+    asserted to be exactly that one file, so widening it is a visible edit
+- [x] **1.3.2** The guard fails when `packages/db/src/notes.ts` stops stating the condition, so a pass
   can never mean nothing checks privacy at all — verified by `tests/guards/note-privacy.test.ts`
   - the owning module is asserted positively, not only the absence of violations elsewhere
-- [ ] **1.3.3** `tools/visibility-boundary.ts` and its test are unchanged, and the recording
+- [x] **1.3.3** `tools/visibility-boundary.ts` and its test are unchanged, and the recording
   publication guard still passes over every read path that depends on it — verified by
   `tests/guards/visibility-boundary.test.ts`
   - two guards, one concept each
 
-**Record**
+**Record** — _updated 2026-08-24_
+
+- **Edge cases:** the guard reads text, so a predicate assembled through a variable —
+  `const column = note.visibility` and then `eq(column, me)` — is not recognised. A second copy of
+  the condition written that way ships with a green build
+- **Edge cases:** `packages/db/src/schema.ts` is exempt, so a note read query written into the
+  schema file would not be reported. Nothing writes queries there today, and the test asserts the
+  exemption list is exactly that one file, but the hole is real
+- **Edge cases:** the guard walks the four package source trees only — a note query written in
+  `scripts/` or in another `tools/` file is invisible to it
+- **Edge cases:** comparing visibility **in JavaScript** is deliberately allowed, because the
+  All / Public / Mine filter (3.2.3) and the **Private** badge (3.2.2) both do it. So a client that
+  filtered a payload it should never have been sent still passes — the API is what makes that
+  impossible, and this guard only makes sure the API's rule is written once
+- **Edge cases:** a leak that never compares visibility at all is not caught. Task 4.3's reaction
+  counts and Task 6.4's pins are the shape to watch: a count assembled from an unfiltered join over
+  `note_reaction` reveals that a private note exists without naming either column. Both must read
+  through `packages/db/src/notes.ts`
+- **Assumptions, major (confirmed):** none
+- **Assumptions, minor:** the guard states both halves of the condition as one pattern list and
+  reuses it in both directions — the shape that is a violation everywhere else is the shape the
+  owning module is required to state, so the two can never drift apart; an assignment
+  (`const visibility = 'private'`) is excluded by lookbehind so the composer at Task 1.8 does not
+  trip it
+- **Reworked:** none
+- **False positives fixed:** 0
+- **Operator steps:** none
+- **Notes:** 1.3.1 was amended to record the `schema.ts` exemption the shipped table forced — see
+  the criterion. `tools/visibility-boundary.ts` and `tests/guards/visibility-boundary.test.ts` are
+  byte-for-byte unchanged (`git diff` over both is empty), and the publication guard was driven red
+  on purpose by removing the condition from `visibility.ts`, so 1.3.3 is a checked property rather
+  than an untouched file
 
 ### Task 1.4 — Creating a note over the API
 

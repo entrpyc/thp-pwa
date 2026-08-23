@@ -3,9 +3,12 @@ import { describe, expect, it } from 'vitest';
 import {
   checkClientBoundary,
   checkSingleDatabaseModule,
+  checkStoreExportSurface,
   checkWorkerBoundary,
+  collectExportedNames,
   collectClientFiles,
   formatViolations,
+  STORE_MODULE_FILES,
 } from '../../tools/import-boundary';
 import { walkFiles } from '../../tools/fs-walk';
 
@@ -88,3 +91,30 @@ describe('the worker and the API share a database, not a codebase', () => {
 function collectWorkerFiles(): string[] {
   return walkFiles(resolve(REPO_ROOT, 'packages/worker/src'));
 }
+
+describe('a store module hands out row types, not Drizzle types', () => {
+  it('has exports to check at all — otherwise the pass below is vacuous', () => {
+    // The rule is about a module with a real public surface, not an empty file that trivially
+    // names nothing.
+    for (const file of STORE_MODULE_FILES) {
+      const names = collectExportedNames(REPO_ROOT, file);
+      expect(names, file).toContain('NoteRow');
+      expect(names.length, file).toBeGreaterThan(2);
+    }
+  });
+
+  it('holds for every store module', () => {
+    expect(formatViolations(checkStoreExportSurface(REPO_ROOT))).toBe('');
+  });
+
+  it('would report each of the three ways the builder gets out', () => {
+    const violations = checkStoreExportSurface(REPO_ROOT, ['tests/fixtures/leaky-store/notes.ts']);
+    const details = violations.map((violation) => violation.detail);
+
+    expect(details).toContain('imports a type from drizzle-orm');
+    expect(details).toContain('names a table inferred row type');
+    expect(details).toContain('re-exports drizzle-orm');
+    expect(formatViolations(violations)).toContain('leaky-store/notes.ts');
+    expect(violations.every((violation) => violation.line > 0)).toBe(true);
+  });
+});

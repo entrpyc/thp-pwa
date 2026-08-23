@@ -1,6 +1,13 @@
 import { afterAll, beforeAll, describe, expect, it, inject } from 'vitest';
 import postgres from 'postgres';
-import { runMigrations } from '@thp/db';
+import {
+  createDatabase,
+  insertNote,
+  listNotesForReader,
+  runMigrations,
+  withTransaction,
+  type DatabaseHandle,
+} from '@thp/db';
 import { MAX_NOTE_LENGTH, NOTE_VISIBILITIES } from '@thp/shared';
 import { createThrowawayDatabase, type ThrowawayDatabase } from '../../../../tests/setup/throwaway-db';
 
@@ -350,5 +357,443 @@ describe('the rules a note can never break', () => {
     expect(rows).toHaveLength(1);
     expect(rows[0]?.deleted_by).toBeNull();
     expect(rows[0]?.deleted_at).not.toBeNull();
+  });
+});
+
+// =================================================================================================
+
+/**
+ * **The notes store** (Task 1.2) — the module that owns every statement against `note` and, with
+ * it, the private-note condition.
+ *
+ * Its own database and its own connections: the suite above drives raw SQL at a table and this one
+ * drives the store, and sharing a database would let a store bug hide behind a row the other suite
+ * happened to leave behind.
+ *
+ * Every read below is asked by **two different readers** wherever privacy is the point. A read that
+ * returns the right rows to their author proves nothing on its own — the failure this module exists
+ * to prevent is a note reaching somebody else, so the second reader is the assertion.
+ */
+describe('the notes store', () => {
+  let store: ThrowawayDatabase;
+  let storeSql: ReturnType<typeof postgres>;
+  let handle: DatabaseHandle;
+
+  /** Two members and a teaching. Alice writes; Bella is who must not see the private ones. */
+  let alice: string;
+  let bella: string;
+
+  async function member(label: string): Promise<string> {
+    const [row] = await storeSql<{ id: string }[]>`
+      insert into "user" (email, password_hash, display_name, role)
+      values (${`${label}@example.test`}, 'hash', ${label}, 'member')
+      returning id
+    `;
+    return row?.id as string;
+  }
+
+  async function recording(key: string): Promise<string> {
+    const [row] = await storeSql<{ id: string }[]>`
+      insert into recording (original_media_key, title, recorded_at)
+      values (${`originals/${key}.mp3`}, ${`Teaching ${key}`}, '2026-06-01')
+      returning id
+    `;
+    return row?.id as string;
+  }
+
+  beforeAll(async () => {
+    store = await createThrowawayDatabase(inject('databaseUrl'), 'notes_store');
+    await runMigrations({ url: store.url });
+    storeSql = postgres(store.url, { max: 2, onnotice: () => {} });
+    handle = createDatabase({ url: store.url, max: 4 });
+
+    alice = await member('alice');
+    bella = await member('bella');
+  }, 180_000);
+
+  afterAll(async () => {
+    await handle?.close();
+    await storeSql?.end({ timeout: 5 });
+    await store?.drop();
+  }, 60_000);
+
+  // ---------------------------------------------------------------------------------------------
+  // 1.2.1 — the write
+
+  describe('writing a note', () => {
+    it('returns the row it wrote, with the values it was given', async () => {
+      const where = await recording('write-returns');
+      const row = await insertNote(
+        {
+          recordingId: where,
+          authorId: alice,
+          visibility: 'private',
+          text: 'The bit about stillness.',
+          timestampMs: 92_000,
+        },
+        handle,
+      );
+
+      expect(row.id).toMatch(/^[0-9a-f-]{36}$/);
+      expect(row.recordingId).toBe(where);
+      expect(row.authorId).toBe(alice);
+      expect(row.visibility).toBe('private');
+      expect(row.text).toBe('The bit about stillness.');
+      expect(row.timestampMs).toBe(92_000);
+      expect(row.parentId).toBeNull();
+      expect(row.createdAt).toBeInstanceOf(Date);
+      expect(row.editedAt).toBeNull();
+      expect(row.deletedAt).toBeNull();
+      expect(row.deletedBy).toBeNull();
+    });
+
+    it('actually writes it — the row is there when another connection looks', async () => {
+      const where = await recording('write-persists');
+      const row = await insertNote(
+        {
+          recordingId: where,
+          authorId: alice,
+          visibility: 'public',
+          text: 'Written.',
+          timestampMs: 10,
+        },
+        handle,
+      );
+
+      // Read back over a different connection than the one that wrote it: a store that returned a
+      // plausible object without committing would pass every assertion above and fail this one.
+      const rows = await storeSql<{ text: string; timestamp_ms: number }[]>`
+        select text, timestamp_ms from note where id = ${row.id}
+      `;
+      expect(rows).toHaveLength(1);
+      expect(rows[0]?.text).toBe('Written.');
+      expect(rows[0]?.timestamp_ms).toBe(10);
+    });
+
+    it('takes an executor, so a caller can roll the write back with the rest of its work', async () => {
+      const where = await recording('write-in-transaction');
+      let written = '';
+
+      await expect(
+        withTransaction(async (tx) => {
+          const row = await insertNote(
+            {
+              recordingId: where,
+              authorId: alice,
+              visibility: 'public',
+              text: 'Doomed.',
+              timestampMs: 1,
+            },
+            tx,
+          );
+          written = row.id;
+          throw new Error('the caller changed its mind');
+        }, handle),
+      ).rejects.toThrow('the caller changed its mind');
+
+      // The whole point of the executor: the note went back with the transaction. A store that
+      // opened its own connection would leave this row behind.
+      expect(written).not.toBe('');
+      expect(await storeSql`select id from note where id = ${written}`).toHaveLength(0);
+    });
+
+    it('does not return the table plumbing — a caller sees a note, not its generated columns', async () => {
+      const where = await recording('write-columns');
+      const row = await insertNote(
+        {
+          recordingId: where,
+          authorId: alice,
+          visibility: 'public',
+          text: 'Named.',
+          timestampMs: 5,
+        },
+        handle,
+      );
+
+      // `is_reply` and `parent_is_reply` are how the one-level rule is enforced (§ 6.1). A
+      // `select *` would carry them out of the package to every caller downstream.
+      expect(Object.keys(row).sort()).toEqual([
+        'authorId',
+        'createdAt',
+        'deletedAt',
+        'deletedBy',
+        'editedAt',
+        'id',
+        'parentId',
+        'recordingId',
+        'text',
+        'timestampMs',
+        'visibility',
+      ]);
+    });
+  });
+
+  // ---------------------------------------------------------------------------------------------
+  // 1.2.2 — the order
+
+  describe('the order a teaching reads in', () => {
+    it('is by position, then by when it was written, and is the same on every call', async () => {
+      const where = await recording('order');
+
+      // Written deliberately out of order, so a store that returned insertion order would look
+      // right for the wrong reason.
+      const late = await insertNote(
+        {
+          recordingId: where,
+          authorId: alice,
+          visibility: 'public',
+          text: 'late',
+          timestampMs: 300_000,
+        },
+        handle,
+      );
+      const firstAtSame = await insertNote(
+        {
+          recordingId: where,
+          authorId: alice,
+          visibility: 'public',
+          text: 'same-a',
+          timestampMs: 60_000,
+        },
+        handle,
+      );
+      const early = await insertNote(
+        { recordingId: where, authorId: alice, visibility: 'public', text: 'early', timestampMs: 0 },
+        handle,
+      );
+      const secondAtSame = await insertNote(
+        {
+          recordingId: where,
+          authorId: alice,
+          visibility: 'public',
+          text: 'same-b',
+          timestampMs: 60_000,
+        },
+        handle,
+      );
+
+      const once = await listNotesForReader(where, alice, handle);
+      expect(once.map((row) => row.id)).toEqual([
+        early.id,
+        firstAtSame.id,
+        secondAtSame.id,
+        late.id,
+      ]);
+
+      const twice = await listNotesForReader(where, alice, handle);
+      expect(twice.map((row) => row.id)).toEqual(once.map((row) => row.id));
+    });
+
+    it('breaks a tie by when the note was written, not by where the row happens to sit', async () => {
+      const where = await recording('order-tie');
+
+      // Three notes at the same moment, written in an order that is **not** their `created_at`
+      // order — planted with raw SQL, because that is the only way to make the two disagree.
+      //
+      // Without the tie-break stated, the sort has nothing to separate these three and returns them
+      // in the order the rows come off the heap, which is the order below. With it, they come back
+      // b → c → a. The test is the difference between those two orders, so an `order by
+      // timestamp_ms` on its own cannot pass it.
+      const planted = await storeSql<{ id: string; text: string }[]>`
+        insert into note (recording_id, author_id, visibility, timestamp_ms, text, created_at)
+        values
+          (${where}, ${alice}, 'public', 60000, 'written third',  '2026-06-01T12:00:03Z'),
+          (${where}, ${alice}, 'public', 60000, 'written first',  '2026-06-01T12:00:01Z'),
+          (${where}, ${alice}, 'public', 60000, 'written second', '2026-06-01T12:00:02Z')
+        returning id, text
+      `;
+      expect(planted.map((row) => row.text)).toEqual([
+        'written third',
+        'written first',
+        'written second',
+      ]);
+
+      const rows = await listNotesForReader(where, alice, handle);
+      expect(rows.map((row) => row.text)).toEqual([
+        'written first',
+        'written second',
+        'written third',
+      ]);
+
+      // And the same answer twice, which is what a member reloading the tab is promised.
+      const again = await listNotesForReader(where, alice, handle);
+      expect(again.map((row) => row.id)).toEqual(rows.map((row) => row.id));
+    });
+
+    it('reads only the teaching it was asked about', async () => {
+      const here = await recording('scoped-here');
+      const elsewhere = await recording('scoped-elsewhere');
+      const mine = await insertNote(
+        { recordingId: here, authorId: alice, visibility: 'public', text: 'here', timestampMs: 1 },
+        handle,
+      );
+      await insertNote(
+        {
+          recordingId: elsewhere,
+          authorId: alice,
+          visibility: 'public',
+          text: 'there',
+          timestampMs: 1,
+        },
+        handle,
+      );
+
+      expect((await listNotesForReader(here, alice, handle)).map((row) => row.id)).toEqual([
+        mine.id,
+      ]);
+    });
+
+    it('leaves replies out — a note with no position has no place in a list ordered by one', async () => {
+      const where = await recording('order-replies');
+      const parent = await insertNote(
+        {
+          recordingId: where,
+          authorId: alice,
+          visibility: 'public',
+          text: 'the note',
+          timestampMs: 4_000,
+        },
+        handle,
+      );
+      await insertNote(
+        {
+          recordingId: where,
+          authorId: alice,
+          visibility: 'public',
+          text: 'the reply',
+          parentId: parent.id,
+        },
+        handle,
+      );
+
+      const rows = await listNotesForReader(where, alice, handle);
+      expect(rows.map((row) => row.text)).toEqual(['the note']);
+    });
+  });
+
+  // ---------------------------------------------------------------------------------------------
+  // 1.2.3 — the private-note condition
+
+  describe('what a reader may see', () => {
+    it('returns every public note plus the reader own private ones, and nobody else private ones', async () => {
+      const where = await recording('privacy');
+      const alicePublic = await insertNote(
+        {
+          recordingId: where,
+          authorId: alice,
+          visibility: 'public',
+          text: 'alice public',
+          timestampMs: 1_000,
+        },
+        handle,
+      );
+      const alicePrivate = await insertNote(
+        {
+          recordingId: where,
+          authorId: alice,
+          visibility: 'private',
+          text: 'alice private',
+          timestampMs: 2_000,
+        },
+        handle,
+      );
+      const bellaPublic = await insertNote(
+        {
+          recordingId: where,
+          authorId: bella,
+          visibility: 'public',
+          text: 'bella public',
+          timestampMs: 3_000,
+        },
+        handle,
+      );
+      const bellaPrivate = await insertNote(
+        {
+          recordingId: where,
+          authorId: bella,
+          visibility: 'private',
+          text: 'bella private',
+          timestampMs: 4_000,
+        },
+        handle,
+      );
+
+      const forAlice = await listNotesForReader(where, alice, handle);
+      expect(forAlice.map((row) => row.id)).toEqual([
+        alicePublic.id,
+        alicePrivate.id,
+        bellaPublic.id,
+      ]);
+
+      const forBella = await listNotesForReader(where, bella, handle);
+      expect(forBella.map((row) => row.id)).toEqual([
+        alicePublic.id,
+        bellaPublic.id,
+        bellaPrivate.id,
+      ]);
+
+      // Stated as an absence too: the other member's private note is not in the payload at all, in
+      // any position — which is the requirement, rather than "is not rendered".
+      expect(forAlice.map((row) => row.text)).not.toContain('bella private');
+      expect(forBella.map((row) => row.text)).not.toContain('alice private');
+      expect(forAlice.some((row) => row.id === bellaPrivate.id)).toBe(false);
+      expect(forBella.some((row) => row.id === alicePrivate.id)).toBe(false);
+    });
+
+    it('is a row rule, not a first-row rule — a private note in the middle is dropped too', async () => {
+      const where = await recording('privacy-middle');
+      const before = await insertNote(
+        { recordingId: where, authorId: alice, visibility: 'public', text: 'before', timestampMs: 1_000 },
+        handle,
+      );
+      await insertNote(
+        { recordingId: where, authorId: bella, visibility: 'private', text: 'hidden', timestampMs: 2_000 },
+        handle,
+      );
+      const after = await insertNote(
+        { recordingId: where, authorId: alice, visibility: 'public', text: 'after', timestampMs: 3_000 },
+        handle,
+      );
+
+      expect((await listNotesForReader(where, alice, handle)).map((row) => row.id)).toEqual([
+        before.id,
+        after.id,
+      ]);
+    });
+
+    it('does not bend for a reader who has written nothing — an empty list, not everything', async () => {
+      const where = await recording('privacy-stranger');
+      await insertNote(
+        { recordingId: where, authorId: alice, visibility: 'private', text: 'only mine', timestampMs: 1 },
+        handle,
+      );
+
+      expect(await listNotesForReader(where, bella, handle)).toEqual([]);
+    });
+  });
+
+  // ---------------------------------------------------------------------------------------------
+  // 1.2.4 — what this module does not decide
+
+  describe('publication is not this module to decide', () => {
+    it('reads a note on an unpublished teaching — the gate is asked before this is called', async () => {
+      const where = await recording('unpublished');
+      const row = await insertNote(
+        { recordingId: where, authorId: alice, visibility: 'public', text: 'on a draft', timestampMs: 1 },
+        handle,
+      );
+
+      // `recording.published_at` is null on every row this suite makes, and the store returns the
+      // note anyway. The publication gate is `visibility.ts`'s and the service asks it before this
+      // module is reached — a store that compared the timestamp here would be the second copy
+      // tests/guards/visibility-boundary.test.ts refuses.
+      const [state] = await storeSql<{ published_at: Date | null }[]>`
+        select published_at from recording where id = ${where}
+      `;
+      expect(state?.published_at).toBeNull();
+      expect((await listNotesForReader(where, alice, handle)).map((one) => one.id)).toEqual([
+        row.id,
+      ]);
+    });
   });
 });

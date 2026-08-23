@@ -57,6 +57,12 @@ export {
 } from './jobs';
 export { MIGRATIONS_DIR, runMigrations, type RunMigrationsOptions } from './migrate';
 export {
+  insertNote,
+  listNotesForReader,
+  type NewNote,
+  type NoteRow,
+} from './notes';
+export {
   findPlaybackProgress,
   setPreferredPlaybackSpeed,
   upsertPlaybackProgress,

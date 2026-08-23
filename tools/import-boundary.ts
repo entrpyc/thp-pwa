@@ -13,7 +13,8 @@ export interface BoundaryViolation {
     | 'no-database-driver'
     | 'no-server-module'
     | 'no-node-builtin'
-    | 'no-hardcoded-api-path';
+    | 'no-hardcoded-api-path'
+    | 'no-drizzle-in-exports';
 }
 
 const DATABASE_PACKAGES = ['@thp/db'];
@@ -230,4 +231,59 @@ export function checkWorkerBoundary(
   }
 
   return violations;
+}
+
+/**
+ * **A store module's exports are row types in and row types out.**
+ *
+ * `packages/db` is the only place that may name Drizzle, and the rule the other checks in this file
+ * enforce is about *imports* — nobody outside the package may reach a driver. That leaves one way
+ * for the query builder to escape anyway: a store module naming a Drizzle type in its own public
+ * surface. `Promise<typeof note.$inferSelect>` compiles, reads as a row type, and quietly makes
+ * every caller downstream depend on the schema object and the version of Drizzle that produced it.
+ *
+ * Three shapes are refused, and between them there is no way for a Drizzle type to reach a caller:
+ *
+ * - **a type imported from `drizzle-orm`** — `import type { SQL }`, or a `type` specifier inside a
+ *   value import. A type the module cannot name is a type it cannot export;
+ * - **a table's inferred row type** — `$inferSelect` / `$inferInsert`, which is a Drizzle type
+ *   reached through the schema rather than through the package name;
+ * - **a re-export from `drizzle-orm`**, which hands the builder itself out through the barrel.
+ *
+ * The query helpers — `eq`, `and`, `asc` — are values used inside the module and are not the
+ * concern: they build the statement and never appear in a signature.
+ */
+export function checkStoreExportSurface(
+  repoRoot: string,
+  storeFiles: readonly string[] = STORE_MODULE_FILES,
+): BoundaryViolation[] {
+  const root = resolve(repoRoot);
+  const violations: BoundaryViolation[] = [];
+
+  for (const relativeFile of storeFiles) {
+    const source = withoutComments(readFileSync(resolve(root, relativeFile), 'utf8'));
+
+    source.split('\n').forEach((text, index) => {
+      const report = (detail: string) =>
+        violations.push({ file: relativeFile, line: index + 1, detail, rule: 'no-drizzle-in-exports' });
+
+      const fromDrizzle = /from\s*['"]drizzle-orm(?:\/[^'"]*)?['"]/.test(text);
+      if (fromDrizzle && /^\s*export\b/.test(text)) report('re-exports drizzle-orm');
+      if (fromDrizzle && /\bimport\s+type\b/.test(text)) report('imports a type from drizzle-orm');
+      if (fromDrizzle && /\{[^}]*\btype\s+\w/.test(text)) report('imports a type from drizzle-orm');
+      if (/\$infer(?:Select|Insert)\b/.test(text)) report('names a table inferred row type');
+    });
+  }
+
+  return violations;
+}
+
+/** The store modules held to it. One per table group, and each one owns its own row types. */
+export const STORE_MODULE_FILES: readonly string[] = ['packages/db/src/notes.ts'];
+
+/** Exported declarations in a module, by name — so a check over exports cannot pass on an empty file. */
+export function collectExportedNames(repoRoot: string, relativeFile: string): string[] {
+  const source = withoutComments(readFileSync(resolve(resolve(repoRoot), relativeFile), 'utf8'));
+  return [...source.matchAll(/^export\s+(?:async\s+)?(?:function|interface|type|const|class)\s+(\w+)/gm)]
+    .map((match) => match[1] as string);
 }
