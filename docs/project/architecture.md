@@ -190,7 +190,8 @@ dropped and rebuilt.
 
 **Member-owned state** is a separate cluster, all keyed by user and all subject to the privacy rule:
 `PlaybackProgress`, `ListeningHistory`, `Note` (with `visibility`, an optional `parent_note` one
-level deep, and reactions), `QuestionnaireResponse`, `FlowTrackerSession`, `HighlightEntry`,
+level deep, reactions, and any number of admin pins per recording —
+[3.12.15](docs/project/prd.md#L287)), `QuestionnaireResponse`, `FlowTrackerSession`, `HighlightEntry`,
 `PersonalMindMap`, `NotificationPreference`. Account deletion removes this cluster and re-attributes
 only public notes to a placeholder ([3.1.9](docs/project/prd.md#L51)–[3.1.10](docs/project/prd.md#L52)) — which
 means public notes must not be foreign-keyed to users with `ON DELETE CASCADE`; that is a schema
