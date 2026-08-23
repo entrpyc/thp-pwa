@@ -1,7 +1,9 @@
 import { sql } from 'drizzle-orm';
 import {
+  boolean,
   check,
   date,
+  foreignKey,
   index,
   integer,
   jsonb,
@@ -11,12 +13,15 @@ import {
   real,
   text,
   timestamp,
+  unique,
   uniqueIndex,
   uuid,
 } from 'drizzle-orm/pg-core';
 import {
   DEFAULT_PLAYBACK_SPEED,
   JOB_STATUSES,
+  MAX_NOTE_LENGTH,
+  NOTE_VISIBILITIES,
   PIPELINE_STEPS,
   PLAYBACK_SPEEDS,
   REVIEW_KINDS,
@@ -49,6 +54,8 @@ export const jobStatus = pgEnum('job_status', JOB_STATUSES);
 export const reviewKind = pgEnum('review_kind', REVIEW_KINDS);
 
 export const reviewStatus = pgEnum('review_status', REVIEW_STATUSES);
+
+export const noteVisibility = pgEnum('note_visibility', NOTE_VISIBILITIES);
 
 /**
  * An account. Columns arrive with the steps that use them: `deactivated_at` comes with ticket 4
@@ -642,4 +649,134 @@ export const playbackProgress = pgTable(
     updatedAt: timestamp('updated_at', { withTimezone: true }).notNull().defaultNow(),
   },
   (table) => [primaryKey({ columns: [table.userId, table.recordingId] })],
+);
+
+/**
+ * **A note written at a moment in a teaching** (active-scope architecture § 6.1) — the first
+ * member-authored content in the product, and the first table whose rules are worth stating at the
+ * database rather than in the code that writes it.
+ *
+ * Four things a note can never be are refused by Postgres here, not by a service that remembers to
+ * check:
+ *
+ * 1. **A reply to a reply.** One level, and no more (active-scope prd 3.3.4). See the generated
+ *    pair below.
+ * 2. **A top-level note with no position, or a reply carrying one** (3.3.2) — one check over the
+ *    two columns, so the two shapes a note comes in are the only two it can come in.
+ * 3. **A private reply** (3.3.3). A thread under a public note is public throughout.
+ * 4. **More than {@link MAX_NOTE_LENGTH} characters** — the ceiling derived from the shared
+ *    constant the composer counts down from, so a note one end accepts is never one the other
+ *    refuses.
+ *
+ * **A delete is a tombstone, not a missing row** (3.5.9): `deleted_at` set and `text` null, the two
+ * together or neither, which is the last check. The row stays so a thread does not lose its shape
+ * when the note it hangs off is removed.
+ *
+ * **`author_id` restricts rather than cascades**, unlike every other member-owned row in this
+ * codebase — deliberately, and it is the one deviation worth reading twice.
+ * docs/project/architecture.md § Data model states outright that public notes must not cascade from
+ * users, and re-attribution ([3.1.10](docs/project/prd.md)) is unbuilt. Until it exists, deleting an
+ * account that has written a note is *meant* to fail: a hand at the database cannot take a group's
+ * study notes with one person's account by accident.
+ *
+ * What is absent is the design. No `updated_at` — `created_at`, `edited_at` and `deleted_at` are the
+ * three things that happen to a note. No prior text and no revision table: 3.5.1 says an edit is
+ * permanent and keeps no history, so a version column would be building the undo the requirement
+ * refuses. No `reaction_count` and no `pinned` flag, because each is a row in its own table rather
+ * than a property of this one. No full-text index, because search is unbuilt.
+ */
+export const note = pgTable(
+  'note',
+  {
+    id: uuid('id').primaryKey().defaultRandom(),
+    /** Cascades: a note about a teaching that no longer exists is nothing. */
+    recordingId: uuid('recording_id')
+      .notNull()
+      .references(() => recording.id, { onDelete: 'cascade' }),
+    /** Restricts — see the note above. This is the deviation, and it is on purpose. */
+    authorId: uuid('author_id')
+      .notNull()
+      .references(() => user.id, { onDelete: 'restrict' }),
+    /**
+     * The note this one replies to, or null. Non-null exactly on replies, and constrained to name a
+     * top-level note by the composite foreign key below rather than by a lookup.
+     */
+    parentId: uuid('parent_id'),
+    /**
+     * Where in the recording the composer was opened, in milliseconds — matching the offsets
+     * `segment` and `playback_progress` already establish. Non-null exactly on top-level notes.
+     */
+    timestampMs: integer('timestamp_ms'),
+    /** Chosen at creation and never written again. */
+    visibility: noteVisibility('visibility').notNull(),
+    /** Null exactly when the row is a tombstone. */
+    text: text('text'),
+    createdAt: timestamp('created_at', { withTimezone: true }).notNull().defaultNow(),
+    /** Null until the first edit; what drives the **edited** indicator. No prior text is kept. */
+    editedAt: timestamp('edited_at', { withTimezone: true }),
+    /** Presence is what makes a row a tombstone. */
+    deletedAt: timestamp('deleted_at', { withTimezone: true }),
+    /**
+     * Who removed it — the author or an admin. Required by 3.6.4's audit line and never returned to
+     * a member (3.5.8). Sets null rather than restricting: the note survives, and who deleted it is
+     * a detail, not the record.
+     */
+    deletedBy: uuid('deleted_by').references(() => user.id, { onDelete: 'set null' }),
+    /**
+     * **Half of how "one level" becomes a row the database cannot hold.**
+     *
+     * Stored and generated, so nothing writes them and nothing can write them wrong. A reply has
+     * `is_reply = true` and `parent_is_reply = false`, and the composite foreign key below demands
+     * its parent's `is_reply` be `false` — so a parent that is itself a reply has no matching key.
+     * A top-level note has `parent_is_reply` null, and a foreign key with a null column is not
+     * enforced at all, which is exactly what should happen to a note with no parent.
+     *
+     * The cheaper alternative is a parent lookup inside the create transaction. It is correct today
+     * and one careless later writer away from not being — the same argument
+     * `recording_original_media_key_unique` is already made on.
+     */
+    isReply: boolean('is_reply').generatedAlwaysAs(sql`parent_id is not null`),
+    parentIsReply: boolean('parent_is_reply').generatedAlwaysAs(
+      sql`case when parent_id is null then null else false end`,
+    ),
+  },
+  (table) => [
+    /** The list's order exactly (3.2.1), so reading a teaching's notes is one index scan. */
+    index('note_recording_timestamp_idx').on(
+      table.recordingId,
+      table.timestampMs,
+      table.createdAt,
+    ),
+    /** The thread's order (3.3.6). */
+    index('note_parent_created_idx').on(table.parentId, table.createdAt),
+    /** Exists only so `note_pin`'s composite key has something to point at. */
+    unique('note_recording_id_unique').on(table.recordingId, table.id),
+    /** What the composite foreign key below references. */
+    unique('note_id_is_reply_unique').on(table.id, table.isReply),
+    foreignKey({
+      columns: [table.parentId, table.parentIsReply],
+      foreignColumns: [table.id, table.isReply],
+      name: 'note_parent_top_level_fk',
+    }).onDelete('restrict'),
+    /** A top-level note has a position; a reply does not. Both directions, one constraint. */
+    check(
+      'note_position_on_top_level_only',
+      sql`(${table.parentId} is null) = (${table.timestampMs} is not null)`,
+    ),
+    /** A thread under a public note is public throughout (3.3.3). */
+    check(
+      'note_reply_is_public',
+      sql`${table.parentId} is null or ${table.visibility} = 'public'`,
+    ),
+    /** The ceiling, derived from the shared constant rather than restated. */
+    check(
+      'note_text_length',
+      sql`char_length(${table.text}) <= ${sql.raw(String(MAX_NOTE_LENGTH))}`,
+    ),
+    /** A tombstone has no text, and text means it is not a tombstone. */
+    check(
+      'note_tombstone_has_no_text',
+      sql`(${table.text} is null) = (${table.deletedAt} is not null)`,
+    ),
+  ],
 );

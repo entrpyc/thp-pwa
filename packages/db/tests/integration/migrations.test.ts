@@ -131,11 +131,13 @@ describe('migrations apply to an empty database by one command', () => {
       const types = await sql<{ typname: string }[]>`
         select typname from pg_type
         where typname in
-              ('user_role', 'pipeline_step', 'job_status', 'review_kind', 'review_status')
+              ('user_role', 'pipeline_step', 'job_status', 'review_kind', 'review_status',
+               'note_visibility')
         order by typname
       `;
       expect(types.map((row) => row.typname)).toEqual([
         'job_status',
+        'note_visibility',
         'pipeline_step',
         'review_kind',
         'review_status',
@@ -145,13 +147,15 @@ describe('migrations apply to an empty database by one command', () => {
       // Tables arrive with the ticket that uses them. Ticket 2 added accounts and sessions, ticket 3
       // invitations, ticket 4 password resets, Story 2 Ticket 01 `recording`, Ticket 02 `job` and
       // Ticket 03 `transcript` and `segment`. Story 3 Ticket 01 added `review_item` and `summary`,
-      // and Story 4 Ticket 04 adds `playback_progress` — the last table of this epic.
+      // Story 4 Ticket 04 `playback_progress` and Story 6 Ticket 01 `series` — the last of that
+      // epic. The notes scope adds `note` (Task 1.1).
       const tables = await sql<{ tablename: string }[]>`
         select tablename from pg_tables where schemaname = 'public' order by tablename
       `;
       expect(tables.map((row) => row.tablename)).toEqual([
         'invitation',
         'job',
+        'note',
         'password_reset',
         'playback_progress',
         'recording',

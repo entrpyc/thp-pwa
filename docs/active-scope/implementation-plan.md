@@ -4,7 +4,7 @@ _Planned: 2026-08-24_
 
 ## Status
 
-0/121 criteria met. Groups complete: none.
+6/121 criteria met. Groups complete: none.
 _Maintained by implementation — see the checkboxes for detail._
 
 ## Background to research
@@ -40,33 +40,70 @@ or route.
 
 **Acceptance criteria**
 
-- [ ] **1.1.1** A migration creates `note` with every column at active-scope architecture § 6.1 and
+- [x] **1.1.1** A migration creates `note` with every column at active-scope architecture § 6.1 and
   its three indexes — `(recording_id, timestamp_ms, created_at)`, `(parent_id, created_at)` and
   `unique (recording_id, id)` — verified by `packages/db/tests/integration/notes.test.ts`
   - a migration beside the existing ones, applied by the migration runner
   - the indexes are asserted against the catalogue, not just the schema file
-- [ ] **1.1.2** `visibility` is a Postgres enum generated from a shared `NOTE_VISIBILITIES` tuple and
+- [x] **1.1.2** `visibility` is a Postgres enum generated from a shared `NOTE_VISIBILITIES` tuple and
   stated nowhere else in the codebase — verified by `tests/guards/domain-declarations.test.ts`
   - the tuple is exported from `packages/shared`; the enum is derived from it
-- [ ] **1.1.3** Deleting a recording deletes its notes, and deleting a user who has written one is
+- [x] **1.1.3** Deleting a recording deletes its notes, and deleting a user who has written one is
   refused by the database — verified by `packages/db/tests/integration/notes.test.ts`
   - `recording_id` on delete cascade, `author_id` on delete restrict
   - restrict is deliberate: account deletion is meant to fail here until re-attribution exists
-- [ ] **1.1.4** A top-level row with no `timestamp_ms`, and a reply row carrying one, are each
+- [x] **1.1.4** A top-level row with no `timestamp_ms`, and a reply row carrying one, are each
   refused — verified by `packages/db/tests/integration/notes.test.ts`
   - `check ((parent_id is null) = (timestamp_ms is not null))`
-- [ ] **1.1.5** An insert whose `parent_id` names a row that is itself a reply is refused by the
+- [x] **1.1.5** An insert whose `parent_id` names a row that is itself a reply is refused by the
   database, not by a lookup inside the transaction — verified by
   `packages/db/tests/integration/notes.test.ts`
   - the `is_reply` / `parent_is_reply` generated-column pair, `unique (id, is_reply)` and the
     composite foreign key back to `note (id, is_reply)`
-- [ ] **1.1.6** A reply row with `visibility = 'private'` is refused; text longer than 1,000
+- [x] **1.1.6** A reply row with `visibility = 'private'` is refused; text longer than 1,000
   characters is refused; and a row carrying both `deleted_at` and text, or neither, is refused —
   verified by `packages/db/tests/integration/notes.test.ts`
   - `check (parent_id is null or visibility = 'public')`, `check (char_length(text) <= 1000)` and
     `check ((text is null) = (deleted_at is not null))`
 
-**Record**
+**Record** — _updated 2026-08-24_
+
+- **Edge cases:** a reply's `recording_id` is not tied to its parent's — a reply filed under a
+  different recording is a row the database accepts, and it would appear in the wrong teaching's
+  list with no thread above it; Task 3.1's service is where that gets refused
+- **Edge cases:** `visibility` is immutable by convention only — nothing at the database stops
+  `update note set visibility = 'public'`, so a stray update or a hand at the console would turn a
+  private note public with nobody notified
+- **Edge cases:** `timestamp_ms` is unbounded — `recording` has no duration, so a note at a
+  negative offset or past the end of the teaching stores fine and shows as a note the scrubber can
+  never reach
+- **Edge cases:** whitespace-only text is accepted — the trim is the service's (1.4.4), so until
+  that ships a note written as spaces reads as a blank row in the list
+- **Edge cases:** `edited_at` can be set on a tombstone — nothing pairs the two, so a deleted note
+  could carry the **edited** indicator
+- **Edge cases:** nothing makes a note unique — the same sentence written twice at the same moment
+  is two rows and shows twice
+- **Edge cases:** a hard `delete` of a top-level note that has replies is refused by the composite
+  key — only a hand at the database sees this, because the product's delete is a tombstone
+- **Assumptions, major (confirmed):** none — every column, constraint and index is stated in
+  active-scope architecture § 6.1, so nothing was left for implementation to settle
+- **Assumptions, minor:** constraint and index names follow the house pattern
+  (`note_recording_timestamp_idx`, `note_position_on_top_level_only`, …); the migration is tagged
+  `0012_notes`; `parent_id` carries the composite foreign key **only** — a second single-column
+  key would be the same rule enforced twice
+- **Reworked:** none
+- **False positives fixed:** 0 — eleven deliberate breaks, each landing on exactly the test that
+  names the behaviour and no other
+- **Operator steps:** run `npm run migrate` against any database that is not rebuilt from empty —
+  the development one at `DATABASE_URL` included. The test suite migrates its own throwaway
+  databases and needs nothing
+- **Notes:** `MAX_NOTE_LENGTH` and `NOTE_VISIBILITIES` now live in `packages/shared/src/notes.ts`,
+  and `NOTE_VISIBILITIES` / `NoteVisibility` are registered in `tools/domain-declarations.ts`;
+  Task 1.4 reads the same ceiling. Two existing tests keep an exhaustive inventory of tables and
+  enums and were updated to include `note` and `note_visibility` —
+  `packages/db/tests/integration/migrations.test.ts` and `.../invitations.test.ts`. `is_reply` and
+  `parent_is_reply` are real columns and will land in any `select *`: Task 1.2 should name its
+  columns rather than return them
 
 ### Task 1.2 — The notes store and the private-note condition
 

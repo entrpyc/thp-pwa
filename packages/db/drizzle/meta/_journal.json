@@ -85,6 +85,13 @@
       "when": 1787372979761,
       "tag": "0011_series",
       "breakpoints": true
+    },
+    {
+      "idx": 12,
+      "version": "7",
+      "when": 1787524207624,
+      "tag": "0012_notes",
+      "breakpoints": true
     }
   ]
 }
