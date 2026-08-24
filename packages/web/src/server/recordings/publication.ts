@@ -10,6 +10,7 @@ import type { EditSummaryRequest, PublicationPayload } from '@thp/shared';
 import { emitDomainEvent } from '@thp/shared/observability/events';
 import { ApiError } from '@/server/api/errors';
 import type { Actor } from '@/server/auth/policy';
+import { audit } from '@/server/observability/audit';
 import { logger } from '@/server/observability/logger';
 
 /**
@@ -48,7 +49,7 @@ export async function publishRecording(actor: Actor, id: string): Promise<Public
   // Already live: answer with what it already says. Re-stamping would move a fact.
   if (existing.publishedAt !== null) {
     logger.info('recording.publish', {
-      ...audit(actor, 'recording.publish', id),
+      ...audit(actor, 'recording.publish', `recording:${id}`),
       alreadyPublished: true,
     });
     return describe(id, existing.publishedAt, await findSummaryByRecording(id));
@@ -58,7 +59,7 @@ export async function publishRecording(actor: Actor, id: string): Promise<Public
   if (row === null) throw notFound();
 
   logger.info('recording.publish', {
-    ...audit(actor, 'recording.publish', id),
+    ...audit(actor, 'recording.publish', `recording:${id}`),
     publishedAt: row.publishedAt?.toISOString() ?? null,
   });
 
@@ -74,7 +75,7 @@ export async function unpublishRecording(actor: Actor, id: string): Promise<Publ
   const row = await setRecordingPublication(id, null);
   if (row === null) throw notFound();
 
-  logger.info('recording.unpublish', audit(actor, 'recording.unpublish', id));
+  logger.info('recording.unpublish', audit(actor, 'recording.unpublish', `recording:${id}`));
 
   // No event. Taking something down is not something anybody is notified about, and inventing an
   // event with no consumer and no requirement behind it would be the wrong kind of anticipation.
@@ -99,7 +100,7 @@ export async function editSummary(
     );
   }
 
-  logger.info('summary.edit', audit(actor, 'summary.edit', id));
+  logger.info('summary.edit', audit(actor, 'summary.edit', `recording:${id}`));
 
   return describe(id, recording.publishedAt, row);
 }
@@ -111,7 +112,7 @@ export async function unpublishSummary(actor: Actor, id: string): Promise<Public
   const row = await setSummaryPublication(id, false);
   if (row === null) throw ApiError.notFound('This recording has no summary to take down.');
 
-  logger.info('summary.unpublish', audit(actor, 'summary.unpublish', id));
+  logger.info('summary.unpublish', audit(actor, 'summary.unpublish', `recording:${id}`));
 
   return describe(id, recording.publishedAt, row);
 }
@@ -124,16 +125,6 @@ async function requireRecording(id: string) {
 
 function notFound(): ApiError {
   return ApiError.notFound('There is no recording with that id.');
-}
-
-/** Actor, action and target, under the request's correlation id. The logger supplies the time. */
-function audit(actor: Actor, action: string, id: string): Record<string, unknown> {
-  return {
-    actorId: actor.id,
-    actorEmail: actor.email,
-    action,
-    target: `recording:${id}`,
-  };
 }
 
 function describe(

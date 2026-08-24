@@ -1,14 +1,17 @@
 import { afterAll, beforeAll, describe, expect, it, inject } from 'vitest';
 import postgres from 'postgres';
 import {
+  clearNoteReaction,
   createDatabase,
   insertNote,
   listNotesForReader,
+  listReactionsForNotes,
   runMigrations,
+  setNoteReaction,
   withTransaction,
   type DatabaseHandle,
 } from '@thp/db';
-import { MAX_NOTE_LENGTH, NOTE_VISIBILITIES } from '@thp/shared';
+import { MAX_NOTE_LENGTH, NOTE_VISIBILITIES, reactionName } from '@thp/shared';
 import { createThrowawayDatabase, type ThrowawayDatabase } from '../../../../tests/setup/throwaway-db';
 
 /**
@@ -27,6 +30,8 @@ import { createThrowawayDatabase, type ThrowawayDatabase } from '../../../../tes
 
 let target: ThrowawayDatabase;
 let sql: ReturnType<typeof postgres>;
+/** A store handle over the same throwaway database — the two new tables are read through one. */
+let tableHandle: DatabaseHandle;
 
 /** A recording and a member, so the two `NOT NULL` foreign keys have something to point at. */
 let recordingId: string;
@@ -77,15 +82,25 @@ beforeAll(async () => {
   target = await createThrowawayDatabase(inject('databaseUrl'), 'note_table');
   await runMigrations({ url: target.url });
   sql = postgres(target.url, { max: 2, onnotice: () => {} });
+  tableHandle = createDatabase({ url: target.url, max: 2 });
 
   recordingId = await newRecording('note-table');
   authorId = await newUser('note-author');
 }, 180_000);
 
 afterAll(async () => {
+  await tableHandle?.close();
   await sql?.end({ timeout: 5 });
   await target?.drop();
 }, 60_000);
+
+/** How many reactions stand on this note, whatever anybody chose. */
+async function reactionCount(noteId: string): Promise<number> {
+  const rows = await sql<{ count: string }[]>`
+    select count(*)::text as count from note_reaction where note_id = ${noteId}
+  `;
+  return Number(rows[0]?.count ?? '-1');
+}
 
 // =================================================================================================
 
@@ -795,5 +810,216 @@ describe('the notes store', () => {
         row.id,
       ]);
     });
+  });
+});
+
+// =================================================================================================
+// Task 4.1 — the `note_reaction` table
+// =================================================================================================
+
+/**
+ * **How the group responded to a moment**, and the two properties that are the table's rather than
+ * a service's: one reaction per member is a primary key, and a glyph that has left the vocabulary
+ * is still a glyph that counts.
+ */
+describe('the note_reaction table', () => {
+  it('carries exactly these columns, keyed by the note and the member together', async () => {
+    const columns = await sql<{ column_name: string; data_type: string }[]>`
+      select column_name, data_type from information_schema.columns
+      where table_schema = 'public' and table_name = 'note_reaction'
+      order by column_name
+    `;
+    expect(columns.map((row) => row.column_name)).toEqual([
+      'emoji',
+      'note_id',
+      'reacted_at',
+      'user_id',
+    ]);
+
+    // `text`, and neither an enum nor a foreign key — which is exactly what makes 3.4.2 true.
+    expect(columns.find((row) => row.column_name === 'emoji')?.data_type).toBe('text');
+
+    const key = await sql<{ definition: string }[]>`
+      select pg_get_constraintdef(oid) as definition from pg_constraint
+      where conrelid = 'note_reaction'::regclass and contype = 'p'
+    `;
+    expect(key[0]?.definition.toLowerCase().replace(/\s+/g, ' ')).toBe(
+      'primary key (note_id, user_id)',
+    );
+  });
+
+  it('does not point emoji at a vocabulary table or an enum, in any form', async () => {
+    // The absence is the requirement (3.4.2): both an enum and a foreign key would make removing a
+    // value rewrite what a member already chose, which is the one thing that must not happen.
+    const referenced = await sql<{ definition: string }[]>`
+      select pg_get_constraintdef(oid) as definition from pg_constraint
+      where conrelid = 'note_reaction'::regclass and contype = 'f'
+    `;
+    const targets = referenced.map((row) => row.definition.toLowerCase());
+    expect(targets.some((one) => one.includes('(emoji)'))).toBe(false);
+
+    const enums = await sql<{ typname: string }[]>`
+      select t.typname from pg_type t
+      join pg_enum e on e.enumtypid = t.oid
+      where t.typname like '%reaction%'
+      group by t.typname
+    `;
+    expect(enums).toEqual([]);
+  });
+
+  it('cascades from both halves, because a reaction without either is meaningless', async () => {
+    const goingAway = await newRecording('reaction-cascade');
+    const noteId = await newTopLevel({ recording: goingAway });
+    const reactor = await newUser('reaction-cascade-member');
+    await setNoteReaction(noteId, reactor, '🙏', tableHandle);
+
+    // The member's side.
+    await sql`delete from "user" where id = ${reactor}`;
+    expect(await reactionCount(noteId)).toBe(0);
+
+    // And the note's side, driven from a second row so the first deletion cannot pass for it.
+    const second = await newUser('reaction-cascade-second');
+    await setNoteReaction(noteId, second, '🔥', tableHandle);
+    expect(await reactionCount(noteId)).toBe(1);
+    await sql`delete from recording where id = ${goingAway}`;
+    expect(await reactionCount(noteId)).toBe(0);
+  });
+
+  it('replaces a member’s reaction rather than adding a second row', async () => {
+    const noteId = await newTopLevel();
+    const member = await newUser('reaction-replacer');
+
+    await setNoteReaction(noteId, member, '🙏', tableHandle);
+    await setNoteReaction(noteId, member, '🔥', tableHandle);
+
+    const rows = await sql<{ emoji: string }[]>`
+      select emoji from note_reaction where note_id = ${noteId} and user_id = ${member}
+    `;
+    // One row, and it is the *second* choice — a delete-then-insert would also leave one row, so
+    // the emoji is what tells "replaced" from "the first one survived".
+    expect(rows.map((row) => row.emoji)).toEqual(['🔥']);
+  });
+
+  it('holds two members’ reactions on one note apart', async () => {
+    const noteId = await newTopLevel();
+    const [first, second] = await Promise.all([
+      newUser('reaction-pair-one'),
+      newUser('reaction-pair-two'),
+    ]);
+
+    await Promise.all([
+      setNoteReaction(noteId, first, '🙏', tableHandle),
+      setNoteReaction(noteId, second, '🙏', tableHandle),
+    ]);
+
+    const rows = await listReactionsForNotes([noteId], first, tableHandle);
+    expect(rows).toEqual([{ noteId, emoji: '🙏', count: 2, mine: true }]);
+  });
+
+  it('still returns and still counts a glyph the vocabulary does not offer', async () => {
+    const noteId = await newTopLevel();
+    const [one, two] = await Promise.all([
+      newUser('reaction-departed-one'),
+      newUser('reaction-departed-two'),
+    ]);
+    // A glyph that is not in REACTIONS — the state the table is in after a product decision that
+    // removes one. Nothing rewrites it and nothing drops it.
+    const departed = '🕊';
+    await setNoteReaction(noteId, one, departed, tableHandle);
+    await setNoteReaction(noteId, two, departed, tableHandle);
+
+    const rows = await listReactionsForNotes([noteId], one, tableHandle);
+    expect(rows).toEqual([{ noteId, emoji: departed, count: 2, mine: true }]);
+    // And it is labelled by itself rather than announced as nothing (packages/shared/reactions.ts).
+    expect(reactionName(departed)).toBe(departed);
+  });
+
+  it('clears one member’s reaction and leaves everybody else’s', async () => {
+    const noteId = await newTopLevel();
+    const [leaving, staying] = await Promise.all([
+      newUser('reaction-clear-one'),
+      newUser('reaction-clear-two'),
+    ]);
+    await setNoteReaction(noteId, leaving, '🙏', tableHandle);
+    await setNoteReaction(noteId, staying, '🙏', tableHandle);
+
+    await clearNoteReaction(noteId, leaving, tableHandle);
+
+    expect(await listReactionsForNotes([noteId], staying, tableHandle)).toEqual([
+      { noteId, emoji: '🙏', count: 1, mine: true },
+    ]);
+  });
+});
+
+// =================================================================================================
+// Task 6.2 — the `note_pin` table
+// =================================================================================================
+
+describe('the note_pin table', () => {
+  it('carries exactly these columns, keyed by the note alone', async () => {
+    const columns = await sql<{ column_name: string }[]>`
+      select column_name from information_schema.columns
+      where table_schema = 'public' and table_name = 'note_pin'
+      order by column_name
+    `;
+    expect(columns.map((row) => row.column_name)).toEqual([
+      'note_id',
+      'pinned_at',
+      'pinned_by',
+      'recording_id',
+    ]);
+
+    // The key *is* "pinned at most once" (3.6.10) — said by the key rather than by a check.
+    const key = await sql<{ definition: string }[]>`
+      select pg_get_constraintdef(oid) as definition from pg_constraint
+      where conrelid = 'note_pin'::regclass and contype = 'p'
+    `;
+    expect(key[0]?.definition.toLowerCase().replace(/\s+/g, ' ')).toBe('primary key (note_id)');
+  });
+
+  it('points at the note by recording and id together, cascading', async () => {
+    const keys = await sql<{ definition: string }[]>`
+      select pg_get_constraintdef(oid) as definition from pg_constraint
+      where conrelid = 'note_pin'::regclass and contype = 'f'
+    `;
+    const toNote = keys
+      .map((row) => row.definition.toLowerCase().replace(/\s+/g, ' '))
+      .find((one) => one.includes('references note'));
+
+    // The composite key is what stops a pin pointing at a note on a different recording *and*
+    // stops the denormalised `recording_id` drifting from the note's own.
+    expect(toNote).toContain('foreign key (recording_id, note_id)');
+    expect(toNote).toContain('references note(recording_id, id)');
+    expect(toNote).toContain('on delete cascade');
+
+    // And `pinned_by` sets null, the house shape: the pin survives the account that made it.
+    const toUser = keys
+      .map((row) => row.definition.toLowerCase().replace(/\s+/g, ' '))
+      .find((one) => one.includes('references "user"'));
+    expect(toUser).toContain('on delete set null');
+  });
+
+  it('indexes the read it always does — the pins on one recording', async () => {
+    const rows = await sql<{ indexdef: string }[]>`
+      select indexdef from pg_indexes where schemaname = 'public' and tablename = 'note_pin'
+    `;
+    const definitions = rows.map((row) => row.indexdef.toLowerCase().replace(/\s+/g, ' '));
+    expect(definitions.some((one) => one.includes('(recording_id)'))).toBe(true);
+  });
+
+  it('refuses a pin whose recording is not the note’s own', async () => {
+    const elsewhere = await newRecording('pin-elsewhere');
+    const noteId = await newTopLevel();
+
+    // No matching `(recording_id, id)` pair exists, so the composite key has nothing to point at.
+    await expect(
+      sql`insert into note_pin (note_id, recording_id) values (${noteId}, ${elsewhere})`,
+    ).rejects.toThrow();
+
+    // And the honest pairing goes in, so the refusal is about the mismatch and not the table.
+    await expect(
+      sql`insert into note_pin (note_id, recording_id) values (${noteId}, ${recordingId})`,
+    ).resolves.toBeTruthy();
+    await sql`delete from note_pin where note_id = ${noteId}`;
   });
 });

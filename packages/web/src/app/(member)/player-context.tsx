@@ -117,6 +117,19 @@ export interface PlayerApi {
    * moment is being annotated.
    */
   readonly composerAnchorMs: number | null;
+  /**
+   * The note the member has just asked to be taken to, or `null` — the channel a transport marker
+   * reaches the Notes tab through (active-scope prd 3.2.5).
+   *
+   * Here for the same reason the notes are: the marker that sets it lives on the docked transport,
+   * which the member layout mounts, and the tab that reacts to it is on the recording page. They
+   * have no other common owner, and the alternative — a note id in the address bar — would put an
+   * internal identifier in front of the member and still do nothing when they are on another screen.
+   *
+   * It is a **request, not a selection**: the panel clears it once it has scrolled, so pressing the
+   * same marker twice takes the member there twice.
+   */
+  readonly revealedNoteId: string | null;
   /** Load a teaching and seek to `startAtMs`, without playing. Re-opening the current one is a no-op. */
   open(recording: LoadedRecording, startAtMs: number | null): void;
   toggle(): void;
@@ -133,6 +146,10 @@ export interface PlayerApi {
   /** Freeze the anchor at the position the player holds right now, and open the composer. */
   openComposer(): void;
   closeComposer(): void;
+  /** Ask whichever screen is showing the notes to scroll to this one and mark it. */
+  revealNote(noteId: string): void;
+  /** Said by the screen that has done it, so the next press is a fresh request. */
+  clearRevealedNote(): void;
 }
 
 const PlayerContext = createContext<PlayerApi | null>(null);
@@ -222,6 +239,7 @@ export function PlayerProvider({
   const [notes, setNotes] = useState<LoadedNotes | null>(null);
   const [notesFailed, setNotesFailed] = useState(false);
   const [composerAnchorMs, setComposerAnchorMs] = useState<number | null>(null);
+  const [revealedNoteId, setRevealedNoteId] = useState<string | null>(null);
 
   /** The live grant. A ref because the renewal ticker reads it without re-subscribing. */
   const grant = useRef<PlaybackGrantPayload | null>(null);
@@ -319,6 +337,8 @@ export function PlayerProvider({
       // previous teaching would point at a moment in a recording nobody is listening to.
       setNotes(null);
       setComposerAnchorMs(null);
+      // A note id from the previous teaching names nothing in this one's list.
+      setRevealedNoteId(null);
       // Fetched **on open rather than on tab open**, because the markers (3.2.4) are visible on the
       // transport without the Notes tab ever being pressed.
       loadNotes(recording.id);
@@ -578,6 +598,14 @@ export function PlayerProvider({
     setComposerAnchorMs(null);
   }, []);
 
+  const revealNote = useCallback((noteId: string): void => {
+    setRevealedNoteId(noteId);
+  }, []);
+
+  const clearRevealedNote = useCallback((): void => {
+    setRevealedNoteId(null);
+  }, []);
+
   const player = useMemo<PlayerApi>(
     () => ({
       loaded,
@@ -590,6 +618,7 @@ export function PlayerProvider({
       notes,
       notesFailed,
       composerAnchorMs,
+      revealedNoteId,
       open,
       toggle,
       seekToMs,
@@ -601,6 +630,8 @@ export function PlayerProvider({
       refreshNotes,
       openComposer,
       closeComposer,
+      revealNote,
+      clearRevealedNote,
     }),
     [
       loaded,
@@ -613,6 +644,7 @@ export function PlayerProvider({
       notes,
       notesFailed,
       composerAnchorMs,
+      revealedNoteId,
       open,
       toggle,
       seekToMs,
@@ -624,6 +656,8 @@ export function PlayerProvider({
       refreshNotes,
       openComposer,
       closeComposer,
+      revealNote,
+      clearRevealedNote,
     ],
   );
 

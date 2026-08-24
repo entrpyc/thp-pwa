@@ -92,6 +92,13 @@
       "when": 1787524207624,
       "tag": "0012_notes",
       "breakpoints": true
+    },
+    {
+      "idx": 13,
+      "version": "7",
+      "when": 1787577265106,
+      "tag": "0013_note_reactions_and_pins",
+      "breakpoints": true
     }
   ]
 }

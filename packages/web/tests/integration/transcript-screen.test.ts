@@ -364,8 +364,10 @@ describe('captions float above the transport on any member screen', () => {
       await page.getByRole('button', { name: 'More player controls' }).click();
       const toolbar = page.getByRole('navigation', { name: 'Player tools' });
       await expect.poll(() => toolbar.count(), { timeout: 30_000 }).toBe(1);
-      // The reference draws seven icons; only CC has data in this epic.
-      expect(await toolbar.getByRole('button').count()).toBe(1);
+      // The reference draws seven icons; two have data — CC, and the notes scope's speech bubble
+      // (active-scope prd 3.1.2). The other five are dropped rather than rendered disabled.
+      expect(await toolbar.getByRole('button').count()).toBe(2);
+      expect(await toolbar.getByRole('button', { name: 'Write a note' }).count()).toBe(1);
       await toolbar.getByRole('button', { name: 'Captions' }).click();
 
       await page.getByRole('slider', { name: 'Position' }).fill('45000');

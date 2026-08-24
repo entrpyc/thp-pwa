@@ -3,6 +3,7 @@ import postgres from 'postgres';
 import {
   API_PREFIX,
   RECORDINGS_PATH,
+  SERIES_PATH,
   REVIEW_FIELD,
   ROLE,
   recordingPublishPath,
@@ -499,4 +500,64 @@ describe('the field names both writers agree on', () => {
   it('are the ones the shared map declares', () => {
     expect(REVIEW_FIELD).toEqual({ summary: 'summary', recording_metadata: 'description' });
   });
+});
+
+/**
+ * **The audit helper, after the promotion** (Task 6.1.1).
+ *
+ * The identical private `audit()` in `server/recordings/publication.ts` and
+ * `server/series/service.ts` is now one module both import, and the notes service is its third
+ * caller. This is the change most likely to break something quietly: a renamed field still logs,
+ * and the line still *looks* like an audit line to everyone except the search that was supposed to
+ * find it.
+ *
+ * So both original call sites are driven for real and asserted **field by field, and by their
+ * exact prefixes** — a `recording:` that became `recordings:` would satisfy any check that only
+ * asked whether a target was present.
+ */
+describe('the promoted audit helper logs exactly what the two original call sites logged', () => {
+  it('keeps every field and both target prefixes across a recording write and a series write', async () => {
+    const offset = logOffset(logPath);
+    const recordingId = await newRecording();
+
+    await post(recordingPublishPath(recordingId));
+
+    const created = await fetch(`${baseUrl}${API_PREFIX}${SERIES_PATH}`, {
+      method: 'POST',
+      headers: { accept: 'application/json', 'content-type': 'application/json', cookie: adminCookie },
+      body: JSON.stringify({ title: `Audit series ${Date.now()}`, description: null }),
+    });
+    const { series } = (await created.json()) as { series: { id: string } };
+
+    const lines = await waitForLogLines(logPath, offset, (found) =>
+      ['recording.publish', 'series.create'].every((message) =>
+        found.some((line) => line.message === message),
+      ),
+    );
+
+    const publish = lines.find(
+      (one) => one.message === 'recording.publish' && one['target'] === `recording:${recordingId}`,
+    );
+    const create = lines.find(
+      (one) => one.message === 'series.create' && one['target'] === `series:${series.id}`,
+    );
+
+    // The four fields, named individually rather than compared as an object, so a *fifth* field
+    // appearing is not what this test is about and a renamed one is.
+    for (const [what, line, action] of [
+      ['recording', publish, 'recording.publish'],
+      ['series', create, 'series.create'],
+    ] as const) {
+      expect(line, what).toBeDefined();
+      expect(line?.['actorId'], what).toBe(admin.id);
+      expect(line?.['actorEmail'], what).toBe(admin.email);
+      expect(line?.['action'], what).toBe(action);
+      expect(typeof line?.['target'], what).toBe('string');
+      expect(typeof line?.correlationId, what).toBe('string');
+    }
+
+    // The prefixes, which are the half a shared helper could most easily have swallowed.
+    expect(publish?.['target']).toBe(`recording:${recordingId}`);
+    expect(create?.['target']).toBe(`series:${series.id}`);
+  }, 120_000);
 });

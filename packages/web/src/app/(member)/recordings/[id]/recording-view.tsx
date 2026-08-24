@@ -49,10 +49,13 @@ type OpenTab = 'notes' | 'transcript' | null;
 export function RecordingScreen({
   recordingId,
   canCorrect,
+  canModerate,
 }: {
   recordingId: string;
   /** Whether to render the correction affordance. It grants nothing — the API refuses a member. */
   canCorrect: boolean;
+  /** Whether to render the admin entries in a note's overflow. It grants nothing either. */
+  canModerate: boolean;
 }) {
   const player = usePlayer();
   const [recording, setRecording] = useState<Recording | null>(null);
@@ -105,6 +108,19 @@ export function RecordingScreen({
       live = false;
     };
   }, [open, recordingId]);
+
+  /**
+   * A transport marker asking for a note **opens the tab it lives in** (active-scope prd 3.2.5).
+   *
+   * The panel does the scrolling and clears the request; this only has to make sure there is a
+   * panel to scroll. Watching the request rather than being called by the transport is what lets
+   * the marker work from any screen: on this one it opens the tab, and everywhere else it is a
+   * request nothing is listening for, which is exactly right — there is no list there to open.
+   */
+  const revealed = player.revealedNoteId;
+  useEffect(() => {
+    if (revealed !== null) setOpenTab('notes');
+  }, [revealed]);
 
   const isCurrent = player.loaded?.id === recordingId;
 
@@ -190,7 +206,9 @@ export function RecordingScreen({
             </button>
           </div>
 
-          {openTab === 'notes' ? <NotesPanel recordingId={recordingId} /> : null}
+          {openTab === 'notes' ? (
+            <NotesPanel recordingId={recordingId} canModerate={canModerate} />
+          ) : null}
 
           {openTab === 'transcript' ? (
             <TranscriptPanel recordingId={recordingId} canCorrect={canCorrect} />

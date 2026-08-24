@@ -57,9 +57,20 @@ export {
 } from './jobs';
 export { MIGRATIONS_DIR, runMigrations, type RunMigrationsOptions } from './migrate';
 export {
+  clearNoteReaction,
+  findNoteById,
   insertNote,
   listNotesForReader,
+  listPinnedNoteIds,
+  listReactionsForNotes,
+  listRepliesForNotes,
+  pinNote,
+  setNoteReaction,
+  softDeleteNote,
+  unpinNote,
+  updateNoteText,
   type NewNote,
+  type NoteReactionRow,
   type NoteRow,
   type NoteWithAuthorRow,
 } from './notes';

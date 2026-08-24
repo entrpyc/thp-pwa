@@ -165,6 +165,17 @@ export class ApiError extends Error {
     return new ApiError('upload_invalid', 409, message);
   }
 
+  /**
+   * That note was already deleted — by its author, or by an admin — before this request arrived.
+   *
+   * `409` and its own code, because the caller was permitted and the request was well-formed: what
+   * refused it is the state of the note. The client branches on the code to say which of
+   * active-scope prd 5.3.4, 5.4.3 and 5.5.4 applies, and the reply case keeps the member's text.
+   */
+  static noteRemoved(message: string): ApiError {
+    return new ApiError('note_removed', 409, message);
+  }
+
   static notFound(message = 'The requested resource does not exist.'): ApiError {
     return new ApiError('not_found', 404, message);
   }

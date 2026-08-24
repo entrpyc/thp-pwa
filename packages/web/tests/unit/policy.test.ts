@@ -186,17 +186,10 @@ describe('the two note actions are in the table, and neither differs by role', (
   it('answers them from the rules table rather than from a call site', () => {
     expect(isPolicyAction('note.read')).toBe(true);
     expect(isPolicyAction('note.write')).toBe(true);
-    // The six this scope has not built yet are not quietly permitted by a coarse rule: an action
-    // with no entry is denied, which is what makes adding them later a visible edit.
+    // Names nobody wrote a rule for stay denied for both roles, which is what makes adding an
+    // action a visible edit rather than something a coarse rule quietly already covered.
     for (const role of ROLES) {
-      for (const absent of [
-        'note.edit',
-        'note.delete',
-        'note.moderate',
-        'note.react',
-        'note.pin',
-        'note.unpin',
-      ]) {
+      for (const absent of ['note.list', 'note.report', 'note.own', 'note.use']) {
         expect(can(actorWith(role), absent), `${absent}/${role}`).toBe(false);
       }
     }
@@ -205,5 +198,115 @@ describe('the two note actions are in the table, and neither differs by role', (
   it('refuses them to an anonymous caller', () => {
     expect(can(null, 'note.read')).toBe(false);
     expect(can(null, 'note.write')).toBe(false);
+  });
+});
+
+/**
+ * **The six the rest of the scope adds** — active-scope architecture § 8's table, asserted against
+ * the policy module alone with no route and no request involved.
+ *
+ * The claim being pinned is never "the route refuses". It is that **the refusal comes from `can`
+ * reading the rule**, which is what makes every one of these a row in a table an operator can read
+ * rather than a comparison buried in a handler.
+ */
+describe('the six moderation, ownership and reaction actions', () => {
+  const owner: Actor = {
+    id: 'owner-1',
+    email: 'owner@example.test',
+    displayName: 'Owner',
+    role: ROLE.member,
+    preferredPlaybackSpeed: DEFAULT_PLAYBACK_SPEED,
+  };
+  const somebodyElse: Actor = { ...owner, id: 'other-1', email: 'other@example.test' };
+  const admin: Actor = { ...owner, id: 'admin-1', email: 'admin@example.test', role: ROLE.admin };
+
+  const noteOf = (authorId: string) => ({ kind: 'note', id: 'note-1', ownerId: authorId });
+
+  it('has all six in the table, so each is a rule rather than a call-site check', () => {
+    for (const action of [
+      'note.edit',
+      'note.delete',
+      'note.moderate',
+      'note.react',
+      'note.pin',
+      'note.unpin',
+    ]) {
+      expect(isPolicyAction(action), action).toBe(true);
+      expect(can(null, action), action).toBe(false);
+    }
+  });
+
+  // 5.1.2 and 5.2.2 — owned, and owned *against an admin too*.
+  it.each(['note.edit', 'note.delete'] as const)(
+    'permits %s on your own note and refuses it on another member’s',
+    (action) => {
+      expect(can(owner, action, noteOf(owner.id))).toBe(true);
+      expect(can(owner, action, noteOf(somebodyElse.id))).toBe(false);
+    },
+  );
+
+  it('refuses an admin an edit of a note they did not write — moderation is not rewriting', () => {
+    // 3.6.2, and the whole reason `note.edit` carries `requiresOwnership` rather than being
+    // widened to admin: an admin may take a note down and may not put words in somebody's mouth.
+    expect(can(admin, 'note.edit', noteOf(owner.id))).toBe(false);
+    expect(can(admin, 'note.edit', noteOf(admin.id))).toBe(true);
+  });
+
+  it('refuses both owned actions asked with no resource at all', () => {
+    // "Permitted on your own" must not collapse into "permitted" when nobody says whose — which is
+    // exactly what an owned action asked in the abstract would mean.
+    for (const action of ['note.edit', 'note.delete'] as const) {
+      expect(can(owner, action), action).toBe(false);
+      expect(can(admin, action), action).toBe(false);
+      expect(can(owner, action, { kind: 'note' }), action).toBe(false);
+    }
+  });
+
+  // 6.1.2 — the fall-through `DELETE /notes/{id}` takes when the owned answer is no.
+  it('grants note.moderate to an admin alone, whatever note is named', () => {
+    expect(can(admin, 'note.moderate')).toBe(true);
+    expect(can(owner, 'note.moderate')).toBe(false);
+    // Not owned: handing it somebody else's note must not change the answer in either direction.
+    expect(can(admin, 'note.moderate', noteOf(owner.id))).toBe(true);
+    expect(can(owner, 'note.moderate', noteOf(owner.id))).toBe(false);
+  });
+
+  it('is answered for a member by note.delete and then by note.moderate, and both say no', () => {
+    // The two questions the delete route asks, in order, for a member acting on somebody else's
+    // note. Both denying is what makes that route's refusal come from the table twice over.
+    expect(can(somebodyElse, 'note.delete', noteOf(owner.id))).toBe(false);
+    expect(can(somebodyElse, 'note.moderate')).toBe(false);
+    // And for an admin: the first denies, the second permits — which is also the audit condition.
+    expect(can(admin, 'note.delete', noteOf(owner.id))).toBe(false);
+    expect(can(admin, 'note.moderate')).toBe(true);
+    // An admin on their **own** note satisfies the first, so moderation is never reached (6.1.4).
+    expect(can(admin, 'note.delete', noteOf(admin.id))).toBe(true);
+  });
+
+  // 4.2.3 — both roles, and not owned: reacting to your own note and to somebody else's are one
+  // question, because the requirement grants the reaction to any public note.
+  it('grants note.react to both roles without asking whose note it is', () => {
+    for (const role of ROLES) {
+      expect(can(actorWith(role), 'note.react'), role).toBe(true);
+    }
+    expect(can(somebodyElse, 'note.react', noteOf(owner.id))).toBe(true);
+    expect(can(owner, 'note.react', noteOf(owner.id))).toBe(true);
+  });
+
+  // 6.2.4 and 6.3.2 — two actions, both admin-only, following the publish/unpublish split.
+  it.each(['note.pin', 'note.unpin'] as const)('grants %s to an admin alone', (action) => {
+    expect(can(admin, action)).toBe(true);
+    expect(can(owner, action)).toBe(false);
+  });
+
+  it('keeps pin and unpin as separate entries rather than one aliased to the other', () => {
+    // The split is only worth having if it exists to be widened — one action answering for both
+    // would pass every assertion above and be a single rule wearing two names.
+    expect(isPolicyAction('note.pin')).toBe(true);
+    expect(isPolicyAction('note.unpin')).toBe(true);
+    expect(POLICY_ACTIONS.filter((one) => one === 'note.pin' || one === 'note.unpin')).toEqual([
+      'note.pin',
+      'note.unpin',
+    ]);
   });
 });

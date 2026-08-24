@@ -155,6 +155,26 @@ export const POLICY_ACTIONS = [
    */
   'note.read',
   'note.write',
+  /**
+   * **The six the rest of the scope needs** (active-scope architecture § 8), and the split is the
+   * habit every group above follows rather than an exception to it.
+   *
+   * `note.edit` and `note.delete` are the product's second and third **owned** actions: permitted
+   * on what you wrote and on nothing else, with the comparison inside the rule rather than at a
+   * route. They are two rather than one `note.own`, because the day the two part is the day
+   * `note.moderate` arrives — and it already has: an admin may delete a member's note and may not
+   * rewrite it ([3.6.2](docs/active-scope/prd.md)), which is one action widened and one left alone.
+   *
+   * `note.pin` and `note.unpin` are two for the reason `recording.publish` / `unpublish` are two.
+   * They were arguably one while re-pinning was how a pin got replaced; with any number of pins
+   * allowed that is gone, and lowering something the whole group was reading first is its own act.
+   */
+  'note.edit',
+  'note.delete',
+  'note.moderate',
+  'note.react',
+  'note.pin',
+  'note.unpin',
 ] as const;
 
 export type PolicyAction = (typeof POLICY_ACTIONS)[number];
@@ -274,6 +294,23 @@ const RULES: PolicyRules = {
   // moderation actions this scope adds later are where the roles part.
   'note.read': { roles: { admin: true, member: true } },
   'note.write': { roles: { admin: true, member: true } },
+  // Both roles, and only over what they wrote. `requiresOwnership` is what refuses **an admin**
+  // editing a member's note (3.5.6, 3.6.2) with no special case written anywhere: moderation is
+  // deletion, never rewriting somebody's words.
+  'note.edit': { roles: { admin: true, member: true }, requiresOwnership: true },
+  'note.delete': { roles: { admin: true, member: true }, requiresOwnership: true },
+  // Admin alone, and the only note action that is logged. `note.delete` above falls through to
+  // this one when ownership denies, which is what makes "author or admin" two policy answers
+  // rather than an id comparison at a route — and makes 3.6.4's audit condition exactly "the
+  // second question was the one that answered".
+  'note.moderate': { roles: { admin: true, member: false } },
+  // Both roles, on the same terms. Which notes take a reaction is a resource-state question the
+  // service answers (a private note takes none), never this one.
+  'note.react': { roles: { admin: true, member: true } },
+  // Admin alone. Raising a note changes what the whole group reads first, and lowering one takes
+  // that away — the `recording.publish` / `unpublish` split, for the same reason.
+  'note.pin': { roles: { admin: true, member: false } },
+  'note.unpin': { roles: { admin: true, member: false } },
 };
 
 export function isPolicyAction(value: string): value is PolicyAction {

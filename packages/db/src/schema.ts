@@ -780,3 +780,81 @@ export const note = pgTable(
     ),
   ],
 );
+
+/**
+ * **How the group responded to a moment** (active-scope architecture § 6.2) — one row per member
+ * per note, and no row for a member who has not chosen.
+ *
+ * **The primary key is the requirement.** `(note_id, user_id)` *is*
+ * [3.4.3](docs/active-scope/prd.md) — one reaction per member — and it is also
+ * [3.4.11](docs/active-scope/prd.md): replacing is `on conflict do update` rather than
+ * delete-then-insert, and two members reacting in the same instant are two rows that cannot
+ * collide. Neither behaviour is code that has to remember.
+ *
+ * **`emoji` is `text`, deliberately not an enum and deliberately not a foreign key.**
+ * [3.4.2](docs/active-scope/prd.md) requires that a reaction stored under a glyph that later leaves
+ * the vocabulary still renders and still counts. An enum makes removing a value a migration; a
+ * foreign key makes it a cascade — both rewrite a member's past response, which is precisely what
+ * that requirement forbids. The column stores the glyph itself, and `reactionName` in
+ * `packages/shared/src/reactions.ts` labels a departed one by itself.
+ *
+ * **Both sides cascade**, unlike `note.author_id`: a reaction is a fact about a pairing and is
+ * meaningless without either half — the argument `playback_progress` already makes.
+ */
+export const noteReaction = pgTable(
+  'note_reaction',
+  {
+    noteId: uuid('note_id')
+      .notNull()
+      .references(() => note.id, { onDelete: 'cascade' }),
+    userId: uuid('user_id')
+      .notNull()
+      .references(() => user.id, { onDelete: 'cascade' }),
+    /** The glyph, exactly as the vocabulary spells it. Normalised on write by the service. */
+    emoji: text('emoji').notNull(),
+    /** Recorded and not displayed in this scope — the row is ordered by count, not by time. */
+    reactedAt: timestamp('reacted_at', { withTimezone: true }).notNull().defaultNow(),
+  },
+  (table) => [primaryKey({ columns: [table.noteId, table.userId] })],
+);
+
+/**
+ * **A note an admin raised above the rest** (active-scope architecture § 6.3) —
+ * [3.6.5](docs/active-scope/prd.md) to 3.6.10.
+ *
+ * **`note_id` is the whole primary key**, which is what makes "a note is pinned at most once"
+ * ([3.6.10](docs/active-scope/prd.md)) a key rather than a check somebody has to write. Pinning an
+ * already-pinned note is then one `on conflict (note_id) do nothing`, and an admin acting on a
+ * stale screen has still got what they asked for ([3.6.6](docs/active-scope/prd.md)).
+ *
+ * **`recording_id` is carried rather than derived**, so "the pins on this recording" is one indexed
+ * read instead of a join back through `note`. The composite foreign key is what keeps that honest:
+ * `(recording_id, note_id) → note (recording_id, id)` means a pin cannot point at a note on a
+ * different recording *and* the denormalised column cannot drift from the note's own.
+ *
+ * **No `position` and no `sort_order`.** Pinned notes read in the list's own order — timestamp
+ * ascending, creation time as tie-break — so the product has one answer to what order notes read
+ * in and pinning does not invent a second. There is nothing for an admin to drag.
+ *
+ * A soft delete never fires a cascade, so [3.6.9](docs/active-scope/prd.md)'s pin-clear is a second
+ * statement inside the delete's transaction rather than a foreign key.
+ */
+export const notePin = pgTable(
+  'note_pin',
+  {
+    noteId: uuid('note_id').primaryKey(),
+    recordingId: uuid('recording_id').notNull(),
+    /** The house shape for `invited_by` and `reviewed_by`: the pin survives the account. */
+    pinnedBy: uuid('pinned_by').references(() => user.id, { onDelete: 'set null' }),
+    pinnedAt: timestamp('pinned_at', { withTimezone: true }).notNull().defaultNow(),
+  },
+  (table) => [
+    foreignKey({
+      columns: [table.recordingId, table.noteId],
+      foreignColumns: [note.recordingId, note.id],
+      name: 'note_pin_note_fk',
+    }).onDelete('cascade'),
+    /** The read is always "the pins on this recording". */
+    index('note_pin_recording_idx').on(table.recordingId),
+  ],
+);

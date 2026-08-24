@@ -8,6 +8,7 @@ export * from './notes';
 export * from './passwords';
 export * from './playback';
 export * from './pipeline';
+export * from './reactions';
 export * from './recordings';
 export * from './reviews';
 export * from './roles';

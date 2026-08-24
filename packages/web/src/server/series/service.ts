@@ -19,6 +19,7 @@ import type {
 } from '@thp/shared';
 import { ApiError } from '@/server/api/errors';
 import { can, type Actor } from '@/server/auth/policy';
+import { audit } from '@/server/observability/audit';
 import { logger } from '@/server/observability/logger';
 import type { Surface } from '@/server/recordings/service';
 
@@ -99,7 +100,7 @@ export async function createSeries(actor: Actor, body: unknown): Promise<SeriesV
   const requested = parseWrite(body, 'Give the series a title.');
   const row = await insertSeries(requested);
 
-  logger.info('series.create', audit(actor, 'series.create', row.id));
+  logger.info('series.create', audit(actor, 'series.create', `series:${row.id}`));
 
   return describeNew(row);
 }
@@ -119,7 +120,7 @@ export async function renameSeries(
   const row = await updateSeries(id, requested);
   if (row === null) throw notFound();
 
-  logger.info('series.update', audit(actor, 'series.update', id));
+  logger.info('series.update', audit(actor, 'series.update', `series:${id}`));
 
   return describeNew(row);
 }
@@ -150,7 +151,7 @@ export async function assignRecordingSeries(
   if (row === null) throw ApiError.notFound('There is no recording with that id.');
 
   logger.info('series.assign', {
-    ...audit(actor, 'series.assign', seriesId ?? 'none'),
+    ...audit(actor, 'series.assign', `series:${seriesId ?? 'none'}`),
     recordingId,
     seriesId,
   });
@@ -230,16 +231,6 @@ export async function readSeriesFor(
 
 function notFound(): ApiError {
   return ApiError.notFound('There is no such series.');
-}
-
-/** Actor, action and target, under the request's correlation id. The logger supplies the time. */
-function audit(actor: Actor, action: string, id: string): Record<string, unknown> {
-  return {
-    actorId: actor.id,
-    actorEmail: actor.email,
-    action,
-    target: `series:${id}`,
-  };
 }
 
 /** The body of both writes — they take the same two fields, so they read the same one. */

@@ -4,7 +4,8 @@ _Planned: 2026-08-24_
 
 ## Status
 
-42/121 criteria met. Groups complete: **Group 1**.
+121/121 criteria met. Groups complete: **Group 1**, **Group 2**, **Group 3**, **Group 4**,
+**Group 5**, **Group 6** — the scope is delivered.
 _Maintained by implementation — see the checkboxes for detail._
 
 ## Background to research
@@ -620,26 +621,56 @@ second toolbar item; active-scope prd 3.2.4, 3.2.6, 3.2.7, 5.7.1, 5.7.2, 5.7.3;
 
 **Acceptance criteria**
 
-- [ ] **2.1.1** Every top-level note the reading member can see renders as a thin vertical tick in
+- [x] **2.1.1** Every top-level note the reading member can see renders as a thin vertical tick in
   `--color-notes` on the progress track at its position, behind the fill and the thumb so neither
   is obscured — verified by `packages/web/tests/integration/transport-notes.test.ts`
   - driven from the player's note set, so the list and the ticks are one source
-- [ ] **2.1.2** The marker layer takes no pointer events from the slider: scrubbing by pointer and by
+- [x] **2.1.2** The marker layer takes no pointer events from the slider: scrubbing by pointer and by
   keyboard both still work, and the scrubber is still announced as a slider — verified by
   `packages/web/tests/integration/transport-notes.test.ts`
   - the scrubber stays a real `<input type="range">`; markers are a sibling layer, not children of it
-- [ ] **2.1.3** Markers render on the docked transport on every screen it is shown on, not only the
+- [x] **2.1.3** Markers render on the docked transport on every screen it is shown on, not only the
   recording page, and the whole set is replaced when a different recording is loaded — verified by
   `packages/web/tests/integration/transport-notes.test.ts`
-- [ ] **2.1.4** Notes closer together than 1% of the recording's duration collapse into a single
+- [x] **2.1.4** Notes closer together than 1% of the recording's duration collapse into a single
   marker — verified by `packages/web/tests/integration/transport-notes.test.ts`
   - computed client-side from the media element, the only source of a duration
-- [ ] **2.1.5** Each marker is keyboard-reachable and labelled with its position and what it is —
+- [x] **2.1.5** Each marker is keyboard-reachable and labelled with its position and what it is —
   **"Note at 12:45"**, or **"3 notes from 12:45"** for a collapsed one — and a recording with no
   visible notes, or whose notes failed to load, renders a plain track rather than stale ticks —
   verified by `packages/web/tests/integration/transport-notes.test.ts`
 
-**Record**
+**Record** — _updated 2026-08-24_
+
+- **Edge cases:** the ticks appear only once the media element has read its duration — on a slow
+  connection the track is plain for a second or two and then fills at once, which reads as a late
+  paint rather than as a teaching nobody has annotated
+- **Edge cases:** a note past the end of the recording renders a tick beyond the right-hand edge and
+  a note at a negative offset one beyond the left — both invisible and unreachable. `recording`
+  stores no duration, so nothing can refuse either at write time (Task 1.1's record says the same)
+- **Edge cases:** the positions are fractions of the element's own duration — a media file whose
+  header understates its length puts every tick at the wrong place, consistently and silently
+- **Edge cases:** a hundred notes inside one 1% window collapse to one tick whose label says a
+  hundred; the list is the only place they can be read apart
+- **Edge cases:** the ticks are two pixels wide, so at phone width a heavily annotated hour still
+  reads as a dense band even after collapsing
+- **Assumptions, major (confirmed):** the marker layer is a **sibling** of the slider rather than
+  its children — a range input can have none, and children would be neither focusable nor announced
+- **Assumptions, minor:** the layer sits *behind* the slider so the fill and the thumb are never
+  obscured, and each tick stands proud of the slider's own band above and below — those few pixels
+  are what a pointer presses, and the band itself stays entirely the slider's so scrubbing is
+  untouched. A keyboard reaches every tick regardless. Worth a look on a phone
+- **Assumptions, minor:** the tick is centred on its position with `translateX(-50%)` rather than a
+  negative margin, because the style guard refuses a spacing value spelled in pixels
+- **Reworked:** none
+- **False positives fixed:** 1 — 2.1.3's *"the whole set is replaced"* half passed with the clear
+  removed, because the poll simply waited for the next teaching's answer to arrive. Rewritten to
+  hold that answer back, so the interval in which there is nothing to show is observable
+- **Operator steps:** none
+- **Notes:** the collapse window and every tick position are computed from `player.durationMs`,
+  which is the media element's — nothing in this product stores a duration, and Task 2.2 and the
+  Performance NFR both inherit that. `transport-notes.test.ts` is new and is where every Group 2
+  criterion is asserted
 
 ### Task 2.2 — Reaching a noted moment
 
@@ -652,20 +683,43 @@ and to that note in the list — without starting playback they did not ask for.
 
 **Acceptance criteria**
 
-- [ ] **2.2.1** Pressing a marker seeks the audio to that note's position and does **not** start
+- [x] **2.2.1** Pressing a marker seeks the audio to that note's position and does **not** start
   playback — verified by `packages/web/tests/integration/transport-notes.test.ts`
   - the same rule the transcript already follows for selecting a line
-- [ ] **2.2.2** Pressing a marker opens the Notes tab scrolled to that note, which is briefly
+- [x] **2.2.2** Pressing a marker opens the Notes tab scrolled to that note, which is briefly
   highlighted so it is findable in a long list — verified by
   `packages/web/tests/integration/notes-screen.test.ts`
-- [ ] **2.2.3** Pressing a collapsed marker seeks to the earliest note in it and opens the list at
+- [x] **2.2.3** Pressing a collapsed marker seeks to the earliest note in it and opens the list at
   that note, with the rest of the collapsed group as the next rows — verified by
   `packages/web/tests/integration/notes-screen.test.ts`
-- [ ] **2.2.4** Pressing a note card's timestamp link seeks the audio there without starting playback
+- [x] **2.2.4** Pressing a note card's timestamp link seeks the audio there without starting playback
   — verified by `packages/web/tests/integration/notes-screen.test.ts`
   - the timestamp is a `--color-primary-strong` link on the card's first row
 
-**Record**
+**Record** — _updated 2026-08-24_
+
+- **Edge cases:** pressing a tick from a screen that is **not** the recording page seeks the audio
+  and records the request, and nothing navigates — the member hears the moment and has to open the
+  teaching to read the note. Deliberate: there is no list on that screen to open
+- **Edge cases:** a tick naming a note the **All / Public / Mine** filter is hiding opens the tab
+  and scrolls nowhere, because the card it names is not rendered. The member sees the tab open and
+  nothing move
+- **Edge cases:** the highlight lasts two seconds and is not restored — a member who scrolls away
+  and back finds an ordinary card
+- **Edge cases:** `scrollIntoView` is not smooth and not offset for the docked transport, so a note
+  near the end of a long list can land under the bar
+- **Assumptions, major (confirmed):** the marker reaches the tab through **`revealNote` /
+  `revealedNoteId` on `PlayerProvider`** — confirmed with the operator against a URL-hash
+  alternative. It is a *request*, cleared by the panel once acted on, so pressing the same tick
+  twice takes the member there twice
+- **Assumptions, minor:** the highlight is the note-card border in `--color-notes`, held for two
+  seconds — no reference draws it, and the green is the one colour this surface already owns
+- **Reworked:** none
+- **False positives fixed:** 0
+- **Operator steps:** none
+- **Notes:** `revealedNoteId` is watched by `RecordingScreen` (which opens the tab) and by
+  `NotesPanel` (which scrolls and marks). Anything later that wants to point a member at one note —
+  a reply notification, a deep link — binds to the same two members rather than adding a third path
 
 ### Task 2.3 — The composer from the transport menu
 
@@ -680,20 +734,42 @@ second toolbar item, § 4.6 Notes panel and composer; active-scope prd 3.1.2, 5.
 
 **Acceptance criteria**
 
-- [ ] **2.3.1** The transport's `···` toolbar carries a speech-bubble item that opens the composer as
+- [x] **2.3.1** The transport's `···` toolbar carries a speech-bubble item that opens the composer as
   a sheet over the current screen — verified by
   `packages/web/tests/integration/transport-notes.test.ts`
   - the toolbar holds one item today; this is its second
-- [ ] **2.3.2** The sheet shows the loaded recording's title above the frozen timestamp, so which
+- [x] **2.3.2** The sheet shows the loaded recording's title above the frozen timestamp, so which
   teaching is being annotated is unambiguous — verified by
   `packages/web/tests/integration/transport-notes.test.ts`
-- [ ] **2.3.3** The sheet anchors to the recording loaded in the transport whatever screen the member
+- [x] **2.3.3** The sheet anchors to the recording loaded in the transport whatever screen the member
   is on, and produces a note identical to one written from the Notes tab — verified by
   `packages/web/tests/integration/transport-notes.test.ts`
   - both entry points read the same frozen anchor from the player, so they cannot disagree about which
     moment is being annotated
 
-**Record**
+**Record** — _updated 2026-08-24_
+
+- **Edge cases:** the sheet and the inline composer share **one** anchor, so opening the sheet while
+  the Notes tab is open re-freezes it and the inline composer's *At mm:ss* label jumps to the new
+  moment
+- **Edge cases:** cancelling the sheet closes that shared anchor, so an inline composer open under
+  the tab disappears until the tab is closed and re-opened. Both follow from 3.1.1's *one frozen
+  moment*, and both are visible only to a member who has the tab and the sheet open at once
+- **Edge cases:** the sheet does not pause playback, so the moment it names moves further behind the
+  member the longer they write — which is exactly what freezing the anchor is for
+- **Edge cases:** the sheet has no dismissal but its **Cancel**; there is no backdrop and no Escape
+- **Assumptions, major (confirmed):** none — the composer is mounted twice from one implementation,
+  which the architecture (§ 4.6) already settles
+- **Assumptions, minor:** the composer moved to its own module,
+  `recordings/[id]/note-composer.tsx`, so the transport can mount it without importing a panel; the
+  recording's title renders **only** when the `title` prop is given, which is the sheet alone
+- **Reworked:** none
+- **False positives fixed:** 1 — 2.3.3 read the moment it expected **off the sheet it was testing**,
+  so the note was compared against the composer's own claim and passed with the anchor hard-wired
+  to zero. Rewritten to move the player to a position the test chooses first
+- **Operator steps:** none
+- **Notes:** the transport toolbar now holds two items where it shipped holding one;
+  `transcript-screen.test.ts`'s *"only CC has data in this epic"* count was updated to two
 
 ---
 
@@ -717,28 +793,54 @@ every reply a product rule forbids is refused by the server.
 
 **Acceptance criteria**
 
-- [ ] **3.1.1** `POST /api/v1/recordings/{id}/notes` carrying a `parentId` creates a reply with that
+- [x] **3.1.1** `POST /api/v1/recordings/{id}/notes` carrying a `parentId` creates a reply with that
   parent and no position, subject to every text rule at 1.4.4 — verified by
   `packages/web/tests/integration/notes.test.ts`
   - one create route, not two: a reply is a note with a parent
-- [ ] **3.1.2** A create carrying a `parentId` and `visibility: 'private'` is refused, and a reply is
+- [x] **3.1.2** A create carrying a `parentId` and `visibility: 'private'` is refused, and a reply is
   stored public in every case — verified by `packages/web/tests/integration/notes.test.ts`
   - the schema check at 1.1.6 is the floor; the service refuses before reaching it
-- [ ] **3.1.3** A create whose parent is itself a reply is refused `invalid_input`, rather than
+- [x] **3.1.3** A create whose parent is itself a reply is refused `invalid_input`, rather than
   silently re-pointed at the grandparent — verified by
   `packages/web/tests/integration/notes.test.ts`
-- [ ] **3.1.4** A reply to a private note is refused `invalid_input` for every actor, including the
+- [x] **3.1.4** A reply to a private note is refused `invalid_input` for every actor, including the
   private note's own author — verified by `packages/web/tests/integration/notes.test.ts`
   - refused by the service, not the schema
-- [ ] **3.1.5** A `parentId` naming a note on a different recording than the path's is refused — the
+- [x] **3.1.5** A `parentId` naming a note on a different recording than the path's is refused — the
   recording in the path is authoritative — verified by
   `packages/web/tests/integration/notes.test.ts`
-- [ ] **3.1.6** The `GET` payload carries each top-level note's replies, ordered by creation time,
+- [x] **3.1.6** The `GET` payload carries each top-level note's replies, ordered by creation time,
   oldest first, and replies do not appear as top-level entries — verified by
   `packages/web/tests/integration/notes.test.ts`
   - the `(parent_id, created_at)` index is the thread order
 
-**Record**
+**Record** — _updated 2026-08-24_
+
+- **Edge cases:** a `parentId` naming nothing is refused `invalid_input` rather than `not_found` —
+  a member on a very stale screen reads *"There is no note with that id to reply to."*
+- **Edge cases:** the parent lookup is **not** privacy-filtered, deliberately: 3.3.5 wants the same
+  refusal for every actor including the private note's author, and a lookup that hid the row would
+  answer `not_found` to everyone else. A caller who already knew a private note's uuid could tell
+  it exists from the wording — uuids are unguessable and nothing else is disclosed
+- **Edge cases:** nothing rate-limits replies; a member holding the key down writes as many as they
+  can submit
+- **Edge cases:** a reply's own `recording_id` is set from the path rather than from its parent, and
+  the two are checked equal — but a hand at the database can still file a reply under another
+  teaching, which Task 1.1's record already names
+- **Assumptions, major (confirmed):** a reply travels as a **`NoteView` with nulled fields** rather
+  than as a narrower type — confirmed with the operator. `timestampMs` is null, `visibility` is
+  always `public`, `pinned` is always false and `replies` is always empty, so one card component
+  renders either and every later capability applies to both without a second shape
+- **Assumptions, minor:** a body carrying `parentId` **and** `timestampMs` ignores the position
+  rather than refusing — the parent is what makes it a reply; the create route forks on
+  `parentId` being present, so there is one route and one set of text rules
+- **Reworked:** none
+- **False positives fixed:** 0 — six deliberate breaks, each landing on exactly the test that names
+  the behaviour and no other
+- **Operator steps:** none
+- **Notes:** `listRepliesForNotes` is the *second read* Task 1.2's record anticipated, and it states
+  no privacy condition because `note_reply_is_public` makes one unable to exclude anything.
+  `CreateReplyRequest` is in `packages/shared/src/notes.ts` beside `CreateNoteRequest`
 
 ### Task 3.2 — Threads in the notes list
 
@@ -754,24 +856,42 @@ message (Task 5.4).
 
 **Acceptance criteria**
 
-- [ ] **3.2.1** A public note card carries a **Reply** text control at its foot, opening an inline
+- [x] **3.2.1** A public note card carries a **Reply** text control at its foot, opening an inline
   field with placeholder **"Write a reply"** and a character count on the same rule as 1.8.5 —
   verified by `packages/web/tests/integration/notes-screen.test.ts`
-- [ ] **3.2.2** The reply field carries **no** visibility control, and the reply it creates is public
+- [x] **3.2.2** The reply field carries **no** visibility control, and the reply it creates is public
   — verified by `packages/web/tests/integration/notes-screen.test.ts`
-- [ ] **3.2.3** Replies render indented one step inside the parent's card, separated by a
+- [x] **3.2.3** Replies render indented one step inside the parent's card, separated by a
   `--color-border` hairline rather than a gap, each carrying author, written time and text and no
   timestamp link — verified by `packages/web/tests/integration/notes-screen.test.ts`
   - a reply has no moment of its own
-- [ ] **3.2.4** A note with no replies shows the **Reply** control and no thread area at all — not an
+- [x] **3.2.4** A note with no replies shows the **Reply** control and no thread area at all — not an
   empty thread — verified by `packages/web/tests/integration/notes-screen.test.ts`
-- [ ] **3.2.5** A private note carries no reply affordance, and a reply carries none either — verified
+- [x] **3.2.5** A private note carries no reply affordance, and a reply carries none either — verified
   by `packages/web/tests/integration/notes-screen.test.ts`
   - the API refuses both independently, per 3.1.3 and 3.1.4
-- [ ] **3.2.6** A reply produces no marker on the transport — verified by
+- [x] **3.2.6** A reply produces no marker on the transport — verified by
   `packages/web/tests/integration/transport-notes.test.ts`
 
-**Record**
+**Record** — _updated 2026-08-24_
+
+- **Edge cases:** two members replying at the same moment both succeed, and each sees the other's
+  reply only when their own write refreshes the list — nothing polls
+- **Edge cases:** a thread renders in full however long it is (3.3.6 requires it), so a note with a
+  hundred replies is a hundred rows inside one card
+- **Edge cases:** an open reply field is component state on the card; changing the filter unmounts
+  the card and takes the unsent text with it
+- **Edge cases:** the reply field has no draft persistence — a reload loses it
+- **Assumptions, major (confirmed):** none beyond 3.1's shared reply shape
+- **Assumptions, minor:** the reply field opens focused, and its **Reply** submit sits beside a
+  **Cancel** — 5.3.2 names neither, and a field with no way out reads as a trap
+- **Reworked:** none
+- **False positives fixed:** 0
+- **Operator steps:** none
+- **Notes:** a card contains the thread hanging under it, so a card-scoped query in a test also
+  finds its replies' controls — `notes-screen.test.ts` gained an `ownControl` helper that excludes
+  anything inside `ol[aria-label="Replies"]`, and any later assertion about a card's *own* controls
+  needs it
 
 ---
 
@@ -793,25 +913,45 @@ active-scope prd 3.4.1, 3.4.2, 3.4.3, 4.2
 
 **Acceptance criteria**
 
-- [ ] **4.1.1** `packages/shared/src/reactions.ts` names exactly the six of active-scope prd 3.4.1 —
+- [x] **4.1.1** `packages/shared/src/reactions.ts` names exactly the six of active-scope prd 3.4.1 —
   🙏 praying, ❤️ loved, 🔥 convicting, 💡 insight, 👏 encouraged, 😢 moved — each with its
   accessible name, declared once and restated nowhere — verified by
   `tests/guards/domain-declarations.test.ts`
   - its own module, because SOS acknowledgement will import the same 🙏
-- [ ] **4.1.2** A migration creates `note_reaction` with primary key `(note_id, user_id)`, both
+- [x] **4.1.2** A migration creates `note_reaction` with primary key `(note_id, user_id)`, both
   foreign keys cascading, and `emoji` as `text` — neither an enum nor a foreign key — verified by
   `packages/db/tests/integration/notes.test.ts`
   - a reaction is a fact about a pairing and is meaningless without either half
-- [ ] **4.1.3** The store sets a reaction with `on conflict (note_id, user_id) do update`, so a
+- [x] **4.1.3** The store sets a reaction with `on conflict (note_id, user_id) do update`, so a
   member's second reaction replaces their first rather than adding a row — verified by
   `packages/db/tests/integration/notes.test.ts`
-- [ ] **4.1.4** A reaction stored under a glyph the vocabulary no longer offers is still returned and
+- [x] **4.1.4** A reaction stored under a glyph the vocabulary no longer offers is still returned and
   still counted, labelled by the glyph itself — verified by
   `packages/db/tests/integration/notes.test.ts`
   - `text` rather than an enum is exactly what makes this true: a member's past response is not
     rewritten by a product decision taken after it
 
-**Record**
+**Record** — _updated 2026-08-24_
+
+- **Edge cases:** `reacted_at` is stored and shown nowhere — the row is ordered by count, so
+  "who reacted first" is recorded and unreadable
+- **Edge cases:** a reaction under a glyph outside the vocabulary can only be created by a hand at
+  the database; it renders labelled by itself and counts normally, which is 3.4.2 working
+- **Edge cases:** nothing limits how many notes one member may react to
+- **Assumptions, major (confirmed):** none — § 6.2 states every column, the key and the reason
+  `emoji` is `text`
+- **Assumptions, minor:** the vocabulary is `REACTIONS` — an array of `{ emoji, name }` — in
+  `packages/shared/src/reactions.ts`, registered in `tools/domain-declarations.ts` with its emoji as
+  the members list, so a second copy of the six anywhere in `packages/` or `tools/` fails the build.
+  `reactionName` answers for a departed glyph with the glyph
+- **Reworked:** none
+- **False positives fixed:** 0
+- **Operator steps:** run `npm run migrate` against any database that is not rebuilt from empty —
+  migration `0013_note_reactions_and_pins` adds `note_reaction` and `note_pin` together. The test
+  suite migrates its own throwaway databases and needs nothing
+- **Notes:** `REACTIONS` is its own module because SOS acknowledgement
+  ([3.16.5](docs/project/prd.md)) is the same 🙏 and has nothing to do with notes. Writing the six
+  as a literal tuple in a test under `packages/` would trip the declarations guard — import them
 
 ### Task 4.2 — Setting, replacing and clearing a reaction
 
@@ -825,25 +965,41 @@ service, § 5.5 The policy module gains eight actions; active-scope prd 3.4.3, 3
 
 **Acceptance criteria**
 
-- [ ] **4.2.1** `PUT /api/v1/notes/{id}/reaction` sets the member's reaction, and a second `PUT`
+- [x] **4.2.1** `PUT /api/v1/notes/{id}/reaction` sets the member's reaction, and a second `PUT`
   carrying a different emoji replaces it rather than adding a second — verified by
   `packages/web/tests/integration/notes.test.ts`
-- [ ] **4.2.2** `DELETE /api/v1/notes/{id}/reaction` clears the member's reaction, and clearing when
+- [x] **4.2.2** `DELETE /api/v1/notes/{id}/reaction` clears the member's reaction, and clearing when
   none is set succeeds without error — verified by
   `packages/web/tests/integration/notes.test.ts`
-- [ ] **4.2.3** `note.react` is a policy action granted to admin and member, and both routes ask it
+- [x] **4.2.3** `note.react` is a policy action granted to admin and member, and both routes ask it
   through `authorise` inside the handler rather than through a module-load `permits` — verified by
   `packages/web/tests/unit/policy.test.ts`
-- [ ] **4.2.4** An emoji outside the vocabulary is refused, and what is stored is the vocabulary's
+- [x] **4.2.4** An emoji outside the vocabulary is refused, and what is stored is the vocabulary's
   exact string, so the `❤` / `❤️` variation-selector split cannot happen — verified by
   `packages/web/tests/integration/notes.test.ts`
   - the service normalises on write, so only the six ever land
-- [ ] **4.2.5** Two members reacting at the same moment both succeed with both counts correct, and one
+- [x] **4.2.5** Two members reacting at the same moment both succeed with both counts correct, and one
   member reacting twice in rapid succession settles on their last selection rather than recording
   two — verified by `packages/web/tests/integration/notes.test.ts`
   - true by the primary key, not by a read-then-write the interface has to get right
 
-**Record**
+**Record** — _updated 2026-08-24_
+
+- **Edge cases:** nothing rate-limits reactions — a member holding the picker open and pressing
+  repeatedly issues one request per press, and the key settles them all on the last
+- **Edge cases:** clearing a reaction nobody set succeeds, so a double-press reads as two successes
+- **Edge cases:** a reaction to a note on a teaching taken down mid-session is refused `not_found`
+  by the publication gate rather than by anything about reactions
+- **Assumptions, major (confirmed):** none — § 4.4 states both routes and their access
+- **Assumptions, minor:** `PUT` rather than `POST`, because the request states the whole of what
+  the member's reaction is and sending it twice leaves one row; the emoji is compared against the
+  vocabulary's **exact** string, so `❤` is refused and `❤️` accepted
+- **Reworked:** none
+- **False positives fixed:** 0
+- **Operator steps:** none
+- **Notes:** both routes declare `SESSION` and ask `authorise('note.react', …)` inside the handler,
+  because the state rules — a private note takes none, a removed one answers `note_removed` — need
+  the note in hand and splitting the two gates across two files would put half the refusal in each
 
 ### Task 4.3 — What takes a reaction
 
@@ -857,19 +1013,36 @@ payload), § 8 Cross-cutting for this scope; active-scope prd 3.4.5, 3.4.7, 3.4.
 
 **Acceptance criteria**
 
-- [ ] **4.3.1** A reaction to a private note is refused `invalid_input` for every actor, including its
+- [x] **4.3.1** A reaction to a private note is refused `invalid_input` for every actor, including its
   own author — verified by `packages/web/tests/integration/notes.test.ts`
-- [ ] **4.3.2** A reply takes a reaction on exactly the same terms as a top-level note — verified by
+- [x] **4.3.2** A reply takes a reaction on exactly the same terms as a top-level note — verified by
   `packages/web/tests/integration/notes.test.ts`
   - a reply is a note with a parent, and the requirement grants the reaction to any public note
-- [ ] **4.3.3** A member may react to their own public note — verified by
+- [x] **4.3.3** A member may react to their own public note — verified by
   `packages/web/tests/integration/notes.test.ts`
-- [ ] **4.3.4** The `GET` payload carries, for every note and reply, a count per emoji covering only
+- [x] **4.3.4** The `GET` payload carries, for every note and reply, a count per emoji covering only
   emoji with at least one reaction, plus the reading member's own choice where they have one —
   verified by `packages/web/tests/integration/notes.test.ts`
   - a third statement behind the one `GET`, aggregated rather than joined wide
 
-**Record**
+**Record** — _updated 2026-08-24_
+
+- **Edge cases:** reaction counts are uncapped and unpaged — a note with thousands of reactions
+  returns one aggregated row per distinct glyph, which is small, but the underlying table is not
+- **Edge cases:** the reading member's own choice is a `bool_or` over the aggregate, so a member
+  with no reaction and a member whose glyph left the vocabulary are told apart correctly
+- **Edge cases:** a tombstone's reactions are dropped from the payload rather than deleted from the
+  table — restoring a note is not a thing this product does, so nobody sees the difference
+- **Assumptions, major (confirmed):** none
+- **Assumptions, minor:** the row is ordered **most-chosen first, ties broken by the glyph**, so a
+  reload does not reshuffle a row of equal counts under a reader's eye
+- **Reworked:** none
+- **False positives fixed:** 0
+- **Operator steps:** none
+- **Notes:** the `GET` is now four statements — the notes, their threads, the reactions aggregated,
+  and the pinned ids. The architecture's § 7 says three, counting the threads with the notes; the
+  split is Task 1.2's settled *"a second read for a note's thread"* and is noted here rather than
+  left to be found
 
 ### Task 4.4 — The reaction row and the picker
 
@@ -884,24 +1057,42 @@ or take back a reaction in one press — including with a screen reader.
 
 **Acceptance criteria**
 
-- [ ] **4.4.1** The reaction row sits below the note text showing only emoji with a count, each a
+- [x] **4.4.1** The reaction row sits below the note text showing only emoji with a count, each a
   small pill carrying the emoji, the number and an accessible label naming both —
   **"praying, 3"** — with the reading member's own outlined in `--color-primary-strong` and the
   rest carrying `--color-border` — verified by
   `packages/web/tests/integration/notes-screen.test.ts`
   - a bare emoji is unreadable to a screen reader
-- [ ] **4.4.2** A note with no reactions shows no row at all, only the outlined circular control that
+- [x] **4.4.2** A note with no reactions shows no row at all, only the outlined circular control that
   opens the picker — verified by `packages/web/tests/integration/notes-screen.test.ts`
-- [ ] **4.4.3** The picker shows all six in a single row with their names as accessible labels, marks
+- [x] **4.4.3** The picker shows all six in a single row with their names as accessible labels, marks
   the member's current selection, and closes on select — verified by
   `packages/web/tests/integration/notes-screen.test.ts`
   - marking the selection is what makes 4.4.4's toggle-off discoverable rather than a guess
-- [ ] **4.4.4** Selecting the emoji the member has already chosen clears their reaction — verified by
+- [x] **4.4.4** Selecting the emoji the member has already chosen clears their reaction — verified by
   `packages/web/tests/integration/notes-screen.test.ts`
-- [ ] **4.4.5** A private note shows neither a reaction row nor a picker control — verified by
+- [x] **4.4.5** A private note shows neither a reaction row nor a picker control — verified by
   `packages/web/tests/integration/notes-screen.test.ts`
 
-**Record**
+**Record** — _updated 2026-08-24_
+
+- **Edge cases:** the picker closes on selecting and on pressing its control again — **not** on an
+  outside click and not on Escape, so a member who opens one and walks away leaves it open
+- **Edge cases:** the row updates only after the write's refresh, so on a slow connection the count
+  a member just changed reads as the old one for a moment
+- **Edge cases:** the count a member sees is the count at their last refresh; two members reacting
+  at once each see their own until one of them writes again
+- **Edge cases:** the picker is absolutely positioned above the row, so on the first card in a
+  scrolled panel it can open off the top of the viewport
+- **Assumptions, major (confirmed):** none
+- **Assumptions, minor:** the picker's control is a `+` in an outlined circle and carries
+  *"React to this note"*; each pill's accessible label is *"praying, 3"* exactly as 5.4.1 spells it,
+  with the emoji and the number hidden from assistive technology behind it
+- **Reworked:** none
+- **False positives fixed:** 0
+- **Operator steps:** none
+- **Notes:** a refusal on a card now renders with `role="status"`, so it is announced — and so a
+  test can tell 5.4.3's *"This note was removed."* from the tombstone's identical sentence
 
 ---
 
@@ -926,25 +1117,43 @@ policy module gains eight actions, § 8 Cross-cutting for this scope; active-sco
 
 **Acceptance criteria**
 
-- [ ] **5.1.1** `PATCH /api/v1/notes/{id}` changes an author's own note or reply text and sets
+- [x] **5.1.1** `PATCH /api/v1/notes/{id}` changes an author's own note or reply text and sets
   `edited_at`, with the text rules at 1.4.4 applying unchanged — verified by
   `packages/web/tests/integration/notes.test.ts`
   - no time limit, no admin involvement, no history kept
-- [ ] **5.1.2** `note.edit` is a policy action carrying `requiresOwnership`, so a member editing
+- [x] **5.1.2** `note.edit` is a policy action carrying `requiresOwnership`, so a member editing
   another member's note **and an admin editing a note they did not author** are both refused —
   with no `actor.id === note.authorId` comparison written at the route — verified by
   `packages/web/tests/unit/policy.test.ts`
   - moderation is deletion, never rewriting somebody's words
   - the ownership gate denies when no resource is given, so the action cannot be asked in the abstract
-- [ ] **5.1.3** A `PATCH` carrying a timestamp or a visibility changes neither — neither field is
+- [x] **5.1.3** A `PATCH` carrying a timestamp or a visibility changes neither — neither field is
   accepted, in either direction — verified by `packages/web/tests/integration/notes.test.ts`
   - visibility is fixed at creation: raising a private note would publish text written in confidence,
     lowering a public one would strand its replies
-- [ ] **5.1.4** An edited note carries the **edited** indicator in the list permanently, and the text
+- [x] **5.1.4** An edited note carries the **edited** indicator in the list permanently, and the text
   it had before is not returned by the API or shown anywhere — verified by
   `packages/web/tests/integration/notes-screen.test.ts`
 
-**Record**
+**Record** — _updated 2026-08-24_
+
+- **Edge cases:** concurrent edits are last-write-wins with nothing said — two members cannot both
+  author one note, so this needs a member editing from two screens at once
+- **Edge cases:** there is no history and no undo: the previous wording is gone the moment **Save**
+  lands, which is 3.5.1 rather than a gap
+- **Edge cases:** editing does not move a note in the list — the order is the position and the
+  creation time, and neither changes
+- **Edge cases:** a `PATCH` carrying `visibility` or `timestampMs` is answered `200` with those
+  fields untouched rather than refused, so a client sending them is never told they were ignored
+- **Assumptions, major (confirmed):** none — `note.edit` carrying `requiresOwnership` is § 8's table
+- **Assumptions, minor:** `updateNoteText` takes **only** an id and a text, so "editing changes text
+  alone" is a fact about the signature rather than a rule a caller has to respect
+- **Reworked:** none
+- **False positives fixed:** 0
+- **Operator steps:** none
+- **Notes:** `note.edit` is the product's second owned action after `profile.update`, and it refuses
+  an **admin** editing somebody else's note with no special case anywhere — the ownership gate does
+  it. `policy.test.ts` pins that directly
 
 ### Task 5.2 — Deleting a note, and the tombstone
 
@@ -960,27 +1169,45 @@ module gains eight actions; active-scope prd 3.3.9, 3.3.10, 3.5.2, 3.5.4, 3.5.5,
 
 **Acceptance criteria**
 
-- [ ] **5.2.1** `DELETE /api/v1/notes/{id}` on an author's own note sets `deleted_at` and `deleted_by`
+- [x] **5.2.1** `DELETE /api/v1/notes/{id}` on an author's own note sets `deleted_at` and `deleted_by`
   and clears `text` to null — verified by `packages/web/tests/integration/notes.test.ts`
   - a soft delete, so the row, the authorship and the thread survive
   - clearing the text is what makes 5.2.4 true by construction rather than by every future query
     remembering
-- [ ] **5.2.2** `note.delete` is a policy action carrying `requiresOwnership`, so a member deleting
+- [x] **5.2.2** `note.delete` is a policy action carrying `requiresOwnership`, so a member deleting
   another member's note is refused — verified by `packages/web/tests/unit/policy.test.ts`
-- [ ] **5.2.3** Deleting a note with no replies removes it from the payload entirely; deleting a note
+- [x] **5.2.3** Deleting a note with no replies removes it from the payload entirely; deleting a note
   **with** replies returns a tombstone that keeps its position and its replies — verified by
   `packages/web/tests/integration/notes.test.ts`
   - the tombstone rule lives in the store: a deleted top-level note is returned only while it still
     has an undeleted reply
-- [ ] **5.2.4** A deleted note's text is returned to nobody — not to another member, not to its own
+- [x] **5.2.4** A deleted note's text is returned to nobody — not to another member, not to its own
   author, not to an admin — verified by `packages/web/tests/integration/notes.test.ts`
-- [ ] **5.2.5** Deleting a reply removes that reply alone, leaving its parent and its sibling replies
+- [x] **5.2.5** Deleting a reply removes that reply alone, leaving its parent and its sibling replies
   untouched, and a deleted reply is never returned at all — verified by
   `packages/web/tests/integration/notes.test.ts`
-- [ ] **5.2.6** Deleting a private note always removes it entirely, since it can have no replies —
+- [x] **5.2.6** Deleting a private note always removes it entirely, since it can have no replies —
   verified by `packages/web/tests/integration/notes.test.ts`
 
-**Record**
+**Record** — _updated 2026-08-24_
+
+- **Edge cases:** a tombstone whose last surviving reply is later deleted leaves the list on the
+  next read and takes its transport tick with it — the note is gone with no further act by anybody
+- **Edge cases:** there is no hard delete anywhere in the product, so a row stays forever; only its
+  text is destroyed
+- **Edge cases:** `deleted_by` is recorded and returned to nobody, so the product can never tell an
+  author who removed their note — the log is the record (3.6.4)
+- **Edge cases:** deleting a note twice from two screens answers `note_removed` the second time
+  rather than re-stamping the tombstone with a new remover and a new time
+- **Assumptions, major (confirmed):** none — § 7 states the clear-to-null outright
+- **Assumptions, minor:** the tombstone rule is a correlated `exists` inside the list read rather
+  than a filter in the service, so the store owns *which rows* whole and the markers cannot disagree
+  with the list
+- **Reworked:** none
+- **False positives fixed:** 0
+- **Operator steps:** none
+- **Notes:** the delete and the pin-clear run in **one transaction** (`withTransaction`), because
+  3.6.9 is not something two statements can promise. Task 6.3 is where the pin half is asserted
 
 ### Task 5.3 — Author controls in the list
 
@@ -995,30 +1222,50 @@ confirming, and reads a removed note as a tombstone that says nothing about who 
 
 **Acceptance criteria**
 
-- [ ] **5.3.1** A note or reply the reading member authored carries a `···` overflow opening **Edit**
+- [x] **5.3.1** A note or reply the reading member authored carries a `···` overflow opening **Edit**
   and **Delete**; one they did not author carries neither — verified by
   `packages/web/tests/integration/notes-screen.test.ts`
   - the same outlined circular icon button the transport already uses
   - the API refuses both independently of what is rendered
-- [ ] **5.3.2** **Edit** turns the card into the composer with the existing text loaded, the timestamp
+- [x] **5.3.2** **Edit** turns the card into the composer with the existing text loaded, the timestamp
   and visibility shown but not editable, and **Save** / **Cancel** — verified by
   `packages/web/tests/integration/notes-screen.test.ts`
-- [ ] **5.3.3** **Delete** confirms first with **"Delete this note? This can't be undone."**, or
+- [x] **5.3.3** **Delete** confirms first with **"Delete this note? This can't be undone."**, or
   **"Delete this note? The replies to it will stay. This can't be undone."** where the note has
   replies, and **Cancel** leaves the note in place — verified by
   `packages/web/tests/integration/notes-screen.test.ts`
-- [ ] **5.3.4** A tombstone replaces the author line and text with one dim italic line — **"This note
+- [x] **5.3.4** A tombstone replaces the author line and text with one dim italic line — **"This note
   was removed."** — keeping the timestamp and the replies, and carrying no reaction row, no reply
   affordance and no indication of who removed it — verified by
   `packages/web/tests/integration/notes-screen.test.ts`
   - the author of an admin-removed note sees exactly this, like everyone else
-- [ ] **5.3.5** Deleting a note with no replies removes its marker from the transport; deleting a note
+- [x] **5.3.5** Deleting a note with no replies removes its marker from the transport; deleting a note
   **with** replies keeps its marker, so the surviving replies stay reachable from the moment they
   belong to — verified by `packages/web/tests/integration/transport-notes.test.ts`
   - the markers derive from the same note set the list does, so a deleted note cannot vanish from the
     list and leave its tick behind
 
-**Record**
+**Record** — _updated 2026-08-24_
+
+- **Edge cases:** neither the overflow menu nor the delete confirmation closes on an outside click
+  or on Escape — pressing the control again, or **Cancel**, is the way out
+- **Edge cases:** the confirmation renders inside the card and is 18rem wide, so on a narrow phone
+  it can extend past the card's right edge
+- **Edge cases:** **Edit** and **Delete** are drawn from the payload's `mine`; a very stale screen
+  could draw them on a note the member no longer owns, and the API refuses independently
+- **Edge cases:** the edit form has no draft persistence — **Cancel** or a reload loses the changes
+- **Assumptions, major (confirmed):** none
+- **Assumptions, minor:** the tombstone renders as one branch of the **same** card rather than as a
+  separate return, so a refusal's message and an already-open reply field survive the note going
+  away underneath the member — which is what 5.3.4 and 5.5.4 actually need. The moment and the
+  visibility are *shown* by the card above the edit form rather than repeated there as disabled
+  controls, which is 3.5.3 said with less
+- **Reworked:** none
+- **False positives fixed:** 0
+- **Operator steps:** none
+- **Notes:** the panel renders the chronological `<ol>` only when it has rows — a teaching whose
+  only notes are pinned is not an empty teaching, and it was rendering an empty list before Task
+  6.4's tests caught it
 
 ### Task 5.4 — Acting on a note removed underneath you
 
@@ -1033,21 +1280,43 @@ nothing else.
 
 **Acceptance criteria**
 
-- [ ] **5.4.1** The API answers `note_removed` (409) — the one new error code this scope adds — to an
+- [x] **5.4.1** The API answers `note_removed` (409) — the one new error code this scope adds — to an
   edit, a delete, a reply or a reaction aimed at a note already deleted, rather than failing
   silently or resurrecting it — verified by `packages/web/tests/integration/notes.test.ts`
   - distinct from `invalid_input`, because the request was well-formed against an affordance that was
     real when it was rendered
-- [ ] **5.4.2** A refused reply shows **"This note was removed while you were writing."**, keeps the
+- [x] **5.4.2** A refused reply shows **"This note was removed while you were writing."**, keeps the
   reply text in the field so it can be copied out, and the list refreshes to show the tombstone —
   verified by `packages/web/tests/integration/notes-screen.test.ts`
-- [ ] **5.4.3** A refused reaction shows **"This note was removed."** and the list refreshes; a
+- [x] **5.4.3** A refused reaction shows **"This note was removed."** and the list refreshes; a
   tombstone shows no reactions — verified by
   `packages/web/tests/integration/notes-screen.test.ts`
-- [ ] **5.4.4** A refused edit or delete shows **"This note has already been removed."** — verified by
+- [x] **5.4.4** A refused edit or delete shows **"This note has already been removed."** — verified by
   `packages/web/tests/integration/notes-screen.test.ts`
 
-**Record**
+**Record** — _updated 2026-08-24_
+
+- **Edge cases:** nothing polls and nothing is pushed, so a member who never acts keeps reading a
+  note that has been a tombstone for everyone else since they opened the page
+- **Edge cases:** the refusal is per card — two notes removed at once each say so only when each is
+  acted on
+- **Edge cases:** the message is announced through `role="status"` and stays until the next act on
+  that card; nothing dismisses it
+- **Edge cases:** a refused **reply** keeps its field open over the tombstone so the text can be
+  copied out, which means a tombstone can show a reply field it would never offer on its own
+- **Assumptions, major (confirmed):** none — `note_removed` is § 8's one new code
+- **Assumptions, minor:** `note_removed` is answered for a **clear** of a reaction as well as a set,
+  because 4.4.4 makes them one gesture and refusing only half would be a difference the member
+  cannot see
+- **Reworked:** none
+- **False positives fixed:** 1 — 5.4.3's assertion read the card's text for *"This note was
+  removed."*, which is **word for word the tombstone's own line** (5.3.3), so it passed with the
+  refusal replaced by a generic failure. Rewritten to read the refusal itself, which is what put
+  `role="status"` on the card's failure line
+- **Operator steps:** none
+- **Notes:** the three sentences live in `packages/shared/src/notes.ts` beside
+  `NOTE_RECORDING_GONE_MESSAGE`, for the same reason it is there: the API refuses and the client
+  prints, and the two saying different things is a member reading a refusal that does not match
 
 ---
 
@@ -1073,28 +1342,47 @@ this is a structured log, per the running convention.
 
 **Acceptance criteria**
 
-- [ ] **6.1.1** The private `audit(actor, action, target)` helper written twice today moves to one
+- [x] **6.1.1** The private `audit(actor, action, target)` helper written twice today moves to one
   module imported by `server/recordings/publication.ts` and `server/series/service.ts`, emitting
   byte-identical `actorId`, `actorEmail`, `action` and `target` with the same `recording:` and
   `series:` prefixes — verified by `packages/web/tests/integration/publishing.test.ts`
   - the log shape is read back through `tests/support/log-reader.ts`; a renamed field still logs, so
     this is asserted field by field
-- [ ] **6.1.2** `note.moderate` is a policy action granted to admin alone, and `DELETE /notes/{id}`
+- [x] **6.1.2** `note.moderate` is a policy action granted to admin alone, and `DELETE /notes/{id}`
   falls through to it when the owned `note.delete` denies — with no id comparison and no role read
   at the call site — verified by `packages/web/tests/unit/policy.test.ts`
-- [ ] **6.1.3** An admin deleting a public note or reply they did not author succeeds, with the same
+- [x] **6.1.3** An admin deleting a public note or reply they did not author succeeds, with the same
   tombstone-or-removal behaviour as an author's own deletion at 5.2.3 — verified by
   `packages/web/tests/integration/notes.test.ts`
-- [ ] **6.1.4** That deletion logs `action: 'note.moderate'` and `target: 'note:{id}'` with the acting
+- [x] **6.1.4** That deletion logs `action: 'note.moderate'` and `target: 'note:{id}'` with the acting
   admin and the request's correlation id; an admin deleting their **own** note takes the owned
   path and is not logged as moderation — verified by
   `packages/web/tests/integration/notes.test.ts`
-- [ ] **6.1.5** An admin's delete of a private note is refused, and a private note is absent from
+- [x] **6.1.5** An admin's delete of a private note is refused, and a private note is absent from
   every admin-facing response this scope builds — verified by
   `packages/web/tests/integration/notes.test.ts`
   - the absence is the store's query condition, not a branch in the moderation path
 
-**Record**
+**Record** — _updated 2026-08-24_
+
+- **Edge cases:** the record is a structured log line and not a table, so there is no in-product
+  moderation history and nothing an admin can read back — the Auditability NFR asks for the log
+- **Edge cases:** an admin deleting their **own** note takes the owned path and is not logged as
+  moderation, which is 3.6.4 exactly and reads as a gap if the log is skimmed
+- **Edge cases:** a private note is invisible to an admin in every response, so a deletion they
+  cannot reach is one they will never try
+- **Assumptions, major (confirmed):** none — § 7 states the `note.delete` → `note.moderate`
+  fall-through
+- **Assumptions, minor:** an admin's delete of a private note is refused **`forbidden`** rather than
+  `invalid_input`. § 8 lists the state refusals that are `invalid_input` and this is not among
+  them; the admin was not permitted rather than malformed
+- **Reworked:** none
+- **False positives fixed:** 0
+- **Operator steps:** none
+- **Notes:** `audit()` now lives at `server/observability/audit.ts` and takes the **whole target
+  string**, so `recording:`, `series:` and `note:` stay at their call sites where they are readable.
+  `publishing.test.ts` asserts the promoted helper field by field across a recording write and a
+  series write, because a renamed field still logs
 
 ### Task 6.2 — Pinning a note
 
@@ -1110,30 +1398,48 @@ Cross-cutting for this scope; active-scope prd 3.6.5, 3.6.6, 3.6.8, 3.6.10, 3.7
 
 **Acceptance criteria**
 
-- [ ] **6.2.1** A migration creates `note_pin` keyed by `note_id`, carrying `recording_id`,
+- [x] **6.2.1** A migration creates `note_pin` keyed by `note_id`, carrying `recording_id`,
   `pinned_by` and `pinned_at`, with a composite foreign key
   `(recording_id, note_id) → note (recording_id, id)` cascading and an index on `(recording_id)` —
   verified by `packages/db/tests/integration/notes.test.ts`
   - the composite key is what stops a pin pointing at a note on a different recording, and stops the
     denormalised `recording_id` drifting from the note's own
   - `note_id` as the primary key is what makes "pinned at most once" a key rather than a check
-- [ ] **6.2.2** `PUT /api/v1/notes/{id}/pin` pins a public top-level note; any number may be pinned on
+- [x] **6.2.2** `PUT /api/v1/notes/{id}/pin` pins a public top-level note; any number may be pinned on
   one recording, and pinning adds to the set rather than replacing anything — verified by
   `packages/web/tests/integration/notes.test.ts`
   - addressed on the note, not the recording — with any number of pins a recording has no single pin
-- [ ] **6.2.3** Pinning a note that is already pinned succeeds and changes nothing, rather than being
+- [x] **6.2.3** Pinning a note that is already pinned succeeds and changes nothing, rather than being
   refused — verified by `packages/web/tests/integration/notes.test.ts`
   - one `on conflict (note_id) do nothing`, so an admin acting on a stale screen has still got what
     they asked for
-- [ ] **6.2.4** `note.pin` is a policy action granted to admin alone; a member's pin is refused —
+- [x] **6.2.4** `note.pin` is a policy action granted to admin alone; a member's pin is refused —
   verified by `packages/web/tests/unit/policy.test.ts`
-- [ ] **6.2.5** Pinning a reply, a private note, or a note on an unpublished recording is each
+- [x] **6.2.5** Pinning a reply, a private note, or a note on an unpublished recording is each
   refused, and every successful pin is logged through the audit helper with the acting admin and
   the correlation id — verified by `packages/web/tests/integration/notes.test.ts`
   - the two shape refusals are the service's; the publication one is `visibility.ts`'s
   - pinning changes what the whole group reads first, which is why it is audited
 
-**Record**
+**Record** — _updated 2026-08-24_
+
+- **Edge cases:** there is no cap — an admin can raise every note on a teaching, and the
+  chronological list then starts a long way down the page
+- **Edge cases:** `pinned_by` sets null when an account is deleted, and nothing shows who pinned
+  anyway
+- **Edge cases:** pinning on a teaching that has been taken down is refused `not_found` by the
+  publication gate rather than by anything about pins, so the message names the teaching
+- **Edge cases:** `pinned_at` is recorded and is **not** what pinned notes are ordered by
+- **Assumptions, major (confirmed):** none — § 6.3 states the table, the key and the composite
+  foreign key
+- **Assumptions, minor:** the two shape refusals are `invalid_input` per § 8; the audit line uses
+  the same helper and the same `note:{id}` target as moderation
+- **Reworked:** none
+- **False positives fixed:** 0
+- **Operator steps:** covered by Task 4.1's migration — `note_pin` ships in the same
+  `0013_note_reactions_and_pins`
+- **Notes:** `note_id` alone is the primary key, which is what makes 3.6.10 a key rather than a
+  check, and what makes 3.6.6 one `on conflict do nothing`
 
 ### Task 6.3 — Unpinning, and pins when a note is deleted
 
@@ -1148,18 +1454,35 @@ shows a pinned tombstone.
 
 **Acceptance criteria**
 
-- [ ] **6.3.1** `DELETE /api/v1/notes/{id}/pin` unpins one note, leaving every other pin on the
+- [x] **6.3.1** `DELETE /api/v1/notes/{id}/pin` unpins one note, leaving every other pin on the
   recording in place; unpinning the last leaves the recording with no pinned notes — verified by
   `packages/web/tests/integration/notes.test.ts`
-- [ ] **6.3.2** `note.unpin` is a policy action granted to admin alone — separate from `note.pin`,
+- [x] **6.3.2** `note.unpin` is a policy action granted to admin alone — separate from `note.pin`,
   following the `recording.publish` / `unpublish` split — and every unpin is logged through the
   audit helper — verified by `packages/web/tests/unit/policy.test.ts`
-- [ ] **6.3.3** Deleting a pinned note clears **that note's** pin in the same transaction as the
+- [x] **6.3.3** Deleting a pinned note clears **that note's** pin in the same transaction as the
   delete and leaves every other pin in place, whether the delete comes from its author or from an
   admin — verified by `packages/web/tests/integration/notes.test.ts`
   - a soft delete never fires a cascade, so the pin clear is a second statement, not a foreign key
 
-**Record**
+**Record** — _updated 2026-08-24_
+
+- **Edge cases:** unpinning a note that is not pinned succeeds and is logged — an admin acting on a
+  stale screen has the state they asked for, and the log carries a line for an act that changed
+  nothing
+- **Edge cases:** unpinning a note that has already been deleted succeeds, because its pin went with
+  the delete
+- **Edge cases:** the pin-clear runs inside the delete's transaction, so a failed delete leaves the
+  pin exactly where it was
+- **Assumptions, major (confirmed):** none — § 7 states the `note.pin` / `note.unpin` split
+- **Assumptions, minor:** `unpinNote` is the same store function the delete calls, so there is one
+  statement that lowers a note rather than two that must agree
+- **Reworked:** none
+- **False positives fixed:** 0
+- **Operator steps:** none
+- **Notes:** two actions rather than one, following `recording.publish` / `unpublish`. The earlier
+  merged action's justification did not survive any-number-of-pins, and `policy.test.ts` asserts
+  both are real entries rather than one wearing two names
 
 ### Task 6.4 — Pinned notes and the admin overflow in the list
 
@@ -1175,26 +1498,46 @@ on the note.
 
 **Acceptance criteria**
 
-- [ ] **6.4.1** Pinned notes render above the list under a dim **"Pinned"** heading, each a
+- [x] **6.4.1** Pinned notes render above the list under a dim **"Pinned"** heading, each a
   `--color-surface-raised` card with a `--color-border-strong` outline and a **Pinned** pill,
   ordered by timestamp ascending and tie-broken by creation time — the same total order the list
   itself uses — verified by `packages/web/tests/integration/notes-screen.test.ts`
   - visible to every member who can see the recording, not only to admins
-- [ ] **6.4.2** A pinned note is **not** repeated at its position in the chronological list, and its
+- [x] **6.4.2** A pinned note is **not** repeated at its position in the chronological list, and its
   transport marker stays at its own position, unchanged — verified by
   `packages/web/tests/integration/notes-screen.test.ts`
   - every note is read once
-- [ ] **6.4.3** A pinned note is otherwise an ordinary card: its timestamp link, its replies and its
+- [x] **6.4.3** A pinned note is otherwise an ordinary card: its timestamp link, its replies and its
   reactions all work in place — verified by
   `packages/web/tests/integration/notes-screen.test.ts`
-- [ ] **6.4.4** For an admin, the overflow on any public note additionally offers **Delete** and
+- [x] **6.4.4** For an admin, the overflow on any public note additionally offers **Delete** and
   **Pin** — or **Unpin** where it is already pinned — and neither a reply nor a private note
   offers a pin control at all — verified by
   `packages/web/tests/integration/notes-screen.test.ts`
-- [ ] **6.4.5** Deleting somebody else's note confirms with **"Delete this member's note? This can't
+- [x] **6.4.5** Deleting somebody else's note confirms with **"Delete this member's note? This can't
   be undone, and the removal is logged."**, while pinning and unpinning both act without a prompt,
   moving the note between the pinned group and its chronological position — verified by
   `packages/web/tests/integration/notes-screen.test.ts`
   - neither pin action is destructive and both are one press to undo
 
-**Record**
+**Record** — _updated 2026-08-24_
+
+- **Edge cases:** the **All / Public / Mine** filter narrows the pinned group as well as the list,
+  so a member on **Mine** sees the raised notes disappear — they are still pinned for everyone
+- **Edge cases:** with many pins the chronological list starts well down the page; nothing collapses
+  the pinned group
+- **Edge cases:** pinning and unpinning act without a prompt, so a mis-press is corrected by a
+  second press rather than by an undo
+- **Edge cases:** the admin overflow is drawn from a flag the page computed server-side; a member
+  who forged it would see controls the API refuses
+- **Assumptions, major (confirmed):** none
+- **Assumptions, minor:** `pinned` is a **field on the note** rather than a separate array in the
+  payload, so the panel partitions one list and the payload's order is the pinned group's order
+  without a second sort. The page passes `canModerate={can(actor, 'note.moderate')}`, the same shape
+  `canCorrect` already uses
+- **Reworked:** none
+- **False positives fixed:** 0
+- **Operator steps:** none
+- **Notes:** the pinned group's heading is an `<h3>`, and a test asking for the *text* "Pinned"
+  would be satisfied by each card's pill — it is asserted as a heading, and exactly, because the
+  teaching's own title contains the word too

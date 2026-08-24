@@ -3,6 +3,7 @@ import { relative, resolve, sep } from 'node:path';
 import {
   JOB_STATUSES,
   NOTE_VISIBILITIES,
+  REACTIONS,
   PIPELINE_STEPS,
   REVIEW_KINDS,
   REVIEW_STATUSES,
@@ -60,6 +61,15 @@ export const DOMAIN_DECLARATIONS: readonly DomainDeclaration[] = [
     members: NOTE_VISIBILITIES,
   },
   { name: 'NoteVisibility', canonicalFile: 'packages/shared/src/notes.ts' },
+  {
+    name: 'REACTIONS',
+    canonicalFile: 'packages/shared/src/reactions.ts',
+    // Derived rather than retyped, exactly as every list above is: a literal tuple of the six here
+    // would be the first duplicate of the thing this registry exists to keep single.
+    members: REACTIONS.map((one) => one.emoji),
+  },
+  { name: 'Reaction', canonicalFile: 'packages/shared/src/reactions.ts' },
+  { name: 'ReactionEmoji', canonicalFile: 'packages/shared/src/reactions.ts' },
   { name: 'Segment', canonicalFile: 'packages/shared/src/segment.ts' },
 ];
 

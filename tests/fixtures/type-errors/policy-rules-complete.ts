@@ -49,4 +49,10 @@ export const rules: PolicyRules = {
   'series.browse': { roles: { admin: true, member: true } },
   'note.read': { roles: { admin: true, member: true } },
   'note.write': { roles: { admin: true, member: true } },
+  'note.edit': { roles: { admin: true, member: true }, requiresOwnership: true },
+  'note.delete': { roles: { admin: true, member: true }, requiresOwnership: true },
+  'note.moderate': { roles: { admin: true, member: false } },
+  'note.react': { roles: { admin: true, member: true } },
+  'note.pin': { roles: { admin: true, member: false } },
+  'note.unpin': { roles: { admin: true, member: false } },
 };

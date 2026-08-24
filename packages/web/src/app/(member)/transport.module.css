@@ -297,3 +297,88 @@
     order: 5;
   }
 }
+
+/*
+ * The note markers — `bottom-navigation/default.png`'s track, and 5.7.1's ticks on it.
+ *
+ * The wrapper is taller than the input's own band on purpose. The layer sits **behind** the input,
+ * so the purple fill and the round thumb are never obscured and the slider keeps every pointer
+ * event that lands on it — scrubbing is untouched. Each tick stands a little proud of that band
+ * above and below, and those few pixels are what a pointer presses; a keyboard reaches the ticks
+ * regardless, because they are real buttons in a sibling layer rather than children of a range
+ * input, which can have none.
+ */
+.scrubberWrap {
+  position: relative;
+  flex: 1 1 auto;
+  min-width: 0;
+  display: flex;
+  align-items: center;
+  /*
+   * Taller than the slider's own 4px band on purpose. The band belongs to the input — every
+   * pointer event that lands on it is a scrub — and the clear space above and below it is the
+   * part of a tick a pointer can press.
+   */
+  height: var(--space-6);
+}
+
+.markers {
+  position: absolute;
+  inset: 0;
+  z-index: 0;
+  pointer-events: none;
+}
+
+.marker {
+  position: absolute;
+  top: 0;
+  bottom: 0;
+  width: 2px;
+  /* Centred on its own position by a transform, so no spacing value is spelled in pixels. */
+  transform: translateX(-50%);
+  padding: 0;
+  background: var(--color-notes);
+  border: none;
+  border-radius: 0;
+  pointer-events: auto;
+  cursor: pointer;
+}
+
+/* Above the layer, so the fill and the thumb are drawn over every tick (5.7.1). */
+.scrubber {
+  position: relative;
+  z-index: 1;
+  width: 100%;
+}
+
+/*
+ * The composer as a sheet over the current screen (5.1.5) — the dock's column again, so it stacks
+ * above the bar at every width rather than covering the content on a phone.
+ */
+.sheet {
+  width: 100%;
+  max-width: 48rem;
+  margin: 0 auto;
+  pointer-events: auto;
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-3);
+  background: var(--color-surface);
+  border: 1px solid var(--color-border-strong);
+  border-radius: var(--radius-lg);
+  padding: var(--space-4);
+  max-height: 60vh;
+  overflow-y: auto;
+}
+
+.sheetClose {
+  align-self: flex-start;
+  background: transparent;
+  border: 1px solid var(--color-border-strong);
+  border-radius: var(--radius-pill);
+  padding: var(--space-2) var(--space-5);
+  color: var(--color-text-muted);
+  font-family: inherit;
+  font-size: var(--fs-body);
+  cursor: pointer;
+}

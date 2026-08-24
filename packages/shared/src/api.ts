@@ -78,6 +78,16 @@ export const CORRELATION_ID_HEADER = 'x-correlation-id';
  *   a conflict on the item, because the thing in the way belongs to the *recording*: the partial
  *   unique index allows one unfinished `generate_draft`, and handing the caller back that job
  *   would hand them work for a different kind than the one they asked to regenerate.
+ *
+ * The notes scope adds one, and deliberately only one:
+ *
+ * - `note_removed` — the note this request names was already deleted, by its author or by an
+ *   admin. Distinct from `invalid_input` because the request was **well-formed against an
+ *   affordance that was real when it was rendered**: a Reply control, a reaction pill or an Edit
+ *   entry the member pressed before the list caught up. Distinct from `not_found` because the note
+ *   is still there — as a tombstone — and the screen is about to show it. active-scope prd 5.3.4,
+ *   5.4.3 and 5.5.4 each need to say something different about it, which is what a code they can
+ *   branch on is for.
  */
 export const API_ERROR_CODES = [
   'unauthenticated',
@@ -97,6 +107,7 @@ export const API_ERROR_CODES = [
   'upload_invalid',
   'review_closed',
   'generation_in_flight',
+  'note_removed',
   'not_found',
   'internal_error',
   'service_unavailable',

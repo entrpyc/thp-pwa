@@ -293,3 +293,290 @@
   white-space: pre-wrap;
   overflow-wrap: anywhere;
 }
+
+/* ---- threads, reactions and author controls ------------------------------------------------ */
+
+/*
+ * Everything below is read off `style-guide.md` for the same reason everything above is: no
+ * reference draws the notes surface. The rules each follow one of the guide's own:
+ *
+ * 6. A reply is the guide's **list row** — indented one step inside the parent's card and separated
+ *    by a hairline rather than by a gap (5.3.1), so a thread reads as part of its note.
+ * 7. Reaction pills and the picker are the guide's **small pill** and **outlined icon button**.
+ * 8. The overflow is the same outlined circular icon button the transport already uses (5.5.1) —
+ *    one control shape for "there is more here" across the whole product.
+ * 9. A pinned note is the guide's **raised card with a strong outline** (5.6.2), which is the one
+ *    treatment that reads as lifted without inventing a second card style.
+ */
+
+/* The sheet's own title line — only the transport's mount draws it (5.1.5). */
+.sheetTitle {
+  margin: 0;
+  color: var(--color-text);
+  font-size: var(--fs-body);
+  font-weight: 600;
+}
+
+.edited {
+  color: var(--color-text-dim);
+  font-size: var(--fs-meta);
+  font-style: italic;
+}
+
+/* One dim italic line in place of an author and a text, and nothing about who removed it (5.3.3). */
+.tombstone {
+  margin: 0;
+  color: var(--color-text-dim);
+  font-size: var(--fs-body);
+  font-style: italic;
+}
+
+.cardFailure {
+  margin: 0;
+  color: var(--color-text);
+  font-size: var(--fs-meta);
+  font-weight: 600;
+}
+
+.thread {
+  list-style: none;
+  margin: 0;
+  padding: 0 0 0 var(--space-5);
+  display: flex;
+  flex-direction: column;
+}
+
+/* Separated by a hairline rather than a gap — the guide's list-row rule (5.3.1). */
+.reply {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-2);
+  border-top: 1px solid var(--color-border);
+  padding: var(--space-3) 0 0;
+}
+
+.replyControl {
+  align-self: flex-start;
+  background: transparent;
+  border: none;
+  padding: 0;
+  color: var(--color-primary-strong);
+  font-family: inherit;
+  font-size: var(--fs-meta);
+  font-weight: 600;
+  cursor: pointer;
+}
+
+.replyForm,
+.editForm {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-2);
+}
+
+.secondary {
+  background: transparent;
+  border: 1px solid var(--color-border-strong);
+  border-radius: var(--radius-pill);
+  padding: var(--space-2) var(--space-5);
+  color: var(--color-text-muted);
+  font-family: inherit;
+  font-size: var(--fs-body);
+  cursor: pointer;
+}
+
+.danger {
+  background: transparent;
+  border: 1px solid var(--color-border-strong);
+  border-radius: var(--radius-pill);
+  padding: var(--space-2) var(--space-5);
+  color: var(--color-text);
+  font-family: inherit;
+  font-size: var(--fs-body);
+  font-weight: 600;
+  cursor: pointer;
+}
+
+/* ---- reactions ----------------------------------------------------------------------------- */
+
+.reactions {
+  position: relative;
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: var(--space-2);
+}
+
+.reaction,
+.reactionMine {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--space-1);
+  background: transparent;
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-pill);
+  padding: var(--space-1) var(--space-3);
+  color: var(--color-text-muted);
+  font-family: inherit;
+  font-size: var(--fs-meta);
+  cursor: pointer;
+}
+
+/* The reading member's own, outlined so the row says what they chose without a second control. */
+.reactionMine {
+  border-color: var(--color-primary-strong);
+  color: var(--color-text);
+}
+
+.pickerControl {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  min-width: var(--space-6);
+  min-height: var(--space-6);
+  background: transparent;
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-pill);
+  color: var(--color-primary-icon);
+  font-family: inherit;
+  font-size: var(--fs-meta);
+  cursor: pointer;
+}
+
+/* All six in a single row (5.4.2), floated so opening it does not push the card about. */
+.picker {
+  position: absolute;
+  bottom: 100%;
+  left: 0;
+  z-index: 2;
+  display: flex;
+  gap: var(--space-1);
+  background: var(--color-surface-raised);
+  border: 1px solid var(--color-border-strong);
+  border-radius: var(--radius-pill);
+  padding: var(--space-2);
+}
+
+.pickerOption {
+  background: transparent;
+  border: 1px solid transparent;
+  border-radius: var(--radius-pill);
+  padding: var(--space-1) var(--space-2);
+  font-family: inherit;
+  font-size: var(--fs-body);
+  cursor: pointer;
+}
+
+/* The current selection, marked so 3.4.4's toggle-off is discoverable rather than a guess. */
+.pickerOption[aria-pressed='true'] {
+  border-color: var(--color-primary-strong);
+  background: var(--color-primary-soft);
+}
+
+/* ---- the overflow -------------------------------------------------------------------------- */
+
+.overflow {
+  position: relative;
+  margin-left: auto;
+}
+
+.overflowControl {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  min-width: var(--space-6);
+  min-height: var(--space-6);
+  background: transparent;
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-pill);
+  color: var(--color-primary-icon);
+  font-family: inherit;
+  font-size: var(--fs-meta);
+  cursor: pointer;
+}
+
+.menu {
+  position: absolute;
+  top: 100%;
+  right: 0;
+  z-index: 2;
+  display: flex;
+  flex-direction: column;
+  background: var(--color-surface-raised);
+  border: 1px solid var(--color-border-strong);
+  border-radius: var(--radius-md);
+  padding: var(--space-2);
+}
+
+.menuItem {
+  background: transparent;
+  border: none;
+  padding: var(--space-2) var(--space-4);
+  color: var(--color-text);
+  font-family: inherit;
+  font-size: var(--fs-body);
+  text-align: left;
+  cursor: pointer;
+  white-space: nowrap;
+}
+
+.menuItem:hover {
+  background: var(--color-primary-soft);
+}
+
+.confirm {
+  position: absolute;
+  top: 100%;
+  right: 0;
+  z-index: 3;
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: var(--space-2);
+  width: 18rem;
+  background: var(--color-surface-raised);
+  border: 1px solid var(--color-border-strong);
+  border-radius: var(--radius-md);
+  padding: var(--space-4);
+}
+
+.confirmText {
+  width: 100%;
+  margin: 0;
+  color: var(--color-text);
+  font-size: var(--fs-body);
+}
+
+/* ---- pinned -------------------------------------------------------------------------------- */
+
+.pinnedGroup {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-3);
+}
+
+.pinnedHeading {
+  margin: 0;
+  color: var(--color-text-dim);
+  font-size: var(--fs-meta);
+  font-weight: 600;
+  text-transform: uppercase;
+}
+
+.pinnedNote {
+  background: var(--color-surface-raised);
+  border-color: var(--color-border-strong);
+}
+
+.pinnedPill {
+  background: var(--color-primary-soft);
+  border-radius: var(--radius-pill);
+  padding: 0 var(--space-3);
+  color: var(--color-primary-strong);
+  font-size: var(--fs-meta);
+}
+
+/* Briefly marked so a note reached from a marker is findable in a long list (3.2.5). */
+.highlighted {
+  border-color: var(--color-notes);
+}

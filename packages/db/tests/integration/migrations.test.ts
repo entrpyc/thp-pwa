@@ -148,7 +148,8 @@ describe('migrations apply to an empty database by one command', () => {
       // invitations, ticket 4 password resets, Story 2 Ticket 01 `recording`, Ticket 02 `job` and
       // Ticket 03 `transcript` and `segment`. Story 3 Ticket 01 added `review_item` and `summary`,
       // Story 4 Ticket 04 `playback_progress` and Story 6 Ticket 01 `series` — the last of that
-      // epic. The notes scope adds `note` (Task 1.1).
+      // epic. The notes scope adds `note` (Task 1.1), then `note_reaction` (Task 4.1) and
+      // `note_pin` (Task 6.2).
       const tables = await sql<{ tablename: string }[]>`
         select tablename from pg_tables where schemaname = 'public' order by tablename
       `;
@@ -156,6 +157,8 @@ describe('migrations apply to an empty database by one command', () => {
         'invitation',
         'job',
         'note',
+        'note_pin',
+        'note_reaction',
         'password_reset',
         'playback_progress',
         'recording',
