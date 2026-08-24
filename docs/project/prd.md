@@ -160,6 +160,8 @@ It is built as a Progressive Web App on a single codebase, reachable from any br
 - **3.7.5** Published references appear on the recording page alongside the summary (3.6.7).
 - **3.7.6** Each displayed reference is a navigable link into the cross-referencing layer (3.9.4).
 - **3.7.7** Members can find teachings by scripture citation through search (3.10.5).
+- **3.7.8** A teaching in which no scripture is found still reaches the review queue holding an empty list, so an admin confirms that it cites none rather than the item never arriving. "Reviewed and found none" is a different fact from "nobody has looked yet", and the empty item is what makes 3.7.2's manual addition reachable for a teaching the automatic suggestion missed entirely.
+- **3.7.9** Verse text is drawn from one free-to-use translation, named in deployment configuration rather than in code. The product holds one translation at a time and offers a member no choice between translations; the translation in use is named wherever its verse text is read, so nobody has to guess which words they are looking at.
 
 ### 📝 3.8 Mind maps
 
@@ -496,7 +498,7 @@ It is built as a Progressive Web App on a single codebase, reachable from any br
 
 - 🔨 **3.21.2.1** Steps 3 through 7 run automatically on upload without admin intervention.
 - ✅ **3.21.2.2** Steps 3 through 7 produce drafts only. The pipeline does not advance past step 8 without the admin confirmation required by 4.17.3.
-- ✅ **3.21.2.3** A failure at any automated step halts that recording's pipeline and flags it (3.19.4) rather than publishing partial results.
+- ✅ **3.21.2.3** A failure to produce an automated step's artefact halts that recording's pipeline and flags it (3.19.4) rather than publishing partial results. A failure in something a step layers on top of its artefact — verse text fetched for a citation it has already produced (3.7.4) — degrades that convenience instead, and the step succeeds.
 - ✅ **3.21.2.4** An admin can re-run any individual automated step for a recording without re-running the whole pipeline.
 - ✅ **3.21.2.5** Nothing retries by itself. A failed step stays failed until an admin re-runs it, so a failure that spends money at a provider cannot repeat unattended overnight.
 - ✅ **3.21.2.6** Every step is executed at least once and every step is idempotent, so a run that is interrupted leaves no partial result. Work left behind by a process that stopped mid-step is reclaimed rather than lost, and becomes re-runnable through 3.21.2.4.
@@ -584,7 +586,10 @@ It is built as a Progressive Web App on a single codebase, reachable from any br
 | :---- | :---- | :---- |
 | Book, chapter, verse range | AI-suggested, admin-editable | Structured, not free text (3.7.3) |
 | Source recording | Auto-set | Which teaching cites it |
-| Status | Admin-set | Suggested or accepted (3.7.2) |
+| Origin | Auto-set | Whether the machine proposed this reference or an admin added it (4.17.5) |
+| Edited by admin | Auto-set | Whether an admin changed it before approving (4.17.5) |
+
+A reference carries no status of its own. Suggested-versus-accepted is the state of the review item that holds the draft (4.17.6): a reference exists only once an admin has approved the list it belongs to, so a status field here would be a second answer to a question the review item already answers.
 
 ### 4.7 Topic / tag
 
@@ -802,7 +807,7 @@ Mind maps carry no title: the source recording or video title labels them in the
 - **Push notifications across delivery routes.** Web push on iOS behaves differently from push in a store-packaged build, and the two may not be reachable through one mechanism. If they are not, 3.17.1 costs more than it appears to.
 - **Generative video quality, cost and turnaround.** This is the least proven capability in the product. If output quality or per-video cost disappoints, 3.11 changes shape — the feature survives but the workflow around it may need to lean far harder on manual selection.
 - **Offline storage limits on mobile.** Browser-managed storage can be evicted under pressure and is capped on iOS. "Download all" for a long series (3.18.6) may collide with that ceiling, which would force a cap or an eviction policy the product does not currently describe.
-- **Bible text licensing.** Displaying full verse text (3.7.4) is a licensing question, not a technical one, and it differs sharply by translation. The answer determines whether verses render inline or link out.
+- **Bible text licensing.** Displaying full verse text (3.7.4) is a licensing question, not a technical one, and it differs sharply by translation. **Answered for the translation the product runs on**: a free-use source and one configured translation (3.7.9), with verses rendered inline. It re-opens only if the ministry wants a translation that is not free to use — most of the well-known ones are not — which would be a licensing negotiation before it is a code change.
 - **Cross-referencing cold start.** Similarity between teachings (3.9) is only as useful as the library is large. Early on it will surface little, and the feature will look weaker than it is until the back catalogue is processed (3.21.3).
 - **Transcription accuracy on ministry-specific language.** Names, places and theological terminology are where speech-to-text degrades, and every downstream artefact inherits that error. The admin correction path (3.5.5) is a genuine requirement, not a convenience.
 - **Cost at back-catalogue scale.** Running years of recordings through transcription, summarisation and embedding is a one-off cost concentrated in a short window (3.21.3.3), and needs to be sized before committing.
@@ -842,7 +847,7 @@ _This table is the only record of what is left to build._
 | **3.5 Transcription** | partial | core listening | the Contributor role; regeneration of the derived artefacts that do not exist yet |
 | 3.5.1–3.5.4 | complete | core listening | |
 | 3.5.5 | partial | core listening | the Contributor role — correcting is Admin-only |
-| 3.5.6 | partial | core listening | the offer reaches the summary and the description only; mind map, scripture references and cross-references are unbuilt |
+| 3.5.6 | partial | core listening, scripture | the offer reaches the summary and the scripture references; the mind map, tags and cross-references it also names are unbuilt |
 | 3.5.7–3.5.10 | complete | core listening | |
 | **3.6 AI summaries** | partial | core listening | the in-app notification that a draft is ready to review |
 | 3.6.1–3.6.2 | complete | core listening | |
@@ -850,7 +855,12 @@ _This table is the only record of what is left to build._
 | 3.6.4–3.6.8 | complete | core listening | |
 | 3.6.9 | partial | core listening | the notification when the regenerated draft is ready — steering and the one-in-flight rule are built |
 | 3.6.10–3.6.14 | complete | core listening | |
-| **3.7 Scripture references** | not started | — | |
+| **3.7 Scripture references** | partial | scripture | the link into cross-referencing and the search by citation, each waiting on a layer that does not exist; topics as a second input to drafting |
+| 3.7.1 | partial | scripture | the recording's topics as a second input — references are drafted from the transcript alone, because tags (4.7) are not built |
+| 3.7.2–3.7.5 | complete | scripture | |
+| 3.7.6 | not started | — | |
+| 3.7.7 | not started | — | |
+| 3.7.8–3.7.9 | complete | scripture | |
 | **3.8 Mind maps** | not started | — | |
 | **3.9 Intelligent cross-referencing** | not started | — | |
 | **3.10 Semantic search** | not started | — | |
@@ -865,9 +875,9 @@ _This table is the only record of what is left to build._
 | **3.16 SOS signal** | not started | — | |
 | **3.17 Notifications** | not started | — | |
 | **3.18 Offline support & downloads** | not started | — | |
-| **3.19 Admin dashboard** | partial | core listening | the video, questionnaire, announcement, sound-profile, external-publishing and SOS surfaces |
+| **3.19 Admin dashboard** | partial | core listening, scripture | the video, questionnaire, announcement, sound-profile, external-publishing and SOS surfaces |
 | 3.19.1 | partial | core listening | the Contributor role — the dashboard is Admin-only |
-| 3.19.2 | partial | core listening | scripture references and back-catalogue items in the queue; it carries draft summaries and metadata |
+| 3.19.2 | partial | core listening, scripture | back-catalogue items (3.21.3.4); the queue carries draft summaries, metadata and scripture references |
 | 3.19.3–3.19.4 | complete | core listening | |
 | 3.19.5 | partial | core listening | artwork upload; reordering and merging |
 | 3.19.6–3.19.8 | not started | — | |
@@ -876,10 +886,14 @@ _This table is the only record of what is left to build._
 | 3.19.13 | complete | core listening | |
 | **3.20 External distribution** | not started | — | |
 | **3.21 Content pipeline & back-catalogue processing** | partial | core listening | audio processing, mind map and cross-reference steps; bulk back-catalogue processing |
-| 3.21.1 | partial | core listening | steps 3, 6, 7 and 10–13 have no feature behind them yet |
+| 3.21.1 | partial | core listening, scripture | steps 3, 6, 7 and 10–13 have no feature behind them yet; step 5's tags are unbuilt, its summary, description and scripture references are not |
 | 3.21.2.1 | partial | core listening | only transcription and draft generation run automatically — steps 3, 6 and 7 do not exist |
 | 3.21.2.2–3.21.2.7 | complete | core listening | |
 | 3.21.3 | not started | — | |
 
 _Statuses for features this scope did not touch are carried from the ✅ / 🔨 / 📝 markers the
 requirements already carried, spot-checked against the code rather than re-audited._
+
+_3.7.8 and 3.7.9 were written during the scripture scope's reconciliation, over behaviour the code
+had and full scope did not describe. 4.6 lost its *Status* field and 3.21.2.3 was reworded in the
+same pass._

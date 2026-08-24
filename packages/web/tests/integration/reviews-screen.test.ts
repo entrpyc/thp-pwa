@@ -935,6 +935,31 @@ describe('the passage under a citation', () => {
     }
   }, 120_000);
 
+  /**
+   * **project prd 3.7.9** — the form says which translation the passages under the rows are.
+   *
+   * The admin's half of the same requirement the member's panel carries: somebody judging a
+   * citation by the words underneath it should know whose words they are. Said once above the list,
+   * on the same recipe, so the two surfaces cannot describe the same text differently.
+   */
+  it('names the translation the passages are drawn from', async () => {
+    const title = unique('Translation above the rows');
+    const recordingId = await newRecording(title);
+    await drafts(recordingId, ['scripture']);
+
+    const page = await openPanel();
+    try {
+      const row = await openForm(page, title, 'Scripture');
+      await expect
+        .poll(() => row.getByRole('list', { name: 'Citations' }).count(), { timeout: 30_000 })
+        .toBe(1);
+
+      expect(await row.textContent()).toContain('test-translation');
+    } finally {
+      await page.context().close();
+    }
+  }, 120_000);
+
   // 3.3.2 — the row an admin just typed has no draft to have carried anything, so this is the case
   // that makes the resolution a property of the form rather than of the draft.
   it('resolves the passage of a reference the admin adds, while the form is open', async () => {

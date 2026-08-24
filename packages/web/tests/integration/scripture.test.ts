@@ -179,6 +179,23 @@ describe('a member reads a published teaching’s scripture', () => {
     ]);
   });
 
+  /**
+   * **project prd 3.7.9** — the payload names the translation its words came from.
+   *
+   * A member is offered no choice between translations, so the one thing they can be told is which
+   * one they are reading. It rides the payload rather than being configuration the client reads,
+   * which is why it is asserted here rather than only on the screen: the suite's deployment is
+   * configured with `test-translation`, and a payload naming anything else would be a payload
+   * disagreeing with the rows it just returned.
+   */
+  it('names the translation the verse text came from', async () => {
+    const { recordingId, item } = await draft();
+    expect((await resolve(item, 'approve')).status).toBe(200);
+    await setRecordingPublication(recordingId, new Date(), handle);
+
+    expect((await readScripture(recordingId)).body.translation).toBe('test-translation');
+  });
+
   // 4.1.2, first half — approved by nobody is nothing to read, on a teaching that is otherwise fine.
   it('answers with nothing for a published teaching whose draft nobody has approved', async () => {
     const { recordingId } = await draft();

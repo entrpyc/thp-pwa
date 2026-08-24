@@ -1,4 +1,4 @@
-import { resolvePassages } from '@thp/bible';
+import { readBibleTranslation, resolvePassages } from '@thp/bible';
 import { findScriptureReferences, findVisibleRecording } from '@thp/db';
 import {
   checkCitation,
@@ -129,5 +129,9 @@ export async function readScriptureFor(
       ...one.citation,
       passage: one.verses.length === 0 ? null : one.verses.map((verse) => verse.text).join(' '),
     })),
+    // Which translation the words are ([3.7.9](docs/project/prd.md#L164)). Read from the same
+    // configuration the cache keys itself by, so the name on screen and the rows behind it can
+    // never disagree about what was fetched.
+    translation: readBibleTranslation(),
   };
 }

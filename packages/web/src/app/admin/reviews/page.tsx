@@ -1,3 +1,4 @@
+import { readBibleTranslation } from '@thp/bible';
 import { redirect } from 'next/navigation';
 import { currentActor } from '@/server/auth/current-actor';
 import { can } from '@/server/auth/policy';
@@ -29,7 +30,13 @@ export default async function AdminReviewsPage() {
 
   return (
     <ConsoleShell actor={actor} current="reviews">
-      <ReviewsPanel />
+      {/*
+        **Which translation the verse text under a citation is** (docs/project/prd.md, 3.7.9). Read
+        here rather than fetched, because it is this deployment's configuration and not content:
+        the same reason the two capability flags above are decided server-side. It reaches the
+        member's panel down its own payload instead, where it belongs beside the words it names.
+      */}
+      <ReviewsPanel translation={readBibleTranslation()} />
     </ConsoleShell>
   );
 }

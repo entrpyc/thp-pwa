@@ -41,6 +41,7 @@ import styles from './scripture.module.css';
  */
 export function ScripturePanel({ recordingId }: { recordingId: string }) {
   const [references, setReferences] = useState<readonly ScriptureReadingView[] | null>(null);
+  const [translation, setTranslation] = useState<string | null>(null);
   const [failure, setFailure] = useState<string | null>(null);
 
   useEffect(() => {
@@ -52,6 +53,7 @@ export function ScripturePanel({ recordingId }: { recordingId: string }) {
       .then((payload) => {
         if (!live) return;
         setReferences(payload.references);
+        setTranslation(payload.translation);
         setFailure(null);
       })
       .catch((caught: unknown) => {
@@ -81,18 +83,27 @@ export function ScripturePanel({ recordingId }: { recordingId: string }) {
         // showing an empty box.
         <p className={styles.quiet}>This teaching has no scripture references.</p>
       ) : (
-        <ol className={styles.references}>
-          {references.map((reference) => (
-            <li className={styles.reference} key={formatCitation(reference)}>
-              <h3 className={styles.citation}>{formatCitation(reference)}</h3>
-              {reference.passage === null ? (
-                <p className={styles.quiet}>The passage could not be loaded.</p>
-              ) : (
-                <p className={styles.passage}>{reference.passage}</p>
-              )}
-            </li>
-          ))}
-        </ol>
+        <>
+          {/*
+            **Which translation these words are** (`project prd` 3.7.9). The product holds one and
+            offers no choice between translations, so the only thing a member can be told is which
+            one they are reading — said once above the list rather than on every card, because it is
+            true of all of them.
+          */}
+          <p className={styles.translation}>{translation}</p>
+          <ol className={styles.references}>
+            {references.map((reference) => (
+              <li className={styles.reference} key={formatCitation(reference)}>
+                <h3 className={styles.citation}>{formatCitation(reference)}</h3>
+                {reference.passage === null ? (
+                  <p className={styles.quiet}>The passage could not be loaded.</p>
+                ) : (
+                  <p className={styles.passage}>{reference.passage}</p>
+                )}
+              </li>
+            ))}
+          </ol>
+        </>
       )}
     </section>
   );

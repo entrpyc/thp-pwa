@@ -293,3 +293,10 @@
   composes: passage;
   font-style: italic;
 }
+
+/* Which translation the passages under each citation are (project prd 3.7.9). */
+.translation {
+  margin: 0 0 var(--space-3);
+  font-size: var(--fs-meta);
+  color: var(--color-text-dim);
+}

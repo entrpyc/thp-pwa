@@ -396,4 +396,13 @@ export function recordingScripturePath(recordingId: string): string {
  */
 export interface RecordingScripturePayload {
   readonly references: readonly ScriptureReadingView[];
+  /**
+   * **Which translation these words are** ([3.7.9](docs/project/prd.md#L164)).
+   *
+   * The product holds one translation, named in deployment configuration, and a member is offered
+   * no choice between translations — so the only honest thing a surface can do is say which one it
+   * is showing. It rides this payload rather than being read by the client, because it is a fact
+   * about the verse text beside it and the client has no business knowing our configuration.
+   */
+  readonly translation: string;
 }

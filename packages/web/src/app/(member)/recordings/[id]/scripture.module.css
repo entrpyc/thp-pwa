@@ -69,3 +69,14 @@
   color: var(--color-text-muted);
   overflow-wrap: anywhere;
 }
+
+/*
+ * Which translation the passages are (project prd 3.7.9). The guide's meta line — `--fs-meta`,
+ * `--color-text-dim` — because it is an attribution and not one of the readings: it says what the
+ * words are without competing with them for the eye.
+ */
+.translation {
+  margin: 0;
+  font-size: var(--fs-meta);
+  color: var(--color-text-dim);
+}

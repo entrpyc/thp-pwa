@@ -171,7 +171,7 @@ function toSubmitted(row: DraftRow): SubmittedReference {
   };
 }
 
-export function ReviewsPanel() {
+export function ReviewsPanel({ translation }: { translation: string }) {
   const [reviews, setReviews] = useState<readonly ReviewItemView[] | null>(null);
   const [listError, setListError] = useState<string | null>(null);
   const [openId, setOpenId] = useState<string | null>(null);
@@ -235,6 +235,7 @@ export function ReviewsPanel() {
               <ReviewRow
                 key={item.id}
                 item={item}
+                translation={translation}
                 open={openId === item.id}
                 onOpen={() => setOpenId(openId === item.id ? null : item.id)}
                 onDone={async () => {
@@ -259,11 +260,13 @@ type Busy = 'approve' | 'discard' | 'regenerate' | null;
  */
 function ReviewRow({
   item,
+  translation,
   open,
   onOpen,
   onDone,
 }: {
   item: ReviewItemView;
+  translation: string;
   open: boolean;
   onOpen: () => void;
   onDone: () => Promise<void>;
@@ -385,6 +388,7 @@ function ReviewRow({
               <CitationList
                 rows={rows}
                 problems={problems}
+                translation={translation}
                 labelledBy={`${promptId}-draft`}
                 disabled={busy !== null}
                 onChange={(index, patch) =>
@@ -553,6 +557,7 @@ function ReviewRow({
 function CitationList({
   rows,
   problems,
+  translation,
   labelledBy,
   disabled,
   onChange,
@@ -561,6 +566,7 @@ function CitationList({
 }: {
   rows: readonly DraftRow[];
   problems: readonly (string | null)[];
+  translation: string;
   labelledBy: string;
   disabled: boolean;
   onChange: (index: number, patch: Partial<DraftRow>) => void;
@@ -575,7 +581,15 @@ function CitationList({
           the teaching without a reviewed list.
         </p>
       ) : (
-        <ul className={styles.citations} aria-labelledby={labelledBy}>
+        <>
+          {/*
+            **Which translation the passage under each citation is** (docs/project/prd.md, 3.7.9).
+            The same sentence the member's panel says over the same words, said once above the list
+            rather than under every row — an admin judging a citation by its text should know which
+            text it is.
+          */}
+          <p className={styles.translation}>{translation}</p>
+          <ul className={styles.citations} aria-labelledby={labelledBy}>
           {rows.map((row, index) => {
             const label = labelOf(row);
             return (
@@ -643,7 +657,8 @@ function CitationList({
               </li>
             );
           })}
-        </ul>
+          </ul>
+        </>
       )}
 
       <div className={styles.citationAdd}>

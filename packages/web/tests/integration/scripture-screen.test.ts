@@ -202,6 +202,28 @@ describe('the Scripture tab on the recording page', () => {
     }
   }, 120_000);
 
+  /**
+   * **project prd 3.7.9** — the panel says which translation these words are.
+   *
+   * Once, above the list, because it is true of every card under it. Driven in the browser rather
+   * than asserted on the payload alone: the requirement is that a member is told, and a field
+   * nothing renders tells nobody.
+   */
+  it('names the translation the passages are drawn from', async () => {
+    const { page } = await openTeaching(citingId);
+    try {
+      await page.getByRole('tab', { name: 'Scripture' }).click();
+      const panel = panelOf(page);
+
+      await expect
+        .poll(() => panel.getByRole('heading').count(), { timeout: 30_000 })
+        .toBeGreaterThan(0);
+      expect(await panel.textContent()).toContain('test-translation');
+    } finally {
+      await page.context().close();
+    }
+  }, 120_000);
+
   // 4.2.4 — the citation is the artefact; the passage is a convenience on top of it.
   it('shows the citation and a quiet line where a reference has no passage', async () => {
     const { page } = await openTeaching(citingId);
