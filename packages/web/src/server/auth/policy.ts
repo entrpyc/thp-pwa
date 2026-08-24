@@ -140,6 +140,21 @@ export const POLICY_ACTIONS = [
   'series.assign',
   'series.list',
   'series.browse',
+  /**
+   * **The two note actions this scope's first group needs** (active-scope architecture § 8).
+   *
+   * Two rather than one `note.use`, and the same split every group above takes: reading what the
+   * group has written and adding to it are the same question only while both roles answer it the
+   * same way. The six that moderate, edit, delete, react and pin arrive with the tasks that need
+   * them — an action with no route behind it is a rule nobody can see fail.
+   *
+   * Both roles, on the same terms ([3.1.12](docs/active-scope/prd.md)): nothing about writing a
+   * note differs by role, and nothing about reading one does either. **What a member sees through
+   * `note.read` is the query's answer, not this one** — the private-note condition lives in
+   * `packages/db/src/notes.ts` and an admin is not a caller it bends for.
+   */
+  'note.read',
+  'note.write',
 ] as const;
 
 export type PolicyAction = (typeof POLICY_ACTIONS)[number];
@@ -254,6 +269,11 @@ const RULES: PolicyRules = {
   // visibility condition, not here — the policy answers "may this person ask", and the query
   // answers "about which rows".
   'series.browse': { roles: { admin: true, member: true } },
+  // Both roles, on the same terms. Reading a teaching's notes and writing one are the two things
+  // every member of a study group does with notes, and an admin does them as a member does — the
+  // moderation actions this scope adds later are where the roles part.
+  'note.read': { roles: { admin: true, member: true } },
+  'note.write': { roles: { admin: true, member: true } },
 };
 
 export function isPolicyAction(value: string): value is PolicyAction {

@@ -258,12 +258,13 @@ describe('the recording page at /recordings/[id]', () => {
       expect(await page.getByText('What this teaching is about.').count()).toBe(1);
       expect(await page.getByText('Recorded 14 Jul 2026').count()).toBe(1);
 
-      // Four of the reference's five tabs have no data in this epic. The strip arrived in Story 5
-      // holding the one that does — `Transcript` — rather than five that lead nowhere, and the
-      // other four are dropped rather than rendered disabled.
+      // Two of the reference's five tabs have data. The strip arrived in Story 5 holding
+      // `Transcript` and gained `Notes` beside it; the other three are dropped rather than
+      // rendered disabled.
       expect(await page.getByRole('tablist').count()).toBe(1);
-      expect(await page.getByRole('tab').count()).toBe(1);
-      for (const absent of ['Chapter', 'Scripture', 'Notes', 'Mindmap', 'Download']) {
+      expect(await page.getByRole('tab').count()).toBe(2);
+      expect(await page.getByRole('tab', { name: 'Notes' }).count()).toBe(1);
+      for (const absent of ['Chapter', 'Scripture', 'Mindmap', 'Download']) {
         expect(await page.getByRole('tab', { name: absent }).count(), absent).toBe(0);
         expect(await page.getByRole('button', { name: absent }).count(), absent).toBe(0);
       }

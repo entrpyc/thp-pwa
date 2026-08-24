@@ -157,15 +157,17 @@ afterAll(async () => {
 // =================================================================================================
 
 describe('the recording page carries the tab strip and the transcript under it', () => {
-  it('holds exactly one tab, and it is Transcript', async () => {
+  it('holds the two tabs that have data, and drops the three that do not', async () => {
     const { page } = await openTeaching(recordingId);
     try {
       const strip = page.getByRole('tablist', { name: 'Teaching contents' });
       await expect.poll(() => strip.count(), { timeout: 30_000 }).toBe(1);
-      // The four deferred tabs are dropped rather than rendered disabled.
-      expect(await strip.getByRole('tab').count()).toBe(1);
+      // The strip shipped in Story 5 holding `Transcript` alone; the notes scope gave it `Notes`
+      // beside it. The three that still lead nowhere are dropped rather than rendered disabled.
+      expect(await strip.getByRole('tab').count()).toBe(2);
       expect(await strip.getByRole('tab', { name: 'Transcript' }).count()).toBe(1);
-      for (const deferred of ['Chapter', 'Scripture', 'Notes', 'Mindmap']) {
+      expect(await strip.getByRole('tab', { name: 'Notes' }).count()).toBe(1);
+      for (const deferred of ['Chapter', 'Scripture', 'Mindmap']) {
         expect(await page.getByRole('tab', { name: deferred }).count(), deferred).toBe(0);
       }
     } finally {

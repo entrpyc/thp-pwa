@@ -422,3 +422,23 @@
   background: var(--color-primary-soft);
   color: var(--color-text);
 }
+
+/*
+ * The one tab entitled to the green (style-guide principle 5 — green means notes, and nothing
+ * else). Its icon carries the colour whether the tab is open or shut; the fill and the outline
+ * follow when it is open, which is what makes the selected state green rather than purple here.
+ */
+.notesTab {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--space-2);
+}
+
+.notesTab[aria-selected='true'] {
+  border-color: var(--color-notes);
+  background: var(--color-notes-bg);
+}
+
+.notesIcon {
+  color: var(--color-notes);
+}

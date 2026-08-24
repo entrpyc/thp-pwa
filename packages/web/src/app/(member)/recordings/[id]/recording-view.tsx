@@ -13,8 +13,12 @@ import {
 } from '@thp/shared';
 import { ApiClientError, apiFetch } from '@/client/api-client';
 import { useBreadcrumbTrail, usePlayer } from '../../player-context';
+import { NotesPanel } from './notes-panel';
 import { TranscriptPanel } from './transcript-panel';
 import styles from '../../screens.module.css';
+
+/** The strip is single-select: opening one tab closes the other, and `null` is both closed. */
+type OpenTab = 'notes' | 'transcript' | null;
 
 /**
  * **The recording page** — `pages/recording.png`.
@@ -23,12 +27,15 @@ import styles from '../../screens.module.css';
  *
  * - **The hero artwork becomes a flat `--color-bg-deep` band** carrying the back control. Artwork is
  *   deferred, and the band keeps the slot so a picture drops into it later without moving anything.
- * - **A tab strip holding one tab.** The reference draws five — `Chapter`, `Scripture`, `Notes`,
- *   `Transcript`, `Mindmap` — and only `Transcript` has data (Story 5). The other four are dropped
- *   rather than rendered disabled, which is the line the whole member surface draws for a deferred
- *   destination. Summary and description render directly in the page body, above the strip.
- * - **The tab starts closed.** A member who never opens it downloads no transcript; pressing it is
- *   what asks for one, and pressing it again puts it away.
+ * - **A tab strip holding two tabs.** The reference draws five — `Chapter`, `Scripture`, `Notes`,
+ *   `Transcript`, `Mindmap` — and only those two have data. The other three are dropped rather than
+ *   rendered disabled, which is the line the whole member surface draws for a deferred destination.
+ *   Summary and description render directly in the page body, above the strip. The strip is
+ *   **single-select**, the way the reference reads it: opening `Notes` closes `Transcript`.
+ * - **The tabs start closed.** A member who never opens it downloads no transcript; pressing it is
+ *   what asks for one, and pressing it again puts it away. The notes are the exception and are
+ *   fetched when the teaching is opened, because their markers show on the transport without the
+ *   tab (active-scope prd 3.2.4).
  * - **No chapter list, no chapter search, no download control.** All deferred; all dropped rather
  *   than disabled.
  *
@@ -50,7 +57,7 @@ export function RecordingScreen({
   const player = usePlayer();
   const [recording, setRecording] = useState<Recording | null>(null);
   const [failure, setFailure] = useState<string | null>(null);
-  const [transcriptOpen, setTranscriptOpen] = useState(false);
+  const [openTab, setOpenTab] = useState<OpenTab>(null);
 
   /**
    * `home › series › recording` when this teaching is in one, and today's two segments when it is
@@ -151,23 +158,41 @@ export function RecordingScreen({
           )}
 
           {/*
-            `pages/recording.png`'s strip, same pill shape and same spacing, holding the one tab
-            this epic has data for. A tablist of one is still a tablist — when `Scripture`, `Notes`,
-            `Chapter` and `Mindmap` arrive they are entries here, not a different control.
+            `pages/recording.png`'s strip, same pill shape and same spacing, in the reference's own
+            order — `Notes` before `Transcript`. When `Scripture`, `Chapter` and `Mindmap` arrive
+            they are entries here, not a different control.
+
+            `Notes` is the one place in the product entitled to the green (style-guide principle 5),
+            so its icon and its selected state take `--color-notes` where `Transcript` takes the
+            purple every other selected thing takes.
           */}
           <div className={styles.tabs} role="tablist" aria-label="Teaching contents">
+            <button
+              className={`${styles.tab} ${styles.notesTab}`}
+              type="button"
+              role="tab"
+              aria-selected={openTab === 'notes'}
+              onClick={() => setOpenTab((open) => (open === 'notes' ? null : 'notes'))}
+            >
+              <span className={styles.notesIcon} aria-hidden="true">
+                ✎
+              </span>
+              Notes
+            </button>
             <button
               className={styles.tab}
               type="button"
               role="tab"
-              aria-selected={transcriptOpen}
-              onClick={() => setTranscriptOpen((open) => !open)}
+              aria-selected={openTab === 'transcript'}
+              onClick={() => setOpenTab((open) => (open === 'transcript' ? null : 'transcript'))}
             >
               Transcript
             </button>
           </div>
 
-          {transcriptOpen ? (
+          {openTab === 'notes' ? <NotesPanel recordingId={recordingId} /> : null}
+
+          {openTab === 'transcript' ? (
             <TranscriptPanel recordingId={recordingId} canCorrect={canCorrect} />
           ) : null}
         </>

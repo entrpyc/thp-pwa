@@ -4,7 +4,7 @@ _Planned: 2026-08-24_
 
 ## Status
 
-14/121 criteria met. Groups complete: none.
+42/121 criteria met. Groups complete: **Group 1**.
 _Maintained by implementation — see the checkboxes for detail._
 
 ## Background to research
@@ -254,32 +254,64 @@ publication gate); active-scope prd 3.1.4, 3.1.6, 3.1.7, 3.1.8, 3.1.10, 3.1.11, 
 
 **Acceptance criteria**
 
-- [ ] **1.4.1** `POST /api/v1/recordings/{id}/notes` creates a note for the authenticated member from
+- [x] **1.4.1** `POST /api/v1/recordings/{id}/notes` creates a note for the authenticated member from
   `text`, `visibility` and `timestampMs`, and answers the created note — verified by
   `packages/web/tests/integration/notes.test.ts`
   - the service asks the publication gate, then `authorise`, then the store
   - request and response shapes come from `packages/shared/src/notes.ts`
-- [ ] **1.4.2** `note.write` is a policy action granted to both admin and member, so nothing about
+- [x] **1.4.2** `note.write` is a policy action granted to both admin and member, so nothing about
   writing a note differs by role — verified by `packages/web/tests/unit/policy.test.ts`
   - one entry in `POLICY_ACTIONS`, one rule in `RULES`
-- [ ] **1.4.3** The route is declared through `apiRoute` carrying a stated access rule, so it appears
+- [x] **1.4.3** The route is declared through `apiRoute` carrying a stated access rule, so it appears
   in the route sweep and cannot exist without one — verified by
   `packages/web/tests/integration/route-sweep.test.ts`
-- [ ] **1.4.4** Text that is empty or whitespace-only after trimming is refused, and text over 1,000
+- [x] **1.4.4** Text that is empty or whitespace-only after trimming is refused, and text over 1,000
   characters is refused rather than truncated — verified by
   `packages/web/tests/integration/notes.test.ts`
   - the ceiling is one exported constant in `packages/shared/src/notes.ts`, read by the server here
     and by the composer at 1.8.5
-- [ ] **1.4.5** A create on an unpublished recording is refused `not_found`, through
+- [x] **1.4.5** A create on an unpublished recording is refused `not_found`, through
   `findVisibleRecording(id, { includeUnpublished: false })` — verified by
   `packages/web/tests/integration/notes.test.ts`
   - the refusal carries active-scope prd 5.1.4's message
-- [ ] **1.4.6** A `timestampMs` below zero is refused, and a second note at a position already noted
+- [x] **1.4.6** A `timestampMs` below zero is refused, and a second note at a position already noted
   on the same recording is an ordinary create — verified by
   `packages/web/tests/integration/notes.test.ts`
   - the server validates `>= 0` and nothing more; nothing stores a recording's duration
 
-**Record**
+**Record** — _updated 2026-08-24_
+
+- **Edge cases:** a body carrying `parentId` is ignored rather than refused — a client that tried to
+  post a reply here gets a perfectly ordinary top-level note back, at whatever position it sent,
+  until Task 3.1 gives `parentId` a meaning
+- **Edge cases:** any other unknown field in the body is ignored the same way, so a typo'd
+  `visibilty` is answered as "say whether the note is private or public" rather than as a typo
+- **Edge cases:** `timestampMs` has a floor and no ceiling — nothing in this product stores a
+  recording's duration, so a note anchored an hour past the end of a ten-minute teaching is written
+  without complaint and shows in the list at a moment the scrubber can never reach
+- **Edge cases:** the create is not idempotent and nothing de-duplicates — a double-submitted
+  request that the composer's busy state did not stop writes two identical notes at one moment, and
+  neither can be removed until Task 5.2
+- **Edge cases:** the recording is gated once, before the insert, outside any transaction. A
+  teaching unpublished in the microseconds between the two accepts the note, and it becomes visible
+  again the moment the teaching is republished
+- **Assumptions, major (confirmed):** the created note is answered in **the same shape the list
+  uses** (`{ note: NoteView }`), not a narrower one — so the composer can put what it wrote straight
+  into the list beside it. Confirmed with the operator as part of the `NoteView` shape
+- **Assumptions, minor:** the text is trimmed **and stored trimmed**, so what is counted and what is
+  saved are the same string; the over-length refusal reuses 5.1.4's sentence
+  (`1,000 characters maximum.`) rather than inventing a second wording; the refusal for an unknown
+  visibility does not name the two values, because no interface can produce a third
+- **Reworked:** none
+- **False positives fixed:** 0 — nine deliberate breaks over Tasks 1.4 and 1.5, each landing on the
+  test that names the behaviour
+- **Operator steps:** none
+- **Notes:** `NOTE_RECORDING_GONE_MESSAGE` is exported from `packages/shared/src/notes.ts` — 5.1.4's
+  sentence, stated once and read by this service and by the composer at 1.8.6, so the refusal and
+  what the member reads cannot drift. `note.write` is in `POLICY_ACTIONS` and `RULES`; the other six
+  note actions are deliberately absent and are denied by default until the tasks that need them.
+  `tests/fixtures/type-errors/policy-rules-complete.ts` needed the two new entries, which is that
+  fixture's mechanism working
 
 ### Task 1.5 — Reading a recording's notes over the API
 
@@ -295,24 +327,56 @@ tombstones (Task 5.2).
 
 **Acceptance criteria**
 
-- [ ] **1.5.1** `GET /api/v1/recordings/{id}/notes` answers the reading member's visible notes in one
+- [x] **1.5.1** `GET /api/v1/recordings/{id}/notes` answers the reading member's visible notes in one
   payload, ordered by timestamp ascending and tie-broken by creation time, oldest first —
   verified by `packages/web/tests/integration/notes.test.ts`
   - the order is the store's; the route does not re-sort
-- [ ] **1.5.2** Each note carries its id, its position, its author's display name, the time it was
+- [x] **1.5.2** Each note carries its id, its position, its author's display name, the time it was
   written, its `editedAt` and its text — verified by
   `packages/web/tests/integration/notes.test.ts`
-- [ ] **1.5.3** `note.read` is a policy action granted to admin and member, and the route declares it
+- [x] **1.5.3** `note.read` is a policy action granted to admin and member, and the route declares it
   — verified by `packages/web/tests/unit/policy.test.ts`
-- [ ] **1.5.4** A read of an unpublished recording is refused `not_found`, never answered with an
+- [x] **1.5.4** A read of an unpublished recording is refused `not_found`, never answered with an
   empty list — verified by `packages/web/tests/integration/notes.test.ts`
-- [ ] **1.5.5** Another member's private note is absent from the payload for every actor, including an
+- [x] **1.5.5** Another member's private note is absent from the payload for every actor, including an
   admin — verified by `packages/web/tests/integration/notes.test.ts`
   - the absence comes from the store's condition; the route filters nothing
-- [ ] **1.5.6** A note written by a deactivated account is returned unchanged, under the same display
+- [x] **1.5.6** A note written by a deactivated account is returned unchanged, under the same display
   name — verified by `packages/web/tests/integration/notes.test.ts`
 
-**Record**
+**Record** — _updated 2026-08-24_
+
+- **Edge cases:** the read is complete and unpaged — a teaching carrying two thousand notes answers
+  all of them and the tab takes as long as that takes (active-scope prd 7.7)
+- **Edge cases:** an id that never existed and an unpublished one answer the same `not_found`, so a
+  member who follows a stale link is told the teaching is not there rather than that it is hidden
+- **Edge cases:** `timestampMs` and `text` are non-null on the wire because the table refuses a
+  top-level note without a position and the read is top-level only. A tombstone written by Task 5.2
+  or by a hand at the console would come back with **empty text** rather than being filtered, which
+  renders as a blank card; Task 5.2 owns the filter
+- **Edge cases:** nothing caches, so two members reading at the same second get two full reads, and
+  a note written between them appears for one and not the other until the second refreshes
+- **Assumptions, major (confirmed):** the author's display name is **joined in the store**
+  (`listNotesForReader` now answers `NoteWithAuthorRow`), rather than gathered by the service from
+  the ids the rows carry. One statement per read, and Task 3.1's thread read, Task 4.3's reactions
+  and Task 6.4's pins inherit the shape
+- **Assumptions, major (confirmed):** each note carries a derived **`mine: boolean`** rather than
+  its author's id for the client to compare against. The Private badge (3.2.2), the Mine filter
+  (3.2.3) and every later author control read one field, and no viewer identity is threaded through
+  the client tree
+- **Assumptions, minor:** the payload is `{ notes: [...] }` — a named key rather than a bare array,
+  so pinned notes (Task 6.4) become a second key rather than a shape change; timestamps cross the
+  wire as ISO 8601 strings, the house convention; `visibility` travels so 5.2.3's badge can be drawn
+  from it
+- **Reworked:** none
+- **False positives fixed:** 0 — counted with Task 1.4's nine
+- **Operator steps:** none
+- **Notes:** `listNotesForReader`'s return type widened from `NoteRow[]` to `NoteWithAuthorRow[]`
+  (an inner join on `user`), which is a change to the module Task 1.2 shipped — its criteria are
+  unaffected and its tests still pass. `NoteWithAuthorRow` is exported from `@thp/db`. There is
+  deliberately **no `?filter=`** on the route: the All / Public / Mine control narrows what is
+  listed out of what the member was already entitled to, and a filter on the wire would make the
+  interface look like the thing deciding what is reachable
 
 ### Task 1.6 — The Notes tab, the player's notes store, and the list
 
@@ -330,35 +394,78 @@ active-scope prd 3.1.6, 3.2.2, 3.2.8, 3.2.10, 3.2.11, 5.2.1, 5.2.2, 5.2.3, 5.2.4
 
 **Acceptance criteria**
 
-- [ ] **1.6.1** The recording page's tab strip carries a second tab, **Notes**, whose icon and active
+- [x] **1.6.1** The recording page's tab strip carries a second tab, **Notes**, whose icon and active
   state use `--color-notes`, and opening it closes Transcript — verified by
   `packages/web/tests/integration/notes-screen.test.ts`
   - the strip is already a `role="tablist"`; single-select, per the reference
   - no new colour token: `--color-notes` and `--color-notes-bg` already exist and nothing uses them
-- [ ] **1.6.2** `PlayerProvider` fetches the recording's notes when the recording is opened, clears
+- [x] **1.6.2** `PlayerProvider` fetches the recording's notes when the recording is opened, clears
   them when a different recording is opened, and discards a late answer belonging to the previous
   recording — verified by `packages/web/tests/integration/notes-screen.test.ts`
   - the same `loadedRef.current?.id !== recording.id` guard the transcript fetch uses
   - fetched on open rather than on tab open, because markers are visible without the tab
-- [ ] **1.6.3** A notes fetch never touches the `<audio>` element, the playback grant or the renewal
+- [x] **1.6.3** A notes fetch never touches the `<audio>` element, the playback grant or the renewal
   ticker, and `open()` keeps its early return for the already-loaded recording so playback
   survives navigation — verified by `packages/web/tests/integration/player-screen.test.ts`
-- [ ] **1.6.4** The tab lists note cards in the payload's order, each carrying a pressable timestamp,
+- [x] **1.6.4** The tab lists note cards in the payload's order, each carrying a pressable timestamp,
   the author's initials monogram and display name, the time it was written and the full
   untruncated text; the member's own private notes carry a **Private** pill in `--color-notes` —
   verified by `packages/web/tests/integration/notes-screen.test.ts`
   - the style guide's standard card; no avatars are rendered
   - private and public notes are interleaved, not separated
-- [ ] **1.6.5** Note text that looks like markdown, HTML or a URL renders as the characters it is, and
+  - _(amended at implementation)_ **pressable** means the affordance, not the behaviour: what
+    pressing it does is Task 2.2's (2.2.4), which builds seeking from a note and seeking from a
+    marker together. This task ships the control; until 2.2 lands it does nothing
+- [x] **1.6.5** Note text that looks like markdown, HTML or a URL renders as the characters it is, and
   line breaks are preserved — verified by
   `packages/web/tests/integration/notes-screen.test.ts`
-- [ ] **1.6.6** A recording with no notes the member can see shows **"No notes on this teaching yet.
+- [x] **1.6.6** A recording with no notes the member can see shows **"No notes on this teaching yet.
   Write the first one."**, and a failed load shows **"Couldn't load notes."** with a **Try again**
   control while the recording above still plays — verified by
   `packages/web/tests/integration/notes-screen.test.ts`
   - a notes failure leaves the store empty; it cannot reach playback
 
-**Record**
+**Record** — _updated 2026-08-24_
+
+- **Edge cases:** the note card's timestamp is a button that **does nothing when pressed** — 5.2.2's
+  affordance is here, and what the press does belongs to Task 2.2 (2.2.4). Until that lands a member
+  who presses it gets no seek and no feedback
+- **Edge cases:** the fetch happens once per opened recording and nothing polls — a note another
+  member writes while the tab is open never appears until the member reopens the teaching or writes
+  one themselves
+- **Edge cases:** the retry re-asks and re-fails the same way. There is no backoff and no limit, so a
+  member on a dead connection can press **Try again** as fast as they like
+- **Edge cases:** a failed load replaces the **whole** tab, composer included — a member whose notes
+  did not arrive cannot write one either, even though writing does not depend on reading. 5.2.7 only
+  asks that the player be untouched, so this is left as it is rather than widened here
+- **Edge cases:** the whole list renders at once — a teaching carrying hundreds of notes paints
+  hundreds of cards, and the tab is as slow as that is (active-scope prd 7.7)
+- **Edge cases:** the written time is formatted in the **browser's** locale offset with `en-GB`
+  wording, so two members in different time zones see the same note stamped differently
+- **Edge cases:** the monogram is the first and last words' initials — a single-word display name
+  gives one letter, and a name whose words start with the same letter gives a monogram that does not
+  distinguish two people
+- **Assumptions, major (confirmed):** none — the store shape and the payload were settled at 1.5
+- **Assumptions, minor:** the tab strip is one `openTab` value rather than two booleans, which is
+  what makes single-select structural rather than a rule two handlers have to remember; the panel
+  reads `player.notes` **without** re-checking that the notes belong to this recording, because the
+  provider clears the store on open and discards a late answer — a second guard here would hide a
+  broken one there from the transport, which has no panel to filter it; a loading line reads
+  **"Loading the notes…"**, matching the transcript tab's wording
+- **Reworked:** 1.6.2 — the late-answer half of the test held a request that was never made, so it
+  passed with the provider's guard removed. Rewritten to hold the request the provider issues on
+  `open()`, and the panel's duplicate guard was deleted so the provider's is the one being observed
+- **Reworked:** 1.6.3 — both regression tests read the element's state the instant the URL settled,
+  before a re-point or a `pause()` would have landed. Rewritten to let the failure and the second
+  `open()` actually happen before asserting
+- **False positives fixed:** 3
+- **Operator steps:** none
+- **Notes:** `PlayerProvider` gained `notes`, `notesFailed`, `composerAnchorMs`, `refreshNotes()`,
+  `openComposer()` and `closeComposer()`; Task 2.1's markers read `player.notes` and Task 2.3's
+  sheet reads the same anchor. `screens.module.css` gained `.notesTab` and `.notesIcon` — the only
+  two rules in the product that use `--color-notes`. Two shipped tests asserted the strip held
+  exactly one tab and that **Notes** was absent, and were updated to the two the strip now has:
+  `transcript-screen.test.ts` and `member-library-screen.test.ts`
 
 ### Task 1.7 — The All / Public / Mine filter
 
@@ -373,23 +480,43 @@ a reload.
 
 **Acceptance criteria**
 
-- [ ] **1.7.1** A three-state pill row — **All** / **Public** / **Mine** — sits directly under the
+- [x] **1.7.1** A three-state pill row — **All** / **Public** / **Mine** — sits directly under the
   composer in the same tab-pill treatment as the recording tab strip, opening on **All** —
   verified by `packages/web/tests/integration/notes-screen.test.ts`
-- [ ] **1.7.2** **Public** narrows the list to public notes, and **Mine** narrows it to the reading
+- [x] **1.7.2** **Public** narrows the list to public notes, and **Mine** narrows it to the reading
   member's own notes of both visibilities — verified by
   `packages/web/tests/integration/notes-screen.test.ts`
-- [ ] **1.7.3** Each state carries its own empty state — **"No notes on this teaching yet. Write the
+- [x] **1.7.3** Each state carries its own empty state — **"No notes on this teaching yet. Write the
   first one."**, **"Nobody has shared a note on this teaching yet."** and **"You haven't written a
   note on this teaching yet."** — verified by
   `packages/web/tests/integration/notes-screen.test.ts`
   - a recording carrying public notes but none of the member's own is not an empty state under **All**
-- [ ] **1.7.4** Changing the filter changes what is listed and nothing about what is reachable — the
+- [x] **1.7.4** Changing the filter changes what is listed and nothing about what is reachable — the
   player's visible-note set is identical in all three states — verified by
   `packages/web/tests/integration/notes-screen.test.ts`
   - re-asserted against the rendered markers once Task 2.1 lands
 
-**Record**
+**Record** — _updated 2026-08-24_
+
+- **Edge cases:** the choice is component state and is lost on every reload, on every close and
+  reopen of the tab, and whenever a different teaching is opened — deliberate, per the task's
+  *Out of scope*
+- **Edge cases:** the counts are not shown anywhere, so a member on **Mine** cannot tell whether the
+  group has written anything without switching back
+- **Edge cases:** **Public** and **Mine** overlap — the member's own public notes are in both — and
+  nothing on the card says which filters it belongs to
+- **Assumptions, major (confirmed):** none
+- **Assumptions, minor:** the three states are a `role="tablist"` in the same treatment as the
+  recording strip, per 5.2.5, which also makes them keyboard-operable without extra work; the empty
+  states are one `Record<Filter, string>` so a fourth state could not ship without its own sentence
+- **Reworked:** none
+- **False positives fixed:** 0
+- **Operator steps:** none
+- **Notes:** the filter is applied to the payload the player already holds and never re-asks the
+  API — the test asserts no request is made when the state changes, which is what keeps "changes
+  what is listed, never what is reachable" a checked property. Task 2.1's markers must read
+  `player.notes` rather than anything this component computes, or the filter would start narrowing
+  the transport too
 
 ### Task 1.8 — The composer
 
@@ -407,35 +534,68 @@ gains the notes store and the composer anchor; active-scope prd 3.1.1, 3.1.3, 3.
 
 **Acceptance criteria**
 
-- [ ] **1.8.1** The composer is pinned above the list as a `--color-surface-raised` panel showing the
+- [x] **1.8.1** The composer is pinned above the list as a `--color-surface-raised` panel showing the
   position the player held **at the instant it opened**, frozen, displayed as `mm:ss` or
   `h:mm:ss` past an hour, and not editable by the author — verified by
   `packages/web/tests/integration/notes-screen.test.ts`
   - the anchor is held by `PlayerProvider`, not by the panel
   - placeholder **"What landed at this moment?"**
-- [ ] **1.8.2** Opening the composer neither pauses nor moves playback, so a note about a moment does
+- [x] **1.8.2** Opening the composer neither pauses nor moves playback, so a note about a moment does
   not drift to a moment thirty seconds later while it is being typed — verified by
   `packages/web/tests/integration/notes-screen.test.ts`
-- [ ] **1.8.3** With nothing yet played, the anchor is the position the player currently holds — the
+- [x] **1.8.3** With nothing yet played, the anchor is the position the player currently holds — the
   restored resume position where one exists, and `00:00` where none does — verified by
   `packages/web/tests/integration/notes-screen.test.ts`
-- [ ] **1.8.4** The visibility control is a two-state segmented pill opening on **Private**, with one
+- [x] **1.8.4** The visibility control is a two-state segmented pill opening on **Private**, with one
   dim line switching between **"Only you will see this."** and **"Everyone in the group will see
   this at this moment."**; submitting without touching it creates a private note — verified by
   `packages/web/tests/integration/notes-screen.test.ts`
   - a labelled two-state control, not a colour difference
-- [ ] **1.8.5** The character count appears from 900 characters and not before; over 1,000 it shows in
+- [x] **1.8.5** The character count appears from 900 characters and not before; over 1,000 it shows in
   the error treatment with submit disabled and **"1,000 characters maximum."**; empty or
   whitespace-only leaves submit disabled with no message — verified by
   `packages/web/tests/integration/notes-screen.test.ts`
   - the ceiling is the shared constant, not a number typed here
-- [ ] **1.8.6** Submitting shows a busy state that cannot be pressed twice and the note appears in the
+- [x] **1.8.6** Submitting shows a busy state that cannot be pressed twice and the note appears in the
   list; a failed save keeps the text and shows **"Couldn't save your note. Your text is still
   here — try again."**, and a save refused because the recording was unpublished underneath shows
   **"This teaching isn't available any more, so the note can't be saved."** with the text likewise
   preserved — verified by `packages/web/tests/integration/notes-screen.test.ts`
 
-**Record**
+**Record** — _updated 2026-08-24_
+
+- **Edge cases:** the anchor freezes when the **tab** opens, so a member who opens Notes, reads for
+  four minutes and then starts typing anchors their note four minutes behind where they are. Closing
+  and reopening the tab re-freezes it, and nothing on screen says so
+- **Edge cases:** the draft is component state — closing the tab, opening a different teaching or
+  reloading loses whatever was typed, with no warning and no restore
+- **Edge cases:** the count is characters as JavaScript counts them, so an emoji or a character
+  outside the basic plane costs two against the ceiling
+- **Edge cases:** the busy state is per-composer, so a member who saves, opens the transport's sheet
+  (Task 2.3) and saves the same text again writes two notes
+- **Edge cases:** a save refused for anything the server calls `not_found` prints 5.1.4's sentence.
+  Today the publication gate is the only thing that answers it on this route, so the sentence is
+  right; a later `not_found` on the same route would wear the wrong message
+- **Edge cases:** the ceiling refusal from the server is never seen in practice — the client disables
+  submit first — so if the two ever disagree the member gets a disabled button and no explanation
+- **Assumptions, major (confirmed):** the composer is **rendered only once the anchor is frozen**,
+  rather than falling back to `00:00` for the tick before the effect runs. `00:00` is a real answer
+  (3.1.3), so a flicker through it is indistinguishable from the truth — this was found by the
+  freeze assertion passing against a composer that showed `00:00` at both readings
+- **Assumptions, minor:** the submit reads **Save note**, and **Saving…** while it is in flight; the
+  count reads `900 / 1,000` and switches to 5.1.4's sentence over the ceiling; 900 is a named
+  constant in the panel rather than a fraction of the ceiling, so moving the ceiling does not
+  silently move where the warning starts; the visibility control is two `aria-pressed` buttons in a
+  labelled group rather than a radio group, so it reads as the segmented pill 5.1.3 draws
+- **Reworked:** 1.8.1 — the freeze assertion originally compared two readings of a composer that
+  showed `00:00` both times, so it held with the anchor removed entirely. Fixed in the component
+  (above) and the test now reads the seconds and requires a real position
+- **False positives fixed:** 1 (counted here; the other two are in Task 1.6's record)
+- **Operator steps:** none
+- **Notes:** the composer takes its anchor as a prop from the panel, which reads it from the player —
+  Task 2.3's sheet mounts the same `NoteComposer` with the same prop, so the two entry points cannot
+  disagree about the moment. 5.1.4's unpublished sentence is `NOTE_RECORDING_GONE_MESSAGE` in
+  `packages/shared/src/notes.ts`, shared with the service at 1.4.5
 
 ---
 

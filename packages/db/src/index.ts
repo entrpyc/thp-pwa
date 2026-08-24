@@ -61,6 +61,7 @@ export {
   listNotesForReader,
   type NewNote,
   type NoteRow,
+  type NoteWithAuthorRow,
 } from './notes';
 export {
   findPlaybackProgress,

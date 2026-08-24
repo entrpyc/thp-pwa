@@ -1,0 +1,295 @@
+/*
+ * The `Notes` tab of `pages/recording.png` — the composer, the filter and the list.
+ *
+ * Its own stylesheet for the reason `transcript.module.css` has one: `screens.module.css` is the
+ * member screens' shared furniture, and this is one tab's contents. Everything here composes from
+ * `tokens.css`.
+ *
+ * No reference draws below the strip, so every rule is read off `style-guide.md`:
+ *
+ * 1. The composer is the guide's **inner panel** — `--color-surface-raised`, `--radius-md` — lifted
+ *    one tone above the list it sits on rather than separated by a shadow (principle 2).
+ * 2. Each note is the guide's **standard card**, `--space-4` apart.
+ * 3. The filter is the guide's **tab pill**, in the same treatment the recording strip uses (5.2.5).
+ * 4. Green appears in exactly two places — the **Private** pill and nothing else on this surface —
+ *    because green means notes and nothing more (principle 5).
+ * 5. `.primary` is the guide's filled button, one per group.
+ */
+
+.panel {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-4);
+}
+
+.quiet {
+  margin: 0;
+  font-size: var(--fs-body);
+  color: var(--color-text-dim);
+}
+
+.failure {
+  margin: 0;
+  background: var(--color-bg-deep);
+  border: 1px solid var(--color-border-strong);
+  border-radius: var(--radius-md);
+  padding: var(--space-4);
+  font-size: var(--fs-body);
+  color: var(--color-text);
+}
+
+.retry {
+  align-self: flex-start;
+  background: transparent;
+  border: 1px solid var(--color-border-strong);
+  border-radius: var(--radius-pill);
+  padding: var(--space-2) var(--space-5);
+  color: var(--color-primary-strong);
+  font-family: inherit;
+  font-size: var(--fs-meta);
+  font-weight: 600;
+  cursor: pointer;
+}
+
+.retry:hover {
+  background: var(--color-primary-soft);
+}
+
+/* ---- the composer -------------------------------------------------------------------------- */
+
+.composer {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-3);
+  background: var(--color-surface-raised);
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-md);
+  padding: var(--space-5);
+}
+
+/* The frozen position. A label, not a control — the author cannot move it. */
+.anchor {
+  margin: 0;
+  font-size: var(--fs-meta);
+  color: var(--color-text-dim);
+  font-variant-numeric: tabular-nums;
+}
+
+.field {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-2);
+  min-width: 0;
+}
+
+.fieldLabel {
+  font-size: var(--fs-meta);
+  color: var(--color-text-muted);
+}
+
+.textArea {
+  width: 100%;
+  background: var(--color-surface);
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-sm);
+  padding: var(--space-3);
+  color: var(--color-text);
+  font-family: inherit;
+  font-size: var(--fs-body);
+  resize: vertical;
+}
+
+.textArea::placeholder {
+  color: var(--color-text-dim);
+}
+
+/* Two states, joined — the guide's segmented pill. */
+.visibility {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--space-2);
+}
+
+.visibilityOption {
+  background: transparent;
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-pill);
+  padding: var(--space-2) var(--space-5);
+  color: var(--color-text-muted);
+  font-family: inherit;
+  font-size: var(--fs-body);
+  cursor: pointer;
+}
+
+.visibilityOption[aria-pressed='true'] {
+  border-color: var(--color-primary-strong);
+  background: var(--color-primary-soft);
+  color: var(--color-text);
+}
+
+.visibilityHint {
+  margin: 0;
+  font-size: var(--fs-meta);
+  color: var(--color-text-dim);
+}
+
+.count {
+  margin: 0;
+  font-size: var(--fs-meta);
+  color: var(--color-text-dim);
+  font-variant-numeric: tabular-nums;
+}
+
+/* The error treatment: the same line, in the one colour that reads as a stop. */
+.countOver {
+  margin: 0;
+  font-size: var(--fs-meta);
+  color: var(--color-text);
+  font-weight: 600;
+}
+
+.composerActions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--space-3);
+}
+
+.primary {
+  background: var(--color-primary);
+  border: none;
+  border-radius: var(--radius-pill);
+  padding: var(--space-2) var(--space-5);
+  color: var(--color-text);
+  font-family: inherit;
+  font-size: var(--fs-body);
+  font-weight: 600;
+  cursor: pointer;
+}
+
+.primary:hover {
+  background: var(--color-primary-strong);
+}
+
+.primary:disabled {
+  cursor: default;
+  opacity: 0.6;
+}
+
+/* ---- the filter ---------------------------------------------------------------------------- */
+
+.filters {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--space-3);
+}
+
+.filter {
+  background: transparent;
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-pill);
+  padding: var(--space-2) var(--space-5);
+  color: var(--color-text-muted);
+  font-family: inherit;
+  font-size: var(--fs-body);
+  cursor: pointer;
+}
+
+.filter[aria-selected='true'] {
+  border-color: var(--color-primary-strong);
+  background: var(--color-primary-soft);
+  color: var(--color-text);
+}
+
+/* ---- the list ------------------------------------------------------------------------------ */
+
+.notes {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-4);
+}
+
+.note {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-3);
+  background: var(--color-surface);
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-md);
+  padding: var(--space-5);
+}
+
+.noteHead {
+  display: flex;
+  align-items: center;
+  gap: var(--space-3);
+}
+
+.noteTime {
+  background: transparent;
+  border: none;
+  padding: 0;
+  color: var(--color-primary-strong);
+  font-family: inherit;
+  font-size: var(--fs-meta);
+  font-weight: 500;
+  font-variant-numeric: tabular-nums;
+  cursor: pointer;
+}
+
+/* The one green on this surface, and the only thing that distinguishes a private note (5.2.3). */
+.privatePill {
+  background: var(--color-notes-bg);
+  border: 1px solid var(--color-notes);
+  border-radius: var(--radius-pill);
+  padding: 0 var(--space-3);
+  color: var(--color-notes);
+  font-size: var(--fs-meta);
+}
+
+.noteWho {
+  display: flex;
+  align-items: center;
+  gap: var(--space-3);
+  min-width: 0;
+}
+
+/* Initials in a circle. No picture is drawn here — none is stored. */
+.monogram {
+  flex: none;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: var(--space-8);
+  height: var(--space-8);
+  background: var(--color-surface-raised);
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-circle);
+  color: var(--color-text-muted);
+  font-size: var(--fs-meta);
+}
+
+.noteAuthor {
+  color: var(--color-text);
+  font-size: var(--fs-body);
+  font-weight: 600;
+}
+
+.noteWhen {
+  color: var(--color-text-dim);
+  font-size: var(--fs-meta);
+}
+
+/*
+ * Wrapped in full rather than truncated (5.2.2), and the line breaks the member typed are the line
+ * breaks they get back (3.1.6).
+ */
+.noteText {
+  margin: 0;
+  color: var(--color-text);
+  font-size: var(--fs-body);
+  white-space: pre-wrap;
+  overflow-wrap: anywhere;
+}

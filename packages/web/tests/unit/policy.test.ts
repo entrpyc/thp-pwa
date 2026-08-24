@@ -168,3 +168,42 @@ describe('the admin account actions are the API’s refusal, not the console’s
     expect(can(actorWith(ROLE.member), action)).toBe(false);
   });
 });
+
+/**
+ * **The two note actions** (Tasks 1.4 and 1.5) — active-scope prd 3.1.12 and 3.7's matrix.
+ *
+ * The property being pinned is the unusual one for this table: these are the first actions in the
+ * product where **both roles answer identically and are meant to**. Nothing about writing a note
+ * differs by role, and nothing about reading one does either — what a member sees through
+ * `note.read` is decided by the query condition in `packages/db/src/notes.ts`, never here.
+ */
+describe('the two note actions are in the table, and neither differs by role', () => {
+  it.each(['note.read', 'note.write'] as const)('permits %s for both roles', (action) => {
+    expect(can(actorWith(ROLE.admin), action)).toBe(true);
+    expect(can(actorWith(ROLE.member), action)).toBe(true);
+  });
+
+  it('answers them from the rules table rather than from a call site', () => {
+    expect(isPolicyAction('note.read')).toBe(true);
+    expect(isPolicyAction('note.write')).toBe(true);
+    // The six this scope has not built yet are not quietly permitted by a coarse rule: an action
+    // with no entry is denied, which is what makes adding them later a visible edit.
+    for (const role of ROLES) {
+      for (const absent of [
+        'note.edit',
+        'note.delete',
+        'note.moderate',
+        'note.react',
+        'note.pin',
+        'note.unpin',
+      ]) {
+        expect(can(actorWith(role), absent), `${absent}/${role}`).toBe(false);
+      }
+    }
+  });
+
+  it('refuses them to an anonymous caller', () => {
+    expect(can(null, 'note.read')).toBe(false);
+    expect(can(null, 'note.write')).toBe(false);
+  });
+});

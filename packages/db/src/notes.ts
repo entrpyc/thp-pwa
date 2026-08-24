@@ -1,6 +1,6 @@
 import { and, asc, eq, isNull, or } from 'drizzle-orm';
 import { getDatabase, queryable, type Executor } from './client';
-import { note } from './schema';
+import { note, user } from './schema';
 import type { NoteVisibility } from '@thp/shared';
 
 /**
@@ -50,6 +50,18 @@ export interface NoteRow {
   /** Presence is what makes a row a tombstone. */
   readonly deletedAt: Date | null;
   readonly deletedBy: string | null;
+}
+
+/**
+ * A note row plus **the one thing about its author a reader is shown** — the display name
+ * ([3.2.8](docs/active-scope/prd.md)).
+ *
+ * Joined here rather than gathered by the caller because this module owns every statement against
+ * `note` and a read that answers a list is one statement or it is N+1. A deactivated account still
+ * matches: deactivation ends access, not authorship ([3.2.9](docs/active-scope/prd.md)).
+ */
+export interface NoteWithAuthorRow extends NoteRow {
+  readonly authorDisplayName: string;
 }
 
 /** A note as a writer supplies it. The id and the timestamps are the table's business. */
@@ -128,15 +140,20 @@ export async function insertNote(
  *
  * **Top-level only.** A reply has no position, so it has no place in a list ordered by one; the
  * thread under a note is its own read and arrives with replies.
+ *
+ * **The author's display name comes back with the row.** An inner join rather than a second pass
+ * over the ids the first pass returned: `author_id` is `not null` and restricts on delete, so every
+ * note has an author row to join to and the join can drop nothing.
  */
 export async function listNotesForReader(
   recordingId: string,
   readerId: string,
   executor: Executor = getDatabase(),
-): Promise<NoteRow[]> {
+): Promise<NoteWithAuthorRow[]> {
   const rows = await queryable(executor)
-    .select(NOTE_COLUMNS)
+    .select({ ...NOTE_COLUMNS, authorDisplayName: user.displayName })
     .from(note)
+    .innerJoin(user, eq(note.authorId, user.id))
     .where(
       and(
         eq(note.recordingId, recordingId),
@@ -147,5 +164,5 @@ export async function listNotesForReader(
     )
     .orderBy(asc(note.timestampMs), asc(note.createdAt));
 
-  return rows as NoteRow[];
+  return rows as NoteWithAuthorRow[];
 }

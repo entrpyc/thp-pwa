@@ -5,7 +5,9 @@ import {
   DASHBOARD_PAGE_PATH,
   MEMBER_LIBRARY_PAGE_PATH,
   ROLE,
+  recordingNotesPath,
   recordingPagePath,
+  recordingPlaybackPath,
 } from '@thp/shared';
 import {
   createDatabase,
@@ -371,6 +373,105 @@ describe('the transport is mounted app-wide', () => {
       await expect
         .poll(async () => (await bar.textContent()) ?? '', { timeout: 30_000 })
         .toContain(SECOND_TITLE);
+    } finally {
+      await page.context().close();
+    }
+  }, 240_000);
+});
+
+/**
+ * **The notes store cannot reach playback** (Task 1.6, criterion 1.6.3).
+ *
+ * `player-context.tsx` gained a second fetch, and it owns the `<audio>` element, the grant and the
+ * renewal ticker. Three specific regressions are what active-scope architecture § 5.1 names as the
+ * risk of that, and each is driven here rather than reviewed.
+ */
+describe('the notes the player now holds cannot reach the audio', () => {
+  it('plays through a notes failure, and mints no second grant for it', async () => {
+    const context = await browser.newContext({ viewport: { width: 1280, height: 900 } });
+    const page = await context.newPage();
+    const asked: string[] = [];
+    page.on('request', (request) => asked.push(request.url()));
+    try {
+      await page.goto(`${baseUrl}/sign-in`, { waitUntil: 'domcontentloaded' });
+      await page.getByLabel('Email').fill(member.email);
+      await page.getByLabel('Password').fill(member.password);
+      await page.getByRole('button', { name: 'Sign in' }).click();
+      await page.waitForURL(`${baseUrl}${DASHBOARD_PAGE_PATH}`, { timeout: 30_000 });
+
+      // **Held, then refused** — so the failure lands while the member is already listening. A
+      // request that had already failed before the play press would let a `pause()` in the failure
+      // path pass unnoticed, which is precisely the regression this is about.
+      await page.route(`**${API_PREFIX}${recordingNotesPath(recordingId)}`, async (route) => {
+        await new Promise((resolve) => setTimeout(resolve, 6_000));
+        await route.abort();
+      });
+
+      await page.goto(`${baseUrl}${recordingPagePath(recordingId)}`, {
+        waitUntil: 'domcontentloaded',
+      });
+      await expect
+        .poll(async () => (await audioState(page)).duration, { timeout: 60_000 })
+        .toBeGreaterThan(TEACHING_SECONDS - 5);
+
+      await page.getByRole('button', { name: 'Play' }).first().click();
+      await expect
+        .poll(async () => (await audioState(page)).currentTime, { timeout: 30_000 })
+        .toBeGreaterThan(1);
+      const listening = await audioState(page);
+
+      // Past the moment the notes request gives up.
+      await new Promise((resolve) => setTimeout(resolve, 9_000));
+
+      const after = await audioState(page);
+      expect(after.paused).toBe(false);
+      expect(after.currentTime).toBeGreaterThan(listening.currentTime + 1);
+      // The same source, so nothing re-pointed the element on the way through.
+      expect(after.src).toBe(listening.src);
+
+      // And one grant across the whole visit: the notes never asked for another.
+      const grants = asked.filter(
+        (url) => url === `${baseUrl}${API_PREFIX}${recordingPlaybackPath(recordingId)}`,
+      );
+      expect(grants).toHaveLength(1);
+    } finally {
+      await context.close();
+    }
+  }, 240_000);
+
+  it('keeps the early return, so re-opening what is loaded does not re-point the element', async () => {
+    const { page, requests } = await openTeaching(recordingId);
+    try {
+      await page.getByRole('button', { name: 'Play' }).first().click();
+      await expect
+        .poll(async () => (await audioState(page)).currentTime, { timeout: 30_000 })
+        .toBeGreaterThan(1);
+      const listening = await audioState(page);
+
+      // Away and back by client-side navigation, which calls `open()` again with the same teaching.
+      await page.getByRole('link', { name: 'Back to recordings' }).click();
+      await page.waitForURL(`${baseUrl}${MEMBER_LIBRARY_PAGE_PATH}`, { timeout: 30_000 });
+      await page.getByRole('link', { name: new RegExp(TITLE) }).click();
+      await page.waitForURL(`${baseUrl}${recordingPagePath(recordingId)}`, { timeout: 30_000 });
+
+      // The page's own load — the recording and the position — has to finish before the state is
+      // read: an `open()` that re-pointed the element would do it a round trip *after* the URL
+      // changed, and reading the moment the URL settles would miss it entirely.
+      await new Promise((resolve) => setTimeout(resolve, 4_000));
+
+      const back = await audioState(page);
+      expect(back.paused).toBe(false);
+      // The same source, still running — a re-point would have reset `currentTime` to zero.
+      expect(back.src).toBe(listening.src);
+      expect(back.currentTime).toBeGreaterThan(listening.currentTime);
+
+      // And exactly one grant across the whole visit.
+      expect(
+        requests.filter(
+          (request) =>
+            request.url() === `${baseUrl}${API_PREFIX}${recordingPlaybackPath(recordingId)}`,
+        ),
+      ).toHaveLength(1);
     } finally {
       await page.context().close();
     }

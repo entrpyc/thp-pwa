@@ -12,7 +12,8 @@ import type { PolicyRules } from '@/server/auth/policy';
  * recording actions, and Ticket 04–05 the two pipeline actions. Story 3 adds eight — three for the
  * review gate, four for publication, and `recording.browse`, the first action in the product a
  * member may take over somebody else's content. Story 5 adds two — correcting a transcript, and
- * asking for a summary built on the correction. The same edit was required every time.
+ * asking for a summary built on the correction. The notes scope adds two more — reading a
+ * teaching's notes and writing one. The same edit was required every time.
  */
 export const rules: PolicyRules = {
   'session.read': { roles: { admin: true, member: true } },
@@ -46,4 +47,6 @@ export const rules: PolicyRules = {
   'series.assign': { roles: { admin: true, member: false } },
   'series.list': { roles: { admin: true, member: false } },
   'series.browse': { roles: { admin: true, member: true } },
+  'note.read': { roles: { admin: true, member: true } },
+  'note.write': { roles: { admin: true, member: true } },
 };

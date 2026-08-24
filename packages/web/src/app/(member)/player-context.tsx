@@ -13,9 +13,12 @@ import {
 import {
   PLAYBACK_SPEED_PATH,
   nextPlaybackSpeed,
+  recordingNotesPath,
   recordingPlaybackPath,
   recordingProgressPath,
   recordingTranscriptPath,
+  type NoteView,
+  type NotesPayload,
   type PlaybackGrantPayload,
   type TranscriptPayload,
   type TranscriptSegmentView,
@@ -51,6 +54,12 @@ import { shouldWriteProgress, type ProgressEventKind } from '@/client/playback/c
  *   have gone with it. Fetched on first need — the tab mounted, or captions turned on — so a member
  *   who does neither downloads nothing, and cleared when a different teaching is opened so the pill
  *   can never caption the wrong one.
+ * - **The notes, and the composer's frozen anchor** (the notes scope). Here for the same reason the
+ *   transcript is, and one stronger: the note markers render on the docked transport wherever it
+ *   travels (active-scope prd 3.2.7), and the composer is reachable from the transport's own menu
+ *   (3.1.2) — notes owned by the recording page would go with that page. **Fetched when the
+ *   recording is opened** rather than when the tab is, because the markers are visible without the
+ *   tab ever being pressed.
  *
  * **Opening a recording never plays it.** A member who opens a teaching on a phone in company has
  * not asked for sound. The page loads the media, restores the stored position once metadata has
@@ -73,6 +82,17 @@ export interface LoadedTranscript {
   readonly segments: readonly TranscriptSegmentView[];
 }
 
+/**
+ * The loaded teaching's notes, as this member may see them.
+ *
+ * Empty is an answer rather than a failure — a teaching nobody has annotated — which is why the
+ * failure is a separate flag and not `null` doing double duty.
+ */
+export interface LoadedNotes {
+  readonly recordingId: string;
+  readonly notes: readonly NoteView[];
+}
+
 export interface PlayerApi {
   readonly loaded: LoadedRecording | null;
   readonly playing: boolean;
@@ -84,6 +104,19 @@ export interface PlayerApi {
   readonly transcript: LoadedTranscript | null;
   /** Whether the caption pill is showing. Off by default, and session state — never written to `user`. */
   readonly captionsOn: boolean;
+  /** The loaded teaching's notes, or `null` while the first fetch is in flight or after it failed. */
+  readonly notes: LoadedNotes | null;
+  /** Whether the last notes fetch for the loaded teaching failed. Drives 5.2.7's retry. */
+  readonly notesFailed: boolean;
+  /**
+   * The position the composer is anchored to, **frozen when it opened**, or `null` while it is
+   * closed (active-scope prd 3.1.1).
+   *
+   * Held here rather than by the panel because 3.1.2's second entry point is the transport, which
+   * outlives the recording page — two entry points reading one anchor cannot disagree about which
+   * moment is being annotated.
+   */
+  readonly composerAnchorMs: number | null;
   /** Load a teaching and seek to `startAtMs`, without playing. Re-opening the current one is a no-op. */
   open(recording: LoadedRecording, startAtMs: number | null): void;
   toggle(): void;
@@ -95,6 +128,11 @@ export interface PlayerApi {
   setCaptions(on: boolean): void;
   /** Put a corrected line back in the loaded transcript, so the list and the pill agree with it. */
   applyCorrection(segment: TranscriptSegmentView): void;
+  /** Read the loaded teaching's notes again — after a write, or after a failure the member retried. */
+  refreshNotes(): void;
+  /** Freeze the anchor at the position the player holds right now, and open the composer. */
+  openComposer(): void;
+  closeComposer(): void;
 }
 
 const PlayerContext = createContext<PlayerApi | null>(null);
@@ -181,6 +219,9 @@ export function PlayerProvider({
   const [breadcrumb, setBreadcrumb] = useState<BreadcrumbTrail>(EMPTY_TRAIL);
   const [transcript, setTranscript] = useState<LoadedTranscript | null>(null);
   const [captionsOn, setCaptionsOn] = useState(false);
+  const [notes, setNotes] = useState<LoadedNotes | null>(null);
+  const [notesFailed, setNotesFailed] = useState(false);
+  const [composerAnchorMs, setComposerAnchorMs] = useState<number | null>(null);
 
   /** The live grant. A ref because the renewal ticker reads it without re-subscribing. */
   const grant = useRef<PlaybackGrantPayload | null>(null);
@@ -230,6 +271,32 @@ export function PlayerProvider({
     element.load();
   }, []);
 
+  /**
+   * Read a teaching's notes into the store.
+   *
+   * **It cannot reach playback.** No `audioRef`, no grant, no ticker — a notes failure leaves the
+   * store empty and the track marker-less, which is 3.2.11 and the Availability NFR, and is the
+   * whole reason this is a separate request rather than part of the one that points the element.
+   *
+   * The late-answer guard is the transcript fetch's, for the same reason: a slow answer about the
+   * previous teaching must not become the current one's list.
+   */
+  const loadNotes = useCallback((recordingId: string): void => {
+    setNotesFailed(false);
+    void apiFetch<NotesPayload>(recordingNotesPath(recordingId), { credentials: 'include' })
+      .then((payload) => {
+        if (loadedRef.current?.id !== recordingId) return;
+        setNotes({ recordingId, notes: payload.notes });
+      })
+      .catch(() => {
+        if (loadedRef.current?.id !== recordingId) return;
+        // Cleared rather than left stale: 3.2.11 wants no markers over a failure, not the previous
+        // answer wearing this teaching's name.
+        setNotes(null);
+        setNotesFailed(true);
+      });
+  }, []);
+
   const open = useCallback(
     (recording: LoadedRecording, startAtMs: number | null): void => {
       // Re-opening what is already loaded is what makes playback survive navigating away and back:
@@ -248,12 +315,19 @@ export function PlayerProvider({
       // caption the wrong words until a new one arrived.
       transcriptAskedFor.current = null;
       setTranscript(null);
+      // The same argument as the transcript, and one more: the anchor a composer left open on the
+      // previous teaching would point at a moment in a recording nobody is listening to.
+      setNotes(null);
+      setComposerAnchorMs(null);
+      // Fetched **on open rather than on tab open**, because the markers (3.2.4) are visible on the
+      // transport without the Notes tab ever being pressed.
+      loadNotes(recording.id);
       void pointAt(recording.id).catch(() => {
         // Nothing to say on screen: the bar is a transport, not an error surface. The play control
         // simply does nothing until a grant arrives, and the next renewal tick tries again.
       });
     },
-    [pointAt],
+    [loadNotes, pointAt],
   );
 
   /**
@@ -478,6 +552,32 @@ export function PlayerProvider({
     );
   }, []);
 
+  const refreshNotes = useCallback((): void => {
+    const recording = loadedRef.current;
+    if (recording === null) return;
+    loadNotes(recording.id);
+  }, [loadNotes]);
+
+  /**
+   * Freeze the anchor at the position the player holds **now**.
+   *
+   * `positionRef` rather than the `currentMs` state, because it is the position that is right
+   * before anything has played: `open()` seeds it with the restored resume position, so a note
+   * written on a teaching that has never been played anchors there rather than at `00:00`
+   * (active-scope prd 3.1.3).
+   *
+   * **Nothing here touches the element.** Opening the composer neither pauses nor moves playback
+   * (3.1.2 of the composer's own rules, 3.1.1's second sentence) — the freeze is what stops the
+   * moment drifting while the note is typed, not a pause.
+   */
+  const openComposer = useCallback((): void => {
+    setComposerAnchorMs(positionRef.current);
+  }, []);
+
+  const closeComposer = useCallback((): void => {
+    setComposerAnchorMs(null);
+  }, []);
+
   const player = useMemo<PlayerApi>(
     () => ({
       loaded,
@@ -487,6 +587,9 @@ export function PlayerProvider({
       speed,
       transcript,
       captionsOn,
+      notes,
+      notesFailed,
+      composerAnchorMs,
       open,
       toggle,
       seekToMs,
@@ -495,6 +598,9 @@ export function PlayerProvider({
       requestTranscript,
       setCaptions,
       applyCorrection,
+      refreshNotes,
+      openComposer,
+      closeComposer,
     }),
     [
       loaded,
@@ -504,6 +610,9 @@ export function PlayerProvider({
       speed,
       transcript,
       captionsOn,
+      notes,
+      notesFailed,
+      composerAnchorMs,
       open,
       toggle,
       seekToMs,
@@ -512,6 +621,9 @@ export function PlayerProvider({
       requestTranscript,
       setCaptions,
       applyCorrection,
+      refreshNotes,
+      openComposer,
+      closeComposer,
     ],
   );
 

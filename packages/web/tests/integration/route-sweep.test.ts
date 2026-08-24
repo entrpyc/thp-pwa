@@ -83,6 +83,17 @@ describe('every /api/v1 route not on the allowlist refuses an anonymous request'
     expect(paths).toContain(`${API_PREFIX}/series`);
     expect(paths).toContain(`${API_PREFIX}/series/sweep-probe-value`);
     expect(paths).toContain(`${API_PREFIX}/recordings/sweep-probe-value/series`);
+    // The notes scope's first route (Tasks 1.4 and 1.5). Named for the reason every group above
+    // is: a route the discovery missed would be a route nothing asserted refuses an anonymous
+    // caller — and this one file carries **two** methods, so a discovery that found only the `GET`
+    // would leave the write unswept.
+    expect(paths).toContain(`${API_PREFIX}/recordings/sweep-probe-value/notes`);
+    expect(
+      routes
+        .filter((route) => route.path === `${API_PREFIX}/recordings/sweep-probe-value/notes`)
+        .map((route) => route.method)
+        .sort(),
+    ).toEqual(['GET', 'POST']);
     // The catch-all is discovered too, standing in for any path no route claims.
     expect(routes.some((route) => route.isCatchAll)).toBe(true);
   });
