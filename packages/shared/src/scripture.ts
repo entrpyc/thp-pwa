@@ -332,3 +332,35 @@ export interface ScriptureReferenceView extends ScriptureCitation {
   /** Whether an admin changed this reference before approving the list it was in. */
   readonly editedByAdmin: boolean;
 }
+
+/**
+ * **Where a citation's verse text is read** ([3.3.4](docs/active-scope/prd.md)).
+ *
+ * A `GET` with the citation in the query, because that is what it is — a lookup of somebody else's
+ * words by their reference. There is deliberately **no write here and nowhere else**: verse text is
+ * what the source says ([3.3.8](docs/active-scope/prd.md)), so no route in the product accepts any,
+ * and correcting a passage means correcting the citation.
+ */
+export const SCRIPTURE_PASSAGE_PATH = '/scripture/passage';
+
+/** The lookup for one citation, relative to the `/api/v1` prefix. */
+export function passagePath(citation: ScriptureCitation): string {
+  const query = new URLSearchParams({
+    book: citation.book,
+    chapter: String(citation.chapter),
+    verseStart: String(citation.verseStart),
+    verseEnd: String(citation.verseEnd),
+  });
+  return `${SCRIPTURE_PASSAGE_PATH}?${query.toString()}`;
+}
+
+/**
+ * Payload of `GET /api/v1/scripture/passage`.
+ *
+ * `null` is a real answer and the common one when a source is down: the citation stands and has no
+ * text yet ([3.3.6](docs/active-scope/prd.md)). It is not an error, and a caller that treated it as
+ * one would turn a missing convenience into a broken screen.
+ */
+export interface PassagePayload {
+  readonly passage: string | null;
+}

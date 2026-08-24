@@ -1,3 +1,4 @@
+import { readFileSync } from 'node:fs';
 import { resolve } from 'node:path';
 import { describe, expect, it } from 'vitest';
 import {
@@ -91,6 +92,37 @@ describe('the worker and the API share a database, not a codebase', () => {
 function collectWorkerFiles(): string[] {
   return walkFiles(resolve(REPO_ROOT, 'packages/worker/src'));
 }
+
+/**
+ * **The worker and the API resolve a passage through the same port**
+ * ([3.1.1](docs/active-scope/implementation-plan.md)).
+ *
+ * The same argument the media port settled and for the same reason: both processes need a verse,
+ * neither may import the other, so the port is a package beside them rather than a folder inside
+ * one. What this asserts is that the arrangement is actually *used* — a shared package nobody on
+ * one side imports is a shared package in name only, and the rule above would pass just as well if
+ * the worker had quietly grown a second way to fetch a verse.
+ */
+describe('one verse source, reached by both processes', () => {
+  const names = (dir: string): string[] =>
+    walkFiles(resolve(REPO_ROOT, dir)).flatMap((file) => [
+      ...readFileSync(file, 'utf8').matchAll(/from\s*['"]([^'"]+)['"]/g),
+    ].map((match) => match[1] ?? ''));
+
+  it('is imported by the worker and by the API alike', () => {
+    expect(names('packages/worker/src')).toContain('@thp/bible');
+    expect(names('packages/web/src')).toContain('@thp/bible');
+  });
+
+  it('and neither of them reaches into the other to get it', () => {
+    // The worker side is `checkWorkerBoundary` above. This is the other direction: the API does not
+    // import the worker's package either, so "the same port" cannot quietly become "the API calls
+    // the worker's copy".
+    expect(names('packages/web/src')).not.toContain('@thp/worker');
+    expect(names('packages/bible/src')).not.toContain('@thp/worker');
+    expect(names('packages/bible/src').some((one) => one.startsWith('@/'))).toBe(false);
+  });
+});
 
 describe('a store module hands out row types, not Drizzle types', () => {
   it('has exports to check at all — otherwise the pass below is vacuous', () => {

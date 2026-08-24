@@ -4,7 +4,7 @@ _Planned: 2026-08-24_
 
 ## Status
 
-45/71 criteria met. Groups complete: Group 1, Group 2.
+59/71 criteria met. Groups complete: Group 1, Group 2, Group 3.
 _Maintained by implementation — see the checkboxes for detail._
 
 ## Background to research
@@ -510,24 +510,59 @@ base URL or key it needs. Nothing else in this task can be finished without them
 
 **Acceptance criteria**
 
-- [ ] **3.1.1** The worker and the API resolve a passage through the same port, answered by the same
+- [x] **3.1.1** The worker and the API resolve a passage through the same port, answered by the same
       adapter, with neither importing the other's package — verified by
       `packages/bible/tests/unit/source.test.ts` and `tests/guards/import-boundary.test.ts`
   - A package beside `@thp/db` and `@thp/media`, for the reason the media store became one: the
     worker may not reach into the web package.
-- [ ] **3.1.2** Nothing outside the adapter names the source or its HTTP shape; a module that does
+- [x] **3.1.2** Nothing outside the adapter names the source or its HTTP shape; a module that does
       fails the build — verified by `tests/guards/bible-boundary.test.ts` with a leaky fixture
-- [ ] **3.1.3** The translation is read from configuration, and a run with it unset refuses to start
+- [x] **3.1.3** The translation is read from configuration, and a run with it unset refuses to start
       rather than defaulting to one — verified by `packages/bible/tests/unit/env.test.ts`
-- [ ] **3.1.4** `THP_MOCK_EXTERNAL` puts the verse source into a local fake alongside the other
+- [x] **3.1.4** `THP_MOCK_EXTERNAL` puts the verse source into a local fake alongside the other
       three, and the fake wins over an explicitly named real source — verified by
       `tests/guards/mock-switch.test.ts`
-- [ ] **3.1.5** A source that fails, times out, or has no text for a passage answers with *no text*
+- [x] **3.1.5** A source that fails, times out, or has no text for a passage answers with *no text*
       rather than an exception the caller has to interpret — verified by
       `packages/bible/tests/unit/source.test.ts`
   - Which is what lets 3.2.4 keep the pipeline step green.
 
-**Record**
+**Record** — _updated 2026-08-24_
+
+- **Edge cases:**
+  - A source whose chapter is versified differently from the canon returns the verses it has and
+    the row simply reads short — no line says which verses are missing.
+  - A translation id the source does not publish answers as *no text* for every citation, so a
+    typo in `BIBLE_TRANSLATION` looks exactly like a source that is permanently down.
+  - The ten-second timeout is not configurable, so a source that is merely slow reads as one with
+    no text for that passage.
+  - The guard catches a second door opened by a **known** Bible host or the source's own document
+    suffix. A second door at an unlisted vendor's host would pass it.
+- **Assumptions, major (confirmed):** the operator named the **Free Use Bible API**
+  (`https://bible.helloao.org`) with `BIBLE_TRANSLATION=BSB` — no account, no key, no usage limits,
+  commercial use permitted.
+- **Assumptions, minor:**
+  - The port answers **verse by verse** rather than as one paragraph, because the cache is keyed per
+    verse and a paragraph could not be shared between two citations of the same chapter.
+  - The adapter asks for the source's `.simple.json` chapter format — plain sentences rather than
+    the marked-up one, since § 5.1 says verse text is plain text.
+  - The fake reads no script off disk, unlike the ASR and generation fakes: it stands in for a
+    sentence, and a file would be a variable, a fixture and a failure mode for a sentence.
+  - `x-amz-cf-id` is read as the source's own identifier for a call.
+  - The source is named `free-use` in configuration; the host lives only in `.env`.
+- **Reworked:** 3.1.4 — the fake first named the *range* it was asked for in its stand-in text, so a
+  verse fetched inside a whole-chapter request kept that wording in the cache and disagreed with the
+  same verse fetched alone. Renamed per verse. Found by task 3.3's screen test.
+- **False positives fixed:** 0
+- **Operator steps:**
+  1. Run `npm install` once, so the new `@thp/bible` workspace is linked.
+  2. Copy the `BIBLE_` block from `.env.example` into `.env` on every machine and every deployment —
+     `BIBLE_SOURCE`, `BIBLE_BASE_URL`, `BIBLE_TRANSLATION`. A run with `BIBLE_TRANSLATION` unset
+     refuses to resolve any passage, by design.
+- **Notes:** `@thp/bible` is a package beside `@thp/db` and `@thp/media` and is listed in
+  `SERVER_ONLY_PACKAGES` in tools/import-boundary.ts, so a client that imported it fails the build.
+  The suite owns its own verse-source configuration in tests/setup/global.ts rather than inheriting
+  `.env` — `.env` names a real source, and 3.3.10 says a test run reaches none.
 
 ### Task 3.2 — Verse text is fetched once and held
 
@@ -544,24 +579,56 @@ just typed (task 3.3).
 
 **Acceptance criteria**
 
-- [ ] **3.2.1** A verse text table holds one row per translation, book, chapter and verse, with the
+- [x] **3.2.1** A verse text table holds one row per translation, book, chapter and verse, with the
       text and when it was fetched — verified by
       `packages/db/tests/integration/migrations.test.ts`
   - Keyed so a verse cited by a second teaching is the same row, not a second copy.
-- [ ] **3.2.2** Resolving a citation reads what is already held and calls the source only for what is
+- [x] **3.2.2** Resolving a citation reads what is already held and calls the source only for what is
       missing — verified by `packages/db/tests/integration/scripture.test.ts`
-- [ ] **3.2.3** The draft step resolves every citation it produced, so the passage is held before an
+- [x] **3.2.3** The draft step resolves every citation it produced, so the passage is held before an
       admin opens the item — verified by
       `packages/worker/tests/integration/generate-draft.test.ts`
-- [ ] **3.2.4** A source failure during the draft step leaves the citations in place and the **step
+- [x] **3.2.4** A source failure during the draft step leaves the citations in place and the **step
       succeeding**, with the affected reference marked as having no text yet — verified by
       `packages/worker/tests/integration/generate-draft.test.ts`
   - The deliberate exception to the halt-on-failure rule (active-scope prd 3.3.5, § 8).
-- [ ] **3.2.5** How many verses were fetched, how many were already held, and the source's own
+- [x] **3.2.5** How many verses were fetched, how many were already held, and the source's own
       identifier for the call are recorded on the job that caused them — verified by
       `packages/worker/tests/integration/generate-draft.test.ts`
 
-**Record**
+**Record** — _updated 2026-08-24_
+
+- **Edge cases:**
+  - **Nothing ever refreshes a held verse.** A source that corrects its text is never re-read.
+    `fetched_at` is recorded and nothing acts on it.
+  - Two jobs resolving the same chapter at the same moment both call the source; the second's rows
+    are dropped by `on conflict do nothing`. One wasted call, nothing wrong.
+  - A citation that only partly overlaps what is held costs one call for the whole passage — the
+    source answers a passage, not a verse.
+  - A source that returns **fewer** verses than the citation asks for holds what it gave, and the
+    missing verses are asked for again on every later resolution, forever.
+  - `versesFetched` / `versesHeld` are per **job**: re-running a recording reports 0 fetched, so the
+    number reads as what *this run* cost rather than what the teaching cost.
+  - A draft step whose cache write fails records the passages as unresolved and succeeds anyway —
+    the admin sees citations with no text and nothing on screen says the database refused a row.
+- **Assumptions, major (taken, not confirmed — raised at the checkpoint):** `@thp/bible` depends on
+  `@thp/db`, so the cache-aside resolver sits beside the source and the rows stay in the store
+  package. The alternative was `@thp/db` importing the port, which would stop the database package
+  being a leaf. Flagged because it is a module boundary later work binds to.
+- **Assumptions, minor:**
+  - Held verses are read **once per resolution**, for every chapter at issue, before anything is
+    fetched — so a teaching citing one chapter ten times is one read.
+  - `fetched` counts rows actually written rather than verses the source returned.
+  - `verseSourceRequestId` is the **last** call's identifier when a run made several.
+  - Verses fetched partway through a resolution are added to what is held, so a list citing the same
+    chapter twice fetches it once.
+- **Reworked:** none
+- **False positives fixed:** 0
+- **Operator steps:** run `npm run migrate` — migration `0015_verse_text` adds the `verse_text`
+  table. Nothing back-fills: teachings drafted before this migration carry citations with no text
+  until they are drafted again.
+- **Notes:** there is no refresh policy and no expiry. `fetched_at` exists so one can be added later
+  without a migration.
 
 ### Task 3.3 — The admin reads the passage while deciding
 
@@ -575,17 +642,53 @@ active-scope prd § 5.2; design referencess png/style-guide.md
 
 **Acceptance criteria**
 
-- [ ] **3.3.1** Each reference row shows its passage beneath its citation — verified by
+- [x] **3.3.1** Each reference row shows its passage beneath its citation — verified by
       `packages/web/tests/integration/reviews-screen.test.ts`
-- [ ] **3.3.2** A citation an admin adds or edits resolves its passage **while the form is open** —
+- [x] **3.3.2** A citation an admin adds or edits resolves its passage **while the form is open** —
       verified by `packages/web/tests/integration/reviews-screen.test.ts`
-- [ ] **3.3.3** A reference whose passage could not be loaded still shows its citation, with a quiet
+- [x] **3.3.3** A reference whose passage could not be loaded still shows its citation, with a quiet
       line where the text would be — verified by
       `packages/web/tests/integration/reviews-screen.test.ts`
-- [ ] **3.3.4** Verse text is editable nowhere — no input on any screen and no route that accepts it
+- [x] **3.3.4** Verse text is editable nowhere — no input on any screen and no route that accepts it
       — verified by `packages/web/tests/integration/scripture-review.test.ts`
 
-**Record**
+**Record** — _updated 2026-08-24_
+
+- **Edge cases:**
+  - Typing a chapter or verse fires a lookup for **each intermediate citation** — typing `16` over
+    `1` asks for verse 1 as well. Cheap once a chapter is held; a first-time chapter is fetched for
+    each intermediate value.
+  - **"The passage could not be loaded" covers two different things** — the request failed, and the
+    source has no text for it. An admin cannot tell which, deliberately: the row says what it cites
+    and nothing else.
+  - A request that hangs leaves the row saying "Loading the passage…" until the browser gives up;
+    there is no client-side timeout.
+  - A draft with many references makes one lookup per row when the form opens; they are not batched.
+  - Clearing a verse box means "the whole chapter" for an instant, so the row's passage flashes the
+    whole chapter before settling on what was typed.
+  - **Poetry loses its line breaks.** The source returns the psalms with newlines in the verse text;
+    the row renders one paragraph, so `Psalm 23` reads as continuous prose. Correct per § 5.1
+    (verse text is plain text) and worth knowing before anybody reports it as a bug.
+- **Assumptions, major (taken, not confirmed — raised at the checkpoint):** the passage is read from
+  a new `GET /api/v1/scripture/passage` rather than carried on the review payload. That is what makes
+  3.3.2 work at all — a row an admin has just typed has no draft to have carried anything — and it
+  keeps the machine's rows and the admin's rows resolving by one mechanism. It also means
+  `ReviewItemView` did not change.
+- **Assumptions, minor:**
+  - The route is behind `review.list`, the action the Pending Reviews queue already uses, rather
+    than a new policy action.
+  - The passage is joined into one paragraph with **no verse numbers in it** (§ 5.1).
+  - An in-flight answer for a citation the admin has moved on from is dropped, not rendered.
+- **Reworked:** none
+- **False positives fixed:** 1 — the passage-lookup test asserted that John 3 held *only* the verse
+  it had just read. That passed when the file ran alone and failed in the full run, because the
+  screen tests had already resolved the whole chapter into the same app database. Rewritten as a
+  before-and-after comparison, which is the actual claim: these calls wrote nothing.
+- **Operator steps:** none beyond 3.1's and 3.2's.
+- **Notes:** 3.3.4's "no route accepts verse text" is held two ways — the route has only a `GET`, and
+  `scripture_reference` has no text column (asserted in the migrations test's deferred list). The
+  first was break-checked by adding a `POST`; the second is structural and cannot be broken without
+  a migration.
 
 ---
 

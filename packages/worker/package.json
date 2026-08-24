@@ -8,6 +8,7 @@
     "start": "tsx src/index.ts"
   },
   "dependencies": {
+    "@thp/bible": "*",
     "@thp/db": "*",
     "@thp/media": "*",
     "@thp/shared": "*"

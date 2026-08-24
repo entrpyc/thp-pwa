@@ -18,6 +18,7 @@ import {
   type ReviewProvenance,
   type ScriptureCitation,
 } from '@thp/shared';
+import { resolvePassages, type BibleSource } from '@thp/bible';
 import { emitDomainEvent } from '@thp/shared/observability/events';
 import { logger } from '@thp/shared/observability/logger';
 import { generator as configuredGenerator, type Generator } from './generate';
@@ -61,6 +62,8 @@ export interface GenerateDraftPayload {
 
 export interface GenerateDraftDependencies {
   readonly generator?: Generator;
+  /** Where verse text comes from. Defaults to the one this process is configured with. */
+  readonly bibleSource?: BibleSource;
   /** Where the drafts are written. Defaults to the process's pool. */
   readonly executor?: Executor;
 }
@@ -178,6 +181,11 @@ export function createGenerateDraftHandler(deps: GenerateDraftDependencies = {})
       provenance: provenance(kind),
     }));
 
+    // **The verses of what was just drafted, before the item is written**
+    // ([3.2.3](docs/active-scope/implementation-plan.md)). Before rather than after, so an admin
+    // opening the item the moment it appears reads the passages rather than watching them arrive.
+    const verses = await resolveVerses(citationsIn(items), deps, fields);
+
     await replaceOpenDrafts(job.recordingId, items, deps.executor);
 
     const providerMeta: ProviderMeta = {
@@ -192,6 +200,12 @@ export function createGenerateDraftHandler(deps: GenerateDraftDependencies = {})
       // number on the run that proposed it, so a prompt going wrong is visible rather than quiet.
       citationsDropped: dropped,
       citationsDuplicated: duplicates,
+      // [3.3.9](docs/active-scope/prd.md): what the lookups cost, on the job that caused them. A
+      // free source spends nothing and says so; what is worth reading is the second number — the
+      // calls the cache meant nobody had to make.
+      versesFetched: verses.fetched,
+      versesHeld: verses.held,
+      verseSourceRequestId: verses.requestId,
     };
 
     logger.info('generate_draft.succeeded', {
@@ -217,6 +231,57 @@ export function createGenerateDraftHandler(deps: GenerateDraftDependencies = {})
 /** What a freshly generated field's provenance says. */
 function aiSuggested(): FieldProvenance {
   return { aiSuggested: true, editedByAdmin: false };
+}
+
+/** Every citation across the items this run is about to write, whatever kind carried them. */
+function citationsIn(items: readonly NewReviewItem[]): ScriptureCitation[] {
+  const found: ScriptureCitation[] = [];
+  for (const item of items) {
+    // `fields` is `unknown` on the way into the `jsonb` column, so it is read as what this handler
+    // just put there rather than trusted to be anything.
+    for (const value of Object.values(item.fields as Record<string, unknown>)) {
+      if (Array.isArray(value)) found.push(...(value as readonly ScriptureCitation[]));
+    }
+  }
+  return found;
+}
+
+/**
+ * **Resolve the passages, and never fail the step over them**
+ * ([3.2.4](docs/active-scope/implementation-plan.md)).
+ *
+ * The deliberate exception to docs/project/prd.md 3.21.2.3's halt-on-failure rule, and the reason
+ * it is deliberate is [3.3.5](docs/active-scope/prd.md): the artefact this step produces is the
+ * citation, and verse text is a convenience on top of it. A source that is down leaves the
+ * references exactly where they are, marked as having no text yet by there being none — which is
+ * the state the review form and the member surface already draw a quiet line for.
+ *
+ * The port promises not to throw over a source that refuses. This catches anyway, because the write
+ * behind it can: a cache that will not accept a row is still not a reason to lose the draft.
+ */
+async function resolveVerses(
+  citations: readonly ScriptureCitation[],
+  deps: GenerateDraftDependencies,
+  fields: Record<string, string | boolean | readonly ReviewKind[]>,
+): Promise<{ fetched: number; held: number; requestId: string | null }> {
+  if (citations.length === 0) return { fetched: 0, held: 0, requestId: null };
+
+  try {
+    const resolved = await resolvePassages(citations, {
+      ...(deps.bibleSource === undefined ? {} : { source: deps.bibleSource }),
+      ...(deps.executor === undefined ? {} : { executor: deps.executor }),
+    });
+    return { fetched: resolved.fetched, held: resolved.held, requestId: resolved.requestId };
+  } catch (cause) {
+    // At warn, not error: the step is succeeding, and what an operator wants to know is that the
+    // teaching went through with its citations carrying no text.
+    logger.warn('generate_draft.verses_unresolved', {
+      ...fields,
+      citations: citations.length,
+      reason: cause instanceof Error ? cause.message : String(cause),
+    });
+    return { fetched: 0, held: 0, requestId: null };
+  }
 }
 
 /** Log the failure with the whole of it, and hand back the sentence the job row will carry. */

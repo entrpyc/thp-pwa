@@ -1,7 +1,7 @@
-import { eq } from 'drizzle-orm';
+import { and, asc, eq, or } from 'drizzle-orm';
 import type { BookId, ScriptureOrigin } from '@thp/shared';
-import { getDatabase, withTransaction, type Executor } from './client';
-import { scriptureReference } from './schema';
+import { getDatabase, queryable, withTransaction, type Executor } from './client';
+import { scriptureReference, verseText } from './schema';
 
 /**
  * A teaching's approved scripture references (Task 1.4). Query construction lives in this package
@@ -66,4 +66,88 @@ export async function replaceScriptureReferences(
 
     return inserted as ScriptureReferenceRow[];
   }, executor);
+}
+
+/**
+ * **The verse text cache** ([3.2.1](docs/active-scope/implementation-plan.md)–
+ * [3.2.2](docs/active-scope/implementation-plan.md)).
+ *
+ * Two statements, because two is what the cache does: read what is held, and hold what was just
+ * fetched. Deciding *which* verses are missing is not a question about storage and is not asked
+ * here — it belongs beside the source, in `@thp/bible`.
+ */
+
+/** One held verse, as the rest of the application sees it. */
+export interface VerseTextRow {
+  readonly translation: string;
+  readonly book: BookId;
+  readonly chapter: number;
+  readonly verse: number;
+  readonly text: string;
+  readonly fetchedAt: Date;
+}
+
+/** One verse to hold. The timestamp is the table's. */
+export interface NewVerseText {
+  readonly translation: string;
+  readonly book: BookId;
+  readonly chapter: number;
+  readonly verse: number;
+  readonly text: string;
+}
+
+/** A chapter to read held verses for. */
+export interface ChapterKey {
+  readonly book: BookId;
+  readonly chapter: number;
+}
+
+/**
+ * Every verse held for these chapters, in this translation.
+ *
+ * **By chapter rather than by range**, because that is the grain a source answers at: a citation
+ * that needs three verses of a chapter already held pays one read, and the next citation of the
+ * same chapter pays none. An empty list of chapters reads nothing rather than everything.
+ */
+export async function findHeldVerses(
+  translation: string,
+  chapters: readonly ChapterKey[],
+  executor: Executor = getDatabase(),
+): Promise<VerseTextRow[]> {
+  if (chapters.length === 0) return [];
+
+  const wanted = chapters.map((one) =>
+    and(eq(verseText.book, one.book), eq(verseText.chapter, one.chapter)),
+  );
+
+  const rows = await queryable(executor)
+    .select()
+    .from(verseText)
+    .where(and(eq(verseText.translation, translation), or(...wanted)))
+    .orderBy(asc(verseText.book), asc(verseText.chapter), asc(verseText.verse));
+
+  return rows as VerseTextRow[];
+}
+
+/**
+ * Hold these verses, leaving alone any that are already held.
+ *
+ * **`do nothing` rather than an update**, and that is the point of the cache rather than a detail
+ * of it: what is held is what the source said the first time, and two teachings resolving the same
+ * chapter at the same moment must not turn into a unique violation on a path that
+ * [3.2.4](docs/active-scope/implementation-plan.md) requires to keep succeeding.
+ */
+export async function saveVerseTexts(
+  verses: readonly NewVerseText[],
+  executor: Executor = getDatabase(),
+): Promise<number> {
+  if (verses.length === 0) return 0;
+
+  const written = await queryable(executor)
+    .insert(verseText)
+    .values([...verses])
+    .onConflictDoNothing()
+    .returning({ verse: verseText.verse });
+
+  return written.length;
 }

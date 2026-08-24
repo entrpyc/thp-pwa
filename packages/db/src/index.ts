@@ -115,9 +115,14 @@ export {
   type ReviewItemRow,
 } from './reviews';
 export {
+  findHeldVerses,
   replaceScriptureReferences,
+  saveVerseTexts,
+  type ChapterKey,
   type NewScriptureReference,
+  type NewVerseText,
   type ScriptureReferenceRow,
+  type VerseTextRow,
 } from './scripture';
 export {
   findSeriesById,

@@ -14,6 +14,8 @@
     "packages/db/tests/**/*.ts",
     "packages/media/src/**/*.ts",
     "packages/media/tests/**/*.ts",
+    "packages/bible/src/**/*.ts",
+    "packages/bible/tests/**/*.ts",
     "packages/worker/tests/**/*.ts",
     "packages/worker/src/**/*.ts",
     "tools/**/*.ts",

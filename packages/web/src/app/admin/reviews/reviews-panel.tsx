@@ -13,9 +13,11 @@ import {
   citationsEqual,
   findBook,
   formatCitation,
+  passagePath,
   reviewPath,
   reviewRegeneratePath,
   type CitationCheck,
+  type PassagePayload,
   type ReviewItemView,
   type ReviewListPayload,
   type ScriptureCitation,
@@ -636,6 +638,7 @@ function CitationList({
                       {problems[index]}
                     </p>
                   )}
+                  <Passage row={row} />
                 </fieldset>
               </li>
             );
@@ -650,4 +653,80 @@ function CitationList({
       </div>
     </>
   );
+}
+
+/**
+ * **The passage under a citation, resolved while the form is open**
+ * ([3.3.1](docs/active-scope/prd.md), [3.3.4](docs/active-scope/prd.md)).
+ *
+ * Read from the API rather than carried on the draft, and that is what makes
+ * [3.3.4](docs/active-scope/prd.md) work at all: a row an admin has just typed has no draft to have
+ * carried anything, and the machine's rows and the admin's rows then resolve by the same route
+ * instead of by two mechanisms that could disagree.
+ *
+ * **It re-resolves as the citation changes.** A half-typed row is not a citation and asks for
+ * nothing; the moment it becomes one, its passage arrives underneath it. The stale-answer guard is
+ * the one every fetch on this codebase uses — an in-flight answer for a citation the admin has
+ * already moved on from is dropped rather than rendered.
+ *
+ * **A passage that could not be loaded still shows its citation** ([3.3.6](docs/active-scope/prd.md)),
+ * with a quiet line where the words would be. A source that is down is the worst case the
+ * architecture already names, and it degrades the row rather than the form.
+ *
+ * **Nothing here is editable, and there is nothing to edit it with**
+ * ([3.3.8](docs/active-scope/prd.md)) — a paragraph, not a control.
+ */
+function Passage({ row }: { row: DraftRow }) {
+  const checked = checkRow(row);
+  const key = checked.ok ? citationKey(checked.citation) : null;
+  const [text, setText] = useState<string | null>(null);
+  const [state, setState] = useState<'idle' | 'loading' | 'loaded'>('idle');
+
+  useEffect(() => {
+    if (key === null) {
+      setState('idle');
+      setText(null);
+      return;
+    }
+
+    let live = true;
+    setState('loading');
+
+    apiFetch<PassagePayload>(passagePath(parseCitationKey(key)), { credentials: 'include' })
+      .then((payload) => {
+        if (!live) return;
+        setText(payload.passage);
+        setState('loaded');
+      })
+      .catch(() => {
+        if (!live) return;
+        // The refusal and the passage the source has no text for are the same thing on screen: the
+        // citation stands, and the words are not here.
+        setText(null);
+        setState('loaded');
+      });
+
+    return () => {
+      live = false;
+    };
+  }, [key]);
+
+  if (key === null) return null;
+  if (state !== 'loaded') return <p className={styles.passageQuiet}>Loading the passage…</p>;
+  if (text === null) {
+    return <p className={styles.passageQuiet}>The passage could not be loaded.</p>;
+  }
+  return <p className={styles.passage}>{text}</p>;
+}
+
+/** The citation a row's key names. The key is built from one, so this cannot fail on a real one. */
+function parseCitationKey(key: string): ScriptureCitation {
+  const [book = '', chapter = '', range = ''] = key.split(':');
+  const [verseStart = '', verseEnd = ''] = range.split('-');
+  return {
+    book,
+    chapter: Number(chapter),
+    verseStart: Number(verseStart),
+    verseEnd: Number(verseEnd),
+  };
 }

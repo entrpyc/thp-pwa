@@ -916,3 +916,44 @@ export const scriptureReference = pgTable(
     index('scripture_reference_recording_idx').on(table.recordingId),
   ],
 );
+
+/**
+ * **The verse text cache** ([3.3.1](docs/active-scope/prd.md), [4](docs/active-scope/prd.md)).
+ *
+ * One row per verse, per translation. Not a column on `scripture_reference`, and that is the whole
+ * design: a verse cited by a second teaching is **the same row**, not a second copy — which is what
+ * makes [3.3.2](docs/active-scope/prd.md)'s "text already held is never fetched again" true across
+ * teachings rather than only within one, and what keeps the lookup volume near
+ * docs/project/architecture.md § Estimated running costs's assumption.
+ *
+ * **The key is the passage, not an id.** `(translation, book, chapter, verse)` is the primary key
+ * because that quadruple *is* the identity of a verse: an id column would let the same verse be
+ * held twice under two ids, and nothing could then say which of them a reader gets.
+ *
+ * No foreign key to `scripture_reference`, deliberately. The cache belongs to the translation, not
+ * to any teaching that happens to quote it — a reference removed from a teaching must not take a
+ * verse away from the next one to cite it.
+ *
+ * `fetched_at` is when the source answered. Nothing expires on it yet; it is here because a cache
+ * with no answer to "how old is this" cannot be refreshed later without a migration.
+ */
+export const verseText = pgTable(
+  'verse_text',
+  {
+    /** As `BIBLE_TRANSLATION` names it. Opaque here — the source decides what its ids are. */
+    translation: text('translation').notNull(),
+    /** The canon identity, the same one a citation carries. Never a model's words. */
+    book: text('book').notNull(),
+    chapter: integer('chapter').notNull(),
+    verse: integer('verse').notNull(),
+    /** What the source says the verse says. Plain text; never edited ([3.3.8](docs/active-scope/prd.md)). */
+    text: text('text').notNull(),
+    fetchedAt: timestamp('fetched_at', { withTimezone: true }).notNull().defaultNow(),
+  },
+  (table) => [
+    primaryKey({
+      columns: [table.translation, table.book, table.chapter, table.verse],
+      name: 'verse_text_passage_pk',
+    }),
+  ],
+);

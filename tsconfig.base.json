@@ -28,6 +28,8 @@
       "@thp/db/*": ["./packages/db/src/*"],
       "@thp/media": ["./packages/media/src/index.ts"],
       "@thp/media/*": ["./packages/media/src/*"],
+      "@thp/bible": ["./packages/bible/src/index.ts"],
+      "@thp/bible/*": ["./packages/bible/src/*"],
       "@/*": ["./packages/web/src/*"]
     }
   }

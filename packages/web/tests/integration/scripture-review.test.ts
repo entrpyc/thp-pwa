@@ -4,6 +4,7 @@ import {
   API_PREFIX,
   REVIEW_FIELD,
   ROLE,
+  passagePath,
   reviewPath,
   reviewRegeneratePath,
   type RegenerateReviewPayload,
@@ -542,5 +543,101 @@ describe('asking for the scripture references again', () => {
     expect(second.code).toBe('generation_in_flight');
     // And the item it refused is untouched — nothing was discarded on the way to the refusal.
     expect((await itemRow(summary.id))?.status).toBe('draft');
+  });
+});
+
+/**
+ * **Verse text is editable nowhere** ([3.3.4](docs/active-scope/implementation-plan.md),
+ * [3.3.8](docs/active-scope/prd.md)).
+ *
+ * The half of that which is a fact about the API rather than about a screen: nothing in the product
+ * accepts verse text, so correcting a passage means correcting the citation. Asserted from the
+ * outside, over HTTP, because a rule that only holds in the client is a rule a `curl` breaks.
+ */
+describe('nothing accepts verse text', () => {
+  const passageUrl = (citation: ScriptureCitation) =>
+    `${baseUrl}${API_PREFIX}${passagePath(citation)}`;
+
+  const JOHN: ScriptureCitation = { book: 'john', chapter: 3, verseStart: 16, verseEnd: 16 };
+
+  /** Every verse held for a chapter, so "nothing wrote one" is a comparison rather than a claim. */
+  async function heldText(book: string, chapter: number): Promise<string[]> {
+    const rows = await sql<{ text: string }[]>`
+      select text from verse_text where book = ${book} and chapter = ${chapter} order by verse
+    `;
+    return rows.map((row) => row.text);
+  }
+
+  it('reads a passage and offers no way to write one', async () => {
+    const read = await call<{ passage: string | null }>(passageUrl(JOHN), { cookie: adminCookie });
+    expect(read.status).toBe(200);
+    expect(read.body.passage).toContain('John 3:16');
+    // Reading held exactly what it read, and nothing beside it.
+    expect(await heldText('john', 3)).toContain(read.body.passage);
+
+    // Compared before and after rather than against a list, because this chapter is shared with
+    // every other file in the run — what is asserted is that these calls changed nothing, which is
+    // the claim, not how many verses happen to be held.
+    const before = await heldText('john', 3);
+
+    // The only verb the route has. Everything else is refused by the framework because there is no
+    // handler to refuse it — which is the strongest form of "there is no write here".
+    for (const method of ['POST', 'PUT', 'PATCH', 'DELETE']) {
+      const written = await call(passageUrl(JOHN), {
+        method,
+        cookie: adminCookie,
+        body: JSON.stringify({ passage: 'Words nobody translated.' }),
+      });
+      expect(written.status, method).toBe(405);
+    }
+
+    expect(await heldText('john', 3)).toEqual(before);
+  });
+
+  it('ignores text sent alongside a reference, and stores none', async () => {
+    const { recordingId, item } = await draft();
+
+    const resolved = await post<ResolveReviewPayload>(reviewPath(item.id), {
+      action: 'approve',
+      fields: {
+        [FIELD]: [
+          {
+            book: 'john',
+            chapter: 3,
+            verseStart: 16,
+            verseEnd: 16,
+            from: 1,
+            // What a client would send if it thought it could correct a passage.
+            text: 'For God so loved the client that sent this.',
+          },
+        ],
+      },
+    });
+
+    expect(resolved.status).toBe(200);
+    expect(await references(recordingId)).toEqual([
+      { book: 'john', chapter: 3, verse_start: 16, verse_end: 16, origin: 'machine', edited_by_admin: false },
+    ]);
+    // Not on the reference — the table has no column for it — and not in the cache either.
+    expect(await heldText('john', 3)).not.toContain('For God so loved the client that sent this.');
+  });
+
+  it('refuses a reader the review queue would refuse', async () => {
+    // The same one-place decision every other admin read goes through, so the lookup cannot become
+    // a way around it.
+    expect((await call(passageUrl(JOHN), { cookie: memberCookie })).status).toBe(403);
+    expect((await call(passageUrl(JOHN))).status).toBe(401);
+  });
+
+  it('refuses a citation that is not one, rather than inventing a passage for it', async () => {
+    const refused = await call<{ passage: string | null }>(
+      `${baseUrl}${API_PREFIX}${passagePath({ book: 'john', chapter: 3, verseStart: 16, verseEnd: 16 })}`.replace(
+        'chapter=3',
+        'chapter=99',
+      ),
+      { cookie: adminCookie },
+    );
+    expect(refused.status).toBe(400);
+    expect(refused.code).toBe('invalid_input');
   });
 });

@@ -271,3 +271,25 @@
 .citationAdd {
   display: flex;
 }
+
+/*
+ * **The passage under a citation** ([3.3.1](docs/active-scope/prd.md)).
+ *
+ * Body text under the row's own controls, indented by nothing — it is what the row is *about*, and
+ * setting it apart as a quotation would be a formatting decision about somebody else's words.
+ * `--color-text-dim` rather than the full text colour, because the citation above it is the thing
+ * the admin is deciding on and the passage is what they read to decide.
+ */
+.passage {
+  margin-top: var(--space-2);
+  color: var(--color-text-dim);
+  font-size: var(--fs-body);
+  line-height: 1.6;
+}
+
+/* The same line, for when there is no passage to show. Italic so "nothing yet" does not read as
+   scripture that happens to be short. */
+.passageQuiet {
+  composes: passage;
+  font-style: italic;
+}

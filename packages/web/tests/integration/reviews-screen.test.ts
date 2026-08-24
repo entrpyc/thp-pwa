@@ -5,10 +5,12 @@ import {
   ADMIN_PAGE_PATH,
   ADMIN_RECORDINGS_PAGE_PATH,
   ADMIN_REVIEWS_PAGE_PATH,
+  API_PREFIX,
   REVIEW_FIELD,
   REVIEW_KINDS,
   REVIEW_RECORDING_PARAM,
   ROLE,
+  SCRIPTURE_PASSAGE_PATH,
   type ReviewKind,
 } from '@thp/shared';
 import {
@@ -885,6 +887,156 @@ describe('correcting a list before approving', () => {
       expect(
         await sql`select id from scripture_reference where recording_id = ${recordingId}`,
       ).toHaveLength(0);
+    } finally {
+      await page.context().close();
+    }
+  }, 120_000);
+});
+
+/**
+ * **The passage under each citation** ([3.3.1](docs/active-scope/implementation-plan.md)–
+ * [3.3.3](docs/active-scope/implementation-plan.md)).
+ *
+ * The whole point of putting verse text on this screen is that a citation which *reads* right and
+ * *is* wrong is catchable — so what is asserted is that the words are under the row, that a row the
+ * admin has just typed gets them too, and that a row whose passage will not load still shows what
+ * it cites.
+ *
+ * The server the suite drives is configured with the local fake verse source, so nothing here
+ * reaches a Bible API and the text is the fake's stand-in rather than scripture.
+ */
+describe('the passage under a citation', () => {
+  it('shows each reference’s passage beneath it', async () => {
+    const title = unique('Passages under the rows');
+    const recordingId = await newRecording(title);
+    await drafts(recordingId, ['scripture']);
+
+    const page = await openPanel();
+    try {
+      const row = await openForm(page, title, 'Scripture');
+      const list = row.getByRole('list', { name: 'Citations' });
+      const first = list.getByRole('listitem').first();
+
+      await expect
+        .poll(() => first.textContent(), { timeout: 30_000 })
+        .toContain('Stand-in verse text for Psalm 23');
+
+      // Every row, not only the first — a list where one row resolved is a list nobody can review.
+      for (const wanted of ['Psalm 23', 'John 3:16', 'Romans 8:1–4']) {
+        await expect
+          .poll(() => list.filter({ hasText: wanted }).first().textContent(), { timeout: 30_000 })
+          .toContain('Stand-in verse text');
+      }
+
+      // A paragraph, not a control: verse text is what the source says and is editable nowhere.
+      expect(await first.getByRole('textbox').count()).toBe(0);
+    } finally {
+      await page.context().close();
+    }
+  }, 120_000);
+
+  // 3.3.2 — the row an admin just typed has no draft to have carried anything, so this is the case
+  // that makes the resolution a property of the form rather than of the draft.
+  it('resolves the passage of a reference the admin adds, while the form is open', async () => {
+    const title = unique('Adding resolves');
+    const recordingId = await newRecording(title);
+    await drafts(recordingId, ['scripture']);
+
+    const page = await openPanel();
+    try {
+      const row = await openForm(page, title, 'Scripture');
+      await row.getByRole('button', { name: 'Add a reference' }).click();
+
+      const list = row.getByRole('list', { name: 'Citations' });
+      const added = list.getByRole('listitem').last();
+      await expect
+        .poll(() => added.textContent(), { timeout: 30_000 })
+        .toContain('Stand-in verse text for Genesis 1');
+    } finally {
+      await page.context().close();
+    }
+  }, 120_000);
+
+  it('resolves it again when the admin edits the citation', async () => {
+    const title = unique('Editing resolves');
+    const recordingId = await newRecording(title);
+    await drafts(recordingId, ['scripture']);
+
+    const page = await openPanel();
+    try {
+      const row = await openForm(page, title, 'Scripture');
+      const list = row.getByRole('list', { name: 'Citations' });
+      const second = list.getByRole('listitem').nth(1);
+
+      await expect
+        .poll(() => second.textContent(), { timeout: 30_000 })
+        .toContain('Stand-in verse text for John 3:16');
+
+      // `John 3:16` becomes `John 3:1`, and the passage under it follows what was typed.
+      await second.getByLabel('First verse').fill('1');
+      await second.getByLabel('Last verse').fill('1');
+      await expect
+        .poll(() => second.textContent(), { timeout: 30_000 })
+        .toContain('Stand-in verse text for John 3:1.');
+    } finally {
+      await page.context().close();
+    }
+  }, 120_000);
+
+  // 3.3.3 — a source that is down degrades the row, never the form. The citation is the artefact;
+  // the passage is a convenience on top of it.
+  it('still shows the citation, with a quiet line, when the passage will not load', async () => {
+    const title = unique('Passage unavailable');
+    const recordingId = await newRecording(title);
+    await drafts(recordingId, ['scripture']);
+
+    const page = await openPanel();
+    try {
+      await page.route(`**${API_PREFIX}${SCRIPTURE_PASSAGE_PATH}*`, (route) => route.abort());
+
+      const row = await openForm(page, title, 'Scripture');
+      const list = row.getByRole('list', { name: 'Citations' });
+
+      await expect
+        .poll(() => list.getByRole('listitem').first().textContent(), { timeout: 30_000 })
+        .toContain('could not be loaded');
+
+      // The citation is still there, still correctable, still approvable — which is the whole of
+      // what "degrades to citations without text" has to mean.
+      expect(await list.locator('legend').allTextContents()).toEqual([
+        'Psalm 23',
+        'John 3:16',
+        'Romans 8:1–4',
+      ]);
+      expect(await row.getByRole('button', { name: 'Approve' }).count()).toBe(1);
+    } finally {
+      await page.context().close();
+    }
+  }, 120_000);
+
+  it('says so rather than showing nothing when the source has no text for the passage', async () => {
+    const title = unique('No text for it');
+    const recordingId = await newRecording(title);
+    await drafts(recordingId, ['scripture']);
+
+    const page = await openPanel();
+    try {
+      // The other half of 3.3.3: the API answered, and the answer is that there is no text. On
+      // screen the two are the same, deliberately — the row says what it cites and nothing else.
+      await page.route(`**${API_PREFIX}${SCRIPTURE_PASSAGE_PATH}*`, (route) =>
+        route.fulfill({
+          status: 200,
+          contentType: 'application/json',
+          body: JSON.stringify({ passage: null }),
+        }),
+      );
+
+      const row = await openForm(page, title, 'Scripture');
+      await expect
+        .poll(() => row.getByRole('list', { name: 'Citations' }).getByRole('listitem').first().textContent(), {
+          timeout: 30_000,
+        })
+        .toContain('could not be loaded');
     } finally {
       await page.context().close();
     }

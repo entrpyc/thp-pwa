@@ -25,6 +25,21 @@ const UNREACHABLE_DATABASE_URL = 'postgres://nobody:nobody@127.0.0.1:1/nothing';
  */
 const MAIL_FROM = 'Teaching Hub <invitations@example.test>';
 
+/**
+ * Verse text, for every server the suite starts.
+ *
+ * **The suite's, not the developer's** — the same argument tests/setup/media-bucket.ts makes about
+ * the bucket. `.env` names a real Bible source, and [3.3.10](docs/active-scope/prd.md) says a test
+ * run reaches none: leaving it to be inherited would make "no test reaches a source" true only for
+ * developers who happened to set `THP_MOCK_EXTERNAL`. The translation is named too, because it is
+ * the first part of every cached verse's key and a suite whose key came from `.env` would hold
+ * different rows on different machines.
+ */
+const TEST_BIBLE = {
+  BIBLE_SOURCE: 'fake',
+  BIBLE_TRANSLATION: 'test-translation',
+} as const;
+
 function captureMail(name: string): Record<string, string> {
   return {
     MAIL_TRANSPORT: 'capture',
@@ -77,14 +92,14 @@ export default async function setup(project: TestProject): Promise<() => Promise
       name: 'primary',
       databaseUrl: appDatabase.url,
       port: primaryPort,
-      env: { ...media, ...captureMail('primary') },
+      env: { ...media, ...TEST_BIBLE, ...captureMail('primary') },
     });
     servers.push(primary);
 
     const broken = await startNextServer({
       name: 'broken-db',
       databaseUrl: UNREACHABLE_DATABASE_URL,
-      env: { ...media, ...captureMail('broken-db') },
+      env: { ...media, ...TEST_BIBLE, ...captureMail('broken-db') },
     });
     servers.push(broken);
 
@@ -93,7 +108,7 @@ export default async function setup(project: TestProject): Promise<() => Promise
     const mailDown = await startNextServer({
       name: 'mail-down',
       databaseUrl: appDatabase.url,
-      env: { ...media, MAIL_TRANSPORT: 'failing', MAIL_FROM },
+      env: { ...media, ...TEST_BIBLE, MAIL_TRANSPORT: 'failing', MAIL_FROM },
     });
     servers.push(mailDown);
 

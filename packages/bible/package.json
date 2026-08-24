@@ -1,0 +1,14 @@
+{
+  "name": "@thp/bible",
+  "version": "0.0.0",
+  "private": true,
+  "type": "module",
+  "exports": {
+    ".": "./src/index.ts",
+    "./*": "./src/*.ts"
+  },
+  "dependencies": {
+    "@thp/db": "*",
+    "@thp/shared": "*"
+  }
+}

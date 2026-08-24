@@ -26,8 +26,14 @@ const DATABASE_PACKAGES = ['@thp/db'];
  * `packages/web` so the worker could read the original. Moving it made it nameable by a client, so
  * it has to be named here: it holds bucket credentials and mints signed grants, and a client that
  * imported it would be a client bundling both.
+ *
+ * `@thp/bible` joined it in the scripture scope for the same reason and by the same route: the
+ * worker needs a verse while it drafts and the API needs one while an admin reviews, so the port
+ * lives beside both rather than inside either ([3.1.1](docs/active-scope/implementation-plan.md)).
+ * A client that imported it would be a client holding the source's configuration and calling the
+ * source from the browser — which is neither cached nor authorised.
  */
-const SERVER_ONLY_PACKAGES = ['@thp/media'];
+const SERVER_ONLY_PACKAGES = ['@thp/media', '@thp/bible'];
 const DATABASE_DRIVERS = ['postgres', 'pg', 'pg-native', 'drizzle-orm', 'drizzle-kit'];
 
 /** `import x from 'y'`, `export * from 'y'`, `import('y')`, `require('y')` — specifier in group 1 or 2. */
@@ -147,6 +153,7 @@ export function checkSingleDatabaseModule(
     'packages/worker/src',
     'packages/shared/src',
     'packages/media/src',
+    'packages/bible/src',
   ],
 ): BoundaryViolation[] {
   const root = resolve(repoRoot);

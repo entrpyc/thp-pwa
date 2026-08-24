@@ -156,7 +156,8 @@ describe('migrations apply to an empty database by one command', () => {
       // Ticket 03 `transcript` and `segment`. Story 3 Ticket 01 added `review_item` and `summary`,
       // Story 4 Ticket 04 `playback_progress` and Story 6 Ticket 01 `series` — the last of that
       // epic. The notes scope adds `note` (Task 1.1), then `note_reaction` (Task 4.1) and
-      // `note_pin` (Task 6.2). The scripture scope adds `scripture_reference` (Task 1.4).
+      // `note_pin` (Task 6.2). The scripture scope adds `scripture_reference` (Task 1.4) and then
+      // `verse_text` (Task 3.2).
       const tables = await sql<{ tablename: string }[]>`
         select tablename from pg_tables where schemaname = 'public' order by tablename
       `;
@@ -177,6 +178,7 @@ describe('migrations apply to an empty database by one command', () => {
         'summary',
         'transcript',
         'user',
+        'verse_text',
       ]);
     } finally {
       await sql.end({ timeout: 5 });
@@ -1611,5 +1613,134 @@ describe('scripture references, and nothing beside them', () => {
         values ('00000000-0000-0000-0000-000000000000', 'acts', 2, 1, 4, 'machine')
       `,
     ).rejects.toThrow();
+  });
+});
+
+/**
+ * The verse text cache, asserted by its **exact column set**, for the reason every block above is:
+ * what is absent is the design.
+ *
+ * [3.2.1](docs/active-scope/implementation-plan.md) — one row per translation, book, chapter and
+ * verse, with the text and when it was fetched, keyed so that a verse cited by a second teaching is
+ * the same row rather than a second copy.
+ */
+describe('the verse text cache, and nothing beside it', () => {
+  let target: ThrowawayDatabase;
+  let before: Map<string, string[]>;
+  let after: Map<string, string[]>;
+  let sql: ReturnType<typeof postgres>;
+
+  const hold = (
+    translation: string,
+    book: string,
+    chapter: number,
+    verse: number,
+    text: string,
+  ) => sql`
+    insert into verse_text (translation, book, chapter, verse, text)
+    values (${translation}, ${book}, ${chapter}, ${verse}, ${text})
+  `;
+
+  beforeAll(async () => {
+    target = await createThrowawayDatabase(inject('databaseUrl'), 'verse_text_migration');
+
+    const priorCount = journalCountBefore('0015_verse_text');
+    await runMigrations({ url: target.url, migrationsFolder: migrationsFolderUpTo(priorCount) });
+    before = await readColumnSets(target.url);
+
+    sql = postgres(target.url, { max: 2, onnotice: () => {} });
+
+    await runMigrations({ url: target.url, migrationsFolder: migrationsFolderUpTo(priorCount + 1) });
+    after = await readColumnSets(target.url);
+  }, 120_000);
+
+  afterAll(async () => {
+    await sql?.end({ timeout: 5 });
+    await target?.drop();
+  }, 60_000);
+
+  it('did not exist before this migration and does after — otherwise the comparison is vacuous', () => {
+    expect(before.has('verse_text')).toBe(false);
+    expect(after.has('verse_text')).toBe(true);
+  });
+
+  it('adds one table and changes no column of any table that already existed', () => {
+    for (const [table, columns] of before) {
+      expect(after.get(table), `${table} must be untouched`).toEqual(columns);
+    }
+    expect([...after.keys()].filter((table) => !before.has(table))).toEqual(['verse_text']);
+  });
+
+  it('gives verse_text exactly these columns, and none of the deferred ones', () => {
+    expect(after.get('verse_text')).toEqual([
+      'book',
+      'chapter',
+      'fetched_at',
+      'text',
+      'translation',
+      'verse',
+    ]);
+
+    // `id` would let the same verse be held twice under two ids, with nothing able to say which one
+    // a reader gets. `recording_id` or `scripture_reference_id` would tie a verse to one teaching,
+    // which is the opposite of what the shared cache is for. `expires_at` is a refresh policy, and
+    // there is not one. `translation_name` and `copyright` are the source's to state, not ours.
+    for (const deferred of [
+      'id',
+      'recording_id',
+      'scripture_reference_id',
+      'expires_at',
+      'translation_name',
+      'copyright',
+      'edited_at',
+      'edited_by_user_id',
+    ]) {
+      expect(after.get('verse_text'), `${deferred} must not exist`).not.toContain(deferred);
+    }
+  });
+
+  it('holds one row per verse per translation, and refuses a second', async () => {
+    await expect(hold('BSB', 'john', 3, 16, 'The first answer.')).resolves.toBeTruthy();
+    // The primary key *is* the passage, which is what makes "already held" a question with one
+    // answer rather than a race between two rows.
+    await expect(hold('BSB', 'john', 3, 16, 'A second answer.')).rejects.toThrow();
+
+    // The same verse in another translation is a different verse as far as this cache is concerned.
+    await expect(hold('WEB', 'john', 3, 16, 'Another translation.')).resolves.toBeTruthy();
+    // And a different verse of the same chapter is simply another row.
+    await expect(hold('BSB', 'john', 3, 17, 'The next verse.')).resolves.toBeTruthy();
+  });
+
+  it('stamps when the source answered, without anybody passing a time', async () => {
+    await hold('BSB', 'romans', 8, 1, 'A verse of Romans.');
+    const rows = await sql<{ fetched_at: string | null }[]>`
+      select fetched_at from verse_text
+      where translation = 'BSB' and book = 'romans' and chapter = 8 and verse = 1
+    `;
+    expect(rows).toHaveLength(1);
+    expect(rows[0]?.fetched_at).not.toBeNull();
+  });
+
+  it('belongs to no teaching, so deleting one takes no verse with it', async () => {
+    const [written] = await sql<{ id: string }[]>`
+      insert into recording (original_media_key, title, recorded_at)
+      values ('originals/verse-text-owner.mp3', 'A teaching that cites a verse', '2026-06-01')
+      returning id
+    `;
+    const recordingId = written?.id as string;
+    await sql`
+      insert into scripture_reference (recording_id, book, chapter, verse_start, verse_end, origin)
+      values (${recordingId}, 'acts', 2, 1, 4, 'machine')
+    `;
+    await hold('BSB', 'acts', 2, 1, 'A verse of Acts.');
+
+    await sql`delete from recording where id = ${recordingId}`;
+
+    // The verse survives its citer, because it belongs to the translation rather than to the
+    // teaching — which is the whole of why the cache is shared.
+    const rows = await sql`
+      select 1 from verse_text where translation = 'BSB' and book = 'acts' and chapter = 2
+    `;
+    expect(rows).toHaveLength(1);
   });
 });

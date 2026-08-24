@@ -12,6 +12,7 @@ import {
   type DatabaseHandle,
   type JobRow,
 } from '@thp/db';
+import type { BibleSource } from '@thp/bible';
 import { REVIEW_KINDS, type ReviewKind, type ReviewProvenance } from '@thp/shared';
 import { DOMAIN_EVENT_MESSAGE } from '@thp/shared/observability/events';
 import { setLogSink, type LogLine } from '@thp/shared/observability/logger';
@@ -119,8 +120,35 @@ async function items(recordingId: string): Promise<
   }[];
 }
 
-function run(job: JobRow, generator: Generator = fakeGenerator(DRAFT)): Promise<JobRow> {
-  return runJob(job, createHandlers({ generator, executor: handle }), { executor: handle });
+/**
+ * A verse source that answers every citation and says which call it was.
+ *
+ * Handed in exactly as the generator is, so this suite reaches no Bible API either — and built
+ * fresh per run, so "how many calls did this job make" is a question about one job.
+ */
+function countingBibleSource(): BibleSource {
+  let calls = 0;
+  return {
+    name: 'counting',
+    async readPassage(citation) {
+      calls += 1;
+      const verses = [];
+      for (let number = citation.verseStart; number <= citation.verseEnd; number += 1) {
+        verses.push({ number, text: `Verse ${number} as the source has it.` });
+      }
+      return { verses, requestId: `call-${calls}` };
+    },
+  };
+}
+
+function run(
+  job: JobRow,
+  generator: Generator = fakeGenerator(DRAFT),
+  bibleSource: BibleSource = countingBibleSource(),
+): Promise<JobRow> {
+  return runJob(job, createHandlers({ generator, bibleSource, executor: handle }), {
+    executor: handle,
+  });
 }
 
 beforeAll(async () => {
@@ -512,5 +540,104 @@ describe('what it says happened', () => {
     expect([...((events[0]?.['kinds'] as ReviewKind[]) ?? [])].sort()).toEqual(
       [...REVIEW_KINDS].sort(),
     );
+  });
+});
+
+/**
+ * **The passage is held before an admin opens the item**
+ * ([3.2.3](docs/active-scope/implementation-plan.md)–
+ * [3.2.5](docs/active-scope/implementation-plan.md)).
+ *
+ * The source is handed in exactly as the generator is, so nothing here reaches a Bible API — and
+ * the cache is the real table, because the whole of 3.2.3 is that a row is there afterwards.
+ */
+describe('the verses of what it drafted', () => {
+  /** Every verse held for a teaching's chapters, whatever translation the run was configured with. */
+  async function heldVerses(): Promise<{ book: string; chapter: number; verse: number; text: string }[]> {
+    return (await sql`
+      select book, chapter, verse, text from verse_text order by book, chapter, verse
+    `) as unknown as { book: string; chapter: number; verse: number; text: string }[];
+  }
+
+  beforeEach(async () => {
+    await sql`delete from verse_text`;
+  });
+
+  it('resolves every citation it produced, so the text is held before the item is opened', async () => {
+    const job = await claimedJob();
+
+    const row = await run(job);
+    expect(row.status).toBe('succeeded');
+
+    // The two that survived the canon check, and every verse of each of them.
+    const held = await heldVerses();
+    expect(held.filter((one) => one.book === 'john' && one.chapter === 3).map((one) => one.verse)).toEqual([16]);
+    expect(held.filter((one) => one.book === 'romans' && one.chapter === 8).map((one) => one.verse)).toEqual([1, 2, 3, 4]);
+    expect(held.every((one) => one.text.trim() !== '')).toBe(true);
+
+    // And nothing was held for the proposal that was dropped, because it is not a citation.
+    expect(held.some((one) => one.book === 'hezekiah')).toBe(false);
+  });
+
+  // 3.2.4 — the deliberate exception to the halt-on-failure rule. Verse text is a convenience on
+  // top of the artefact, and the artefact is the citation.
+  it('succeeds with the citations in place when the verse source fails', async () => {
+    const job = await claimedJob();
+
+    const row = await run(job, undefined, {
+      name: 'down',
+      readPassage: async () => {
+        throw new Error('the verse source is unreachable');
+      },
+    });
+
+    expect(row.status).toBe('succeeded');
+    const scripture = (await items(job.recordingId)).find((one) => one.kind === 'scripture');
+    expect(scripture?.fields).toEqual({
+      citations: [
+        { book: 'john', chapter: 3, verseStart: 16, verseEnd: 16 },
+        { book: 'romans', chapter: 8, verseStart: 1, verseEnd: 4 },
+      ],
+    });
+    // The reference is marked as having no text yet by there being none — which is the same state
+    // the review form and the member surface already render a quiet line for.
+    expect(await heldVerses()).toEqual([]);
+  });
+
+  it('succeeds when the source simply has no text for the passage', async () => {
+    const job = await claimedJob();
+
+    const row = await run(job, undefined, {
+      name: 'silent',
+      readPassage: async () => ({ verses: [], requestId: null }),
+    });
+
+    expect(row.status).toBe('succeeded');
+    expect(await heldVerses()).toEqual([]);
+    expect(row.providerMeta).toMatchObject({ versesFetched: 0, versesHeld: 0 });
+  });
+
+  // 3.2.5 — what the lookups cost, on the job that caused them. A free source spends nothing and
+  // is recorded as spending nothing; what is worth counting is the calls it did not have to make.
+  it('records how many verses were fetched, how many were held, and the source’s own call id', async () => {
+    const first = await claimedJob();
+    const firstRow = await run(first);
+
+    expect(firstRow.providerMeta).toMatchObject({
+      versesFetched: 5,
+      versesHeld: 0,
+      verseSourceRequestId: expect.stringContaining('call-'),
+    });
+
+    // A second teaching citing the same passages: every verse is already held, so nothing is
+    // fetched and there is no call to identify.
+    const second = await claimedJob();
+    const secondRow = await run(second);
+
+    expect(secondRow.providerMeta).toMatchObject({
+      versesFetched: 0,
+      versesHeld: 5,
+      verseSourceRequestId: null,
+    });
   });
 });

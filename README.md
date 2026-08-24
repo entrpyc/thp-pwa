@@ -68,6 +68,7 @@ too: the integration suite starts real Next.js servers and talks to them over HT
 | [packages/shared](packages/shared)   | Domain vocabulary — role enum, pipeline-step enum, segment shape, the `/api/v1` wire contract. Imported by client, API, worker and database layer alike. |
 | [packages/db](packages/db)           | **Server-only.** Drizzle schema, migrations, and the single module the API reaches Postgres through. |
 | [packages/media](packages/media)     | **Server-only.** The object-store port and its S3 adapter. Depended on by both the API and the worker, which is why it is not a folder inside either. |
+| [packages/bible](packages/bible)     | **Server-only.** The Bible-text port, its one adapter, and the cache-aside resolver that holds a verse in our own database once. Depended on by both the API and the worker, for the same reason the media port is. |
 | [packages/web](packages/web)         | Next.js App Router — the React client *and* the `/api/v1` route handlers.     |
 | [packages/worker](packages/worker)   | The pipeline worker — polls the job ledger, transcribes, and will generate drafts. Holds the ASR port and its one adapter. |
 
