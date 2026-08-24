@@ -6,6 +6,7 @@ _Planned: 2026-08-24_
 
 121/121 criteria met. Groups complete: **Group 1**, **Group 2**, **Group 3**, **Group 4**,
 **Group 5**, **Group 6** — the scope is delivered.
+_1.8.1–1.8.3 reworded 2026-08-24 after delivery, on an operator report — see Task 1.8's Record._
 _Maintained by implementation — see the checkboxes for detail._
 
 ## Background to research
@@ -583,10 +584,12 @@ gains the notes store and the composer anchor; active-scope prd 3.1.1, 3.1.3, 3.
   right; a later `not_found` on the same route would wear the wrong message
 - **Edge cases:** the ceiling refusal from the server is never seen in practice — the client disables
   submit first — so if the two ever disagree the member gets a disabled button and no explanation
-- **Assumptions, major (confirmed):** the composer is **rendered only once the anchor is frozen**,
-  rather than falling back to `00:00` for the tick before the effect runs. `00:00` is a real answer
-  (3.1.3), so a flicker through it is indistinguishable from the truth — this was found by the
-  freeze assertion passing against a composer that showed `00:00` at both readings
+- **Assumptions, major (confirmed):** ~~the composer is **rendered only once the anchor is frozen**,
+  rather than falling back to `00:00` for the tick before the effect runs~~ — **superseded
+  2026-08-24.** An armed composer shows the position the player already holds from its first paint,
+  so there is no tick to flicker through and the guard is gone. The reasoning still stands for why
+  `00:00` may never be a fallback, and `anchorMs` falling back to `0` is one of the breaks 1.8.3 is
+  now checked against
 - **Assumptions, minor:** the submit reads **Save note**, and **Saving…** while it is in flight; the
   count reads `900 / 1,000` and switches to 5.1.4's sentence over the ceiling; 900 is a named
   constant in the panel rather than a fraction of the ceiling, so moving the ceiling does not
@@ -595,12 +598,28 @@ gains the notes store and the composer anchor; active-scope prd 3.1.1, 3.1.3, 3.
 - **Reworked:** 1.8.1 — the freeze assertion originally compared two readings of a composer that
   showed `00:00` both times, so it held with the anchor removed entirely. Fixed in the component
   (above) and the test now reads the seconds and requires a real position
-- **False positives fixed:** 1 (counted here; the other two are in Task 1.6's record)
+- **Reworked:** 1.8.1, 1.8.2, 1.8.3 **a second time, 2026-08-24, on an operator report** — two notes
+  written in one sitting both landed on the same second and collapsed into one transport marker. The
+  cause was this task's own reading of 3.1.1: the moment was fixed *"when the composer opens"*, the
+  composer opens when the Notes tab is pressed, and a tab stays open — so the moment was fixed once
+  and never moved again, however long the member listened. **The requirement was wrong rather than
+  the code**, and the operator chose to reword it: the moment now follows playback until the member's
+  **first character** and holds from there, and saving arms it again. active-scope prd 3.1.1 carries
+  the reworded requirement and the reason; 1.8.1 and 1.8.2 above carry the reworded criteria. A
+  planning signal worth reading: the phrase *"when the composer opens"* was carried from the PRD into
+  the criteria unexamined, and nothing between the two asked what "opens" meant for a tab
+- **False positives fixed:** 1 (counted here; the other two are in Task 1.6's record). The rework
+  above added no new one — but the first break written to reproduce the reported behaviour did not
+  reproduce it (it left `player` in an effect's dependencies, so the moment re-locked on every
+  playback tick and appeared to follow the teaching). Both reworked criteria are now checked against
+  the previous implementation restored exactly, and against each half of it alone
 - **Operator steps:** none
-- **Notes:** the composer takes its anchor as a prop from the panel, which reads it from the player —
-  Task 2.3's sheet mounts the same `NoteComposer` with the same prop, so the two entry points cannot
-  disagree about the moment. 5.1.4's unpublished sentence is `NOTE_RECORDING_GONE_MESSAGE` in
-  `packages/shared/src/notes.ts`, shared with the service at 1.4.5
+- **Notes:** the composer reads the moment from the player itself rather than taking it as a prop —
+  Task 2.3's sheet mounts the same `NoteComposer`, so the two entry points cannot hold two moments
+  even in principle. `PlayerApi` carries `composerAnchorMs` (null while it follows playback) with
+  `lockComposerAnchor` and `releaseComposerAnchor`; `openComposer` / `closeComposer` are gone.
+  5.1.4's unpublished sentence is `NOTE_RECORDING_GONE_MESSAGE` in `packages/shared/src/notes.ts`,
+  shared with the service at 1.4.5
 
 ---
 
