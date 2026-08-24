@@ -40,6 +40,29 @@ const TEST_BIBLE = {
   BIBLE_TRANSLATION: 'test-translation',
 } as const;
 
+/**
+ * **The `mail-down` server's transport, said in a way `.env` cannot overrule.**
+ *
+ * `THP_MOCK_EXTERNAL` wins over any named transport and resolves to `capture`, which is right for
+ * every other server and fatal for this one: a developer with the switch set in `.env` — which
+ * `.env.example` recommends — gets a "mail is down" server that captures happily and sends every
+ * message, so "a send failure leaves the invitation in place" passes on a machine where no send
+ * ever failed.
+ *
+ * So the switch is turned **off** here and the three adapters it would have faked are named
+ * individually instead. That is the same move {@link TEST_BIBLE} makes one block up and for the
+ * same reason — the suite's configuration is the suite's, never the developer's — and it keeps the
+ * property that matters: the only thing real about this server is that its mail refuses.
+ */
+const FAILING_MAIL = {
+  THP_MOCK_EXTERNAL: 'false',
+  MAIL_TRANSPORT: 'failing',
+  MAIL_FROM,
+  // What the switch was covering. Named here so turning it off widens nothing.
+  ASR_PROVIDER: 'fake',
+  GENERATE_PROVIDER: 'fake',
+} as const;
+
 function captureMail(name: string): Record<string, string> {
   return {
     MAIL_TRANSPORT: 'capture',
@@ -108,7 +131,7 @@ export default async function setup(project: TestProject): Promise<() => Promise
     const mailDown = await startNextServer({
       name: 'mail-down',
       databaseUrl: appDatabase.url,
-      env: { ...media, ...TEST_BIBLE, MAIL_TRANSPORT: 'failing', MAIL_FROM },
+      env: { ...media, ...TEST_BIBLE, ...FAILING_MAIL },
     });
     servers.push(mailDown);
 
