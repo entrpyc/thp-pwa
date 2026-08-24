@@ -14,11 +14,12 @@ import {
 import { ApiClientError, apiFetch } from '@/client/api-client';
 import { useBreadcrumbTrail, usePlayer } from '../../player-context';
 import { NotesPanel } from './notes-panel';
+import { ScripturePanel } from './scripture-panel';
 import { TranscriptPanel } from './transcript-panel';
 import styles from '../../screens.module.css';
 
-/** The strip is single-select: opening one tab closes the other, and `null` is both closed. */
-type OpenTab = 'notes' | 'transcript' | null;
+/** The strip is single-select: opening one tab closes the others, and `null` is all closed. */
+type OpenTab = 'scripture' | 'notes' | 'transcript' | null;
 
 /**
  * **The recording page** — `pages/recording.png`.
@@ -27,11 +28,14 @@ type OpenTab = 'notes' | 'transcript' | null;
  *
  * - **The hero artwork becomes a flat `--color-bg-deep` band** carrying the back control. Artwork is
  *   deferred, and the band keeps the slot so a picture drops into it later without moving anything.
- * - **A tab strip holding two tabs.** The reference draws five — `Chapter`, `Scripture`, `Notes`,
- *   `Transcript`, `Mindmap` — and only those two have data. The other three are dropped rather than
- *   rendered disabled, which is the line the whole member surface draws for a deferred destination.
- *   Summary and description render directly in the page body, above the strip. The strip is
- *   **single-select**, the way the reference reads it: opening `Notes` closes `Transcript`.
+ * - **A tab strip holding three tabs.** The reference draws five — `Chapter`, `Scripture`, `Notes`,
+ *   `Transcript`, `Mindmap` — and only those three have data. `Chapter` and `Mindmap` are dropped
+ *   rather than rendered disabled, which is the line the whole member surface draws for a deferred
+ *   destination. Summary and description render directly in the page body, above the strip. The
+ *   strip is **single-select**, the way the reference reads it: opening `Notes` closes `Transcript`.
+ * - **`Scripture` is drawn only for a teaching that has some** (active-scope prd 3.4.4) — the same
+ *   line, one step further: a destination with no data behind it is left out rather than offered
+ *   empty. The recording payload carries `hasScripture` so that decision costs no request.
  * - **The tabs start closed.** A member who never opens it downloads no transcript; pressing it is
  *   what asks for one, and pressing it again puts it away. The notes are the exception and are
  *   fetched when the teaching is opened, because their markers show on the transport without the
@@ -175,14 +179,30 @@ export function RecordingScreen({
 
           {/*
             `pages/recording.png`'s strip, same pill shape and same spacing, in the reference's own
-            order — `Notes` before `Transcript`. When `Scripture`, `Chapter` and `Mindmap` arrive
-            they are entries here, not a different control.
+            order — `Scripture`, then `Notes`, then `Transcript`. When `Chapter` and `Mindmap`
+            arrive they are entries here, not a different control.
 
             `Notes` is the one place in the product entitled to the green (style-guide principle 5),
             so its icon and its selected state take `--color-notes` where `Transcript` takes the
             purple every other selected thing takes.
           */}
           <div className={styles.tabs} role="tablist" aria-label="Teaching contents">
+            {/*
+              Absent entirely rather than disabled for a teaching that cites nothing (3.4.4) — the
+              same line the strip already draws for `Chapter` and `Mindmap`, decided off the payload
+              the page already has rather than off a passage nobody asked for.
+            */}
+            {recording.hasScripture ? (
+              <button
+                className={styles.tab}
+                type="button"
+                role="tab"
+                aria-selected={openTab === 'scripture'}
+                onClick={() => setOpenTab((open) => (open === 'scripture' ? null : 'scripture'))}
+              >
+                Scripture
+              </button>
+            ) : null}
             <button
               className={`${styles.tab} ${styles.notesTab}`}
               type="button"
@@ -205,6 +225,8 @@ export function RecordingScreen({
               Transcript
             </button>
           </div>
+
+          {openTab === 'scripture' ? <ScripturePanel recordingId={recordingId} /> : null}
 
           {openTab === 'notes' ? (
             <NotesPanel recordingId={recordingId} canModerate={canModerate} />

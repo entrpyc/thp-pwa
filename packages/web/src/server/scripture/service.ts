@@ -1,5 +1,12 @@
 import { resolvePassages } from '@thp/bible';
-import { checkCitation, formatCitation, type PassagePayload } from '@thp/shared';
+import { findScriptureReferences, findVisibleRecording } from '@thp/db';
+import {
+  checkCitation,
+  compareCitations,
+  formatCitation,
+  type PassagePayload,
+  type RecordingScripturePayload,
+} from '@thp/shared';
 import { ApiError } from '@/server/api/errors';
 import type { Actor } from '@/server/auth/policy';
 import { logger } from '@/server/observability/logger';
@@ -57,4 +64,70 @@ export async function readPassageFor(
 function numberOrNull(value: string | null): number | null {
   if (value === null || value.trim() === '') return null;
   return Number(value);
+}
+
+/**
+ * **A published teaching's scripture, as a member reads it** ([3.4.2](docs/active-scope/prd.md)–
+ * [3.4.5](docs/active-scope/prd.md)).
+ *
+ * **One gate, and it is the recording's.** References ride publication
+ * ([3.2.13](docs/active-scope/prd.md)), so the only question asked here is the one
+ * `findVisibleRecording` already answers for the teaching itself — the same read the recording page
+ * and the transcript go through, reached through the same `recording.browse` the route declares.
+ * There is no second publication state on a reference and nothing here compares one.
+ *
+ * **An empty list is the ordinary answer.** A teaching whose draft nobody has approved has no rows,
+ * and a discarded draft leaves its citations in the closed `review_item` and writes none — so both
+ * read as no references without this function knowing which happened. That is the point: the only
+ * thing that puts a row in front of a member is an approval.
+ *
+ * **Canon order is applied here rather than in the query**, because the order is the position of a
+ * book in the canon table and that table is declared once, in `@thp/shared`.
+ *
+ * **A Bible source that is down degrades to citations without text** (§ 6 Operability). The port
+ * promises never to throw, so a page load cannot fail over a passage — the reference arrives with
+ * `passage: null` and the panel says so.
+ */
+export async function readScriptureFor(
+  actor: Actor,
+  recordingId: string,
+): Promise<RecordingScripturePayload> {
+  const visible = await findVisibleRecording(recordingId, { includeUnpublished: false });
+  if (visible === null) {
+    logger.warn('scripture.read.refused', {
+      actorId: actor.id,
+      action: 'recording.browse',
+      target: `recording:${recordingId}`,
+      reason: 'not-visible',
+      code: 'not_found',
+    });
+    throw ApiError.notFound('There is no such teaching.');
+  }
+
+  const citations = (await findScriptureReferences(recordingId))
+    .map((row) => ({
+      book: row.book,
+      chapter: row.chapter,
+      verseStart: row.verseStart,
+      verseEnd: row.verseEnd,
+    }))
+    .sort(compareCitations);
+
+  const resolved = await resolvePassages(citations);
+
+  logger.info('scripture.read', {
+    actorId: actor.id,
+    action: 'recording.browse',
+    target: `recording:${recordingId}`,
+    references: citations.length,
+    fetched: resolved.fetched,
+    held: resolved.held,
+  });
+
+  return {
+    references: resolved.passages.map((one) => ({
+      ...one.citation,
+      passage: one.verses.length === 0 ? null : one.verses.map((verse) => verse.text).join(' '),
+    })),
+  };
 }

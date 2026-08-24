@@ -116,6 +116,7 @@ export {
 } from './reviews';
 export {
   findHeldVerses,
+  findScriptureReferences,
   replaceScriptureReferences,
   saveVerseTexts,
   type ChapterKey,

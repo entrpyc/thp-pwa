@@ -4,7 +4,7 @@ _Planned: 2026-08-24_
 
 ## Status
 
-59/71 criteria met. Groups complete: Group 1, Group 2, Group 3.
+71/71 criteria met. Groups complete: Group 1, Group 2, Group 3, Group 4.
 _Maintained by implementation — see the checkboxes for detail._
 
 ## Background to research
@@ -712,20 +712,46 @@ project architecture § Cross-cutting concerns (*Authorisation*, *The review gat
 
 **Acceptance criteria**
 
-- [ ] **4.1.1** A member asking for a published teaching's scripture gets its approved references in
+- [x] **4.1.1** A member asking for a published teaching's scripture gets its approved references in
       canon order, each with its passage — verified by
       `packages/web/tests/integration/scripture.test.ts`
-- [ ] **4.1.2** A member gets nothing for a teaching whose references were never approved, and
+- [x] **4.1.2** A member gets nothing for a teaching whose references were never approved, and
       nothing for a teaching that is not published **even when its references were** — verified by
       `packages/web/tests/integration/scripture.test.ts`
   - References ride the recording's publication; there is no second gate.
-- [ ] **4.1.3** A discarded draft's citations are never returned to anyone — verified by
+- [x] **4.1.3** A discarded draft's citations are never returned to anyone — verified by
       `packages/web/tests/integration/scripture.test.ts`
-- [ ] **4.1.4** The read goes through the same one-place authorisation decision every other member
+- [x] **4.1.4** The read goes through the same one-place authorisation decision every other member
       route uses, and an unauthenticated caller is refused — verified by
       `packages/web/tests/integration/scripture.test.ts` and `packages/web/tests/unit/policy.test.ts`
 
-**Record**
+**Record** — _updated 2026-08-25_
+
+- **Edge cases:** a recording unpublished between the page load and the tab press answers
+  `not_found` and the panel shows the failure line — the member sees "could not load" rather than
+  "this teaching is no longer published". · A teaching whose references were approved after the
+  page loaded has no **Scripture** tab until the page is reloaded; nothing polls. · A very long list
+  of references resolves every passage in one request with no ceiling and no pagination — a teaching
+  citing hundreds of passages would make the read slow rather than refuse. · A Bible source that is
+  down on the very first read of a passage answers `passage: null` and **is not retried on the next
+  read** within the same request; the next page load fetches again.
+- **Assumptions, major (confirmed):** the recording payload carries `hasScripture`, computed as an
+  `exists` subquery inside the visibility module and returned by both the library list and the
+  detail read — chosen over a detail-only payload type and over a second request per page load.
+- **Assumptions, minor:** "nothing" is two different answers, following the transcript route
+  exactly — an empty `references` list for a published teaching with none, and `not_found` for one
+  that is not published. · The member's payload carries the citation and its passage only; `origin`
+  and `editedByAdmin` are an operator's record and do not cross to a reader. · Passages are joined
+  into one paragraph with no verse numbers, the same way the review form's lookup already does it.
+- **Reworked:** none
+- **False positives fixed:** 1 — the ordering fixture used Genesis/John/Romans, whose canon order
+  and alphabetical order coincide, so the test would have passed against the raw database order.
+  Replaced with Genesis/Exodus/Romans, which the two orders disagree about.
+- **Operator steps:** none — no migration, no new configuration. `scripture_reference` and the
+  verse-text cache already exist from Groups 1 and 3.
+- **Notes:** the read declares `recording.browse` rather than an action of its own, and
+  `policy.test.ts` now pins the *absence* of any `scripture.*` action — that is what makes "the same
+  one-place decision" checkable rather than asserted.
 
 ### Task 4.2 — The Scripture tab on the recording page
 
@@ -740,26 +766,54 @@ active-scope prd 3.4.7, active-scope prd 3.4.8, active-scope prd § 5.1, active-
 
 **Acceptance criteria**
 
-- [ ] **4.2.1** The tab strip shows **Scripture** in the position the reference draws it, for a
+- [x] **4.2.1** The tab strip shows **Scripture** in the position the reference draws it, for a
       teaching with published references — verified by
       `packages/web/tests/integration/scripture-screen.test.ts`
-- [ ] **4.2.2** The tab is **absent entirely** for a teaching with none — not disabled, not an empty
+- [x] **4.2.2** The tab is **absent entirely** for a teaching with none — not disabled, not an empty
       panel — verified by `packages/web/tests/integration/scripture-screen.test.ts`
-- [ ] **4.2.3** Opening it lists the references in canon order, each with its citation as heading and
+- [x] **4.2.3** Opening it lists the references in canon order, each with its citation as heading and
       its passage as body — verified by
       `packages/web/tests/integration/scripture-screen.test.ts`
-- [ ] **4.2.4** A reference with no passage shows its citation and a quiet line in place of the text
+- [x] **4.2.4** A reference with no passage shows its citation and a quiet line in place of the text
       — verified by `packages/web/tests/integration/scripture-screen.test.ts`
-- [ ] **4.2.5** The panel is fetched when first opened, closes on a second press, and opening it
+- [x] **4.2.5** The panel is fetched when first opened, closes on a second press, and opening it
       closes whichever tab was open — verified by
       `packages/web/tests/integration/scripture-screen.test.ts`
-- [ ] **4.2.6** A failed load shows one failure line inside the panel and leaves the player, the
+- [x] **4.2.6** A failed load shows one failure line inside the panel and leaves the player, the
       notes and the transcript working — verified by
       `packages/web/tests/integration/scripture-screen.test.ts`
-- [ ] **4.2.7** A citation is text, not a link — nothing in the panel navigates anywhere — verified
+- [x] **4.2.7** A citation is text, not a link — nothing in the panel navigates anywhere — verified
       by `packages/web/tests/integration/scripture-screen.test.ts`
   - active-scope prd 3.4.8: the destination is cross-referencing, and it does not exist.
-- [ ] **4.2.8** The tab is reachable by keyboard and carries an accessible label, as the other tabs
+- [x] **4.2.8** The tab is reachable by keyboard and carries an accessible label, as the other tabs
       in the strip do — verified by `packages/web/tests/integration/scripture-screen.test.ts`
 
-**Record**
+**Record** — _updated 2026-08-25_
+
+- **Edge cases:** closing and re-opening the tab **fetches again** — the panel is unmounted when the
+  tab shuts, so a member toggling it repeatedly makes a request each time. · An admin approving an
+  empty list while the member has the page open leaves the tab drawn; opening it shows "This
+  teaching has no scripture references" rather than an empty box. · A failed load has no retry
+  control — the member closes and re-opens the tab, or reloads the page. · The panel has no bounded
+  height, so a long list scrolls the page rather than itself, unlike the transcript.
+- **Assumptions, major (confirmed):** none beyond 4.1's — the tab's presence is read off
+  `recording.hasScripture`, settled there.
+- **Assumptions, minor:** the tab carries **no icon**, matching the `Transcript` tab beside it. The
+  reference draws an icon on all five tabs, but the built strip gives one only to `Notes`, where the
+  style guide's green means notes and nothing else — adding one to `Scripture` alone would make the
+  strip less consistent than leaving it out. · Its accessible name is its own text, the way every
+  other tab in the strip works; no `aria-label` was added. · The panel is an `ol` of cards rather
+  than a bounded scroller: a handful of passages is not a transcript.
+- **Reworked:** none
+- **False positives fixed:** 0 — the fixture fault was 4.1's and is recorded there; the screen
+  fixture was corrected in the same pass.
+- **Operator steps:** none
+- **Notes:** `Scripture` is **first** in the strip, which is the reference's order once `Chapter` is
+  dropped — `Chapter` and `Mindmap` stay dropped rather than disabled, unchanged from Story 4. ·
+  Adding `hasScripture` to the recording payload turned three existing key-set guards red —
+  `publishing.test.ts` twice and `pipeline.test.ts` once, each pinning the payload's **exact** keys
+  so a field added later cannot slip in unnoticed. All three had their expected lists extended, not
+  loosened; that is the guard working. · The group's *Delivers* line was walked end to end once in a
+  real browser — an admin approving the draft in Pending Reviews, publishing the teaching, and a
+  member then reading those exact passages in the tab without leaving the page. It passed, and the
+  throwaway file that drove it was removed rather than left as test surface no criterion names.

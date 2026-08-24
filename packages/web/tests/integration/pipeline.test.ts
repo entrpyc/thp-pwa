@@ -318,6 +318,9 @@ describe('what the read answers with', () => {
     expect(Object.keys(summary ?? {}).sort()).toEqual([
       'createdAt',
       'description',
+      // Group 4's, and still not a speaker: whether the teaching has any approved scripture
+      // reference, which is what decides whether the recording page draws the tab.
+      'hasScripture',
       'id',
       'originalMediaKey',
       'publishedAt',

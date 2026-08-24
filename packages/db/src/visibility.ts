@@ -1,6 +1,6 @@
 import { and, asc, desc, eq, isNotNull, sql } from 'drizzle-orm';
 import { getDatabase, queryable, type Executor } from './client';
-import { playbackProgress, recording, series, summary } from './schema';
+import { playbackProgress, recording, scriptureReference, series, summary } from './schema';
 
 /**
  * **The member visibility condition, written once.**
@@ -43,7 +43,29 @@ export interface VisibleRecordingRow {
   /** The series this recording is in, or `null` for the many in none (Story 6). */
   readonly seriesId: string | null;
   readonly seriesTitle: string | null;
+  /**
+   * Whether this teaching has any approved scripture reference at all (Group 4).
+   *
+   * Counted rather than stored, in the same statement that reads the row — the shape
+   * {@link VisibleSeriesRow}'s aggregates already take. **Whether there is a reference and what it
+   * says are two different reads**, and this is the cheap one: the recording page asks it to decide
+   * whether to draw a tab, and asks the other only if the member presses it.
+   *
+   * A reference exists only because an admin approved the list it was in, so there is no second
+   * gate to apply here — the row gate above is the whole of who may see this.
+   */
+  readonly hasScripture: boolean;
 }
+
+/**
+ * `true` when this recording has at least one approved reference.
+ *
+ * `exists` rather than a count or a join: nothing wants the number, and a join would multiply the
+ * recording row by its references and turn a one-row read into a `group by`.
+ */
+const hasScripture = sql<boolean>`exists (
+  select 1 from ${scriptureReference} where ${scriptureReference.recordingId} = ${recording.id}
+)`;
 
 export interface VisibilityOptions {
   /**
@@ -87,6 +109,7 @@ export async function listVisibleRecordings(
       createdAt: recording.createdAt,
       seriesId: recording.seriesId,
       seriesTitle: series.title,
+      hasScripture,
     })
     .from(recording)
     .leftJoin(summary, eq(summary.recordingId, recording.id))
@@ -136,6 +159,7 @@ export async function findVisibleRecording(
       createdAt: recording.createdAt,
       seriesId: recording.seriesId,
       seriesTitle: series.title,
+      hasScripture,
     })
     .from(recording)
     .leftJoin(summary, eq(summary.recordingId, recording.id))

@@ -281,6 +281,10 @@ describe('what a member is answered', () => {
     // The **exact** key set, because a key added later is precisely what an absence check misses.
     expect(Object.keys(row).sort()).toEqual([
       'description',
+      // Group 4. Whether the teaching has any approved scripture reference — a boolean, never the
+      // references themselves, so the recording page can decide whether to draw the tab without
+      // downloading a passage nobody asked for.
+      'hasScripture',
       'id',
       'publishedAt',
       'recordedAt',
@@ -302,6 +306,7 @@ describe('what a member is answered', () => {
     expect(Object.keys(row ?? {}).sort()).toEqual([
       'createdAt',
       'description',
+      'hasScripture',
       'id',
       'originalMediaKey',
       'publishedAt',

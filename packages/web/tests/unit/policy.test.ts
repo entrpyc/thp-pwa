@@ -324,3 +324,27 @@ describe('the six moderation, ownership and reaction actions', () => {
     ]);
   });
 });
+
+/**
+ * 4.1.4 — **the member's scripture read goes through the decision that already existed.**
+ *
+ * References ride the recording's publication ([3.2.13](docs/active-scope/prd.md)), so reading them
+ * is `recording.browse` asked again rather than a second action with a second set of rules. The
+ * assertion worth having is therefore the *absence* of a scripture action: a route that invented
+ * one would still refuse an anonymous caller and still permit a member, and would have quietly
+ * given the product two answers to "who may read what a teaching cites".
+ */
+describe('reading a teaching’s scripture is the recording’s own authorisation question', () => {
+  it('adds no scripture action of its own to the policy table', () => {
+    expect(POLICY_ACTIONS.filter((one) => one.startsWith('scripture.'))).toEqual([]);
+    expect(isPolicyAction('scripture.read')).toBe(false);
+    expect(can(actorWith(ROLE.admin), 'scripture.read')).toBe(false);
+  });
+
+  it('answers recording.browse for both roles and refuses an anonymous caller', () => {
+    for (const role of ROLES) {
+      expect(can(actorWith(role), 'recording.browse'), role).toBe(true);
+    }
+    expect(can(null, 'recording.browse')).toBe(false);
+  });
+});

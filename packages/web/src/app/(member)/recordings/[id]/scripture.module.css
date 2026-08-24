@@ -1,0 +1,71 @@
+/*
+ * The `Scripture` tab of `pages/recording.png`.
+ *
+ * `pages/recording.png` draws the tab and nothing draws what is behind it (active-scope prd § 5.1),
+ * so every rule here is read off `style-guide.md` rather than invented — and off the same rules the
+ * transcript panel beside it already composes from:
+ *
+ * 1. `.reference` is the guide's card recipe verbatim — `--color-surface`, one hairline,
+ *    `--radius-md`, `--space-5` padding, no shadow. One card per reference, because a reference is
+ *    a heading and a paragraph and that is exactly what the guide's card is for.
+ * 2. `.citation` is the guide's card title, and `.passage` its body copy. The citation is the
+ *    heading rather than a label beside the text: it is what the reference *is*.
+ * 3. `.quiet` and `.failure` are the transcript panel's, unchanged. A missing passage and a failed
+ *    load read the same way everywhere in the product, by tone and weight rather than by hue.
+ */
+
+.panel {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-4);
+}
+
+.quiet {
+  margin: 0;
+  font-size: var(--fs-body);
+  color: var(--color-text-dim);
+}
+
+.failure {
+  margin: 0;
+  background: var(--color-bg-deep);
+  border: 1px solid var(--color-border-strong);
+  border-radius: var(--radius-md);
+  padding: var(--space-4);
+  font-size: var(--fs-body);
+  color: var(--color-text);
+}
+
+.references {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-4);
+}
+
+.reference {
+  background: var(--color-surface);
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-md);
+  padding: var(--space-5);
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-3);
+}
+
+.citation {
+  margin: 0;
+  font-size: var(--fs-card-title);
+  font-weight: 600;
+  color: var(--color-text);
+}
+
+/* Plain text, and only that: no verse numbers, no markup, no copy or share control (§ 5.1). */
+.passage {
+  margin: 0;
+  font-size: var(--fs-body);
+  color: var(--color-text-muted);
+  overflow-wrap: anywhere;
+}

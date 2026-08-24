@@ -265,6 +265,21 @@ export interface RecordingView {
    * than about the navigation that reached it.
    */
   readonly series: RecordingSeriesRef | null;
+  /**
+   * Whether this teaching has any approved scripture references at all
+   * ([3.4.4](docs/active-scope/prd.md)) — Group 4.
+   *
+   * A boolean rather than the references themselves, and that is the whole of why it is here: the
+   * recording page has to decide whether to draw the **Scripture** tab *before* anything is
+   * fetched, because the panel behind it is fetched when the tab is first opened and not before.
+   * Without it the page would have to download every passage on load to find out whether to offer
+   * them, which is the cost the closed tab exists to avoid.
+   *
+   * It rides the same gate everything else on this payload does — an unpublished teaching is not
+   * readable at all, so there is no state in which this is `true` for somebody who may not see the
+   * references it promises.
+   */
+  readonly hasScripture: boolean;
 }
 
 /**

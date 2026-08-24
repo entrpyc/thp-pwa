@@ -16,6 +16,8 @@
  * print one calls {@link formatCitation}.
  */
 
+import { RECORDINGS_PATH } from './recordings';
+
 /** One book of the canon: what it is called, and how long each of its chapters is. */
 export interface BibleBook {
   /** The stable identity a stored citation carries. Never re-spelled once written. */
@@ -363,4 +365,35 @@ export function passagePath(citation: ScriptureCitation): string {
  */
 export interface PassagePayload {
   readonly passage: string | null;
+}
+
+/**
+ * **One approved reference as a member reads it** ([3.4.3](docs/active-scope/prd.md)).
+ *
+ * The citation and its words, and deliberately nothing else. `origin` and `editedByAdmin` are on
+ * the stored row and are an operator's record of how the list was arrived at — a reader has no
+ * business with which references the machine proposed and which an admin typed, and a payload that
+ * carried them would invite a surface to draw the difference.
+ *
+ * `passage` is `null` when the source has no text for it, which is a real answer rather than a
+ * failure ([3.3.6](docs/active-scope/prd.md)) — the citation stands either way.
+ */
+export interface ScriptureReadingView extends ScriptureCitation {
+  readonly passage: string | null;
+}
+
+/** This teaching's published scripture, under the API prefix ([3.4.2](docs/active-scope/prd.md)). */
+export function recordingScripturePath(recordingId: string): string {
+  return `${RECORDINGS_PATH}/${recordingId}/scripture`;
+}
+
+/**
+ * Payload of `GET /api/v1/recordings/:id/scripture`.
+ *
+ * **An empty list is the ordinary answer**, not an error: a teaching whose draft nobody has
+ * approved, and one an admin approved as empty ([3.2.7](docs/active-scope/prd.md)), both read as no
+ * references. What separates the two is the review queue, and a member is not looking at it.
+ */
+export interface RecordingScripturePayload {
+  readonly references: readonly ScriptureReadingView[];
 }

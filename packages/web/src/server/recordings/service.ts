@@ -72,6 +72,9 @@ export function describeRecording(row: RecordingRow): RecordingSummary {
     // A recording one request old is in no series by construction — assignment is a later press on
     // the row this creation puts in the list.
     series: null,
+    // And it cites nothing: the draft that will propose references has not been written yet, let
+    // alone approved.
+    hasScripture: false,
     createdAt: row.createdAt.toISOString(),
   };
 }
@@ -318,6 +321,10 @@ function describeForMember(row: VisibleRecordingRow): RecordingView {
       row.seriesId === null || row.seriesTitle === null
         ? null
         : { id: row.seriesId, title: row.seriesTitle },
+    // Whether there is a **Scripture** tab to draw at all (3.4.4). Counted by the visibility read
+    // rather than fetched here: the page needs to know before it asks for a passage, and asking for
+    // the passages to find out is the download the closed tab exists to avoid.
+    hasScripture: row.hasScripture,
   };
 }
 

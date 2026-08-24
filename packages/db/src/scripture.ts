@@ -151,3 +151,33 @@ export async function saveVerseTexts(
 
   return written.length;
 }
+
+/**
+ * **A teaching's approved references** (Task 4.1).
+ *
+ * The read half of the one write above, and the only one there is: a reference exists because an
+ * admin approved the list it was in, so "what does this teaching cite" is the whole question.
+ *
+ * **Ordered by the table, not by the canon.** Canon order is the position of a book in
+ * `BIBLE_BOOKS`, which is a fact about a declaration in `@thp/shared` rather than a fact about a
+ * column — expressing it in SQL would mean a second copy of the canon's order in this package, and
+ * a second copy is exactly what [1.1.1](docs/active-scope/implementation-plan.md) forbids. The
+ * caller sorts with `compareCitations`. This order is stable so the rows arrive the same way twice.
+ */
+export async function findScriptureReferences(
+  recordingId: string,
+  executor: Executor = getDatabase(),
+): Promise<ScriptureReferenceRow[]> {
+  const rows = await queryable(executor)
+    .select()
+    .from(scriptureReference)
+    .where(eq(scriptureReference.recordingId, recordingId))
+    .orderBy(
+      asc(scriptureReference.book),
+      asc(scriptureReference.chapter),
+      asc(scriptureReference.verseStart),
+      asc(scriptureReference.verseEnd),
+    );
+
+  return rows as ScriptureReferenceRow[];
+}
