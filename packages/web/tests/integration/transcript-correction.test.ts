@@ -385,20 +385,21 @@ describe('accepting the offer produces a draft the approve press publishes', () 
     // The published summary is still what a member reads, before the worker has done anything.
     expect(await summaryAsMember(recordingId)).toBe(LIVE_SUMMARY);
 
-    await runWorkerUntil(async () => (await queueFor(recordingId)).length > 0);
+    await runWorkerUntil(async () => (await queueFor(recordingId)).length > 1);
 
+    // 2.3.3 — both artefacts the offer names, from the one job it enqueued.
     const waiting = await queueFor(recordingId);
-    expect(waiting).toHaveLength(1);
-    expect(waiting[0]?.kind).toBe('summary');
-    expect(waiting[0]?.status).toBe('draft');
-    expect(waiting[0]?.fields['summary']).toBe(REGENERATED.summary);
+    expect(waiting.map((one) => one.kind).sort()).toEqual(['scripture', 'summary']);
+    const fresh = waiting.find((one) => one.kind === 'summary');
+    expect(fresh?.status).toBe('draft');
+    expect(fresh?.fields['summary']).toBe(REGENERATED.summary);
     // The AI-suggested provenance every draft carries (docs/project/prd.md 4.17.5).
-    expect(waiting[0]?.provenance.fields?.['summary']?.aiSuggested).toBe(true);
+    expect(fresh?.provenance.fields?.['summary']?.aiSuggested).toBe(true);
 
     // Still the old summary, with the new one sitting in the queue — the whole point of the path.
     expect(await summaryAsMember(recordingId)).toBe(LIVE_SUMMARY);
 
-    const approved = await call(reviewPath(waiting[0]?.id ?? ''), {
+    const approved = await call(reviewPath(fresh?.id ?? ''), {
       method: 'POST',
       cookie: adminCookie,
       body: JSON.stringify({ action: 'approve' }),
@@ -406,6 +407,25 @@ describe('accepting the offer produces a draft the approve press publishes', () 
     expect(approved.status).toBe(200);
     expect(await summaryAsMember(recordingId)).toBe(REGENERATED.summary);
   }, 180_000);
+
+  // 2.3.3 — the offer's other half. `project prd 3.5.6` asks for the derived artefacts to be
+  // rebuilt from corrected words, and until scripture existed the summary was all there was.
+  it('asks for the scripture references alongside the summary, in the one job', async () => {
+    const recordingId = await publishedTeaching('regen-both');
+
+    const asked = await call<RegenerateSummaryPayload>(
+      recordingSummaryRegeneratePath(recordingId),
+      { method: 'POST', cookie: adminCookie },
+    );
+    expect(asked.status).toBe(200);
+
+    const [job] = await sql<{ step: string; payload: unknown }[]>`
+      select step::text as step, payload from job where id = ${asked.body.jobId}
+    `;
+    // One job, the same handler, naming both artefacts — not a second enqueue for the second one.
+    expect(job?.step).toBe('generate_draft');
+    expect(job?.payload).toEqual({ kinds: ['summary', 'scripture'] });
+  });
 
   it('refuses a second regeneration while one is in flight', async () => {
     const recordingId = await publishedTeaching('inflight');

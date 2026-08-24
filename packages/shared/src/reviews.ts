@@ -14,7 +14,7 @@
  * `JOB_STATUSES`.
  */
 
-import type { ScriptureCitation } from './scripture';
+import type { ProposedCitation, ScriptureCitation, ScriptureReferenceView } from './scripture';
 
 /**
  * What kind of artefact is waiting on an admin.
@@ -148,6 +148,32 @@ export interface FieldProvenance {
   readonly aiSuggested: boolean;
   /** Set when an admin edited the text before approving it ([4.17.5](docs/project/prd.md)). */
   readonly editedByAdmin: boolean;
+  /**
+   * **For a list-shaped field: what was approved, entry by entry, and where each entry came from**
+   * ([3.2.9](docs/active-scope/prd.md)).
+   *
+   * Written by the approve path and only by it, so an open draft does not carry one. The draft
+   * itself stays what the machine proposed — which is what lets a closed item be read as *what was
+   * suggested* beside *what was accepted*, rather than as one list that overwrote the other.
+   */
+  readonly entries?: readonly ScriptureReferenceView[];
+}
+
+/**
+ * **One row of a list-shaped draft, as the form sends it back** ([3.2.3](docs/active-scope/prd.md),
+ * [3.2.4](docs/active-scope/prd.md)).
+ *
+ * The citation as it now reads — unresolved, because a form submits words and numbers and whether
+ * they are a citation is the server's question — and **which proposal it came from**: `from` is the
+ * entry's index in the machine's list, or `null` for a reference a person added.
+ *
+ * That one field is the whole of [3.2.9](docs/active-scope/prd.md)'s three-way distinction. A row
+ * carrying a `from` whose citation has changed was *edited*; a row carrying none was *added*; and
+ * everything else is the machine's as it stood. The server works all three out for itself rather
+ * than being told, so nothing here is a claim a client makes about its own provenance.
+ */
+export interface SubmittedReference extends ProposedCitation {
+  readonly from: number | null;
 }
 
 /**
@@ -196,12 +222,13 @@ export interface ReviewListPayload {
  * Body of `POST /api/v1/reviews/{id}`.
  *
  * `approve` writes through to the canonical entity and closes the item; `discard` closes it with
- * no replacement ([3.6.10](docs/project/prd.md)). `fields` is the admin's text when they edited it
- * before approving, and absent when they took the machine's as it stands.
+ * no replacement ([3.6.10](docs/project/prd.md)). `fields` is the admin's own version of the draft
+ * — a paragraph for a text field, the list they corrected for a list-shaped one — and absent when
+ * they took the machine's as it stands.
  */
 export interface ResolveReviewRequest {
   readonly action: 'approve' | 'discard';
-  readonly fields?: Readonly<Record<string, string>>;
+  readonly fields?: Readonly<Record<string, string | readonly SubmittedReference[]>>;
 }
 
 /** Payload of `POST /api/v1/reviews/{id}` — the item as it now reads. */

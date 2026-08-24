@@ -13,6 +13,10 @@ import {
   MAX_STEERING_PROMPT_LENGTH,
   REVIEW_FIELD,
   SCRIPTURE_ORIGINS,
+  checkCitation,
+  citationKey,
+  citationsEqual,
+  formatCitation,
   isScriptureCitation,
   type FieldProvenance,
   type RegenerateReviewPayload,
@@ -24,6 +28,8 @@ import {
   type ReviewKind,
   type ReviewProvenance,
   type ScriptureCitation,
+  type ScriptureReferenceView,
+  type SubmittedReference,
 } from '@thp/shared';
 import { ApiError } from '@/server/api/errors';
 import type { Actor } from '@/server/auth/policy';
@@ -108,7 +114,7 @@ export async function resolveReview(
   const spec = REVIEW_FIELD[item.kind];
 
   if (spec.shape === 'list') {
-    return approveList(actor, id, item, spec.name);
+    return approveList(actor, id, item, spec.name, request.references);
   }
 
   const field = spec.name;
@@ -166,19 +172,31 @@ export async function resolveReview(
  * proposed it closes. A failure in either leaves neither, so there is no state in which a teaching
  * carries references nobody approved.
  *
- * **The list written is the item's own.** Nothing an admin sends is read here, because in this
- * group the rows are read-only — editing, removing and adding are group 2, and the server
- * re-validating what a client sent arrives with them. An empty list is legal and correct: it
- * deletes whatever the teaching had and records, in the closed item, that somebody looked and
- * found none ([3.2.7](docs/active-scope/prd.md)).
+ * **The list written is the admin's, when they sent one** ([2.1.4](docs/active-scope/implementation-plan.md)).
+ * A body carrying no list approves the item's own, which is what taking the machine's as it stands
+ * means. Either way the *draft* is left exactly as it was written: the correction is a fact about
+ * what was approved, and overwriting the proposal with it would lose the comparison that makes a
+ * closed item worth keeping.
+ *
+ * An empty list is legal and correct: it deletes whatever the teaching had and records, in the
+ * closed item, that somebody looked and found none ([3.2.7](docs/active-scope/prd.md)).
  */
 async function approveList(
   actor: Actor,
   id: string,
   item: ReviewItemRow,
   field: string,
+  submitted: readonly unknown[] | undefined,
 ): Promise<ResolveReviewPayload> {
-  const citations = readCitations(item.fields, field);
+  const proposed = readCitations(item.fields, field);
+  const references =
+    submitted === undefined ? asProposed(proposed) : resolveReferences(submitted, proposed);
+  // The list as a whole was changed, which is what the field-level flag has always meant. Both
+  // halves are reachable only through a correction: nothing a person added or edited is here
+  // otherwise, and a removal is what changes the length.
+  const edited =
+    references.length !== proposed.length ||
+    references.some((one) => one.origin === PERSON || one.editedByAdmin);
 
   await withTransaction(async (tx) => {
     // **The close goes first, and that ordering is the concurrency control.** Two admins pressing
@@ -186,20 +204,21 @@ async function approveList(
     // when the first commits it sees a row that is no longer a draft and is refused before it has
     // written anything. Writing the references first would have both transactions racing to delete
     // and re-insert the same passages, which is a unique-violation rather than a refusal.
-    const closed = await closeReviewItem({ id, status: 'published', reviewedBy: actor.id }, tx);
-    if (closed === null) throw closedAlready();
-
-    await replaceScriptureReferences(
-      item.recordingId,
-      citations.map((citation) => ({
-        ...citation,
-        // Everything in this group came from the machine and nobody has changed it. Group 2 is what
-        // makes either of these say something else.
-        origin: SCRIPTURE_ORIGINS[0],
-        editedByAdmin: false,
-      })),
+    const closed = await closeReviewItem(
+      {
+        id,
+        status: 'published',
+        // `fields` deliberately unset: the draft stays the machine's proposal. What was approved,
+        // and where each reference in it came from, goes beside the model that proposed it
+        // ([2.2.4](docs/active-scope/implementation-plan.md)).
+        reviewedBy: actor.id,
+        provenance: withEntries(item.provenance, field, references, edited),
+      },
       tx,
     );
+    if (closed === null) throw closedAlready();
+
+    await replaceScriptureReferences(item.recordingId, references, tx);
   });
 
   logger.info('review.approve', {
@@ -209,11 +228,87 @@ async function approveList(
     target: `review_item:${id}`,
     recordingId: item.recordingId,
     kind: item.kind,
-    edited: false,
-    references: citations.length,
+    edited,
+    references: references.length,
   });
 
   return { id, status: 'published' };
+}
+
+/** The two things a reference can have come from, spelled once, where the enum declares them. */
+const [MACHINE, PERSON] = SCRIPTURE_ORIGINS;
+
+/** The machine's list, approved as it stands: nobody added anything and nobody changed anything. */
+function asProposed(citations: readonly ScriptureCitation[]): ScriptureReferenceView[] {
+  return citations.map((citation) => ({
+    ...citation,
+    origin: MACHINE,
+    editedByAdmin: false,
+  }));
+}
+
+/**
+ * **What the admin sent, checked and placed** ([2.1.5](docs/active-scope/implementation-plan.md),
+ * [2.2.3](docs/active-scope/implementation-plan.md)).
+ *
+ * Two questions per entry, and the order matters. First, *is this a citation* — asked of the same
+ * validator the worker refuses a model's proposal with, because what one screen allowed is not what
+ * the product allows and a client is not the authority on either. Then, *where did it come from* —
+ * derived from the proposal the row names rather than from anything the client asserts about
+ * itself.
+ *
+ * **The same passage twice is refused.** The form will not build such a list
+ * ([3.2.5](docs/active-scope/prd.md)), and the references table will not hold one — so refusing it
+ * here is what turns a unique-violation into a sentence an admin can act on.
+ *
+ * Refusals throw before the transaction opens, so a list holding one bad entry writes nothing at
+ * all rather than most of itself.
+ */
+function resolveReferences(
+  submitted: readonly unknown[],
+  proposed: readonly ScriptureCitation[],
+): ScriptureReferenceView[] {
+  const seen = new Set<string>();
+
+  return submitted.map((entry) => {
+    if (typeof entry !== 'object' || entry === null) {
+      throw ApiError.invalidInput('Every reference has to name a book, a chapter and its verses.');
+    }
+    const { book, chapter, verseStart, verseEnd, from } = entry as Partial<SubmittedReference>;
+
+    const checked = checkCitation({
+      book: typeof book === 'string' ? book : '',
+      chapter: typeof chapter === 'number' ? chapter : Number.NaN,
+      // An absent verse and a null one are the same thing said twice — the whole chapter.
+      verseStart: verseStart ?? null,
+      verseEnd: verseEnd ?? null,
+    });
+    if (!checked.ok) throw ApiError.invalidInput(checked.problem.message);
+
+    const key = citationKey(checked.citation);
+    if (seen.has(key)) {
+      throw ApiError.invalidInput(
+        `${formatCitation(checked.citation)} is in this list twice. A teaching cites a passage once.`,
+      );
+    }
+    seen.add(key);
+
+    // Which proposal this row replaced, if any. An index naming nothing reads as no proposal at
+    // all — the answer that never claims the machine's authorship for a row that cannot show it.
+    const source =
+      typeof from === 'number' && Number.isInteger(from) && from >= 0 && from < proposed.length
+        ? proposed[from]
+        : undefined;
+
+    if (source === undefined) {
+      return { ...checked.citation, origin: PERSON, editedByAdmin: false };
+    }
+    return {
+      ...checked.citation,
+      origin: MACHINE,
+      editedByAdmin: !citationsEqual(checked.citation, source),
+    };
+  });
 }
 
 /**
@@ -351,9 +446,31 @@ function withEdit(provenance: unknown, field: string, edited: boolean): ReviewPr
   };
 }
 
+/**
+ * The provenance a closed list-shaped item carries: what generation wrote, plus what was actually
+ * approved and where each reference in it came from
+ * ([2.2.4](docs/active-scope/implementation-plan.md)).
+ */
+function withEntries(
+  provenance: unknown,
+  field: string,
+  entries: readonly ScriptureReferenceView[],
+  edited: boolean,
+): ReviewProvenance {
+  const existing = (provenance ?? {}) as ReviewProvenance;
+  const perField = (existing.fields ?? {}) as Record<string, FieldProvenance>;
+  const before = perField[field] ?? { aiSuggested: true, editedByAdmin: false };
+  return {
+    ...existing,
+    fields: { ...perField, [field]: { ...before, editedByAdmin: edited, entries } },
+  };
+}
+
 interface ParsedResolve {
   readonly action: 'approve' | 'discard';
   readonly fields?: Record<string, string>;
+  /** The list an admin corrected, unchecked. `undefined` when they sent none. */
+  readonly references?: readonly unknown[];
 }
 
 function parseResolveRequest(body: unknown, kind: ReviewKind): ParsedResolve {
@@ -373,14 +490,19 @@ function parseResolveRequest(body: unknown, kind: ReviewKind): ParsedResolve {
   // Only the field this kind carries is read. A body naming a field the kind has no business with
   // is ignored rather than refused — the form sends what it rendered, and nothing else is written.
   const spec = REVIEW_FIELD[kind];
-  // A list-shaped draft is approved as it stands in this group: its rows are read-only, so there is
-  // nothing an admin could have edited and nothing to accept from them. Task 2.1 is what makes an
-  // edited list arrive here, and what re-validates it.
-  if (spec.shape === 'list') return { action };
-
   const name = spec.name;
   const value = (fields as Record<string, unknown>)[name];
   if (value === undefined) return { action };
+
+  // A list-shaped draft arrives as the rows the form rendered. What is *in* them is
+  // `resolveReferences`'s question — this is only that a list is what came.
+  if (spec.shape === 'list') {
+    if (!Array.isArray(value)) {
+      throw ApiError.invalidInput(`Send the ${name} as a list of references.`);
+    }
+    return { action, references: value as readonly unknown[] };
+  }
+
   if (typeof value !== 'string' || value.length > MAX_FIELD_LENGTH) {
     throw ApiError.invalidInput(`The ${name} is not text this can store.`);
   }

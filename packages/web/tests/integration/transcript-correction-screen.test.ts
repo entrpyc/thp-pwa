@@ -147,8 +147,9 @@ describe('an admin corrects a line and is offered a fresh summary', () => {
 
       const offer = page.getByRole('region', { name: 'Regenerate the summary' });
       await expect.poll(() => offer.count(), { timeout: 30_000 }).toBe(1);
-      // It names the summary and nothing else — nothing else derived from the transcript exists.
+      // 2.3.3 — it names both artefacts the correction invalidates, not the summary alone.
       expect(await offer.textContent()).toContain('summary');
+      expect(await offer.textContent()).toContain('scripture references');
 
       await offer.getByRole('button', { name: 'Not now' }).click();
       await expect.poll(() => offer.count(), { timeout: 30_000 }).toBe(0);

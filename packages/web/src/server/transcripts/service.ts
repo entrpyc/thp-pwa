@@ -196,9 +196,11 @@ export async function regenerateSummary(
   const enqueued = await queue().enqueue({
     recordingId,
     step: 'generate_draft',
-    // The summary and nothing else: mind maps, scripture references and tags do not exist yet, so
-    // the offer names the one derived artefact this product has.
-    payload: { kinds: ['summary'] },
+    // **The summary and the scripture references** ([3.1.10](docs/active-scope/prd.md)). Both are
+    // read out of the words that just changed, so a correction invalidates both — which is the half
+    // of docs/project/prd.md 3.5.6 that could not be honoured until scripture existed. Mind maps and
+    // tags are not generated yet, so they are not here.
+    payload: { kinds: ['summary', 'scripture'] },
   });
 
   logger.info('summary.regenerate', {

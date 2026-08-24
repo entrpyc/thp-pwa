@@ -399,6 +399,38 @@ describe('what a payload asks for', () => {
     );
   });
 
+  // 2.3.2 — an admin asking for the scripture again steers the call that produces it, and the
+  // replacement draft says what they steered it with.
+  it('carries a scripture-only steer to the provider and records it on the replacement draft', async () => {
+    const steer = 'It missed the passage the whole teaching was built on.';
+    const first = await claimedJob();
+    await run(first);
+    const summaryBefore = (await items(first.recordingId)).find((one) => one.kind === 'summary');
+
+    const again = await enqueueJob(
+      {
+        recordingId: first.recordingId,
+        step: 'generate_draft',
+        correlationId: 'scripture-again',
+        payload: { kinds: ['scripture'], prompt: steer },
+      },
+      handle,
+    );
+    const model = fakeGenerator(DRAFT);
+    await run({ ...again, status: 'running' }, model);
+
+    // The sentence reaches the provider call, in the same request the transcript does.
+    expect(model.requests).toHaveLength(1);
+    expect(model.requests[0]?.kinds).toEqual(['scripture']);
+    expect(model.requests[0]?.steeringPrompt).toBe(steer);
+
+    const after = await items(first.recordingId);
+    const scripture = after.find((one) => one.kind === 'scripture');
+    expect((scripture?.provenance as ReviewProvenance).steeringPrompt).toBe(steer);
+    // And the summary is the row it was: asking for scripture again is not asking for the summary.
+    expect(after.find((one) => one.kind === 'summary')?.id).toBe(summaryBefore?.id);
+  });
+
   it('generates both kinds when there is no payload, which is every chained job', async () => {
     const job = await claimedJob();
     await run(job);

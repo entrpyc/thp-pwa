@@ -210,3 +210,64 @@
   font-size: var(--fs-body);
   color: var(--color-text);
 }
+
+/* ------------------------------------------------------------------- a row an admin can correct */
+
+/*
+ * **A row's controls** (2.1.1). A `fieldset`, because a set of controls under one caption is what a
+ * fieldset is — and the legend is the citation the row currently reads as, so a screen reader
+ * hears "Romans 8:1–4, Chapter" rather than "Chapter". Its own border and padding are dropped:
+ * the `.citation` card around it is already the box, and a second one inside it is noise.
+ */
+.citationGroup {
+  display: block;
+  min-width: 0;
+  margin: 0;
+  padding: 0;
+  border: 0;
+}
+
+.citationLegend {
+  padding: 0;
+  font-size: var(--fs-body);
+  color: var(--color-text);
+}
+
+/* The four parts of a citation and the press that throws it out, on one line where there is room. */
+.citationControls {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: var(--space-2);
+  margin-top: var(--space-2);
+}
+
+/* The field recipe again, for the two controls a citation needs that no other panel here has. */
+.select {
+  min-height: calc(var(--space-8) + var(--space-3));
+  max-width: 100%;
+  background: var(--color-surface-raised);
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-sm);
+  padding: var(--space-2) var(--space-3);
+  color: var(--color-text);
+  font-family: inherit;
+  font-size: var(--fs-body);
+}
+
+/* A chapter is at most three digits and a verse at most three; the box is sized for what goes in
+   it, so four of them and a button fit on one line at desktop width. */
+.number {
+  composes: select;
+  width: 5.5rem;
+}
+
+.select:disabled {
+  cursor: progress;
+  color: var(--color-text-dim);
+}
+
+/* Its own line under the list, because it acts on the list rather than on any row of it. */
+.citationAdd {
+  display: flex;
+}

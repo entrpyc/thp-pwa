@@ -5,6 +5,8 @@ import {
   REVIEW_FIELD,
   ROLE,
   reviewPath,
+  reviewRegeneratePath,
+  type RegenerateReviewPayload,
   type ResolveReviewPayload,
   type ScriptureCitation,
 } from '@thp/shared';
@@ -345,5 +347,200 @@ describe('who may resolve one', () => {
 
     expect(asMember.status).toBe(403);
     expect(asMember.code).toBe('forbidden');
+  });
+});
+
+// =================================================================================================
+
+/**
+ * **An admin corrects the list before approving** (Task 2.1, Task 2.2), over HTTP.
+ *
+ * The form sends the list it rendered, one entry per row, each naming the proposal it came from —
+ * `from` is the index in the machine's list, or `null` for a reference a person added. That one
+ * field is what lets the server say which of the three things [3.2.9](docs/active-scope/prd.md)
+ * asks about happened to each reference, without trusting a client to assert it.
+ */
+describe('approving an edited list', () => {
+  /** Romans corrected, John kept exactly as proposed, Ephesians added by hand. */
+  const CORRECTED = [
+    { book: 'romans', chapter: 8, verseStart: 1, verseEnd: 5, from: 0 },
+    { book: 'john', chapter: 3, verseStart: 16, verseEnd: 16, from: 1 },
+    { book: 'ephesians', chapter: 2, verseStart: 8, verseEnd: 9, from: null },
+  ];
+
+  // 2.1.4 — what lands is what the admin approved, and what the machine said is still readable.
+  it('writes the admin’s list rather than the machine’s, and keeps the proposal on the closed row', async () => {
+    const { recordingId, item } = await draft();
+
+    const approved = await post<ResolveReviewPayload>(reviewPath(item.id), {
+      action: 'approve',
+      // John removed by the admin: a row the form dropped simply is not in what it sends.
+      fields: { [FIELD]: CORRECTED.filter((one) => one.book !== 'john') },
+    });
+
+    expect(approved.status).toBe(200);
+    expect(
+      (await references(recordingId)).map(
+        (one) => `${one.book} ${one.chapter}:${one.verse_start}-${one.verse_end}`,
+      ),
+    ).toEqual(['ephesians 2:8-9', 'romans 8:1-5']);
+
+    // The machine's original, untouched, on the closed item — the correction is a fact about what
+    // the admin approved, not an overwrite of what was proposed.
+    expect((await itemRow(item.id))?.fields).toEqual({ [FIELD]: PROPOSED });
+  });
+
+  // 2.2.3 — three distinct facts, one per reference.
+  it('records per reference whether the machine proposed it, an admin edited it, or an admin added it', async () => {
+    const { recordingId, item } = await draft();
+
+    expect(
+      (await post(reviewPath(item.id), { action: 'approve', fields: { [FIELD]: CORRECTED } })).status,
+    ).toBe(200);
+
+    expect(
+      (await references(recordingId)).map((one) => [one.book, one.origin, one.edited_by_admin]),
+    ).toEqual([
+      // Added by a person, so nothing about it is the machine's and nothing was edited.
+      ['ephesians', 'person', false],
+      // Taken exactly as proposed.
+      ['john', 'machine', false],
+      // The machine's, changed before it was approved.
+      ['romans', 'machine', true],
+    ]);
+  });
+
+  // 2.2.4 — and the same record survives where the model and the versions live.
+  it('keeps that per-reference record on the closed item, beside the model and the prompt version', async () => {
+    const { item } = await draft();
+
+    await post(reviewPath(item.id), { action: 'approve', fields: { [FIELD]: CORRECTED } });
+
+    const closed = await itemRow(item.id);
+    const provenance = closed?.provenance as Record<string, unknown>;
+    expect(provenance['model']).toBe(PROVENANCE.model);
+    expect(provenance['modelVersion']).toBe(PROVENANCE.modelVersion);
+    expect(provenance['promptVersion']).toBe(PROVENANCE.promptVersion);
+    expect(provenance['steeringPrompt']).toBe(PROVENANCE.steeringPrompt);
+
+    const field = (provenance['fields'] as Record<string, unknown>)[FIELD] as Record<string, unknown>;
+    expect(field['aiSuggested']).toBe(true);
+    // The list as a whole was changed before it was approved, which is what the field-level flag
+    // has always meant.
+    expect(field['editedByAdmin']).toBe(true);
+    expect(field['entries']).toEqual([
+      { book: 'romans', chapter: 8, verseStart: 1, verseEnd: 5, origin: 'machine', editedByAdmin: true },
+      { book: 'john', chapter: 3, verseStart: 16, verseEnd: 16, origin: 'machine', editedByAdmin: false },
+      { book: 'ephesians', chapter: 2, verseStart: 8, verseEnd: 9, origin: 'person', editedByAdmin: false },
+    ]);
+  });
+
+  // 2.1.5 — the screen's validator is not the product's. Every citation is checked again here.
+  it('refuses a list holding a citation the client would not have allowed, and writes nothing', async () => {
+    const refusals = [
+      { entry: { book: 'Hezekiah', chapter: 1, verseStart: 1, verseEnd: 1, from: null }, says: 'Hezekiah' },
+      { entry: { book: 'romans', chapter: 99, verseStart: 1, verseEnd: 1, from: null }, says: 'chapter 99' },
+      { entry: { book: 'romans', chapter: 8, verseStart: 4, verseEnd: 1, from: null }, says: 'end at or after' },
+      { entry: { book: 'john', chapter: 3, verseStart: 16, verseEnd: 999, from: null }, says: 'verse 999' },
+    ];
+
+    for (const { entry, says } of refusals) {
+      const { recordingId, item } = await draft();
+
+      const refused = await post(reviewPath(item.id), {
+        action: 'approve',
+        fields: { [FIELD]: [entry] },
+      });
+
+      expect(refused.status).toBe(400);
+      expect(refused.code).toBe('invalid_input');
+      expect((refused.body as { error?: { message?: string } }).error?.message).toContain(says);
+      // Refused before anything is written: no reference, and the draft is still waiting.
+      expect(await references(recordingId)).toHaveLength(0);
+      expect((await itemRow(item.id))?.status).toBe('draft');
+    }
+  });
+
+  // The same passage twice is a list the form would not have let an admin build (2.2.2), and it is
+  // also the one shape the table's unique index would answer with a crash rather than a refusal.
+  it('refuses a list naming the same passage twice', async () => {
+    const { recordingId, item } = await draft();
+
+    const refused = await post(reviewPath(item.id), {
+      action: 'approve',
+      fields: {
+        [FIELD]: [
+          { book: 'romans', chapter: 8, verseStart: 1, verseEnd: 4, from: 0 },
+          { book: 'romans', chapter: 8, verseStart: 1, verseEnd: 4, from: null },
+        ],
+      },
+    });
+
+    expect(refused.status).toBe(400);
+    expect(refused.code).toBe('invalid_input');
+    expect(await references(recordingId)).toHaveLength(0);
+    expect((await itemRow(item.id))?.status).toBe('draft');
+  });
+});
+
+/**
+ * **Asking for the scripture references again** (Task 2.3).
+ *
+ * The route is the one [3.6.9](docs/project/prd.md) already built for a summary; what these assert
+ * is that a scripture item reaching it re-drafts *scripture alone* and leaves the teaching's other
+ * open drafts where they are.
+ */
+describe('asking for the scripture references again', () => {
+  /** A teaching whose scripture and summary are both waiting on an admin. */
+  async function bothOpen(): Promise<{ scripture: ReviewItemRow; summary: ReviewItemRow }> {
+    const recordingId = await newRecording();
+    const [scripture, summary] = await replaceOpenDrafts(
+      recordingId,
+      [
+        { kind: 'scripture', fields: { [FIELD]: PROPOSED }, provenance: PROVENANCE },
+        { kind: 'summary', fields: { summary: 'What the machine heard.' }, provenance: PROVENANCE },
+      ],
+      handle,
+    );
+    return { scripture: scripture as ReviewItemRow, summary: summary as ReviewItemRow };
+  }
+
+  // 2.3.1 — scripture alone, with the steer, and the summary untouched.
+  it('discards the open item and enqueues the step for scripture alone', async () => {
+    const { scripture, summary } = await bothOpen();
+
+    const again = await post<RegenerateReviewPayload>(reviewRegeneratePath(scripture.id), {
+      prompt: 'It missed the passage the whole teaching was built on.',
+    });
+
+    expect(again.status).toBe(200);
+    expect(again.body.kind).toBe('scripture');
+    expect((await itemRow(scripture.id))?.status).toBe('discarded');
+
+    const [job] = await sql<{ step: string; payload: unknown }[]>`
+      select step::text as step, payload from job where id = ${again.body.jobId}
+    `;
+    expect(job?.step).toBe('generate_draft');
+    expect(job?.payload).toEqual({
+      kinds: ['scripture'],
+      prompt: 'It missed the passage the whole teaching was built on.',
+    });
+
+    // The summary is not re-drafted and its draft is not discarded: asking for one artefact again
+    // is not asking for the other.
+    expect((await itemRow(summary.id))?.status).toBe('draft');
+  });
+
+  // 2.3.4 — the existing one-in-flight rule, checked from the scripture side.
+  it('refuses a second request while one is unfinished rather than answering with the first one’s job', async () => {
+    const { scripture, summary } = await bothOpen();
+
+    expect((await post(reviewRegeneratePath(scripture.id), {})).status).toBe(200);
+
+    const second = await post(reviewRegeneratePath(summary.id), {});
+    expect(second.status).toBe(409);
+    expect(second.code).toBe('generation_in_flight');
+    // And the item it refused is untouched — nothing was discarded on the way to the refusal.
+    expect((await itemRow(summary.id))?.status).toBe('draft');
   });
 });

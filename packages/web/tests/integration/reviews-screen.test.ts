@@ -489,7 +489,8 @@ describe('a scripture item on the form', () => {
       const list = row.getByRole('list', { name: 'Citations' });
 
       await expect.poll(() => list.getByRole('listitem').count(), { timeout: 30_000 }).toBe(3);
-      expect(await list.getByRole('listitem').allTextContents()).toEqual([
+      // Each row reads as the passage it names, in canon order — its controls are task 2.1's.
+      expect(await list.locator('legend').allTextContents()).toEqual([
         'Psalm 23',
         'John 3:16',
         'Romans 8:1–4',
@@ -632,6 +633,258 @@ describe('a scripture item on the form', () => {
         select id from scripture_reference where recording_id = ${recordingId}
       `;
       expect(written).toHaveLength(0);
+    } finally {
+      await page.context().close();
+    }
+  }, 120_000);
+});
+
+/**
+ * **An admin corrects the list before approving** (Task 2.1, Task 2.2).
+ *
+ * The rows the machine proposed stop being read-only here. Each one is book, chapter and verse as
+ * separate controls — never a text box, because a citation that can be typed as prose is a citation
+ * somebody has to parse back — and each one can be thrown out or replaced before the list is
+ * approved.
+ *
+ * Nothing is saved until the admin approves: removing a row is an edit to a draft, which is why it
+ * takes one press where discarding the whole item takes two.
+ */
+describe('correcting a list before approving', () => {
+  /** The three rows the machine proposed, as the form renders their citations. */
+  const PROPOSED_LABELS = ['Psalm 23', 'John 3:16', 'Romans 8:1–4'];
+
+  /** An open scripture draft holding no citations at all — the machine found none. */
+  async function foundNone(title: string): Promise<{ recordingId: string; item: ReviewItemRow }> {
+    const recordingId = await newRecording(title);
+    const [item] = await replaceOpenDrafts(
+      recordingId,
+      [
+        {
+          kind: 'scripture',
+          fields: { [REVIEW_FIELD.scripture.name]: [] },
+          provenance: {
+            model: 'fake',
+            modelVersion: 'fake-1',
+            promptVersion: 'draft-1',
+            steeringPrompt: null,
+            fields: { [REVIEW_FIELD.scripture.name]: { aiSuggested: true, editedByAdmin: false } },
+          },
+        },
+      ],
+      handle,
+    );
+    return { recordingId, item: item as ReviewItemRow };
+  }
+
+  /** What each row's citation currently reads as, top to bottom. */
+  function labels(row: Locator): Promise<string[]> {
+    return row.getByRole('list', { name: 'Citations' }).locator('legend').allTextContents();
+  }
+
+  // 2.1.1 — separate inputs, never one free-text box.
+  it('edits a row as book, chapter and verse in separate inputs, never as one box', async () => {
+    const title = unique('Edit a row');
+    const recordingId = await newRecording(title);
+    await drafts(recordingId, ['scripture']);
+
+    const page = await openPanel();
+    try {
+      const row = await openForm(page, title, 'Scripture');
+      const psalm = row.getByRole('group').first();
+
+      await expect.poll(() => labels(row), { timeout: 30_000 }).toEqual(PROPOSED_LABELS);
+      // The citation, taken apart into the four things it is made of.
+      expect(await psalm.getByRole('combobox', { name: 'Book' }).inputValue()).toBe('psalm');
+      expect(await psalm.getByRole('spinbutton', { name: 'Chapter' }).inputValue()).toBe('23');
+      expect(await psalm.getByRole('spinbutton', { name: 'First verse' }).inputValue()).toBe('1');
+      expect(await psalm.getByRole('spinbutton', { name: 'Last verse' }).inputValue()).toBe('6');
+
+      await psalm.getByRole('spinbutton', { name: 'Chapter' }).fill('24');
+      await psalm.getByRole('spinbutton', { name: 'First verse' }).fill('3');
+      await psalm.getByRole('spinbutton', { name: 'Last verse' }).fill('5');
+
+      // The row reads back as the passage it now names, so an admin sees what they typed.
+      await expect.poll(() => labels(row), { timeout: 30_000 }).toEqual([
+        'Psalm 24:3–5',
+        'John 3:16',
+        'Romans 8:1–4',
+      ]);
+
+      // Still nothing that invites prose: the one text box on the form is the steering sentence.
+      expect(await row.getByRole('textbox').count()).toBe(1);
+      expect(await row.getByRole('textbox').first().getAttribute('name')).toBe('prompt');
+    } finally {
+      await page.context().close();
+    }
+  }, 120_000);
+
+  // 2.1.2 — one press, and the rest of the list is untouched.
+  it('removes a row on one press, leaving the others exactly as they were', async () => {
+    const title = unique('Remove a row');
+    const recordingId = await newRecording(title);
+    const [item] = await drafts(recordingId, ['scripture']);
+
+    const page = await openPanel();
+    try {
+      const row = await openForm(page, title, 'Scripture');
+      await expect.poll(() => labels(row), { timeout: 30_000 }).toEqual(PROPOSED_LABELS);
+
+      await row.getByRole('button', { name: 'Remove John 3:16' }).click();
+
+      // Gone on the first press — and the two either side of it are exactly as they were. The
+      // second press stays where it belongs, on the button that throws the whole draft away.
+      await expect.poll(() => labels(row), { timeout: 30_000 }).toEqual(['Psalm 23', 'Romans 8:1–4']);
+      expect(await row.getByRole('button', { name: 'Yes, discard it' }).count()).toBe(0);
+      expect(await statusOf(item?.id ?? '')).toBe('draft');
+
+      // And nothing is written until the admin approves, which is what makes removal an edit.
+      expect(
+        await sql`select id from scripture_reference where recording_id = ${recordingId}`,
+      ).toHaveLength(0);
+    } finally {
+      await page.context().close();
+    }
+  }, 120_000);
+
+  // 2.1.3 — refused against its own row, naming what is wrong, and nothing else lost.
+  it('refuses an invalid edit against its own row and keeps the admin’s other edits', async () => {
+    const title = unique('Refuse a row');
+    const recordingId = await newRecording(title);
+    const [item] = await drafts(recordingId, ['scripture']);
+
+    const page = await openPanel();
+    try {
+      const row = await openForm(page, title, 'Scripture');
+      await expect.poll(() => labels(row), { timeout: 30_000 }).toEqual(PROPOSED_LABELS);
+
+      // A correction the admin makes first, and must not lose.
+      const romans = row.getByRole('group').nth(2);
+      await romans.getByRole('spinbutton', { name: 'Last verse' }).fill('11');
+
+      // And then a chapter that book does not have.
+      const john = row.getByRole('group').nth(1);
+      await john.getByRole('spinbutton', { name: 'Chapter' }).fill('99');
+
+      await expect.poll(() => john.getByRole('alert').count(), { timeout: 30_000 }).toBe(1);
+      expect(await john.getByRole('alert').textContent()).toContain('there is no chapter 99');
+
+      // Against its own row: the row above it is not complaining, and the edit made in it is
+      // exactly where the admin left it.
+      expect(await romans.getByRole('alert').count()).toBe(0);
+      expect(await romans.getByRole('spinbutton', { name: 'Last verse' }).inputValue()).toBe('11');
+      expect(await row.getByRole('group').first().getByRole('alert').count()).toBe(0);
+
+      // And a list holding it cannot be approved.
+      await row.getByRole('button', { name: 'Approve' }).click();
+      await expect.poll(() => statusOf(item?.id ?? ''), { timeout: 30_000 }).toBe('draft');
+      expect(
+        await sql`select id from scripture_reference where recording_id = ${recordingId}`,
+      ).toHaveLength(0);
+    } finally {
+      await page.context().close();
+    }
+  }, 120_000);
+
+  // 2.1.6 — labelled, and reachable in order without a mouse.
+  it('labels every per-row control and reaches all of them by keyboard', async () => {
+    const title = unique('Keyboard rows');
+    const recordingId = await newRecording(title);
+    await drafts(recordingId, ['scripture']);
+
+    const page = await openPanel();
+    try {
+      const row = await openForm(page, title, 'Scripture');
+      await expect.poll(() => labels(row), { timeout: 30_000 }).toEqual(PROPOSED_LABELS);
+
+      await row.getByRole('group').first().getByRole('combobox', { name: 'Book' }).focus();
+
+      const reached: string[] = [];
+      for (let step = 0; step < 4; step += 1) {
+        await page.keyboard.press('Tab');
+        reached.push(
+          await page.evaluate(() => document.activeElement?.getAttribute('aria-label') ?? ''),
+        );
+      }
+
+      // Every control of the row, in the order it is read in, each saying what it is.
+      expect(reached).toEqual(['Chapter', 'First verse', 'Last verse', 'Remove Psalm 23']);
+    } finally {
+      await page.context().close();
+    }
+  }, 120_000);
+
+  // 2.2.1 — added by hand, structurally, to a draft that came back with nothing.
+  it('adds a reference by hand to a draft the machine found nothing in', async () => {
+    const title = unique('Add to none');
+    const { recordingId, item } = await foundNone(title);
+
+    const page = await openPanel();
+    try {
+      const row = await openForm(page, title, 'Scripture');
+      expect(await row.textContent()).toContain('found no scripture in this teaching');
+
+      await row.getByRole('button', { name: 'Add a reference' }).click();
+
+      const added = row.getByRole('group').first();
+      await expect.poll(() => added.count(), { timeout: 30_000 }).toBe(1);
+      await added.getByRole('combobox', { name: 'Book' }).selectOption('acts');
+      await added.getByRole('spinbutton', { name: 'Chapter' }).fill('2');
+      await added.getByRole('spinbutton', { name: 'First verse' }).fill('1');
+      await added.getByRole('spinbutton', { name: 'Last verse' }).fill('4');
+      await expect.poll(() => labels(row), { timeout: 30_000 }).toEqual(['Acts 2:1–4']);
+
+      await row.getByRole('button', { name: 'Approve' }).click();
+      await expect.poll(() => statusOf(item.id), { timeout: 30_000 }).toBe('published');
+
+      // A hand-added reference is the same kind of thing as a proposed one, and says so.
+      expect(
+        await sql`
+          select book, chapter, verse_start, verse_end, origin::text as origin
+          from scripture_reference where recording_id = ${recordingId}
+        `,
+      ).toEqual([
+        { book: 'acts', chapter: 2, verse_start: 1, verse_end: 4, origin: 'person' },
+      ]);
+    } finally {
+      await page.context().close();
+    }
+  }, 120_000);
+
+  // 2.2.2 — an addition is checked the same way an edit is, and against the list it joins.
+  it('refuses an added reference that is not a citation, and one the list already holds', async () => {
+    const title = unique('Refuse an addition');
+    const recordingId = await newRecording(title);
+    const [item] = await drafts(recordingId, ['scripture']);
+
+    const page = await openPanel();
+    try {
+      const row = await openForm(page, title, 'Scripture');
+      await expect.poll(() => labels(row), { timeout: 30_000 }).toEqual(PROPOSED_LABELS);
+
+      await row.getByRole('button', { name: 'Add a reference' }).click();
+      const added = row.getByRole('group').last();
+      await expect.poll(() => row.getByRole('group').count(), { timeout: 30_000 }).toBe(4);
+
+      // A chapter that book does not have.
+      await added.getByRole('combobox', { name: 'Book' }).selectOption('john');
+      await added.getByRole('spinbutton', { name: 'Chapter' }).fill('99');
+      await expect.poll(() => added.getByRole('alert').count(), { timeout: 30_000 }).toBe(1);
+      expect(await added.getByRole('alert').textContent()).toContain('there is no chapter 99');
+
+      // And a passage the list already holds — a real citation, and still not one to add twice.
+      await added.getByRole('spinbutton', { name: 'Chapter' }).fill('3');
+      await added.getByRole('spinbutton', { name: 'First verse' }).fill('16');
+      await added.getByRole('spinbutton', { name: 'Last verse' }).fill('16');
+      await expect
+        .poll(() => added.getByRole('alert').textContent(), { timeout: 30_000 })
+        .toContain('already in the list');
+
+      await row.getByRole('button', { name: 'Approve' }).click();
+      await expect.poll(() => statusOf(item?.id ?? ''), { timeout: 30_000 }).toBe('draft');
+      expect(
+        await sql`select id from scripture_reference where recording_id = ${recordingId}`,
+      ).toHaveLength(0);
     } finally {
       await page.context().close();
     }

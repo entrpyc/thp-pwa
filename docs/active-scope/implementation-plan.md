@@ -4,7 +4,7 @@ _Planned: 2026-08-24_
 
 ## Status
 
-31/71 criteria met. Groups complete: Group 1.
+45/71 criteria met. Groups complete: Group 1, Group 2.
 _Maintained by implementation — see the checkboxes for detail._
 
 ## Background to research
@@ -338,23 +338,55 @@ active-scope prd § 6 (Accessibility); design referencess png/style-guide.md
 
 **Acceptance criteria**
 
-- [ ] **2.1.1** A row is edited as book, chapter, verse start and verse end in separate inputs, never
+- [x] **2.1.1** A row is edited as book, chapter, verse start and verse end in separate inputs, never
       as one free-text box — verified by `packages/web/tests/integration/reviews-screen.test.ts`
-- [ ] **2.1.2** A row is removed without a second press and without touching the other rows —
+- [x] **2.1.2** A row is removed without a second press and without touching the other rows —
       verified by `packages/web/tests/integration/reviews-screen.test.ts`
   - Removing is an edit to an unsaved draft, not a destruction; the second press stays on discard.
-- [ ] **2.1.3** An invalid edit is refused against its own row, naming what is wrong, with the
+- [x] **2.1.3** An invalid edit is refused against its own row, naming what is wrong, with the
       admin's other edits intact — verified by
       `packages/web/tests/integration/reviews-screen.test.ts`
-- [ ] **2.1.4** Approving writes the **edited** list through, and the machine's original stays on the
+- [x] **2.1.4** Approving writes the **edited** list through, and the machine's original stays on the
       closed item — verified by `packages/web/tests/integration/scripture-review.test.ts`
-- [ ] **2.1.5** The server re-validates every citation on approve and refuses a list holding one the
+- [x] **2.1.5** The server re-validates every citation on approve and refuses a list holding one the
       client would not have allowed — verified by
       `packages/web/tests/integration/scripture-review.test.ts`
-- [ ] **2.1.6** Every per-row control is reachable by keyboard and carries an accessible label —
+- [x] **2.1.6** Every per-row control is reachable by keyboard and carries an accessible label —
       verified by `packages/web/tests/integration/reviews-screen.test.ts`
 
-**Record**
+**Record** — _updated 2026-08-24_
+- **Edge cases:** the book control is a picker, so a book outside the canon cannot be entered from
+  the form at all — the "unknown book" refusal 3.2.5 names is reachable only over the API, and an
+  admin who wants a book the canon does not list has no way to say so.
+- **Edge cases:** a cleared chapter box reads as chapter 0 and is refused in the canon's own words
+  — "Romans has 16 chapters, so there is no chapter 0" — rather than as "say which chapter".
+- **Edge cases:** clearing both verse boxes silently widens the row to the whole chapter rather
+  than asking; an admin who meant to retype a range and stopped halfway approves the chapter.
+- **Edge cases:** rows cannot be reordered, so the references are stored in the order the form held
+  them. Nothing a member sees depends on that yet — group 4 sorts into canon order at read time.
+- **Edge cases:** closing the form, or another admin resolving the item first, throws away every
+  unsaved edit with no warning and no way to get them back.
+- **Edge cases:** nothing caps how many references one approve may carry; a list of a thousand is
+  written as a list of a thousand.
+- **Edge cases:** the per-row refusal is a live `role="alert"`, so a screen reader re-announces it
+  as an admin types through an invalid chapter rather than once when they stop.
+- **Assumptions, major (confirmed):** the approve request carries, per row, the index of the
+  proposal that row came from — `from`, or `null` for an addition — and the server derives origin
+  and edited-ness from it. A client never asserts its own provenance.
+- **Assumptions, minor:** a blank verse box means the whole chapter; a blank chapter box is an
+  error. Each is what a blank can honestly mean in that field, and they differ for that reason.
+- **Assumptions, minor:** the form sends the whole list on every approve, including an untouched
+  one, so there is one approve path rather than a corrected one and an as-it-stands one.
+- **Assumptions, minor:** a `from` index naming no proposal reads as a person's addition rather
+  than as a refusal — the answer that never claims the machine's authorship for a row.
+- **Reworked:** none
+- **False positives fixed:** 0
+- **Operator steps:** none
+- **Notes:** 1.5.1's test was updated rather than weakened. A row is now a group of controls, so
+  the citations are read from each row's caption instead of from the list item's text; the
+  criterion is unchanged, still asserts three rows in canon order, and its "the only text box on
+  this form is the steering sentence" assertion still holds — chapter and verse are number
+  controls, and the book is a picker.
 
 ### Task 2.2 — An admin adds a reference the machine missed
 
@@ -368,19 +400,39 @@ active-scope prd 3.1.6, active-scope prd § 5.2
 
 **Acceptance criteria**
 
-- [ ] **2.2.1** A reference can be added to a draft, entered structurally, including to a draft whose
+- [x] **2.2.1** A reference can be added to a draft, entered structurally, including to a draft whose
       list came back empty — verified by `packages/web/tests/integration/reviews-screen.test.ts`
-- [ ] **2.2.2** An added reference is refused if it is not a valid citation, and refused if the list
+- [x] **2.2.2** An added reference is refused if it is not a valid citation, and refused if the list
       already holds that passage — verified by
       `packages/web/tests/integration/reviews-screen.test.ts`
-- [ ] **2.2.3** An approved reference records whether it was proposed by the machine, edited by an
+- [x] **2.2.3** An approved reference records whether it was proposed by the machine, edited by an
       admin, or added by one — verified by
       `packages/web/tests/integration/scripture-review.test.ts`
-- [ ] **2.2.4** That per-reference record survives on the **closed** review item, beside the item's
+- [x] **2.2.4** That per-reference record survives on the **closed** review item, beside the item's
       model, model version and prompt version — verified by
       `packages/web/tests/integration/scripture-review.test.ts`
 
-**Record**
+**Record** — _updated 2026-08-24_
+- **Edge cases:** an added row starts as the canon's first book, chapter 1 — a real citation the
+  admin corrects rather than a blank the form has to have an opinion about. An admin who presses
+  *Add a reference* and then approves without touching the row publishes that citation.
+- **Edge cases:** a duplicate is flagged on the *later* of the two rows, so an admin who meant to
+  keep the new one has to remove the older one by hand before the refusal clears.
+- **Edge cases:** removing a machine row and adding the same passage back by hand records it as a
+  person's addition; afterwards the two cannot be told apart on the closed item.
+- **Edge cases:** the closed item records what was approved but not what was removed — a reference
+  an admin threw out is readable only by reading the draft against the entries beside it.
+- **Assumptions, minor:** the per-reference record lives on the closed item's provenance, under
+  that field's own entry, beside the model and the two versions — which is where 2.2.4 puts it.
+  The draft field itself stays the machine's proposal, so the two are readable side by side.
+- **Assumptions, minor:** the whole approve request is refused when one entry in it is not a
+  citation, rather than the good entries being written and the bad ones reported.
+- **Reworked:** none
+- **False positives fixed:** 0
+- **Operator steps:** none
+- **Notes:** the duplicate refusal is the server's as well as the screen's, because
+  `scripture_reference_passage_unique` would otherwise answer a duplicated list with a constraint
+  violation rather than with a sentence an admin can act on.
 
 ### Task 2.3 — An admin asks for the scripture references again
 
@@ -395,21 +447,46 @@ widened by 3.1.10's offer.
 
 **Acceptance criteria**
 
-- [ ] **2.3.1** Asking again for a scripture draft, with an optional sentence of steering, discards
+- [x] **2.3.1** Asking again for a scripture draft, with an optional sentence of steering, discards
       the open item and enqueues the step **for scripture alone** — the summary and description are
       not re-drafted — verified by `packages/web/tests/integration/scripture-review.test.ts`
-- [ ] **2.3.2** The steering sentence reaches the provider call and is recorded on the replacement
+- [x] **2.3.2** The steering sentence reaches the provider call and is recorded on the replacement
       draft — verified by `packages/worker/tests/integration/generate-draft.test.ts`
-- [ ] **2.3.3** The offer made after a transcript correction names scripture references alongside the
+- [x] **2.3.3** The offer made after a transcript correction names scripture references alongside the
       summary, and enqueues both — verified by
       `packages/web/tests/integration/transcript-correction.test.ts`
   - Closes the half of the correction offer the Delivery status table records as missing.
-- [ ] **2.3.4** A second re-draft request while one is unfinished is still refused rather than
+- [x] **2.3.4** A second re-draft request while one is unfinished is still refused rather than
       answered with the first one's job — verified by
       `packages/web/tests/integration/scripture-review.test.ts`
   - A regression check on the existing one-in-flight rule, not a new rule.
 
-**Record**
+**Record** — _updated 2026-08-24_
+- **Edge cases:** the transcript-correction offer now asks for both artefacts, so accepting it
+  leaves two items in Pending Reviews — an admin who only wanted the summary rewritten gets a
+  scripture draft to deal with as well, and there is no way to accept half the offer.
+- **Edge cases:** a re-draft refused as one-in-flight says "a draft for this recording is already
+  being generated" without naming which kind is running, so an admin cannot tell whether the job
+  in the way is theirs.
+- **Edge cases:** a transcript correction on a teaching whose scripture was already approved
+  enqueues a fresh scripture draft, which replaces the approved references only if the admin
+  approves the new one — until then the teaching carries the old list.
+- **Assumptions, minor:** the offer's text, its button and the region's accessible name now all
+  name both artefacts, and the failure line under it says "a new draft" rather than "a new
+  summary".
+- **Reworked:** none
+- **False positives fixed:** 0
+- **Operator steps:** none
+- **Notes:** 2.3.1, 2.3.2 and 2.3.4 needed no code — group 1 built the route and the handler
+  generically, so the regenerate path already enqueued `[item.kind]` and the worker already carried
+  the steer into the provider call. Their tests were therefore green on the first run and earned no
+  red, so each was checked by breaking the behaviour on purpose — the wrong kind enqueued, the
+  in-flight check disabled, the steer withheld from the provider call — and confirming its test
+  went red.
+- **Notes:** plan correction. 2.3.3's *names scripture references* half is a screen fact and the
+  criterion named only `packages/web/tests/integration/transcript-correction.test.ts`. The enqueue
+  is asserted there; the wording is asserted in `transcript-correction-screen.test.ts`, which is
+  where the offer is driven.
 
 ---
 

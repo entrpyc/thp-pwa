@@ -31,7 +31,8 @@ import styles from './transcript.module.css';
  *   line, resumes it. Scrolling this component did itself does not count as a member scroll — see
  *   {@link scrollToCurrent}.
  * - **An admin corrects a line in place** ([3.5.5](docs/project/prd.md)) and is then offered a
- *   summary built on the corrected words ([3.5.6](docs/project/prd.md)). The offer never fires by
+ *   summary and a set of scripture references built on the corrected words
+ *   ([3.5.6](docs/project/prd.md), [3.1.10](docs/active-scope/prd.md)). The offer never fires by
  *   itself, and declining it does nothing at all.
  *
  * `canCorrect` hides the affordance and grants nothing: the API is what refuses a member, which is
@@ -304,17 +305,18 @@ function RegenerationOffer({
     return (
       <section className={styles.offer} aria-label="Regeneration asked for">
         <p className={styles.offerText}>
-          A fresh summary is being written. It will be waiting in Pending Reviews — the summary
-          members see does not change until you approve it.
+          A fresh summary and a fresh set of scripture references are being written. They will be
+          waiting in Pending Reviews — what members see does not change until you approve them.
         </p>
       </section>
     );
   }
 
   return (
-    <section className={styles.offer} aria-label="Regenerate the summary">
+    <section className={styles.offer} aria-label="Regenerate the summary and scripture references">
       <p className={styles.offerText}>
-        Line corrected. Would you like a fresh summary written from the corrected words?
+        Line corrected. Would you like the summary and the scripture references written again from
+        the corrected words?
       </p>
       <div className={styles.formActions}>
         <button
@@ -333,13 +335,13 @@ function RegenerationOffer({
                 onFailure(
                   caught instanceof ApiClientError
                     ? caught.message
-                    : 'Could not ask for a new summary. Check your connection and try again.',
+                    : 'Could not ask for a new draft. Check your connection and try again.',
                 );
               })
               .finally(() => setAsking(false));
           }}
         >
-          Regenerate summary
+          Regenerate summary and scripture
         </button>
         <button className={styles.secondary} type="button" onClick={onDismiss}>
           Not now

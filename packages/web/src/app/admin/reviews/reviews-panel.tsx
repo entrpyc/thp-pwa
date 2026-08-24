@@ -2,17 +2,24 @@
 
 import { useCallback, useEffect, useId, useState } from 'react';
 import {
+  BIBLE_BOOKS,
   MAX_STEERING_PROMPT_LENGTH,
   REVIEWS_PATH,
   REVIEW_FIELD,
   REVIEW_KIND_LABEL,
   REVIEW_RECORDING_PARAM,
+  checkCitation,
+  citationKey,
+  citationsEqual,
+  findBook,
   formatCitation,
   reviewPath,
   reviewRegeneratePath,
+  type CitationCheck,
   type ReviewItemView,
   type ReviewListPayload,
   type ScriptureCitation,
+  type SubmittedReference,
 } from '@thp/shared';
 import { ApiClientError, apiFetch } from '@/client/api-client';
 import styles from './reviews.module.css';
@@ -61,6 +68,105 @@ function describeFailure(caught: unknown): string {
 /** What a field is called on screen, from the one map both kinds are described by. */
 function labelFor(field: string): string {
   return field.charAt(0).toUpperCase() + field.slice(1);
+}
+
+/**
+ * **One row of a list-shaped draft, while an admin is working on it** (2.1.1).
+ *
+ * Held as the four things a citation is made of, each as the text of its own control, because that
+ * is what the admin is editing — a half-typed chapter is not a number and a blank verse is not a
+ * zero. It becomes a citation on the way out, through the same validator the worker and the API
+ * use.
+ *
+ * `from` is **which proposal this row came from** — its index in the machine's list, or `null` for
+ * one a person added. It is the only thing the form knows that the server cannot work out for
+ * itself, and it is what separates 3.2.9's "edited by an admin" from its "added by one".
+ */
+interface DraftRow {
+  /** Stable across edits, so React keeps the input an admin is typing in. */
+  readonly key: string;
+  readonly from: number | null;
+  readonly book: string;
+  readonly chapter: string;
+  readonly verseStart: string;
+  readonly verseEnd: string;
+}
+
+/** The machine's proposal, as rows an admin can take apart. */
+function rowsFrom(citations: readonly ScriptureCitation[]): DraftRow[] {
+  return citations.map((citation, index) => ({
+    key: `proposed-${index}`,
+    from: index,
+    book: citation.book,
+    chapter: String(citation.chapter),
+    verseStart: String(citation.verseStart),
+    verseEnd: String(citation.verseEnd),
+  }));
+}
+
+/**
+ * The citation a row currently names, or what is wrong with it — from the one validator, so the
+ * screen and the server cannot disagree about what a citation is.
+ *
+ * A blank verse reads as the whole chapter, which is the only thing a blank can honestly mean
+ * here. A blank chapter does not: it is refused, in the canon's own words.
+ */
+function checkRow(row: DraftRow): CitationCheck {
+  return checkCitation({
+    book: row.book,
+    chapter: Number(row.chapter),
+    verseStart: row.verseStart === '' ? null : Number(row.verseStart),
+    verseEnd: row.verseEnd === '' ? null : Number(row.verseEnd),
+  });
+}
+
+/**
+ * What is wrong with each row, in the order they are shown (3.2.5).
+ *
+ * The canon's answer per row, plus the one thing only the list knows — that a passage is already
+ * in it. Computed for the whole list on every keystroke rather than stored, so a row stops
+ * complaining the moment the row above it changes.
+ */
+function problemsIn(rows: readonly DraftRow[]): (string | null)[] {
+  const seen = new Set<string>();
+  return rows.map((row) => {
+    const checked = checkRow(row);
+    if (!checked.ok) return checked.problem.message;
+
+    const key = citationKey(checked.citation);
+    if (seen.has(key)) return 'That passage is already in the list.';
+    seen.add(key);
+    return null;
+  });
+}
+
+/** How a row reads — the citation once it is one, and a best effort while it is being typed. */
+function labelOf(row: DraftRow): string {
+  const checked = checkRow(row);
+  if (checked.ok) return formatCitation(checked.citation);
+  return `${findBook(row.book)?.name ?? row.book} ${row.chapter}`.trim();
+}
+
+/** Whether the admin has changed the list they were given (4.17.5). */
+function listChanged(rows: readonly DraftRow[], proposed: readonly ScriptureCitation[]): boolean {
+  if (rows.length !== proposed.length) return true;
+  return rows.some((row, index) => {
+    if (row.from !== index) return true;
+    const checked = checkRow(row);
+    const original = proposed[index];
+    return !checked.ok || original === undefined || !citationsEqual(checked.citation, original);
+  });
+}
+
+/** A row as the approve request carries it. */
+function toSubmitted(row: DraftRow): SubmittedReference {
+  return {
+    book: row.book,
+    chapter: Number(row.chapter),
+    verseStart: row.verseStart === '' ? null : Number(row.verseStart),
+    verseEnd: row.verseEnd === '' ? null : Number(row.verseEnd),
+    from: row.from,
+  };
 }
 
 export function ReviewsPanel() {
@@ -163,21 +269,25 @@ function ReviewRow({
   const promptId = useId();
   const spec = REVIEW_FIELD[item.kind];
   const field = spec.name;
+  const proposed = Array.isArray(item.fields[field])
+    ? (item.fields[field] as readonly ScriptureCitation[])
+    : [];
   const [values, setValues] = useState<Record<string, string>>(() => ({
     [field]: typeof item.fields[field] === 'string' ? (item.fields[field] as string) : '',
   }));
+  const [rows, setRows] = useState<DraftRow[]>(() => rowsFrom(proposed));
+  /** How many rows this admin has added, so an added row's key is its own. */
+  const [addedCount, setAddedCount] = useState(0);
   const [prompt, setPrompt] = useState('');
   const [busy, setBusy] = useState<Busy>(null);
   const [note, setNote] = useState<string | null>(null);
   const [confirmingDiscard, setConfirmingDiscard] = useState(false);
 
-  const citations = Array.isArray(item.fields[field])
-    ? (item.fields[field] as readonly ScriptureCitation[])
-    : [];
-  // A list is read-only in this group, so nothing about it can have been edited. Task 2.1 is what
-  // gives a list an edited state, and it is the same flag when it does.
+  const problems = spec.shape === 'list' ? problemsIn(rows) : [];
   const edited =
-    spec.shape === 'text' && (values[field] ?? '') !== (item.fields[field] ?? '');
+    spec.shape === 'list'
+      ? listChanged(rows, proposed)
+      : (values[field] ?? '') !== (item.fields[field] ?? '');
 
   async function send(what: Busy, path: string, body: unknown): Promise<void> {
     if (busy !== null) return;
@@ -201,6 +311,31 @@ function ReviewRow({
     }
   }
 
+  /**
+   * Approve — the whole draft, in whatever shape it is.
+   *
+   * A list holding a refusal is not sent at all: the row already says what is wrong with it
+   * (3.2.5), and a press that produced a 400 saying the same thing would be a round trip to learn
+   * what is on the screen.
+   */
+  function approve(): void {
+    if (spec.shape !== 'list') {
+      void send('approve', reviewPath(item.id), {
+        action: 'approve',
+        fields: { [field]: values[field] ?? '' },
+      });
+      return;
+    }
+    if (problems.some((one) => one !== null)) {
+      setNote('Put the reference the list is complaining about right before approving.');
+      return;
+    }
+    void send('approve', reviewPath(item.id), {
+      action: 'approve',
+      fields: { [field]: rows.map(toSubmitted) },
+    });
+  }
+
   return (
     <li className={styles.listRow}>
       <div className={styles.rowIdentity}>
@@ -222,9 +357,9 @@ function ReviewRow({
         <div className={styles.form}>
           <div className={styles.field}>
             {/*
-              A label for a control, a plain caption for a list — there is nothing focusable behind
-              a read-only list, and `htmlFor` pointing at nothing is worse for a screen reader than
-              not saying it. The list names itself through `aria-labelledby` instead.
+              A label for a control, a plain caption for a list — the list is a set of controls
+              rather than one, and each row names its own. The list names itself through
+              `aria-labelledby` instead.
             */}
             {spec.shape === 'list' ? (
               <p className={styles.label} id={`${promptId}-draft`}>
@@ -245,7 +380,33 @@ function ReviewRow({
               first line of, which is the whole of 3.6.5.
             */}
             {spec.shape === 'list' ? (
-              <CitationList citations={citations} labelledBy={`${promptId}-draft`} />
+              <CitationList
+                rows={rows}
+                problems={problems}
+                labelledBy={`${promptId}-draft`}
+                disabled={busy !== null}
+                onChange={(index, patch) =>
+                  setRows(rows.map((row, at) => (at === index ? { ...row, ...patch } : row)))
+                }
+                onRemove={(index) => setRows(rows.filter((_, at) => at !== index))}
+                onAdd={() => {
+                  setRows([
+                    ...rows,
+                    {
+                      key: `added-${addedCount}`,
+                      // Nothing the machine proposed, which is what makes it a person's (3.2.9).
+                      from: null,
+                      // The first book of the canon and its first chapter: a real citation the
+                      // admin corrects, rather than a blank the form has to have an opinion about.
+                      book: BIBLE_BOOKS[0]?.id ?? '',
+                      chapter: '1',
+                      verseStart: '',
+                      verseEnd: '',
+                    },
+                  ]);
+                  setAddedCount(addedCount + 1);
+                }}
+              />
             ) : (
               <textarea
                 className={styles.textarea}
@@ -290,17 +451,7 @@ function ReviewRow({
               className={styles.submit}
               type="button"
               disabled={busy !== null}
-              onClick={() =>
-                void send(
-                  'approve',
-                  reviewPath(item.id),
-                  // A list is approved whole and as it stands: there is nothing to send back
-                  // because there was nothing to edit (1.5.4).
-                  spec.shape === 'list'
-                    ? { action: 'approve' }
-                    : { action: 'approve', fields: { [field]: values[field] ?? '' } },
-                )
-              }
+              onClick={() => approve()}
             >
               {busy === 'approve' ? 'Approving…' : edited ? 'Approve with edits' : 'Approve'}
             </button>
@@ -377,39 +528,126 @@ function ReviewRow({
 }
 
 /**
- * **A list-shaped draft: one row per citation** (1.5.1).
+ * **A list-shaped draft: one row per citation, each one correctable** (1.5.1, 2.1.1, 2.2.1).
  *
- * Read-only here. Editing a row, removing one and adding one the machine missed are Task 2.1 and
- * Task 2.2, and the verse text beneath each citation is Task 3.3 — this is the list, and the two
- * presses under it are the ones the form already had.
+ * Every row is the four things a citation is made of, as four controls — a book to pick, a
+ * chapter, and the verses it runs between. Never a text box: a citation typed as prose is a
+ * citation somebody has to parse back, which is the whole of what
+ * [§ 6 Content integrity](docs/active-scope/prd.md) refuses.
  *
- * **An empty list says so in words** (1.5.3). An empty box would read as a draft that failed;
- * what actually happened is that the machine read the teaching and found no scripture in it, and
- * an admin approving that is recording a fact rather than accepting a blank.
+ * **A row is thrown out on one press.** Removing one is an edit to a draft that is not saved until
+ * the admin approves, so the confirming press stays where it belongs — on discard, which is what
+ * actually destroys something.
+ *
+ * **Every row says what is wrong with it, against itself** (3.2.5). The refusal lives inside the
+ * row's own group, so a list of four with one bad chapter reads as one bad row rather than as a
+ * form that will not submit.
+ *
+ * **An empty list says so in words** (1.5.3). An empty box would read as a draft that failed; what
+ * actually happened is that the machine read the teaching and found no scripture in it — and the
+ * admin can still add what it missed, which is the only way [3.2.4](docs/active-scope/prd.md) is
+ * reachable at all for such a teaching.
  */
 function CitationList({
-  citations,
+  rows,
+  problems,
   labelledBy,
+  disabled,
+  onChange,
+  onRemove,
+  onAdd,
 }: {
-  citations: readonly ScriptureCitation[];
+  rows: readonly DraftRow[];
+  problems: readonly (string | null)[];
   labelledBy: string;
+  disabled: boolean;
+  onChange: (index: number, patch: Partial<DraftRow>) => void;
+  onRemove: (index: number) => void;
+  onAdd: () => void;
 }) {
-  if (citations.length === 0) {
-    return (
-      <p className={styles.empty}>
-        The machine found no scripture in this teaching. Approving records that; discarding leaves
-        the teaching without a reviewed list.
-      </p>
-    );
-  }
-
   return (
-    <ul className={styles.citations} aria-labelledby={labelledBy}>
-      {citations.map((citation) => (
-        <li className={styles.citation} key={`${citation.book}-${citation.chapter}-${citation.verseStart}-${citation.verseEnd}`}>
-          {formatCitation(citation)}
-        </li>
-      ))}
-    </ul>
+    <>
+      {rows.length === 0 ? (
+        <p className={styles.empty}>
+          The machine found no scripture in this teaching. Approving records that; discarding leaves
+          the teaching without a reviewed list.
+        </p>
+      ) : (
+        <ul className={styles.citations} aria-labelledby={labelledBy}>
+          {rows.map((row, index) => {
+            const label = labelOf(row);
+            return (
+              <li className={styles.citation} key={row.key}>
+                {/*
+                  A group, named by the citation it currently reads as — so every control inside it
+                  is "the chapter of Romans 8:1–4" rather than "a chapter" (§ 6 Accessibility), and
+                  the name follows what the admin types.
+                */}
+                <fieldset className={styles.citationGroup} disabled={disabled}>
+                  <legend className={styles.citationLegend}>{label}</legend>
+                  <div className={styles.citationControls}>
+                    <select
+                      className={styles.select}
+                      aria-label="Book"
+                      value={row.book}
+                      onChange={(event) => onChange(index, { book: event.target.value })}
+                    >
+                      {BIBLE_BOOKS.map((book) => (
+                        <option key={book.id} value={book.id}>
+                          {book.name}
+                        </option>
+                      ))}
+                    </select>
+                    <input
+                      className={styles.number}
+                      type="number"
+                      min={1}
+                      aria-label="Chapter"
+                      value={row.chapter}
+                      onChange={(event) => onChange(index, { chapter: event.target.value })}
+                    />
+                    <input
+                      className={styles.number}
+                      type="number"
+                      min={1}
+                      aria-label="First verse"
+                      value={row.verseStart}
+                      onChange={(event) => onChange(index, { verseStart: event.target.value })}
+                    />
+                    <input
+                      className={styles.number}
+                      type="number"
+                      min={1}
+                      aria-label="Last verse"
+                      value={row.verseEnd}
+                      onChange={(event) => onChange(index, { verseEnd: event.target.value })}
+                    />
+                    <button
+                      className={styles.action}
+                      type="button"
+                      aria-label={`Remove ${label}`}
+                      onClick={() => onRemove(index)}
+                    >
+                      Remove
+                    </button>
+                  </div>
+                  {problems[index] === undefined || problems[index] === null ? null : (
+                    <p className={styles.rowRefusal} role="alert">
+                      {problems[index]}
+                    </p>
+                  )}
+                </fieldset>
+              </li>
+            );
+          })}
+        </ul>
+      )}
+
+      <div className={styles.citationAdd}>
+        <button className={styles.action} type="button" disabled={disabled} onClick={onAdd}>
+          Add a reference
+        </button>
+      </div>
+    </>
   );
 }
