@@ -4,7 +4,7 @@ _Planned: 2026-08-24_
 
 ## Status
 
-0/71 criteria met. Groups complete: none.
+31/71 criteria met. Groups complete: Group 1.
 _Maintained by implementation — see the checkboxes for detail._
 
 ## Background to research
@@ -38,32 +38,61 @@ as a static table rather than fetched from anywhere.
 
 **Acceptance criteria**
 
-- [ ] **1.1.1** The 66-book canon is declared exactly once — each book, its chapter count, and each
+- [x] **1.1.1** The 66-book canon is declared exactly once — each book, its chapter count, and each
       chapter's verse count — and is the only place in the repository a book name is spelled.
       Verified by `tests/guards/domain-declarations.test.ts`
   - Follows the shape `ROLES`, `PIPELINE_STEPS` and `REVIEW_KINDS` already take in `@thp/shared`.
   - The guard fails the build on a book name written anywhere else.
-- [ ] **1.1.2** A citation naming a book outside the canon is refused, and the refusal names the
+- [x] **1.1.2** A citation naming a book outside the canon is refused, and the refusal names the
       book it did not recognise — verified by `packages/web/tests/unit/scripture-citation.test.ts`
   - One validator, returning what is wrong rather than a boolean.
-- [ ] **1.1.3** A citation whose chapter is beyond what that book has, or whose verse is beyond what
+- [x] **1.1.3** A citation whose chapter is beyond what that book has, or whose verse is beyond what
       that chapter has, is refused, naming which of the two was wrong — verified by
       `packages/web/tests/unit/scripture-citation.test.ts`
-- [ ] **1.1.4** A range whose end verse precedes its start is refused; a range whose start and end
+- [x] **1.1.4** A range whose end verse precedes its start is refused; a range whose start and end
       are equal is accepted as a single verse — verified by
       `packages/web/tests/unit/scripture-citation.test.ts`
-- [ ] **1.1.5** Two citations of the same passage compare equal, so a list can be de-duplicated
+- [x] **1.1.5** Two citations of the same passage compare equal, so a list can be de-duplicated
       without each caller deciding what "the same" means — verified by
       `packages/web/tests/unit/scripture-citation.test.ts`
-- [ ] **1.1.6** A list of citations sorts into canon order — Genesis before Exodus, chapter 3 before
+- [x] **1.1.6** A list of citations sorts into canon order — Genesis before Exodus, chapter 3 before
       chapter 12, verse 1 before verse 9 — verified by
       `packages/web/tests/unit/scripture-citation.test.ts`
   - The order is the canon's, not alphabetical; the declaration's order is the sort key.
-- [ ] **1.1.7** A citation renders the way a person says it — `John 3:16`, `Romans 8:1–4`,
+- [x] **1.1.7** A citation renders the way a person says it — `John 3:16`, `Romans 8:1–4`,
       `Psalm 23` for a whole chapter — from one function both surfaces call — verified by
       `packages/web/tests/unit/scripture-citation.test.ts`
 
-**Record**
+**Record** — _updated 2026-08-24_
+- **Edge cases:** a book named by an abbreviation or an alternative spelling (`Rom`, `Song of
+  Songs`, `Psalms`) is not recognised — the citation is dropped from a draft and counted, and an
+  admin adding one by hand later will be refused until they spell the book in full.
+- **Edge cases:** a citation covering every verse of a chapter and one written as `1–<last verse>`
+  are the same value — an admin who meant "the whole chapter" and one who meant "verses 1 to the
+  end" cannot be told apart afterwards.
+- **Edge cases:** a range crossing a chapter boundary (`Romans 8:1–9:5`) cannot be expressed — a
+  teaching that works across one comes back as two citations or as none.
+- **Edge cases:** the verse counts are the traditional English versification; a translation that
+  numbers verses differently would have a real citation refused as out of range.
+- **Assumptions, major (confirmed):** a book is identified by a stable string id (`romans`,
+  `1-john`) rather than by its canon ordinal, so a row and a payload are readable on their own.
+- **Assumptions, major (confirmed):** a whole chapter is verses 1 to the chapter's last, not a pair
+  of nulls — one code path for compare, sort, render and group 3's verse lookup.
+- **Assumptions, minor:** the canon spells the psalms `Psalm`, because that is how a citation is
+  written and one name serves both; `Song of Solomon` is the name, and `song-of-songs` is not
+  recognised.
+- **Assumptions, minor:** the book-name guard checks quoted string literals under `packages/*/src`
+  and `tools/` only — tests are exempt, because a test asserting what `formatCitation` returns has
+  to spell the answer.
+- **Assumptions, minor:** a proposal with no verse numbers reads as the whole chapter, which is the
+  only way a whole-chapter citation can reach the product at all in this group.
+- **Reworked:** none
+- **False positives fixed:** 0
+- **Operator steps:** none
+- **Notes:** the table is checked by its two public totals — 66 books, 1,189 chapters, 31,102
+  verses — so a mistyped verse count fails the guard test rather than refusing one real citation
+  forever. Two books (Joshua, Jeremiah) were wrong on the first pass and were caught by exactly
+  that check.
 
 ### Task 1.2 — The review queue carries a list-shaped draft
 
@@ -78,22 +107,37 @@ existing, extended*); project architecture § Cross-cutting concerns (*The revie
 
 **Acceptance criteria**
 
-- [ ] **1.2.1** `scripture` is a value of the review-kind enum, with the Postgres enum derived from
+- [x] **1.2.1** `scripture` is a value of the review-kind enum, with the Postgres enum derived from
       the one declaration rather than restated beside it — verified by
       `packages/db/tests/integration/migrations.test.ts` and `tests/guards/domain-declarations.test.ts`
   - No new table and no new route: the queue, the ordering and the closed-row audit trail are the
     ones that already exist.
-- [ ] **1.2.2** An artefact kind may declare a **list-shaped** field, and the two existing kinds keep
+- [x] **1.2.2** An artefact kind may declare a **list-shaped** field, and the two existing kinds keep
       their single text field with no change to how they are read or written — verified by
       `packages/web/tests/unit/review-contract.test.ts`
   - The field-per-kind map widens from "one field name" to "one field name and its shape".
-- [ ] **1.2.3** The pending-reviews query returns a scripture item and a summary item together, in
+- [x] **1.2.3** The pending-reviews query returns a scripture item and a summary item together, in
       the same order the queue already sorts by, with no branch on kind — verified by
       `packages/db/tests/integration/reviews.test.ts`
-- [ ] **1.2.4** `GET /reviews` returns a scripture item's citations as structured entries, and
+- [x] **1.2.4** `GET /reviews` returns a scripture item's citations as structured entries, and
       refuses a member — verified by `packages/web/tests/integration/reviews.test.ts`
 
-**Record**
+**Record** — _updated 2026-08-24_
+- **Edge cases:** a `fields` entry under a name no kind declares is dropped from the payload
+  silently — a row written by a newer worker reads as a draft with a missing field rather than as
+  an error.
+- **Edge cases:** an entry inside a list-shaped field that is not citation-shaped is dropped on the
+  way to the wire, so a malformed row renders as a shorter list rather than saying anything.
+- **Assumptions, minor:** the scripture kind's field is called `citations`, and
+  `ReviewFieldValue` is `string | ScriptureCitation[]` — tags and mind maps widen that union
+  rather than adding a second contract.
+- **Reworked:** none
+- **False positives fixed:** 0
+- **Operator steps:** run `npm run migrate` — migration `0014_scripture_references` adds the
+  `scripture` value to the `review_kind` enum, and nothing renders until it has.
+- **Notes:** the migration adds the enum value to a live type, so it is the one migration here that
+  behaves differently against a database with rows in it; the migration test drives that case with
+  a row written before the widening.
 
 ### Task 1.3 — The generator drafts a teaching's scripture references
 
@@ -111,32 +155,53 @@ new pipeline step — this is the step that already runs.
 
 **Acceptance criteria**
 
-- [ ] **1.3.1** The run that produces the summary and the description also produces the citations, in
+- [x] **1.3.1** The run that produces the summary and the description also produces the citations, in
       **one** provider call — verified by `packages/worker/tests/integration/generate-draft.test.ts`
   - The generation port's result widens from one string per kind to one string *or one list* per kind.
-- [ ] **1.3.2** The citations come back as a structured answer; an answer in prose where the
+- [x] **1.3.2** The citations come back as a structured answer; an answer in prose where the
       structure was required fails the job with a reason and writes nothing — verified by
       `packages/worker/tests/integration/generate-draft.test.ts` and
       `packages/worker/tests/unit/minimax.test.ts`
-- [ ] **1.3.3** A citation outside the canon, or with numbers its book does not have, is dropped from
+- [x] **1.3.3** A citation outside the canon, or with numbers its book does not have, is dropped from
       the draft, and how many were dropped is recorded on the job — verified by
       `packages/worker/tests/unit/scripture-draft.test.ts`
-- [ ] **1.3.4** Two citations of the same passage in one answer collapse to one entry — verified by
+- [x] **1.3.4** Two citations of the same passage in one answer collapse to one entry — verified by
       `packages/worker/tests/unit/scripture-draft.test.ts`
-- [ ] **1.3.5** A teaching the machine finds no scripture in still produces a scripture review item,
+- [x] **1.3.5** A teaching the machine finds no scripture in still produces a scripture review item,
       holding an empty list — verified by
       `packages/worker/tests/integration/generate-draft.test.ts`
   - So an admin confirms "none", and so task 2.2's add control has an item to act on.
-- [ ] **1.3.6** The step writes no reference anywhere a member can reach, and leaves the recording's
+- [x] **1.3.6** The step writes no reference anywhere a member can reach, and leaves the recording's
       publication state untouched — verified by
       `packages/worker/tests/integration/generate-draft.test.ts`
-- [ ] **1.3.7** Running the step twice leaves **one** open scripture draft, and closed items are
+- [x] **1.3.7** Running the step twice leaves **one** open scripture draft, and closed items are
       untouched — verified by `packages/worker/tests/integration/generate-draft.test.ts`
-- [ ] **1.3.8** A provider that refuses or times out fails the job with a reason readable on the
+- [x] **1.3.8** A provider that refuses or times out fails the job with a reason readable on the
       pipeline panel, and writes no partial draft — verified by
       `packages/worker/tests/integration/generate-draft.test.ts`
 
-**Record**
+**Record** — _updated 2026-08-24_
+- **Edge cases:** the machine may name a book by an abbreviation and lose a real citation; the
+  admin sees only a count on the job row, never which passage went.
+- **Edge cases:** how many were dropped and how many repeated is summed across kinds into
+  `job.provider_meta` and logged at warn — it is on no screen, so an operator has to read the job
+  row or the log to notice a prompt going wrong.
+- **Edge cases:** nothing caps the list — a model that proposes two hundred citations writes two
+  hundred, and the admin scrolls.
+- **Edge cases:** nothing retries; a provider that times out leaves a failed job an operator
+  re-runs from the pipeline panel, as every other step already does.
+- **Assumptions, minor:** the tool schema asks for the book as words with only `book` and
+  `chapter` required, so a whole-chapter citation is expressible and placing the book in the canon
+  stays one job, done once, where it is counted.
+- **Assumptions, minor:** `citationsDropped` and `citationsDuplicated` are the names on
+  `provider_meta`.
+- **Reworked:** none
+- **False positives fixed:** 0
+- **Operator steps:** none. `GENERATE_FAKE_SCRIPT` (`packages/worker/tests/fixtures/draft-script.json`)
+  gained a `citations` list so a local run with `GENERATE_PROVIDER=fake` produces a real one.
+- **Notes:** the handler refuses a list-shaped field that did not come back as a list, as well as
+  the adapter — one is the vendor's shape and the other is the port's contract, and the job fails
+  before anything is written either way.
 
 ### Task 1.4 — Approving a list makes it the teaching's references
 
@@ -153,33 +218,54 @@ member can read (group 4).
 
 **Acceptance criteria**
 
-- [ ] **1.4.1** A scripture reference table holds one row per approved citation on a recording, with
+- [x] **1.4.1** A scripture reference table holds one row per approved citation on a recording, with
       its origin and whether an admin changed it, and **no status column** — verified by
       `packages/db/tests/integration/migrations.test.ts`
   - Suggested-versus-accepted is the review item's state; a second answer to it is what the missing
     column prevents (active-scope prd § 8).
-- [ ] **1.4.2** Approving writes every reference in the list and closes the review item in one
+- [x] **1.4.2** Approving writes every reference in the list and closes the review item in one
       transaction — a failure in either leaves neither — verified by
       `packages/web/tests/integration/scripture-review.test.ts`
-- [ ] **1.4.3** Approving an **empty** list closes the item and records that the teaching has no
+- [x] **1.4.3** Approving an **empty** list closes the item and records that the teaching has no
       references, distinguishably from a teaching nobody has reviewed — verified by
       `packages/web/tests/integration/scripture-review.test.ts`
-- [ ] **1.4.4** Approving a later draft **replaces** the recording's references rather than appending
+- [x] **1.4.4** Approving a later draft **replaces** the recording's references rather than appending
       to them — verified by `packages/web/tests/integration/scripture-review.test.ts`
-- [ ] **1.4.5** A second resolve of the same item — two admins, or one double press — is refused as
+- [x] **1.4.5** A second resolve of the same item — two admins, or one double press — is refused as
       already closed, and nothing is written twice — verified by
       `packages/web/tests/integration/scripture-review.test.ts`
   - The close is what refuses it, as it already does for a summary: the update touches only rows
     still in draft.
-- [ ] **1.4.6** Discarding closes the item with no reference written, leaving the proposed citations
+- [x] **1.4.6** Discarding closes the item with no reference written, leaving the proposed citations
       in the closed row with the model, the model version, the prompt version and any steering
       prompt — verified by `packages/web/tests/integration/scripture-review.test.ts`
-- [ ] **1.4.7** Resolving a scripture item is refused server-side for a member whatever the client
+- [x] **1.4.7** Resolving a scripture item is refused server-side for a member whatever the client
       sends, and every resolve is logged with actor, action, target and timestamp — verified by
       `packages/web/tests/integration/scripture-review.test.ts` and
       `packages/web/tests/unit/policy.test.ts`
 
-**Record**
+**Record** — _updated 2026-08-24_
+- **Edge cases:** there is no un-approve — a list approved by mistake is corrected only by asking
+  for another draft and approving that, which replaces the set.
+- **Edge cases:** "reviewed and found none" is readable only from the closed review item; nothing
+  on the recording row says it, so any later caller that wants the answer has to read the review
+  table.
+- **Edge cases:** deleting a recording takes its references with it, deliberately — a reference to
+  a teaching that is gone is not a record of anything.
+- **Edge cases:** `origin` is always `machine` and `edited_by_admin` always false until an
+  admin can edit or add a reference, which is group 2.
+- **Assumptions, minor:** the enum values are `machine` and `person` rather than `ai` and
+  `admin` — `admin` is a role literal, which `tools/role-usage.ts` refuses outside `roles.ts`,
+  and origin is not a role.
+- **Reworked:** 1.4.5 — the first pass wrote the references and then closed the item, and two
+  simultaneous approvals raced to delete and re-insert the same passages, answering one of them
+  with a 500 instead of a refusal. The close now goes first inside the transaction, so the second
+  request blocks on the review item's row and is refused before it writes anything.
+- **False positives fixed:** 0
+- **Operator steps:** none beyond 1.2's migration.
+- **Notes:** a sequential second resolve is refused by the service's open-item check and the
+  concurrent one by the close's `status = 'draft'` predicate — two guards, and the deliberate-break
+  pass showed only the concurrent test fails when the predicate goes, which is the honest division.
 
 ### Task 1.5 — The form shows the list, and the admin approves or discards it
 
@@ -195,23 +281,42 @@ guide is the reference.
 
 **Acceptance criteria**
 
-- [ ] **1.5.1** The form renders a scripture item as a list of citations, one row each, chosen by the
+- [x] **1.5.1** The form renders a scripture item as a list of citations, one row each, chosen by the
       item's **kind** rather than by a branch naming scripture — verified by
       `packages/web/tests/integration/reviews-screen.test.ts`
   - The per-kind rendering seam active-scope prd 1.4 asks for: tags and mind maps later add a
     renderer, not a branch.
-- [ ] **1.5.2** The two existing kinds still render as the single text box they always did —
+- [x] **1.5.2** The two existing kinds still render as the single text box they always did —
       verified by `packages/web/tests/integration/reviews-screen.test.ts`
-- [ ] **1.5.3** An item whose list is empty says the machine found no scripture in this teaching,
+- [x] **1.5.3** An item whose list is empty says the machine found no scripture in this teaching,
       rather than rendering an empty box — verified by
       `packages/web/tests/integration/reviews-screen.test.ts`
-- [ ] **1.5.4** Approve and discard act on the whole list, with the second press on discard, exactly
+- [x] **1.5.4** Approve and discard act on the whole list, with the second press on discard, exactly
       as the form already does for a summary — verified by
       `packages/web/tests/integration/reviews-screen.test.ts`
-- [ ] **1.5.5** An item another admin already resolved shows the refusal rather than appearing to
+- [x] **1.5.5** An item another admin already resolved shows the refusal rather than appearing to
       succeed — verified by `packages/web/tests/integration/reviews-screen.test.ts`
 
-**Record**
+**Record** — _updated 2026-08-24_
+- **Edge cases:** rows are read-only — an admin who spots one wrong citation can only discard the
+  whole list and ask for another, until task 2.1 adds per-row edit and remove.
+- **Edge cases:** no verse text yet, so an admin judges a citation by its reference alone; a
+  wrong-but-plausible reference is not catchable here until task 3.3.
+- **Edge cases:** a long list grows the row rather than scrolling or paging inside it.
+- **Edge cases:** the form's existing **Regenerate** control now reaches a scripture item and
+  already re-drafts that kind alone, because the route enqueues the item's own kind. Task 2.3's
+  criteria — the steering sentence recorded on the replacement, and the transcript-correction offer
+  — are still unbuilt and untested.
+- **Assumptions, minor:** the renderer is chosen by the kind's declared field *shape*, so a list is
+  captioned by a plain element and named through `aria-labelledby` rather than by a `label`
+  pointing at nothing focusable.
+- **Assumptions, minor:** approving a list sends no fields at all, because there is nothing an
+  admin could have edited; task 2.1 is what makes an edited list arrive at the server.
+- **Reworked:** none
+- **False positives fixed:** 0
+- **Operator steps:** none
+- **Notes:** the citation row takes the panel's existing row recipe from `admin.module.css` — no
+  new hue and no new shape, because nothing in the list has a state yet.
 
 ---
 

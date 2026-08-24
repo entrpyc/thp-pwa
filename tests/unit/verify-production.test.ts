@@ -21,23 +21,23 @@ import {
 describe('pm2 jlist', () => {
   const CAPTURED = JSON.stringify([
     { name: 'thp-web', pid: 1201, pm2_env: { status: 'online', exec_mode: 'fork_mode', instances: 1, restart_time: 0 } },
-    { name: 'thp-worker', pid: 1202, pm2_env: { status: 'online', exec_mode: 'fork', instances: 1, restart_time: 3 } },
+    { name: 'thp-worker', pid: 1202, pm2_env: { status: 'online', exec_mode: 'fork_mode', instances: 1, restart_time: 3 } },
   ]);
 
   it('reads the fields the supervision criterion turns on', () => {
     const [web, worker] = parsePm2List(CAPTURED);
 
     expect(web).toMatchObject({ name: 'thp-web', status: 'online', pid: 1201 });
-    expect(worker).toMatchObject({ execMode: 'fork', instances: 1, restarts: 3, pid: 1202 });
+    expect(worker).toMatchObject({ execMode: 'fork_mode', instances: 1, restarts: 3, pid: 1202 });
   });
 
   it('surfaces cluster mode rather than smoothing it over', () => {
     // The check refuses cluster mode because the worker's boot sweep assumes a single process; a
     // parser that defaulted this field would hide exactly that.
     const clustered = JSON.stringify([
-      { name: 'thp-worker', pid: 9, pm2_env: { status: 'online', exec_mode: 'cluster', instances: 4 } },
+      { name: 'thp-worker', pid: 9, pm2_env: { status: 'online', exec_mode: 'cluster_mode', instances: 4 } },
     ]);
-    expect(parsePm2List(clustered)[0]).toMatchObject({ execMode: 'cluster', instances: 4 });
+    expect(parsePm2List(clustered)[0]).toMatchObject({ execMode: 'cluster_mode', instances: 4 });
   });
 
   it('does not invent a status for a stopped process', () => {

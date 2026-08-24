@@ -185,3 +185,28 @@
     flex: 1 1 auto;
   }
 }
+
+/* ------------------------------------------------------------------------ a list-shaped draft */
+
+/*
+ * One row per citation (1.5.1). It borrows the row recipe the panel already uses — hairline
+ * border, raised surface, `--radius-sm` — rather than inventing a card, because a citation is a
+ * line of text and the list is read top to bottom. No hue: nothing here has a state yet.
+ */
+.citations {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-2);
+}
+
+.citation {
+  background: var(--color-surface-raised);
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-sm);
+  padding: var(--space-3) var(--space-4);
+  font-size: var(--fs-body);
+  color: var(--color-text);
+}

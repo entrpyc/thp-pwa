@@ -1,7 +1,8 @@
-import { REVIEW_FIELD, type ReviewKind } from '@thp/shared';
+import { REVIEW_FIELD, type ProposedCitation, type ReviewKind } from '@thp/shared';
 import { readGenerateApiKey, type EnvSource } from './env';
 import {
   GenerationError,
+  type GeneratedDraft,
   type GeneratedDrafts,
   type GenerationRequest,
   type GenerationResult,
@@ -209,12 +210,29 @@ export function mapResponse(body: string, kinds: readonly ReviewKind[]): Generat
   }
 
   const input = call.input as Record<string, unknown>;
-  const drafts: Record<string, string> = {};
+  const drafts: Record<string, GeneratedDraft> = {};
   for (const kind of kinds) {
-    const value = input[REVIEW_FIELD[kind]];
+    const field = REVIEW_FIELD[kind];
+    const value = input[field.name];
+
+    if (field.shape === 'list') {
+      // **A list is required to be a list.** A model that wrote its citations as a sentence — or
+      // as a list of sentences — has not answered in the structure that was required, and the
+      // honest thing is to fail the job rather than store prose as though it were citations
+      // ([3.1.2](docs/active-scope/prd.md)). An *empty* list is a real answer and passes.
+      if (!Array.isArray(value) || value.some((entry) => typeof entry !== 'object' || entry === null)) {
+        throw new GenerationError(
+          `The generation provider answered the ${field.name} as something other than a list of ` +
+            'entries, so there is nothing structured to record. Run this step again.',
+        );
+      }
+      drafts[kind] = value as readonly ProposedCitation[];
+      continue;
+    }
+
     if (typeof value !== 'string' || value.trim() === '') {
       throw new GenerationError(
-        `The generation provider called ${DRAFT_TOOL_NAME} without a ${REVIEW_FIELD[kind]} in it.`,
+        `The generation provider called ${DRAFT_TOOL_NAME} without a ${field.name} in it.`,
       );
     }
     drafts[kind] = value.trim();

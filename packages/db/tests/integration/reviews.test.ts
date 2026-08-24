@@ -13,7 +13,7 @@ import {
   runMigrations,
   type DatabaseHandle,
 } from '@thp/db';
-import { REVIEW_KINDS, REVIEW_STATUSES, type ReviewKind } from '@thp/shared';
+import { REVIEW_FIELD, REVIEW_KINDS, REVIEW_STATUSES, type ReviewKind } from '@thp/shared';
 import { createThrowawayDatabase, type ThrowawayDatabase } from '../../../../tests/setup/throwaway-db';
 
 /**
@@ -47,19 +47,33 @@ async function newRecording(title = 'A teaching', recordedAt = '2026-08-16'): Pr
   return row.id;
 }
 
+/**
+ * What the machine wrote, per kind — a paragraph for a text-shaped field, a list of citations for
+ * a list-shaped one. Keyed the way the handler keys it, so the read is exercised against the shape
+ * a real draft has.
+ */
+const MACHINE: Record<ReviewKind, unknown> = {
+  summary: 'What the machine wrote.',
+  recording_metadata: 'A line.',
+  scripture: [
+    { book: 'romans', chapter: 8, verseStart: 1, verseEnd: 4 },
+    { book: 'john', chapter: 3, verseStart: 16, verseEnd: 16 },
+  ],
+};
+
 /** A draft of each named kind, written the way the handler writes them. */
 async function draftsFor(recordingId: string, kinds: readonly ReviewKind[]) {
   return replaceOpenDrafts(
     recordingId,
     kinds.map((kind) => ({
       kind,
-      fields: kind === 'summary' ? { summary: 'What the machine wrote.' } : { description: 'A line.' },
+      fields: { [REVIEW_FIELD[kind].name]: MACHINE[kind] },
       provenance: {
         model: 'fake',
         modelVersion: 'fake-1',
         promptVersion: 'draft-1',
         steeringPrompt: null,
-        fields: { [kind === 'summary' ? 'summary' : 'description']: { aiSuggested: true, editedByAdmin: false } },
+        fields: { [REVIEW_FIELD[kind].name]: { aiSuggested: true, editedByAdmin: false } },
       },
     })),
     handle,
@@ -98,17 +112,53 @@ describe('the Pending Reviews read', () => {
 
     const closed = await newRecording('Both kinds closed');
     const closedItems = await draftsFor(closed, REVIEW_KINDS);
-    await closeReviewItem({ id: closedItems[0]?.id ?? '', status: 'published', reviewedBy: adminId }, handle);
-    await closeReviewItem({ id: closedItems[1]?.id ?? '', status: 'discarded', reviewedBy: adminId }, handle);
+    for (const [index, item] of closedItems.entries()) {
+      await closeReviewItem(
+        { id: item.id, status: index === 0 ? 'published' : 'discarded', reviewedBy: adminId },
+        handle,
+      );
+    }
 
     const pending = await listPendingReviews(handle);
 
     const mine = pending.filter((one) => one.recordingId === open || one.recordingId === closed);
-    expect(mine).toHaveLength(2);
+    expect(mine).toHaveLength(REVIEW_KINDS.length);
     expect(mine.every((one) => one.recordingId === open)).toBe(true);
     expect(mine.map((one) => one.kind).sort()).toEqual([...REVIEW_KINDS].sort());
     // Every status the enum admits is represented in the seed, so this is not vacuous.
     expect([...REVIEW_STATUSES]).toHaveLength(3);
+  });
+
+  /**
+   * 1.2.3 — **a scripture item and a summary item come back from the same one query**, in the
+   * queue's existing order, with the list-shaped draft intact.
+   *
+   * The property the single-table gate exists to hold: `listPendingReviews` filters one column and
+   * branches on `kind` nowhere, so a fourth artefact costs a value in an enum rather than a union
+   * in this read.
+   */
+  it('returns a list-shaped draft beside a text one, in the order the queue already sorts by', async () => {
+    const older = await newRecording('An older teaching', '2026-05-17');
+    await draftsFor(older, ['scripture']);
+    const newer = await newRecording('A newer teaching', '2026-06-21');
+    await draftsFor(newer, ['summary', 'scripture']);
+
+    const mine = (await listPendingReviews(handle)).filter(
+      (one) => one.recordingId === older || one.recordingId === newer,
+    );
+
+    // Newest recording first, which is the ordering the queue already had — the new kind sorts
+    // with everything else rather than beside it.
+    expect(mine.map((one) => one.recordingId)).toEqual([newer, newer, older]);
+    expect(mine.filter((one) => one.recordingId === newer).map((one) => one.kind).sort()).toEqual([
+      'scripture',
+      'summary',
+    ]);
+
+    // The list survives the round trip as entries rather than as text.
+    expect(mine.find((one) => one.recordingId === older)?.fields).toEqual({
+      citations: MACHINE.scripture,
+    });
   });
 
   it('carries the recording it is about, so the queue reads as work rather than as ids', async () => {

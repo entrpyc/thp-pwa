@@ -14,6 +14,8 @@
  * `JOB_STATUSES`.
  */
 
+import type { ScriptureCitation } from './scripture';
+
 /**
  * What kind of artefact is waiting on an admin.
  *
@@ -21,7 +23,7 @@
  * `recording_metadata` is the suggested description ([4.17.1](docs/project/prd.md) — topics, tags
  * and scripture references are deferred with the epics that generate them).
  */
-export const REVIEW_KINDS = ['summary', 'recording_metadata'] as const;
+export const REVIEW_KINDS = ['summary', 'recording_metadata', 'scripture'] as const;
 
 export type ReviewKind = (typeof REVIEW_KINDS)[number];
 
@@ -49,26 +51,56 @@ export function isReviewStatus(value: unknown): value is ReviewStatus {
 }
 
 /**
- * The field each kind carries, by name.
+ * **What shape a kind's draft is.**
  *
- * **One field per kind in this epic**, and the form does not know that:
+ * `text` is one string, which is what every kind was until scripture arrived. `list` is a list of
+ * structured entries — the first artefact whose draft is not a paragraph, and, per
+ * [1.4](docs/active-scope/prd.md), the first of four: tags, mind maps and video scripts are queued
+ * behind it and are not one string either.
+ *
+ * The distinction lives here rather than in the form so that the form can *ask* rather than
+ * branch: a renderer is chosen by shape, and a kind added to {@link REVIEW_KINDS} says which
+ * renderer it wants by saying what shape it is.
+ */
+export const REVIEW_FIELD_SHAPES = ['text', 'list'] as const;
+
+export type ReviewFieldShape = (typeof REVIEW_FIELD_SHAPES)[number];
+
+/** The one field a kind carries: what it is called, and what shape it is. */
+export interface ReviewFieldSpec {
+  readonly name: string;
+  readonly shape: ReviewFieldShape;
+}
+
+/**
+ * The field each kind carries.
+ *
+ * **One field per kind still**, and the form does not know that:
  * [4.17.2](docs/project/prd.md) wants accept/edit/discard per field, and the review form is built
  * generically over the `fields` and `provenance` objects a row holds. This map exists for the two
- * writers — the generator, which turns one string into `{ summary }` or `{ description }`, and the
- * approve path, which reads the value back out to write it through to the canonical entity.
+ * writers — the generator, which turns one answer into `{ summary }`, `{ description }` or
+ * `{ citations }`, and the approve path, which reads the value back out to write it through to the
+ * canonical entity.
  *
- * `Record<ReviewKind, string>` rather than a lookup with a fallback: a kind added to
- * {@link REVIEW_KINDS} stops the build until it says which field it carries.
+ * It widened from a bare field *name* to a name and a shape when scripture arrived
+ * ([1.2.2](docs/active-scope/implementation-plan.md)). The two text kinds are read and written
+ * exactly as they were; what a reader now has is a way to ask what it is holding without knowing
+ * which kinds exist.
+ *
+ * `Record<ReviewKind, ReviewFieldSpec>` rather than a lookup with a fallback: a kind added to
+ * {@link REVIEW_KINDS} stops the build until it says which field it carries and what shape it is.
  */
-export const REVIEW_FIELD: Record<ReviewKind, string> = {
-  summary: 'summary',
-  recording_metadata: 'description',
+export const REVIEW_FIELD: Record<ReviewKind, ReviewFieldSpec> = {
+  summary: { name: 'summary', shape: 'text' },
+  recording_metadata: { name: 'description', shape: 'text' },
+  scripture: { name: 'citations', shape: 'list' },
 };
 
 /** What a kind is called on screen. A kind with no entry here would be a compiler error. */
 export const REVIEW_KIND_LABEL: Record<ReviewKind, string> = {
   summary: 'Summary',
   recording_metadata: 'Description',
+  scripture: 'Scripture',
 };
 
 /** Paths of the review resource, relative to the `/api/v1` prefix. */
@@ -99,6 +131,16 @@ export const REVIEW_RECORDING_PARAM = 'recording';
  * prompt the model already has, and a wall of text there is a prompt nobody can reason about.
  */
 export const MAX_STEERING_PROMPT_LENGTH = 500;
+
+/**
+ * What one field of a draft holds.
+ *
+ * One member per {@link ReviewFieldShape} — a paragraph, or a list of citations. The list arm names
+ * scripture because scripture is the only list-shaped artefact there is; tags and mind maps widen
+ * this union when they arrive, and everything reading it already asks the shape rather than the
+ * kind.
+ */
+export type ReviewFieldValue = string | readonly ScriptureCitation[];
 
 /** What the machine wrote for one field, and whether a person has changed it since. */
 export interface FieldProvenance {
@@ -134,8 +176,8 @@ export interface ReviewItemView {
   readonly recordedAt: string;
   readonly kind: ReviewKind;
   readonly status: ReviewStatus;
-  /** The draft itself, keyed by field name. */
-  readonly fields: Readonly<Record<string, string>>;
+  /** The draft itself, keyed by field name, in whatever shape the kind's field declares. */
+  readonly fields: Readonly<Record<string, ReviewFieldValue>>;
   readonly provenance: ReviewProvenance;
   /**
    * The transcript's word count, summed over the segment rows at read time. Nothing stores it: at

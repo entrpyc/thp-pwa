@@ -10,10 +10,31 @@
       "name": "record_draft",
       "input": {
         "summary": "The teaching stays with the second chapter of the letter throughout, and opens by naming where last week left off.\n\nMost of it is spent slowing the passage down phrase by phrase before drawing it back together.",
-        "description": "A close reading of the letter's second chapter, and why what follows depends on it."
+        "description": "A close reading of the letter's second chapter, and why what follows depends on it.",
+        "citations": [
+          {
+            "book": "Romans",
+            "chapter": 8,
+            "verseStart": 1,
+            "verseEnd": 4
+          },
+          {
+            "book": "John",
+            "chapter": 3,
+            "verseStart": 16,
+            "verseEnd": 16
+          },
+          {
+            "book": "Psalm",
+            "chapter": 23
+          }
+        ]
       }
     }
   ],
   "stop_reason": "tool_use",
-  "usage": { "input_tokens": 81234, "output_tokens": 512 }
+  "usage": {
+    "input_tokens": 81234,
+    "output_tokens": 512
+  }
 }

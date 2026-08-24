@@ -39,6 +39,14 @@ const databaseUrl = inject('databaseUrl');
 const DRAFT = {
   summary: 'The teaching stays with the second chapter of the letter throughout.',
   description: 'A close reading of the second chapter.',
+  // The book comes as words, because that is what a model has. One out-of-canon proposal and one
+  // repeat, so a run's ordinary answer exercises the dropping and the collapsing.
+  citations: [
+    { book: 'Romans', chapter: 8, verseStart: 1, verseEnd: 4 },
+    { book: 'John', chapter: 3, verseStart: 16, verseEnd: 16 },
+    { book: 'Romans', chapter: 8, verseStart: 1, verseEnd: 4 },
+    { book: 'Hezekiah', chapter: 2, verseStart: 1, verseEnd: 1 },
+  ],
 };
 
 let target: ThrowawayDatabase;
@@ -151,6 +159,73 @@ describe('one call, two drafts', () => {
     // column per field per artefact.
     expect(summary?.fields).toEqual({ summary: DRAFT.summary });
     expect(metadata?.fields).toEqual({ description: DRAFT.description });
+
+    // 1.3.1 — the same run produced the citations, as structured entries rather than as prose,
+    // with the book stored as the canon's identity rather than as the words the model wrote.
+    const scripture = written.find((one) => one.kind === 'scripture');
+    expect(scripture?.fields).toEqual({
+      citations: [
+        { book: 'john', chapter: 3, verseStart: 16, verseEnd: 16 },
+        { book: 'romans', chapter: 8, verseStart: 1, verseEnd: 4 },
+      ],
+    });
+  });
+
+  // 1.3.3 / 1.3.4 — what the model proposed and could not be stored is a number on the run that
+  // proposed it, so a prompt starting to hallucinate books is visible rather than quiet.
+  it('records how much of the answer was not usable on the job that produced it', async () => {
+    const job = await claimedJob();
+
+    const row = await run(job);
+
+    expect(row.providerMeta).toMatchObject({ citationsDropped: 1, citationsDuplicated: 1 });
+    expect(captured.filter((line) => line.message === 'generate_draft.citations_discarded')).toEqual(
+      [expect.objectContaining({ dropped: 1, duplicates: 1 })],
+    );
+  });
+
+  // 1.3.5 — the item still arrives, so an admin confirms "none" rather than the draft never
+  // showing up, and so Task 2.2's add control has something to act on.
+  it('writes a scripture draft holding an empty list when the machine finds none', async () => {
+    const job = await claimedJob();
+
+    await run(job, fakeGenerator({ ...DRAFT, citations: [] }));
+
+    const scripture = (await items(job.recordingId)).find((one) => one.kind === 'scripture');
+    expect(scripture).toBeDefined();
+    expect(scripture?.status).toBe('draft');
+    expect(scripture?.fields).toEqual({ citations: [] });
+  });
+
+  // 1.3.2 — the structure was required, so an answer that is not one fails the step and leaves
+  // nothing behind. Nothing partial: not the summary either, which came back perfectly well.
+  it('fails the job and writes nothing when a list-shaped field comes back as prose', async () => {
+    const job = await claimedJob();
+    const prose: Generator = {
+      name: 'prose',
+      generate: async () => ({
+        drafts: {
+          summary: DRAFT.summary,
+          recording_metadata: DRAFT.description,
+          scripture: 'Romans 8:1-4 and John 3:16',
+        },
+        promptVersion: 'draft-1',
+        spend: {
+          model: 'prose',
+          modelVersion: 'prose-1',
+          inputTokens: 0,
+          outputTokens: 0,
+          costUsd: 0,
+          requestId: 'prose-1',
+        },
+      }),
+    };
+
+    const row = await run(job, prose);
+
+    expect(row.status).toBe('failed');
+    expect(row.error).toContain('list of citations');
+    expect(await items(job.recordingId)).toHaveLength(0);
   });
 
   it('makes exactly one provider call for both artefacts', async () => {
@@ -234,6 +309,18 @@ describe('nothing it writes is member-visible', () => {
     const recording = await findRecordingById(job.recordingId, handle);
     expect(recording?.description).toBeNull();
     expect(recording?.publishedAt).toBeNull();
+  });
+
+  // 1.3.6 — the citations are a *proposal*. No reference row exists until an admin approves the
+  // list, so there is nothing for the member surface to read however the recording is published.
+  it('writes no scripture reference, so nothing a member can reach exists yet', async () => {
+    const job = await claimedJob();
+    await run(job);
+
+    const rows = await sql`
+      select count(*)::int as count from scripture_reference where recording_id = ${job.recordingId}
+    `;
+    expect(rows[0]?.['count']).toBe(0);
   });
 });
 
@@ -343,6 +430,23 @@ describe('what it refuses to generate from', () => {
     // reason, and re-runnable from there.
     expect(row.status).toBe('failed');
     expect(row.error).toContain('without calling the tool');
+    expect(await items(job.recordingId)).toHaveLength(0);
+  });
+
+  // 1.3.8 — a provider that never answers is the same event as one that refuses: the job fails
+  // with a reason an operator reads off the panel, and no partial draft is left behind.
+  it('fails the job with the provider’s reason when the provider times out', async () => {
+    const job = await claimedJob();
+    const silent: Generator = {
+      name: 'silent',
+      generate: () =>
+        Promise.reject(new GenerationError('the generation provider did not answer within 10 minutes')),
+    };
+
+    const row = await run(job, silent);
+
+    expect(row.status).toBe('failed');
+    expect(row.error).toContain('did not answer');
     expect(await items(job.recordingId)).toHaveLength(0);
   });
 });

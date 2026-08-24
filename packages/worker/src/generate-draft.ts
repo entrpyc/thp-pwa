@@ -16,10 +16,12 @@ import {
   type FieldProvenance,
   type ReviewKind,
   type ReviewProvenance,
+  type ScriptureCitation,
 } from '@thp/shared';
 import { emitDomainEvent } from '@thp/shared/observability/events';
 import { logger } from '@thp/shared/observability/logger';
 import { generator as configuredGenerator, type Generator } from './generate';
+import { readProposedCitations, resolveProposedCitations } from './scripture-draft';
 import type { JobHandler } from './handlers';
 
 /**
@@ -138,12 +140,41 @@ export function createGenerateDraftHandler(deps: GenerateDraftDependencies = {})
       steeringPrompt: prompt,
       // Everything this epic writes is AI-suggested and unedited at birth; the approve path is
       // what sets `editedByAdmin`. Built per field so a later kind with two fields is one loop.
-      fields: { [REVIEW_FIELD[kind]]: aiSuggested() },
+      fields: { [REVIEW_FIELD[kind].name]: aiSuggested() },
     });
+
+    // What a list-shaped kind proposed, resolved against the canon before anything is written.
+    // Summed across the kinds rather than kept per kind, because there is one such kind and the
+    // number is read as "how much of this run's answer was not usable".
+    let dropped = 0;
+    let duplicates = 0;
+
+    const draftOf = (kind: ReviewKind): string | readonly ScriptureCitation[] => {
+      const field = REVIEW_FIELD[kind];
+      const value = result.drafts[kind];
+
+      if (field.shape === 'text') return typeof value === 'string' ? value : '';
+
+      // **The structure was required, so prose is a failure** ([3.1.2](docs/active-scope/prd.md)).
+      // Thrown before anything is written, so a run that answered in the wrong shape leaves no
+      // partial draft behind it. The adapter refuses this too; this is the handler refusing to
+      // trust that it did.
+      if (!Array.isArray(value)) {
+        throw fail(
+          fields,
+          `the ${field.name} came back as ${typeof value} rather than as a list of citations`,
+        );
+      }
+
+      const resolved = resolveProposedCitations(readProposedCitations(value));
+      dropped += resolved.dropped;
+      duplicates += resolved.duplicates;
+      return resolved.citations;
+    };
 
     const items: NewReviewItem[] = kinds.map((kind) => ({
       kind,
-      fields: { [REVIEW_FIELD[kind]]: result.drafts[kind] ?? '' },
+      fields: { [REVIEW_FIELD[kind].name]: draftOf(kind) },
       provenance: provenance(kind),
     }));
 
@@ -157,6 +188,10 @@ export function createGenerateDraftHandler(deps: GenerateDraftDependencies = {})
       outputTokens: result.spend.outputTokens,
       costUsd: result.spend.costUsd,
       requestId: result.spend.requestId,
+      // [3.1.3](docs/active-scope/prd.md): what the machine proposed and could not be stored is a
+      // number on the run that proposed it, so a prompt going wrong is visible rather than quiet.
+      citationsDropped: dropped,
+      citationsDuplicated: duplicates,
     };
 
     logger.info('generate_draft.succeeded', {
@@ -165,6 +200,12 @@ export function createGenerateDraftHandler(deps: GenerateDraftDependencies = {})
       items: items.length,
       ...providerMeta,
     });
+
+    if (dropped > 0 || duplicates > 0) {
+      // Its own line, at warn, because it is the one thing about a *successful* run that somebody
+      // should look at: the step worked and part of what the model said was not usable.
+      logger.warn('generate_draft.citations_discarded', { ...fields, dropped, duplicates });
+    }
 
     // Nothing subscribes. §3.17's notifications are what will — see the events module.
     emitDomainEvent({ type: 'draft_generated', recordingId: job.recordingId, kinds });

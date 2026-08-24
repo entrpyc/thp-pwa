@@ -115,6 +115,11 @@ export {
   type ReviewItemRow,
 } from './reviews';
 export {
+  replaceScriptureReferences,
+  type NewScriptureReference,
+  type ScriptureReferenceRow,
+} from './scripture';
+export {
   findSeriesById,
   insertSeries,
   setRecordingSeries,

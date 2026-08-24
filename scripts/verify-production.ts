@@ -359,7 +359,11 @@ const CHECKS: readonly Check[] = [
       }
       // The pin that matters. Cluster mode runs a second worker, and the boot sweep assumes there
       // is only one — a second copy reclaims jobs the first is still running.
-      if (worker.execMode !== 'fork') return bad(`the worker is in ${worker.execMode} mode, not fork`);
+      // pm2 reports this field as `fork_mode` / `cluster_mode`, not as the `fork` written into
+      // ecosystem.config.cjs — comparing against the written value fails a correctly configured box.
+      if (worker.execMode !== 'fork_mode') {
+        return bad(`the worker is in ${worker.execMode} mode, not fork_mode`);
+      }
       if (worker.instances !== 1) return bad(`the worker has ${worker.instances} instances, not 1`);
       if (workers.length !== 1) return bad(`${workers.length} worker processes are registered`);
       return ok('thp-web and thp-worker online; worker fork mode, 1 instance');

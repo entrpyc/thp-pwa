@@ -1,8 +1,9 @@
 import { resolve } from 'node:path';
 import { describe, expect, it } from 'vitest';
-import { REACTIONS, isReactionEmoji, reactionName } from '@thp/shared';
+import { BIBLE_BOOKS, REACTIONS, isReactionEmoji, reactionName } from '@thp/shared';
 import {
   DOMAIN_DECLARATIONS,
+  checkBookNames,
   checkDomainDeclarations,
   formatDeclarationViolations,
 } from '../../tools/domain-declarations';
@@ -64,6 +65,38 @@ describe('domain declarations exist exactly once', () => {
     // which is the whole reason the service compares against the exact string.
     expect(isReactionEmoji('❤')).toBe(false);
     expect(isReactionEmoji('🕊')).toBe(false);
+  });
+
+  /**
+   * **The canon** (Task 1.1) — active-scope implementation-plan 1.1.1 asks for the 66 books, their
+   * chapter counts and their verse counts declared exactly once, and for the canon file to be the
+   * only place in the repository a book name is spelled.
+   *
+   * The registry above holds the first half. These three hold the second, plus the one thing
+   * neither can say: that the table is *right*. The two totals are fixed and public, so a mistyped
+   * verse count fails here rather than refusing one real citation forever.
+   */
+  it('holds the whole canon, and only the canon spells a book', () => {
+    expect(BIBLE_BOOKS.length).toBe(66);
+    expect(BIBLE_BOOKS.reduce((total, book) => total + book.verses.length, 0)).toBe(1189);
+    expect(
+      BIBLE_BOOKS.reduce(
+        (total, book) => total + book.verses.reduce((sum, verses) => sum + verses, 0),
+        0,
+      ),
+    ).toBe(31102);
+    expect(new Set(BIBLE_BOOKS.map((book) => book.id)).size).toBe(66);
+    expect(BIBLE_BOOKS.every((book) => book.verses.every((verses) => verses > 0))).toBe(true);
+
+    expect(formatDeclarationViolations(checkBookNames(REPO_ROOT))).toBe('');
+  });
+
+  it('reports a book name spelled outside the canon when one is deliberately introduced', () => {
+    const violations = checkBookNames(REPO_ROOT, ['tests/fixtures/spelled-book']);
+
+    expect(violations.map((violation) => violation.reason)).toEqual(['book-name-spelled']);
+    expect(formatDeclarationViolations(violations)).toContain('spelled-book/offender.ts');
+    expect(formatDeclarationViolations(violations)).toContain('John');
   });
 
   it('reports a missing canonical declaration', () => {

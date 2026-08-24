@@ -3,6 +3,7 @@ import {
   findReviewItem,
   listPendingReviews,
   publishSummary,
+  replaceScriptureReferences,
   setRecordingDescription,
   withTransaction,
   type PendingReviewRow,
@@ -11,14 +12,18 @@ import {
 import {
   MAX_STEERING_PROMPT_LENGTH,
   REVIEW_FIELD,
+  SCRIPTURE_ORIGINS,
+  isScriptureCitation,
   type FieldProvenance,
   type RegenerateReviewPayload,
   type RegenerateReviewRequest,
   type ResolveReviewPayload,
   type ResolveReviewRequest,
+  type ReviewFieldValue,
   type ReviewItemView,
   type ReviewKind,
   type ReviewProvenance,
+  type ScriptureCitation,
 } from '@thp/shared';
 import { ApiError } from '@/server/api/errors';
 import type { Actor } from '@/server/auth/policy';
@@ -100,7 +105,13 @@ export async function resolveReview(
     return { id, status: 'discarded' };
   }
 
-  const field = REVIEW_FIELD[item.kind];
+  const spec = REVIEW_FIELD[item.kind];
+
+  if (spec.shape === 'list') {
+    return approveList(actor, id, item, spec.name);
+  }
+
+  const field = spec.name;
   const machine = readField(item.fields, field);
   const supplied = request.fields?.[field];
   const edited = supplied !== undefined && supplied !== machine;
@@ -124,7 +135,7 @@ export async function resolveReview(
         id,
         status: 'published',
         reviewedBy: actor.id,
-        fields: { ...(asRecord(item.fields) ?? {}), [field]: content },
+        fields: { ...readFields(item.fields), [field]: content },
         provenance: withEdit(item.provenance, field, edited),
       },
       tx,
@@ -142,6 +153,64 @@ export async function resolveReview(
     // Whether the admin took the machine's words or their own, which is the fact
     // docs/project/prd.md 4.17.5 is asking to be able to read back.
     edited,
+  });
+
+  return { id, status: 'published' };
+}
+
+/**
+ * **Approving a list makes it the teaching's references** ([3.2.6](docs/active-scope/prd.md)).
+ *
+ * The write-through for a list-shaped kind, and the same two statements in the same one
+ * transaction the text kinds use: what was approved goes to the canonical table, and the item that
+ * proposed it closes. A failure in either leaves neither, so there is no state in which a teaching
+ * carries references nobody approved.
+ *
+ * **The list written is the item's own.** Nothing an admin sends is read here, because in this
+ * group the rows are read-only — editing, removing and adding are group 2, and the server
+ * re-validating what a client sent arrives with them. An empty list is legal and correct: it
+ * deletes whatever the teaching had and records, in the closed item, that somebody looked and
+ * found none ([3.2.7](docs/active-scope/prd.md)).
+ */
+async function approveList(
+  actor: Actor,
+  id: string,
+  item: ReviewItemRow,
+  field: string,
+): Promise<ResolveReviewPayload> {
+  const citations = readCitations(item.fields, field);
+
+  await withTransaction(async (tx) => {
+    // **The close goes first, and that ordering is the concurrency control.** Two admins pressing
+    // at the same moment both reach here; the second blocks on the review item's row lock, and
+    // when the first commits it sees a row that is no longer a draft and is refused before it has
+    // written anything. Writing the references first would have both transactions racing to delete
+    // and re-insert the same passages, which is a unique-violation rather than a refusal.
+    const closed = await closeReviewItem({ id, status: 'published', reviewedBy: actor.id }, tx);
+    if (closed === null) throw closedAlready();
+
+    await replaceScriptureReferences(
+      item.recordingId,
+      citations.map((citation) => ({
+        ...citation,
+        // Everything in this group came from the machine and nobody has changed it. Group 2 is what
+        // makes either of these say something else.
+        origin: SCRIPTURE_ORIGINS[0],
+        editedByAdmin: false,
+      })),
+      tx,
+    );
+  });
+
+  logger.info('review.approve', {
+    actorId: actor.id,
+    actorEmail: actor.email,
+    action: 'review.resolve',
+    target: `review_item:${id}`,
+    recordingId: item.recordingId,
+    kind: item.kind,
+    edited: false,
+    references: citations.length,
   });
 
   return { id, status: 'published' };
@@ -233,25 +302,39 @@ export function describeReview(row: PendingReviewRow): ReviewItemView {
     recordedAt: row.recordedAt,
     kind: row.kind,
     status: row.status,
-    fields: asRecord(row.fields) ?? {},
+    fields: readFields(row.fields),
     provenance: row.provenance as ReviewProvenance,
     wordCount: row.wordCount,
     createdAt: row.createdAt.toISOString(),
   };
 }
 
-/** `jsonb` comes back as `unknown`. Everything read out of it is checked before it is used. */
-function asRecord(value: unknown): Record<string, string> | null {
-  if (typeof value !== 'object' || value === null) return null;
-  const found: Record<string, string> = {};
+/**
+ * `jsonb` comes back as `unknown`. Everything read out of it is checked before it is used.
+ *
+ * A field is kept when it is one of the shapes a draft may be — a paragraph, or a list of
+ * citations. Anything else is dropped rather than passed on, so a row written by a version of the
+ * worker this one does not know about cannot put an arbitrary value on the wire.
+ */
+function readFields(value: unknown): Record<string, ReviewFieldValue> {
+  if (typeof value !== 'object' || value === null) return {};
+  const found: Record<string, ReviewFieldValue> = {};
   for (const [key, entry] of Object.entries(value as Record<string, unknown>)) {
     if (typeof entry === 'string') found[key] = entry;
+    else if (Array.isArray(entry)) found[key] = entry.filter(isScriptureCitation);
   }
   return found;
 }
 
 function readField(fields: unknown, name: string): string {
-  return asRecord(fields)?.[name] ?? '';
+  const value = readFields(fields)[name];
+  return typeof value === 'string' ? value : '';
+}
+
+/** The citations a list-shaped field holds. Anything that is not one is not there. */
+function readCitations(fields: unknown, name: string): readonly ScriptureCitation[] {
+  const value = readFields(fields)[name];
+  return Array.isArray(value) ? value : [];
 }
 
 /**
@@ -289,7 +372,13 @@ function parseResolveRequest(body: unknown, kind: ReviewKind): ParsedResolve {
 
   // Only the field this kind carries is read. A body naming a field the kind has no business with
   // is ignored rather than refused — the form sends what it rendered, and nothing else is written.
-  const name = REVIEW_FIELD[kind];
+  const spec = REVIEW_FIELD[kind];
+  // A list-shaped draft is approved as it stands in this group: its rows are read-only, so there is
+  // nothing an admin could have edited and nothing to accept from them. Task 2.1 is what makes an
+  // edited list arrive here, and what re-validates it.
+  if (spec.shape === 'list') return { action };
+
+  const name = spec.name;
   const value = (fields as Record<string, unknown>)[name];
   if (value === undefined) return { action };
   if (typeof value !== 'string' || value.length > MAX_FIELD_LENGTH) {

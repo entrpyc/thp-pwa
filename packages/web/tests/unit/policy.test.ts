@@ -45,6 +45,20 @@ describe('the policy module answers (actor, action, resource)', () => {
     }
   });
 
+  /**
+   * 1.4.7 — resolving a review item is admin-only, and it is *this* module that says so rather
+   * than the panel that renders the button. Scripture adds a kind rather than a route, so the
+   * decision it goes through is the one that already existed — which is what makes it worth
+   * pinning here rather than assuming.
+   */
+  it('lets an admin act on a review item and refuses a member every review action', () => {
+    for (const action of ['review.list', 'review.resolve', 'review.regenerate'] as const) {
+      expect(can(actorWith(ROLE.admin), action), action).toBe(true);
+      expect(can(actorWith(ROLE.member), action), action).toBe(false);
+      expect(can(null, action), action).toBe(false);
+    }
+  });
+
   it('has an answer for every role for every action', () => {
     // The compiler already requires this; asserting it stops a future `as` cast from hiding a gap.
     for (const action of POLICY_ACTIONS) {

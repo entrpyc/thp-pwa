@@ -91,10 +91,29 @@ describe('the request the adapter builds', () => {
     expect(body.tools).toHaveLength(1);
     expect(body.tools[0]?.name).toBe(DRAFT_TOOL_NAME);
     expect(Object.keys(body.tools[0]?.input_schema.properties ?? {}).sort()).toEqual([
+      'citations',
       'description',
       'summary',
     ]);
-    expect(body.tools[0]?.input_schema.required.sort()).toEqual(['description', 'summary']);
+    expect(body.tools[0]?.input_schema.required.sort()).toEqual([
+      'citations',
+      'description',
+      'summary',
+    ]);
+    // 1.3.1 — the list-shaped field is asked for as a list of structured entries, in the same one
+    // call. The shape comes from the field's declaration, not from a branch naming scripture.
+    const citations = body.tools[0]?.input_schema.properties['citations'] as {
+      type: string;
+      items: { type: string; properties: Record<string, unknown>; required: string[] };
+    };
+    expect(citations.type).toBe('array');
+    expect(Object.keys(citations.items.properties).sort()).toEqual([
+      'book',
+      'chapter',
+      'verseEnd',
+      'verseStart',
+    ]);
+    expect(citations.items.required.sort()).toEqual(['book', 'chapter']);
   });
 
   it('asks only for the fields the kinds name, so a regeneration pays for one', () => {
@@ -121,11 +140,18 @@ describe('the request the adapter builds', () => {
 });
 
 describe('the response the adapter maps', () => {
-  it('turns a tool call into one string per kind, and the spend beside it', () => {
+  it('turns a tool call into one value per kind, and the spend beside it', () => {
     const result = mapResponse(TOOL_CALL, [...REVIEW_KINDS]);
 
     expect(result.drafts.summary).toContain('second chapter');
     expect(result.drafts.recording_metadata).toContain('close reading');
+    // The list-shaped kind comes back as entries, unresolved — the book is still the words the
+    // model wrote, because placing them in the canon is not a question about the response.
+    expect(result.drafts.scripture).toEqual([
+      { book: 'Romans', chapter: 8, verseStart: 1, verseEnd: 4 },
+      { book: 'John', chapter: 3, verseStart: 16, verseEnd: 16 },
+      { book: 'Psalm', chapter: 23 },
+    ]);
     expect(result.spend.model).toBe('MiniMax-M3');
     expect(result.spend.modelVersion).toBe('MiniMax-M3');
     expect(result.spend.inputTokens).toBe(81_234);
@@ -153,6 +179,48 @@ describe('the response the adapter maps', () => {
     expect(() => mapResponse(half, [...REVIEW_KINDS])).toThrowError(/without a description/);
     // And the same body is fine when only that field was asked for.
     expect(mapResponse(half, ['summary']).drafts.summary).toBe('Only one.');
+  });
+
+  /**
+   * 1.3.2 — **a list-shaped field required a list.** A model that wrote its citations out as a
+   * sentence has not answered in the structure that was required, and storing that prose as though
+   * it were citations is the one outcome worse than failing the step.
+   */
+  it('fails a list-shaped field answered as prose, or as a list of sentences', () => {
+    const called = (citations: unknown) =>
+      JSON.stringify({
+        id: 'msg_shape',
+        model: MINIMAX_MODEL,
+        content: [
+          {
+            type: 'tool_use',
+            name: DRAFT_TOOL_NAME,
+            input: { summary: 'A summary.', description: 'A description.', citations },
+          },
+        ],
+        usage: { input_tokens: 10, output_tokens: 2 },
+      });
+
+    expect(() => mapResponse(called('Romans 8:1-4 and John 3:16'), ['scripture'])).toThrowError(
+      GenerationError,
+    );
+    expect(() => mapResponse(called(['Romans 8:1-4', 'John 3:16']), ['scripture'])).toThrowError(
+      /other than a list of entries/,
+    );
+    expect(() => mapResponse(called(undefined), ['scripture'])).toThrowError(GenerationError);
+  });
+
+  it('accepts an empty list, because finding no scripture is an answer', () => {
+    // 3.1.6: a teaching the machine finds no scripture in still produces a reviewable draft, so an
+    // empty list must survive the adapter rather than being read as a missing field.
+    const empty = JSON.stringify({
+      id: 'msg_empty',
+      model: MINIMAX_MODEL,
+      content: [{ type: 'tool_use', name: DRAFT_TOOL_NAME, input: { citations: [] } }],
+      usage: { input_tokens: 10, output_tokens: 2 },
+    });
+
+    expect(mapResponse(empty, ['scripture']).drafts.scripture).toEqual([]);
   });
 
   it('fails a body that is not JSON at all', () => {

@@ -123,6 +123,12 @@ async function newRecording(title?: string): Promise<string> {
 const MACHINE = {
   summary: 'What the machine wrote about this teaching.',
   recording_metadata: 'A line the machine wrote.',
+  // A list-shaped draft, keyed by the same field name the handler writes it under. The book is the
+  // canon identity by the time it reaches a row; the model's words stopped at the worker.
+  scripture: [
+    { book: 'romans', chapter: 8, verseStart: 1, verseEnd: 4 },
+    { book: 'john', chapter: 3, verseStart: 16, verseEnd: 16 },
+  ],
 } as const;
 
 /** Drafts written the way the handler writes them. */
@@ -134,13 +140,13 @@ async function drafts(
     recordingId,
     kinds.map((kind) => ({
       kind,
-      fields: { [REVIEW_FIELD[kind]]: MACHINE[kind] },
+      fields: { [REVIEW_FIELD[kind].name]: MACHINE[kind] },
       provenance: {
         model: 'fake',
         modelVersion: 'fake-1',
         promptVersion: 'draft-1',
         steeringPrompt: null,
-        fields: { [REVIEW_FIELD[kind]]: { aiSuggested: true, editedByAdmin: false } },
+        fields: { [REVIEW_FIELD[kind].name]: { aiSuggested: true, editedByAdmin: false } },
       },
     })),
     handle,
@@ -202,6 +208,14 @@ describe('reading the queue', () => {
     // The transcript's word count, computed at read time — the fourth thing 3.6.5 asks the form to
     // show beside the draft.
     expect(summary.wordCount).toBe(15);
+
+    // 1.2.4 — the scripture item comes back from the same one read, with its citations as
+    // structured entries rather than as a block of text.
+    const scripture = mine.find((one) => one.kind === 'scripture') as ReviewItemView;
+    expect(scripture.fields).toEqual({ citations: MACHINE.scripture });
+    expect(Array.isArray(scripture.fields['citations'])).toBe(true);
+    expect(scripture.recordingTitle).toBe('Both kinds waiting');
+    expect(scripture.wordCount).toBe(15);
   });
 
   it('drops an item as soon as it is closed', async () => {

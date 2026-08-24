@@ -99,6 +99,13 @@
       "when": 1787577265106,
       "tag": "0013_note_reactions_and_pins",
       "breakpoints": true
+    },
+    {
+      "idx": 14,
+      "version": "7",
+      "when": 1787592002077,
+      "tag": "0014_scripture_references",
+      "breakpoints": true
     }
   ]
 }

@@ -1,4 +1,4 @@
-import type { ReviewKind } from '@thp/shared';
+import type { ProposedCitation, ReviewKind } from '@thp/shared';
 
 /**
  * **The generation port — what drafting is, as far as this application is concerned.**
@@ -49,13 +49,27 @@ export interface GenerationSpend {
 }
 
 /**
+ * What the model wrote for one kind: a paragraph, or a list of citations it proposed.
+ *
+ * The list arm is [1.3.1](docs/active-scope/implementation-plan.md)'s widening — the port answers
+ * with one string *or one list* per kind, and which of the two a kind wants is `REVIEW_FIELD`'s
+ * declared shape rather than anything the provider decides.
+ *
+ * **The citations arrive unresolved.** `book` is still the words the model wrote, because whether
+ * those name a book of the canon is not a question about the provider's response and is not
+ * answered inside a vendor adapter — it is answered once, in `scripture-draft.ts`, where the
+ * dropping is counted.
+ */
+export type GeneratedDraft = string | readonly ProposedCitation[];
+
+/**
  * What the model wrote, per kind asked for.
  *
- * One string per kind because **every kind in this epic carries exactly one field** — the field's
- * *name* is `REVIEW_FIELD`'s business and the handler's, not the provider's. A later kind with two
- * fields widens this type; nothing about the transport changes.
+ * One value per kind because **every kind carries exactly one field** — the field's *name* is
+ * `REVIEW_FIELD`'s business and the handler's, not the provider's. A later kind with two fields
+ * widens this type; nothing about the transport changes.
  */
-export type GeneratedDrafts = Readonly<Partial<Record<ReviewKind, string>>>;
+export type GeneratedDrafts = Readonly<Partial<Record<ReviewKind, GeneratedDraft>>>;
 
 export interface GenerationResult {
   readonly drafts: GeneratedDrafts;

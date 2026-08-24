@@ -7,10 +7,12 @@ import {
   REVIEW_FIELD,
   REVIEW_KIND_LABEL,
   REVIEW_RECORDING_PARAM,
+  formatCitation,
   reviewPath,
   reviewRegeneratePath,
   type ReviewItemView,
   type ReviewListPayload,
+  type ScriptureCitation,
 } from '@thp/shared';
 import { ApiClientError, apiFetch } from '@/client/api-client';
 import styles from './reviews.module.css';
@@ -159,14 +161,23 @@ function ReviewRow({
   onDone: () => Promise<void>;
 }) {
   const promptId = useId();
-  const [values, setValues] = useState<Record<string, string>>(() => ({ ...item.fields }));
+  const spec = REVIEW_FIELD[item.kind];
+  const field = spec.name;
+  const [values, setValues] = useState<Record<string, string>>(() => ({
+    [field]: typeof item.fields[field] === 'string' ? (item.fields[field] as string) : '',
+  }));
   const [prompt, setPrompt] = useState('');
   const [busy, setBusy] = useState<Busy>(null);
   const [note, setNote] = useState<string | null>(null);
   const [confirmingDiscard, setConfirmingDiscard] = useState(false);
 
-  const field = REVIEW_FIELD[item.kind];
-  const edited = (values[field] ?? '') !== (item.fields[field] ?? '');
+  const citations = Array.isArray(item.fields[field])
+    ? (item.fields[field] as readonly ScriptureCitation[])
+    : [];
+  // A list is read-only in this group, so nothing about it can have been edited. Task 2.1 is what
+  // gives a list an edited state, and it is the same flag when it does.
+  const edited =
+    spec.shape === 'text' && (values[field] ?? '') !== (item.fields[field] ?? '');
 
   async function send(what: Busy, path: string, body: unknown): Promise<void> {
     if (busy !== null) return;
@@ -210,22 +221,42 @@ function ReviewRow({
       {open ? (
         <div className={styles.form}>
           <div className={styles.field}>
-            <label className={styles.label} htmlFor={`${promptId}-draft`}>
-              {labelFor(field)}
-            </label>
             {/*
-              The whole draft, in the box it is edited in. Nothing truncates it: an admin cannot
-              judge a summary they can only see the first line of, which is the whole of 3.6.5.
+              A label for a control, a plain caption for a list — there is nothing focusable behind
+              a read-only list, and `htmlFor` pointing at nothing is worse for a screen reader than
+              not saying it. The list names itself through `aria-labelledby` instead.
             */}
-            <textarea
-              className={styles.textarea}
-              id={`${promptId}-draft`}
-              name={field}
-              rows={item.kind === 'summary' ? 14 : 4}
-              disabled={busy !== null}
-              value={values[field] ?? ''}
-              onChange={(event) => setValues({ ...values, [field]: event.target.value })}
-            />
+            {spec.shape === 'list' ? (
+              <p className={styles.label} id={`${promptId}-draft`}>
+                {labelFor(field)}
+              </p>
+            ) : (
+              <label className={styles.label} htmlFor={`${promptId}-draft`}>
+                {labelFor(field)}
+              </label>
+            )}
+            {/*
+              **The draft, rendered by what shape its field is** — not by which kind it is
+              (1.5.1). A paragraph gets the box it is edited in; a list gets a list. Tags and mind
+              maps arrive as a third shape and a third arm here, rather than as a branch naming an
+              artefact.
+
+              Nothing truncates a paragraph: an admin cannot judge a summary they can only see the
+              first line of, which is the whole of 3.6.5.
+            */}
+            {spec.shape === 'list' ? (
+              <CitationList citations={citations} labelledBy={`${promptId}-draft`} />
+            ) : (
+              <textarea
+                className={styles.textarea}
+                id={`${promptId}-draft`}
+                name={field}
+                rows={item.kind === 'summary' ? 14 : 4}
+                disabled={busy !== null}
+                value={values[field] ?? ''}
+                onChange={(event) => setValues({ ...values, [field]: event.target.value })}
+              />
+            )}
             <p className={styles.provenance}>
               Drafted by {item.provenance.model} ({item.provenance.modelVersion}), prompt{' '}
               {item.provenance.promptVersion}
@@ -260,10 +291,15 @@ function ReviewRow({
               type="button"
               disabled={busy !== null}
               onClick={() =>
-                void send('approve', reviewPath(item.id), {
-                  action: 'approve',
-                  fields: { [field]: values[field] ?? '' },
-                })
+                void send(
+                  'approve',
+                  reviewPath(item.id),
+                  // A list is approved whole and as it stands: there is nothing to send back
+                  // because there was nothing to edit (1.5.4).
+                  spec.shape === 'list'
+                    ? { action: 'approve' }
+                    : { action: 'approve', fields: { [field]: values[field] ?? '' } },
+                )
               }
             >
               {busy === 'approve' ? 'Approving…' : edited ? 'Approve with edits' : 'Approve'}
@@ -337,5 +373,43 @@ function ReviewRow({
         </div>
       ) : null}
     </li>
+  );
+}
+
+/**
+ * **A list-shaped draft: one row per citation** (1.5.1).
+ *
+ * Read-only here. Editing a row, removing one and adding one the machine missed are Task 2.1 and
+ * Task 2.2, and the verse text beneath each citation is Task 3.3 — this is the list, and the two
+ * presses under it are the ones the form already had.
+ *
+ * **An empty list says so in words** (1.5.3). An empty box would read as a draft that failed;
+ * what actually happened is that the machine read the teaching and found no scripture in it, and
+ * an admin approving that is recording a fact rather than accepting a blank.
+ */
+function CitationList({
+  citations,
+  labelledBy,
+}: {
+  citations: readonly ScriptureCitation[];
+  labelledBy: string;
+}) {
+  if (citations.length === 0) {
+    return (
+      <p className={styles.empty}>
+        The machine found no scripture in this teaching. Approving records that; discarding leaves
+        the teaching without a reviewed list.
+      </p>
+    );
+  }
+
+  return (
+    <ul className={styles.citations} aria-labelledby={labelledBy}>
+      {citations.map((citation) => (
+        <li className={styles.citation} key={`${citation.book}-${citation.chapter}-${citation.verseStart}-${citation.verseEnd}`}>
+          {formatCitation(citation)}
+        </li>
+      ))}
+    </ul>
   );
 }

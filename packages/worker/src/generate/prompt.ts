@@ -42,6 +42,12 @@ export const DRAFT_FIELD_INSTRUCTIONS: Record<ReviewKind, string> = {
     'A description of one or two sentences, of the kind that sits under a title in a list. It ' +
     'should say what the teaching is about clearly enough that somebody scanning a list can tell ' +
     'it apart from the one above it.',
+  scripture:
+    'Every passage of the Bible the teaching is built on — one entry per passage, with the book ' +
+    'spelled in full, the chapter, and the first and last verse of the range. A passage taught ' +
+    'from a whole chapter may leave the verses out. Include only what the transcript actually ' +
+    'quotes or works through; do not add passages that merely say something similar, and answer ' +
+    'with an empty list if the teaching works from no passage at all.',
 };
 
 /** The instruction the model is given about who it is writing for and what it is reading. */
@@ -62,7 +68,7 @@ export const SYSTEM_PROMPT =
  */
 export function buildUserPrompt(request: GenerationRequest): string {
   const wanted = request.kinds
-    .map((kind) => `- ${REVIEW_FIELD[kind]}: ${DRAFT_FIELD_INSTRUCTIONS[kind]}`)
+    .map((kind) => `- ${REVIEW_FIELD[kind].name}: ${DRAFT_FIELD_INSTRUCTIONS[kind]}`)
     .join('\n');
 
   const steering =
@@ -79,23 +85,47 @@ export function buildUserPrompt(request: GenerationRequest): string {
 }
 
 /**
+ * What one citation looks like in the tool call.
+ *
+ * **Structured, never prose** ([3.1.2](docs/active-scope/prd.md)): the book, the chapter and the
+ * range come back as four values the model filled in, rather than as a phrase somebody downstream
+ * would have to parse. The book is asked for as words because that is what a model has; turning
+ * those words into a book of the canon — or dropping the citation — happens after the answer, in
+ * one place, where it is counted.
+ */
+const CITATION_SCHEMA = {
+  type: 'object',
+  properties: {
+    book: { type: 'string', description: 'The book of the Bible, spelled in full.' },
+    chapter: { type: 'integer', description: 'The chapter number.' },
+    verseStart: { type: 'integer', description: 'The first verse of the range. Omit for a whole chapter.' },
+    verseEnd: { type: 'integer', description: 'The last verse of the range, or the first for a single verse.' },
+  },
+  required: ['book', 'chapter'],
+} as const;
+
+/**
  * The tool's parameter schema, carrying **only the fields this request asked for**.
  *
  * Filtered rather than fixed, so a single-kind regeneration does not pay for a description it is
  * going to throw away — and so "the handler generates only the kinds the payload names" is true at
  * the request rather than only at the write.
+ *
+ * A field's shape decides whether it is asked for as a paragraph or as a list, which is what makes
+ * a fourth artefact a value in `REVIEW_FIELD` rather than a branch here.
  */
 export function buildToolSchema(kinds: readonly ReviewKind[]): {
   readonly type: 'object';
-  readonly properties: Record<string, { type: 'string'; description: string }>;
+  readonly properties: Record<string, Record<string, unknown>>;
   readonly required: string[];
 } {
-  const properties: Record<string, { type: 'string'; description: string }> = {};
+  const properties: Record<string, Record<string, unknown>> = {};
   for (const kind of kinds) {
-    properties[REVIEW_FIELD[kind]] = {
-      type: 'string',
-      description: DRAFT_FIELD_INSTRUCTIONS[kind],
-    };
+    const field = REVIEW_FIELD[kind];
+    properties[field.name] =
+      field.shape === 'list'
+        ? { type: 'array', description: DRAFT_FIELD_INSTRUCTIONS[kind], items: CITATION_SCHEMA }
+        : { type: 'string', description: DRAFT_FIELD_INSTRUCTIONS[kind] };
   }
-  return { type: 'object', properties, required: kinds.map((kind) => REVIEW_FIELD[kind]) };
+  return { type: 'object', properties, required: kinds.map((kind) => REVIEW_FIELD[kind].name) };
 }

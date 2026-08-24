@@ -12,6 +12,7 @@ export * from './reactions';
 export * from './recordings';
 export * from './reviews';
 export * from './roles';
+export * from './scripture';
 export * from './segment';
 export * from './series';
 export * from './transcripts';

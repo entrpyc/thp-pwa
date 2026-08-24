@@ -98,6 +98,7 @@ describe('the invitation schema', () => {
       'pipeline_step',
       'review_kind',
       'review_status',
+      'scripture_origin',
       'user_role',
     ]);
     expect(enums.filter((row) => row.typname.includes('role'))).toHaveLength(1);

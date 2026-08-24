@@ -4,7 +4,13 @@ import { resolve } from 'node:path';
 import { afterAll, beforeAll, describe, expect, it, inject } from 'vitest';
 import postgres from 'postgres';
 import { MIGRATIONS_DIR, runMigrations } from '@thp/db';
-import { JOB_STATUSES, PLAYBACK_SPEEDS, REVIEW_KINDS, REVIEW_STATUSES } from '@thp/shared';
+import {
+  JOB_STATUSES,
+  PLAYBACK_SPEEDS,
+  REVIEW_KINDS,
+  REVIEW_STATUSES,
+  SCRIPTURE_ORIGINS,
+} from '@thp/shared';
 import { createThrowawayDatabase, type ThrowawayDatabase } from '../../../../tests/setup/throwaway-db';
 
 interface Journal {
@@ -132,7 +138,7 @@ describe('migrations apply to an empty database by one command', () => {
         select typname from pg_type
         where typname in
               ('user_role', 'pipeline_step', 'job_status', 'review_kind', 'review_status',
-               'note_visibility')
+               'note_visibility', 'scripture_origin')
         order by typname
       `;
       expect(types.map((row) => row.typname)).toEqual([
@@ -141,6 +147,7 @@ describe('migrations apply to an empty database by one command', () => {
         'pipeline_step',
         'review_kind',
         'review_status',
+        'scripture_origin',
         'user_role',
       ]);
 
@@ -149,7 +156,7 @@ describe('migrations apply to an empty database by one command', () => {
       // Ticket 03 `transcript` and `segment`. Story 3 Ticket 01 added `review_item` and `summary`,
       // Story 4 Ticket 04 `playback_progress` and Story 6 Ticket 01 `series` — the last of that
       // epic. The notes scope adds `note` (Task 1.1), then `note_reaction` (Task 4.1) and
-      // `note_pin` (Task 6.2).
+      // `note_pin` (Task 6.2). The scripture scope adds `scripture_reference` (Task 1.4).
       const tables = await sql<{ tablename: string }[]>`
         select tablename from pg_tables where schemaname = 'public' order by tablename
       `;
@@ -163,6 +170,7 @@ describe('migrations apply to an empty database by one command', () => {
         'playback_progress',
         'recording',
         'review_item',
+        'scripture_reference',
         'segment',
         'series',
         'session',
@@ -881,13 +889,19 @@ describe('the review gate, and nothing beside it', () => {
     }
   });
 
-  it('admits exactly the kinds and statuses the shared constants declare, in their order', async () => {
+  it('admits exactly the kinds and statuses this migration declared, in their order', async () => {
+    // Bounded by the migration this block is about, like every column set above it: `scripture`
+    // arrives at 0014 and is asserted there, against the shared constant as it now stands. Naming
+    // the two here rather than reading the constant is what keeps *this* block about *this*
+    // migration — the enum a database at 0008 admits is two values however many the product has
+    // since grown.
     const kinds = await sql<{ enumlabel: string }[]>`
       select enumlabel from pg_enum
       join pg_type on pg_type.oid = pg_enum.enumtypid
       where pg_type.typname = 'review_kind' order by pg_enum.enumsortorder
     `;
-    expect(kinds.map((row) => row.enumlabel)).toEqual([...REVIEW_KINDS]);
+    expect(kinds.map((row) => row.enumlabel)).toEqual(['summary', 'recording_metadata']);
+    expect([...REVIEW_KINDS].slice(0, 2)).toEqual(kinds.map((row) => row.enumlabel));
 
     const statuses = await sql<{ enumlabel: string }[]>`
       select enumlabel from pg_enum
@@ -1439,5 +1453,163 @@ describe('series, and nothing beside it', () => {
     await expect(
       sql`insert into series (title) values ('Life of David'), ('Life of David')`,
     ).resolves.toBeTruthy();
+  });
+});
+
+/**
+ * **Scripture references** (Task 1.4) — one table, one enum, and one value added to an enum that
+ * already existed.
+ *
+ * Two things this block is for beyond the usual before-and-after. The `review_kind` value is added
+ * to a live enum rather than created with it, which is the one migration shape in this repository
+ * that can fail on a database with rows already in it. And the table deliberately has **no status
+ * column**: `project prd 4.6`'s *suggested or accepted* is the state of the review item holding the
+ * draft, and a second answer to it here is exactly what
+ * docs/active-scope/prd.md § 8 records as the refinement.
+ */
+describe('scripture references, and nothing beside them', () => {
+  let target: ThrowawayDatabase;
+  let before: Map<string, string[]>;
+  let after: Map<string, string[]>;
+  let sql: ReturnType<typeof postgres>;
+  /** A recording written before the table existed, so the foreign key has something real to hold. */
+  let existingRecordingId: string;
+
+  beforeAll(async () => {
+    target = await createThrowawayDatabase(inject('databaseUrl'), 'scripture_migration');
+
+    const priorCount = journalCountBefore('0014_scripture_references');
+    await runMigrations({ url: target.url, migrationsFolder: migrationsFolderUpTo(priorCount) });
+    before = await readColumnSets(target.url);
+
+    sql = postgres(target.url, { max: 2, onnotice: () => {} });
+    const [written] = await sql<{ id: string }[]>`
+      insert into recording (original_media_key, title, recorded_at)
+      values ('originals/before-scripture.mp3', 'A teaching from before references', '2026-05-04')
+      returning id
+    `;
+    existingRecordingId = written?.id as string;
+    // A row using the enum as it stood, so widening it is a widening rather than a fresh start.
+    await sql`
+      insert into review_item (recording_id, kind, status, fields, provenance)
+      values (${existingRecordingId}, 'summary', 'draft', '{}'::jsonb, '{}'::jsonb)
+    `;
+
+    await runMigrations({ url: target.url, migrationsFolder: migrationsFolderUpTo(priorCount + 1) });
+    after = await readColumnSets(target.url);
+  }, 120_000);
+
+  afterAll(async () => {
+    await sql?.end({ timeout: 5 });
+    await target?.drop();
+  }, 60_000);
+
+  it('did not exist before this migration and does after — otherwise the comparison is vacuous', () => {
+    expect(before.has('scripture_reference')).toBe(false);
+    expect(after.has('scripture_reference')).toBe(true);
+  });
+
+  it('adds one table and changes no column of any table that already existed', () => {
+    for (const [table, columns] of before) {
+      expect(after.get(table), `${table} must be untouched`).toEqual(columns);
+    }
+    expect([...after.keys()].filter((table) => !before.has(table))).toEqual([
+      'scripture_reference',
+    ]);
+  });
+
+  // 1.4.1 — the exact column set, and the absence that is the design.
+  it('gives scripture_reference exactly these columns, and no status beside them', () => {
+    expect(after.get('scripture_reference')).toEqual([
+      'book',
+      'chapter',
+      'created_at',
+      'edited_by_admin',
+      'id',
+      'origin',
+      'recording_id',
+      'verse_end',
+      'verse_start',
+    ]);
+
+    // `status` would be a second answer to a question the review item already answers.
+    // `review_item_id` would tie a reference to the draft that proposed it, which the recording
+    // already leads to. `text` would put the verse in the row rather than in the shared cache
+    // group 3 builds, and `translation` belongs to that cache rather than to a citation.
+    for (const deferred of ['status', 'review_item_id', 'text', 'translation', 'position']) {
+      expect(after.get('scripture_reference'), `${deferred} must not exist`).not.toContain(deferred);
+    }
+  });
+
+  // 1.2.1 — derived from the one declaration rather than restated beside it, and added to an enum
+  // that already had rows using it.
+  it('adds scripture to the review kinds an existing database already admits', async () => {
+    const kinds = await sql<{ enumlabel: string }[]>`
+      select enumlabel from pg_enum
+      join pg_type on pg_type.oid = pg_enum.enumtypid
+      where pg_type.typname = 'review_kind' order by pg_enum.enumsortorder
+    `;
+    expect(kinds.map((row) => row.enumlabel)).toEqual([...REVIEW_KINDS]);
+    expect(kinds.map((row) => row.enumlabel)).toContain('scripture');
+
+    // The row written before the widening is still readable and still says what it said.
+    const rows = await sql<{ kind: string }[]>`
+      select kind::text as kind from review_item where recording_id = ${existingRecordingId}
+    `;
+    expect(rows.map((row) => row.kind)).toEqual(['summary']);
+  });
+
+  it('admits exactly the origins the shared constant declares, in their order', async () => {
+    const origins = await sql<{ enumlabel: string }[]>`
+      select enumlabel from pg_enum
+      join pg_type on pg_type.oid = pg_enum.enumtypid
+      where pg_type.typname = 'scripture_origin' order by pg_enum.enumsortorder
+    `;
+    expect(origins.map((row) => row.enumlabel)).toEqual([...SCRIPTURE_ORIGINS]);
+  });
+
+  it('refuses the same passage on the same teaching twice, and allows it on another', async () => {
+    const insert = (recordingId: string) => sql`
+      insert into scripture_reference (recording_id, book, chapter, verse_start, verse_end, origin)
+      values (${recordingId}, 'romans', 8, 1, 4, 'machine')
+    `;
+
+    await expect(insert(existingRecordingId)).resolves.toBeTruthy();
+    await expect(insert(existingRecordingId)).rejects.toThrow();
+
+    const [other] = await sql<{ id: string }[]>`
+      insert into recording (original_media_key, title, recorded_at)
+      values ('originals/another-scripture.mp3', 'Another teaching', '2026-05-11')
+      returning id
+    `;
+    // A verse cited by a second teaching is a second reference, not a conflict.
+    await expect(insert(other?.id as string)).resolves.toBeTruthy();
+  });
+
+  it('takes a teaching’s references with it when the teaching is deleted', async () => {
+    const [doomed] = await sql<{ id: string }[]>`
+      insert into recording (original_media_key, title, recorded_at)
+      values ('originals/doomed-scripture.mp3', 'A teaching about to go', '2026-05-18')
+      returning id
+    `;
+    const recordingId = doomed?.id as string;
+    await sql`
+      insert into scripture_reference (recording_id, book, chapter, verse_start, verse_end, origin)
+      values (${recordingId}, 'john', 3, 16, 16, 'machine')
+    `;
+
+    // A reference to a teaching that is gone is not a record of anything.
+    await sql`delete from recording where id = ${recordingId}`;
+    const rows = await sql`select id from scripture_reference where recording_id = ${recordingId}`;
+    expect(rows).toHaveLength(0);
+  });
+
+  it('refuses a reference pointed at a teaching that does not exist', async () => {
+    await expect(
+      sql`
+        insert into scripture_reference (recording_id, book, chapter, verse_start, verse_end, origin)
+        values ('00000000-0000-0000-0000-000000000000', 'acts', 2, 1, 4, 'machine')
+      `,
+    ).rejects.toThrow();
   });
 });

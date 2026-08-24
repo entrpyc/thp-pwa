@@ -495,10 +495,16 @@ describe('what the log records', () => {
   });
 });
 
-/** The one field name each kind carries, used above and asserted here so it is not a coincidence. */
+/** The one field each kind carries, used above and asserted here so it is not a coincidence. */
 describe('the field names both writers agree on', () => {
-  it('are the ones the shared map declares', () => {
-    expect(REVIEW_FIELD).toEqual({ summary: 'summary', recording_metadata: 'description' });
+  it('are the ones the shared map declares, each with the shape it is', () => {
+    // 1.2.2 — the map widened from a name to a name and a shape, and the two text kinds are the
+    // text kinds they always were. What a list-shaped draft *is* is asserted where it is written.
+    expect(REVIEW_FIELD).toEqual({
+      summary: { name: 'summary', shape: 'text' },
+      recording_metadata: { name: 'description', shape: 'text' },
+      scripture: { name: 'citations', shape: 'list' },
+    });
   });
 });
 

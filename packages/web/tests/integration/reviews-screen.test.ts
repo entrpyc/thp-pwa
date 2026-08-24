@@ -77,6 +77,13 @@ const MACHINE = {
     'The teaching stays with the second chapter of the letter throughout, and opens by naming ' +
     'where last week left off.',
   recording_metadata: 'A close reading of the letter’s second chapter.',
+  // A list-shaped draft, in canon order as the worker writes it. `Psalm 23` covers its chapter
+  // whole, so the row is also the whole-chapter rendering under test.
+  scripture: [
+    { book: 'psalm', chapter: 23, verseStart: 1, verseEnd: 6 },
+    { book: 'john', chapter: 3, verseStart: 16, verseEnd: 16 },
+    { book: 'romans', chapter: 8, verseStart: 1, verseEnd: 4 },
+  ],
 } as const;
 
 /** A recording with a transcript, so the queue's word count has something to count. */
@@ -110,13 +117,13 @@ async function drafts(recordingId: string, kinds: readonly ReviewKind[]): Promis
     recordingId,
     kinds.map((kind) => ({
       kind,
-      fields: { [REVIEW_FIELD[kind]]: MACHINE[kind] },
+      fields: { [REVIEW_FIELD[kind].name]: MACHINE[kind] },
       provenance: {
         model: 'fake',
         modelVersion: 'fake-1',
         promptVersion: 'draft-1',
         steeringPrompt: null,
-        fields: { [REVIEW_FIELD[kind]]: { aiSuggested: true, editedByAdmin: false } },
+        fields: { [REVIEW_FIELD[kind].name]: { aiSuggested: true, editedByAdmin: false } },
       },
     })),
     handle,
@@ -250,15 +257,16 @@ describe('what the queue says', () => {
     const page = await openPanel();
     try {
       const rows = page.getByRole('listitem').filter({ hasText: label });
-      await expect.poll(() => rows.count(), { timeout: 30_000 }).toBe(3);
+      await expect.poll(() => rows.count(), { timeout: 30_000 }).toBe(REVIEW_KINDS.length + 1);
 
       const texts = await rows.allTextContents();
-      // Both kinds, side by side, with no per-kind screen — which is the property one table buys.
+      // Every kind, side by side, with no per-kind screen — which is the property one table buys.
       expect(texts.filter((one) => one.includes('Summary'))).toHaveLength(2);
       expect(texts.filter((one) => one.includes('Description'))).toHaveLength(1);
+      expect(texts.filter((one) => one.includes('Scripture'))).toHaveLength(1);
       // Newest recording first, matching every other admin list.
       expect(texts[0]).toContain(`${label} newest`);
-      expect(texts[2]).toContain(`${label} oldest`);
+      expect(texts.at(-1)).toContain(`${label} oldest`);
     } finally {
       await page.context().close();
     }
@@ -458,4 +466,174 @@ describe('at every width', () => {
       }
     }, 120_000);
   }
+});
+
+/**
+ * **A list-shaped draft on the form** (Task 1.5) — the first thing in this scope an operator can
+ * use, and the first artefact whose draft is not a paragraph.
+ *
+ * The property under test is not "scripture renders": it is that the form chose the renderer from
+ * the item's **kind**, so the two text kinds go on rendering exactly as they did and the fourth
+ * artefact is a shape rather than a branch.
+ */
+describe('a scripture item on the form', () => {
+  // 1.5.1 — one row per citation, read the way a person says it, in canon order.
+  it('renders the list as one row per citation rather than as a block of text', async () => {
+    const title = unique('A list of references');
+    const recordingId = await newRecording(title, '2026-05-17');
+    await drafts(recordingId, ['scripture']);
+
+    const page = await openPanel();
+    try {
+      const row = await openForm(page, title, 'Scripture');
+      const list = row.getByRole('list', { name: 'Citations' });
+
+      await expect.poll(() => list.getByRole('listitem').count(), { timeout: 30_000 }).toBe(3);
+      expect(await list.getByRole('listitem').allTextContents()).toEqual([
+        'Psalm 23',
+        'John 3:16',
+        'Romans 8:1–4',
+      ]);
+
+      // Not a text box: a citation is structured, and nothing here invites prose. The one textbox
+      // on the form is the steering sentence, which every kind has.
+      expect(await row.getByRole('textbox').count()).toBe(1);
+      expect(await row.getByRole('textbox').first().getAttribute('name')).toBe('prompt');
+    } finally {
+      await page.context().close();
+    }
+  }, 120_000);
+
+  // 1.5.2 — the regression that matters: the widening changed nothing for the kinds that were
+  // already there.
+  it('leaves the two text kinds rendering as the single box they always did', async () => {
+    const title = unique('Still a text box');
+    const recordingId = await newRecording(title);
+    await drafts(recordingId, ['summary', 'recording_metadata']);
+
+    const page = await openPanel();
+    try {
+      const summary = await openForm(page, title, 'Summary');
+      expect(await summary.getByRole('textbox', { name: 'Summary' }).inputValue()).toBe(
+        MACHINE.summary,
+      );
+      expect(await summary.getByRole('list', { name: 'Summary' }).count()).toBe(0);
+
+      const description = await openForm(page, title, 'Description');
+      expect(await description.getByRole('textbox', { name: 'Description' }).inputValue()).toBe(
+        MACHINE.recording_metadata,
+      );
+    } finally {
+      await page.context().close();
+    }
+  }, 120_000);
+
+  // 1.5.3 — an empty box would read as a draft that failed. What happened is that the machine read
+  // the teaching and found no scripture in it, and that is what the form says.
+  it('says the machine found no scripture rather than showing an empty box', async () => {
+    const title = unique('Found none');
+    const recordingId = await newRecording(title);
+    await replaceOpenDrafts(
+      recordingId,
+      [
+        {
+          kind: 'scripture',
+          fields: { [REVIEW_FIELD.scripture.name]: [] },
+          provenance: {
+            model: 'fake',
+            modelVersion: 'fake-1',
+            promptVersion: 'draft-1',
+            steeringPrompt: null,
+            fields: { [REVIEW_FIELD.scripture.name]: { aiSuggested: true, editedByAdmin: false } },
+          },
+        },
+      ],
+      handle,
+    );
+
+    const page = await openPanel();
+    try {
+      const row = await openForm(page, title, 'Scripture');
+
+      expect(await row.textContent()).toContain('found no scripture in this teaching');
+      expect(await row.getByRole('list', { name: 'Citations' }).count()).toBe(0);
+      // And it is still approvable, which is what makes "none" a fact an admin records.
+      expect(await row.getByRole('button', { name: 'Approve' }).count()).toBe(1);
+    } finally {
+      await page.context().close();
+    }
+  }, 120_000);
+
+  // 1.5.4 — the two presses the form already had, acting on the whole list.
+  it('approves the whole list, writing every reference through and closing the item', async () => {
+    const title = unique('Approve the list');
+    const recordingId = await newRecording(title);
+    const [item] = await drafts(recordingId, ['scripture']);
+
+    const page = await openPanel();
+    try {
+      const row = await openForm(page, title, 'Scripture');
+      await row.getByRole('button', { name: 'Approve' }).click();
+
+      await expect.poll(() => statusOf(item?.id ?? ''), { timeout: 30_000 }).toBe('published');
+      const written = await sql<{ book: string }[]>`
+        select book from scripture_reference where recording_id = ${recordingId} order by book
+      `;
+      expect(written.map((one) => one.book)).toEqual(['john', 'psalm', 'romans']);
+      await expect.poll(() => rowFor(page, title, 'Scripture').count(), { timeout: 30_000 }).toBe(0);
+    } finally {
+      await page.context().close();
+    }
+  }, 120_000);
+
+  it('discards the whole list on a second press, writing no reference', async () => {
+    const title = unique('Discard the list');
+    const recordingId = await newRecording(title);
+    const [item] = await drafts(recordingId, ['scripture']);
+
+    const page = await openPanel();
+    try {
+      const row = await openForm(page, title, 'Scripture');
+      await row.getByRole('button', { name: 'Discard' }).click();
+
+      // The first press asks; nothing has happened yet, which is the whole of the confirming press.
+      expect(await row.textContent()).toContain('Discard this scripture?');
+      expect(await statusOf(item?.id ?? '')).toBe('draft');
+
+      await row.getByRole('button', { name: 'Yes, discard it' }).click();
+      await expect.poll(() => statusOf(item?.id ?? ''), { timeout: 30_000 }).toBe('discarded');
+
+      const written = await sql`
+        select id from scripture_reference where recording_id = ${recordingId}
+      `;
+      expect(written).toHaveLength(0);
+    } finally {
+      await page.context().close();
+    }
+  }, 120_000);
+
+  // 1.5.5 — a stale screen is told, rather than being allowed to look like it worked.
+  it('shows the refusal when another admin has already resolved the item', async () => {
+    const title = unique('Already resolved');
+    const recordingId = await newRecording(title);
+    const [item] = await drafts(recordingId, ['scripture']);
+
+    const page = await openPanel();
+    try {
+      const row = await openForm(page, title, 'Scripture');
+      // The other admin, acting between this screen loading and this press.
+      await sql`update review_item set status = 'published' where id = ${item?.id ?? ''}`;
+
+      await row.getByRole('button', { name: 'Approve' }).click();
+
+      await expect.poll(() => row.getByRole('alert').count(), { timeout: 30_000 }).toBe(1);
+      expect(await row.getByRole('alert').textContent()).toContain('already been dealt with');
+      const written = await sql`
+        select id from scripture_reference where recording_id = ${recordingId}
+      `;
+      expect(written).toHaveLength(0);
+    } finally {
+      await page.context().close();
+    }
+  }, 120_000);
 });

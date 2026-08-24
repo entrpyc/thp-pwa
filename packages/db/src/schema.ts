@@ -27,6 +27,7 @@ import {
   REVIEW_KINDS,
   REVIEW_STATUSES,
   ROLES,
+  SCRIPTURE_ORIGINS,
   UNFINISHED_JOB_STATUSES,
 } from '@thp/shared';
 
@@ -56,6 +57,8 @@ export const reviewKind = pgEnum('review_kind', REVIEW_KINDS);
 export const reviewStatus = pgEnum('review_status', REVIEW_STATUSES);
 
 export const noteVisibility = pgEnum('note_visibility', NOTE_VISIBILITIES);
+
+export const scriptureOrigin = pgEnum('scripture_origin', SCRIPTURE_ORIGINS);
 
 /**
  * An account. Columns arrive with the steps that use them: `deactivated_at` comes with ticket 4
@@ -856,5 +859,60 @@ export const notePin = pgTable(
     }).onDelete('cascade'),
     /** The read is always "the pins on this recording". */
     index('note_pin_recording_idx').on(table.recordingId),
+  ],
+);
+
+/**
+ * **A teaching's approved scripture references** (Task 1.4) —
+ * [3.2.6](docs/active-scope/prd.md), and § 4 *Scripture reference — new*.
+ *
+ * One row per citation on one recording, written only when an admin approves the list it belongs
+ * to. **A row existing is what "approved" means**, which is why there is no status column here:
+ * `project prd 4.6`'s *suggested or accepted* is the state of the `review_item` holding the draft
+ * (docs/active-scope/prd.md § 8), and a column repeating it would be a second answer to the same
+ * question that somebody would eventually have to reconcile.
+ *
+ * **The citation is structured, never prose.** `book` is the canon identity `@thp/shared`'s
+ * `BIBLE_BOOKS` declares — not the words a model wrote — and the verse range is always present,
+ * spanning the chapter when the citation is a whole chapter. Which is what
+ * [3.7.6](docs/project/prd.md)'s cross-referencing and [3.7.7](docs/project/prd.md)'s search read
+ * later, and the reason this scope's data model is what unblocks them.
+ *
+ * `origin` and `edited_by_admin` are [3.2.9](docs/active-scope/prd.md)'s per-reference record: what
+ * the machine proposed, what an admin changed, and what they added by hand. Both are written by
+ * the approve path; nothing else may set them.
+ *
+ * **Unique on the passage**, so approving a list holding the same verse twice is impossible at the
+ * database rather than only at the validator. Approving a later draft replaces the set
+ * ([3.2.11](docs/active-scope/prd.md)) rather than appending to it, so there is no version to
+ * thread and no `superseded_by`.
+ */
+export const scriptureReference = pgTable(
+  'scripture_reference',
+  {
+    id: uuid('id').primaryKey().defaultRandom(),
+    recordingId: uuid('recording_id')
+      .notNull()
+      .references(() => recording.id, { onDelete: 'cascade' }),
+    /** The canon identity, e.g. the identity of the letter to the Romans. Never a model's words. */
+    book: text('book').notNull(),
+    chapter: integer('chapter').notNull(),
+    /** Equal to `verse_end` for a single verse; 1 and the chapter's length for a whole chapter. */
+    verseStart: integer('verse_start').notNull(),
+    verseEnd: integer('verse_end').notNull(),
+    origin: scriptureOrigin('origin').notNull(),
+    editedByAdmin: boolean('edited_by_admin').notNull().default(false),
+    createdAt: timestamp('created_at', { withTimezone: true }).notNull().defaultNow(),
+  },
+  (table) => [
+    uniqueIndex('scripture_reference_passage_unique').on(
+      table.recordingId,
+      table.book,
+      table.chapter,
+      table.verseStart,
+      table.verseEnd,
+    ),
+    /** Every read is "the references on this teaching". */
+    index('scripture_reference_recording_idx').on(table.recordingId),
   ],
 );
