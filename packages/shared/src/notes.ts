@@ -110,8 +110,6 @@ export interface NoteView {
   readonly text: string;
   /** ISO 8601. */
   readonly createdAt: string;
-  /** ISO 8601, or `null` until the first edit — what drives the **edited** indicator. */
-  readonly editedAt: string | null;
   /**
    * Whether this is a tombstone ([5.3.3](docs/active-scope/prd.md)) — a note that was removed and
    * whose replies are still read under it.

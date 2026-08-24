@@ -160,7 +160,8 @@ describe('a member writes a note at a moment', () => {
     expect(note.timestampMs).toBe(61_000);
     expect(note.authorDisplayName).toBe(author.displayName);
     expect(note.mine).toBe(true);
-    expect(note.editedAt).toBeNull();
+    // No field on the wire says whether a note has been edited, so the key is absent entirely.
+    expect(Object.keys(note)).not.toContain('editedAt');
     expect(Number.isNaN(Date.parse(note.createdAt))).toBe(false);
 
     // The created note is readable as itself, which is what makes the answer the list's shape
@@ -366,7 +367,7 @@ describe('a member reads a teaching’s notes', () => {
     expect(tiedIn(again)).toEqual(atOneMoment);
   });
 
-  it('carries each note’s id, position, author name, written time, editedAt and text', async () => {
+  it('carries each note’s id, position, author name, written time and text — and no edit marker', async () => {
     const notes = notesOf((await get(orderedId, author.cookie)).body);
     const first = notes[0];
     if (first === undefined) throw new Error('the fixture wrote no notes');
@@ -375,7 +376,7 @@ describe('a member reads a teaching’s notes', () => {
     expect(first.timestampMs).toBe(10_000);
     expect(first.authorDisplayName).toBe(other.displayName);
     expect(first.text).toBe('First');
-    expect(first.editedAt).toBeNull();
+    expect(Object.keys(first)).not.toContain('editedAt');
     expect(Number.isNaN(Date.parse(first.createdAt))).toBe(false);
   });
 
@@ -828,21 +829,23 @@ describe('a member reacts to a public note', () => {
 // Task 5.1 — editing
 
 describe('an author edits their own note', () => {
-  it('changes the text and sets editedAt, with the text rules applying unchanged', async () => {
+  it('changes the text and marks the note nowhere, with the text rules applying unchanged', async () => {
     const where = await recording(`Edit text ${RUN}`, true);
     const note = await write(where, author, {
       text: 'The first wording.',
       visibility: 'public',
       timestampMs: 1_000,
     });
-    expect(note.editedAt).toBeNull();
 
     expect((await patchNote(note.id, author, { text: '  The better wording.  ' })).status).toBe(200);
 
     const after = await seenBy(where, author, note.id);
     expect(after?.text).toBe('The better wording.');
-    expect(after?.editedAt).not.toBeNull();
-    // Permanent, and the previous text is not returned anywhere in the payload (3.5.1).
+    // An edited note reads exactly like one nobody has touched: no field on the wire tells them
+    // apart, so nothing renders an **edited** marker.
+    expect(Object.keys(after ?? {})).not.toContain('editedAt');
+    expect(JSON.stringify(await get(where, author.cookie))).not.toContain('editedAt');
+    // The previous text is not returned anywhere in the payload, and there is no history.
     expect(JSON.stringify(await get(where, author.cookie))).not.toContain('The first wording.');
 
     for (const text of ['', '   ', 'x'.repeat(MAX_NOTE_LENGTH + 1)]) {
@@ -862,7 +865,7 @@ describe('an author edits their own note', () => {
     expect((await patchNote(reply.id, other, { text: 'Second try.' })).status).toBe(200);
     const listed = await seenBy(where, author, parent.id);
     expect(listed?.replies[0]?.text).toBe('Second try.');
-    expect(listed?.replies[0]?.editedAt).not.toBeNull();
+    expect(Object.keys(listed?.replies[0] ?? {})).not.toContain('editedAt');
   });
 
   it('refuses an edit of somebody else’s note — to a member and to an admin alike', async () => {

@@ -1404,8 +1404,8 @@ describe('a member acts on what they wrote', () => {
       await expect
         .poll(() => card(page, note).innerText(), { timeout: 30_000 })
         .toContain('The better wording.');
-      // The indicator is permanent, and the previous text is nowhere on the screen.
-      expect(await card(page, note).innerText()).toContain('edited');
+      // Nothing marks the card as edited, and the previous text is nowhere on the screen.
+      expect(await card(page, note).innerText()).not.toContain('edited');
       expect(await page.textContent('body')).not.toContain('The first wording.');
     } finally {
       await page.context().close();

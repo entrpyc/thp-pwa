@@ -288,8 +288,6 @@ function NoteCard({ note, canModerate, highlighted }: CardProps) {
             </span>
             <span className={styles.noteAuthor}>{note.authorDisplayName}</span>
             <span className={styles.noteWhen}>{writtenAt(note.createdAt)}</span>
-            {/* Permanent, and the previous text is neither kept nor shown (3.5.1, 3.2.8). */}
-            {note.editedAt === null ? null : <span className={styles.edited}>edited</span>}
           </div>
 
           {editing ? (

@@ -264,29 +264,32 @@ It is built as a Progressive Web App on a single codebase, reachable from any br
 - **3.11.5.4** Videos inherit topics and tags from their parent recording by default, and an admin can override them (4.8).
 - **3.11.5.5** An admin can unpublish or delete a video from the catalogue.
 
-### 📝 3.12 Timestamp notes
+### 🔨 3.12 Timestamp notes
 
 *Notes replace generic comments as the primary engagement mechanism. A note is tied to a specific moment in a teaching, not to the teaching as a whole.*
 
 **Functional requirements**
 
-- **3.12.1** Members can write a note at any point in a recording, anchored automatically to the current playback position.
-- **3.12.2** **Public notes** are visible to all members under the recording, at their respective timestamps.
-- **3.12.3** **Private notes** are visible only to their author, for personal study and reflection.
-- **3.12.4** The author selects public or private at the time of writing.
-- **3.12.5** Notes are plain text with a 1,000 character limit.
-- **3.12.6** Any public note can carry a reply thread.
-- **3.12.7** Threads are one level deep: members reply to a note, but cannot reply to a reply.
-- **3.12.8** Private notes have no threads — they are personal and non-collaborative.
-- **3.12.9** Members can edit or delete their own notes at any time.
-- **3.12.10** Admins can delete any public note or reply.
-- **3.12.11** Public notes are displayed chronologically by timestamp on the recording page.
-- **3.12.12** Notes are rendered as markers on the audio progress bar (3.2.9), so members can jump directly to noted moments.
-- **3.12.13** Members can react to any public note with an emoji from a constrained picker of six reactions.
-- **3.12.14** A member has one reaction per note, changeable by selecting a different one.
-- **3.12.15** Admins can pin any number of public notes on a recording. Pinned notes appear above the main note list, each with a visual indicator.
-- **3.12.16** The author of a public note is notified when someone replies to it (3.17.2).
-- **3.12.17** Members can pin their own notes to Highlights (3.15.3).
+- ✅ **3.12.1** Members can write a note at any point in a recording, anchored automatically to the current playback position.
+- ✅ **3.12.2** **Public notes** are visible to all members under the recording, at their respective timestamps.
+- ✅ **3.12.3** **Private notes** are visible only to their author, for personal study and reflection.
+- ✅ **3.12.4** The author selects public or private at the time of writing.
+- ✅ **3.12.5** Notes are plain text with a 1,000 character limit.
+- ✅ **3.12.6** Any public note can carry a reply thread.
+- ✅ **3.12.7** Threads are one level deep: members reply to a note, but cannot reply to a reply.
+- ✅ **3.12.8** Private notes have no threads — they are personal and non-collaborative.
+- ✅ **3.12.9** Members can edit or delete their own notes at any time.
+- ✅ **3.12.10** Admins can delete any public note or reply.
+- ✅ **3.12.11** Public notes are displayed chronologically by timestamp on the recording page.
+- ✅ **3.12.12** Notes are rendered as markers on the audio progress bar (3.2.9), so members can jump directly to noted moments.
+- ✅ **3.12.13** Members can react to any public note with an emoji from a constrained picker of six reactions.
+- ✅ **3.12.14** A member has one reaction per note, changeable by selecting a different one.
+- ✅ **3.12.15** Admins can pin any number of public notes on a recording. Pinned notes appear above the main note list, each with a visual indicator.
+- 📝 **3.12.16** The author of a public note is notified when someone replies to it (3.17.2).
+- 📝 **3.12.17** Members can pin their own notes to Highlights (3.15.3).
+- ✅ **3.12.18** Deleting a note that carries replies leaves a placeholder in its position, holding the moment it was written at, its marker on the progress bar (3.12.12) and the replies underneath it. One member deleting their own note does not delete the replies other members wrote to it. A note with no replies is removed outright, and a placeholder is never pinned (3.12.15).
+- ✅ **3.12.19** A deleted note’s text is returned to nobody — its author and an admin included — and the placeholder says only that the note was removed, never who removed it. The record of who removed it is the audit log (3.12.10).
+- ✅ **3.12.20** A member can clear their reaction to a note by selecting the one they have already chosen (3.12.14).
 
 ### 📝 3.13 Reflective questionnaires
 
@@ -807,3 +810,76 @@ Mind maps carry no title: the source recording or video title labels them in the
 **Since settled, and recorded here because the product now runs on them.** Speech-to-text is Deepgram Nova-3 and drafting is MiniMax M3, both named above; transactional email is Resend over SMTP. Media is held in S3-compatible object storage that is never publicly addressable, written by the browser under a presigned upload grant and read only through a short-lived signed URL. The application, its API and the job orchestration are one codebase plus a single worker process, and the job ledger is itself the queue — there is no broker, which is what makes enqueueing a step transactional with the write that caused it and makes the status view at 3.19.4 one query rather than a log read. Persistence is a single PostgreSQL database with pgvector installed but not yet enabled, so cross-referencing and search (3.9, 3.10) can be built on the datastore that already holds the content and its access rules. Each of these sits behind a narrow adapter, which is what keeps replacing one of them a one-file change rather than a re-architecture.
 
 **Still deliberately not decided here.** Which embedding, video and text-to-speech providers are used; how the PWA is packaged for the two app stores; whether search needs infrastructure beyond the datastore above; and how offline synchronisation resolves conflicts. Each of these has several viable answers, and they belong to the architecture phase of the epic that first needs one.
+
+## Delivery status
+
+_Per feature and functional requirement. Written by active-scope-finalize, once per delivered scope._
+_This table is the only record of what is left to build._
+
+| Requirement | Status | Scope | Missing |
+| :---- | :---- | :---- | :---- |
+| **3.1 Accounts & access** | partial | core listening | self-service account deletion and what it does to authored content; avatars |
+| 3.1.1–3.1.7 | complete | core listening | |
+| 3.1.8–3.1.10 | not started | — | |
+| 3.1.11 | complete | core listening | |
+| 3.1.12 | partial | core listening, notes | the avatar — the display name is stored and is what a note's author line shows |
+| 3.1.13–3.1.14 | complete | core listening | |
+| **3.2 Audio recordings & playback** | partial | core listening | background and lock-screen playback, listening history, completion state, replacing a recording's audio |
+| 3.2.1 | partial | core listening | the Contributor role — uploading is Admin-only |
+| 3.2.2–3.2.5 | complete | core listening | |
+| 3.2.6–3.2.8 | not started | — | |
+| 3.2.9 | complete | core listening | |
+| 3.2.10 | not started | — | |
+| 3.2.11–3.2.14 | complete | core listening | |
+| **3.3 Content organisation & series** | partial | core listening | series artwork, podcast-shaped series metadata, videos in the series view |
+| 3.3.1–3.3.2 | complete | core listening | |
+| 3.3.3 | not started | — | |
+| 3.3.4–3.3.5 | complete | core listening | |
+| 3.3.6 | partial | core listening | reordering and merging series; the Contributor role |
+| 3.3.7–3.3.8 | not started | — | |
+| 3.3.9–3.3.10 | complete | core listening | |
+| **3.4 Audio processing & quality** | not started | — | |
+| **3.5 Transcription** | partial | core listening | the Contributor role; regeneration of the derived artefacts that do not exist yet |
+| 3.5.1–3.5.4 | complete | core listening | |
+| 3.5.5 | partial | core listening | the Contributor role — correcting is Admin-only |
+| 3.5.6 | partial | core listening | the offer reaches the summary and the description only; mind map, scripture references and cross-references are unbuilt |
+| 3.5.7–3.5.10 | complete | core listening | |
+| **3.6 AI summaries** | partial | core listening | the in-app notification that a draft is ready to review |
+| 3.6.1–3.6.2 | complete | core listening | |
+| 3.6.3 | not started | — | |
+| 3.6.4–3.6.8 | complete | core listening | |
+| 3.6.9 | partial | core listening | the notification when the regenerated draft is ready — steering and the one-in-flight rule are built |
+| 3.6.10–3.6.14 | complete | core listening | |
+| **3.7 Scripture references** | not started | — | |
+| **3.8 Mind maps** | not started | — | |
+| **3.9 Intelligent cross-referencing** | not started | — | |
+| **3.10 Semantic search** | not started | — | |
+| **3.11 AI video generation** | not started | — | |
+| **3.12 Timestamp notes** | partial | notes | the reply notification (3.12.16) and pinning a note to Highlights (3.12.17) — each waits on a feature nothing has built |
+| 3.12.1–3.12.15 | complete | notes | |
+| 3.12.16–3.12.17 | not started | — | |
+| 3.12.18–3.12.20 | complete | notes | |
+| **3.13 Reflective questionnaires** | not started | — | |
+| **3.14 Flow tracker** | not started | — | |
+| **3.15 Highlights playlist** | not started | — | |
+| **3.16 SOS signal** | not started | — | |
+| **3.17 Notifications** | not started | — | |
+| **3.18 Offline support & downloads** | not started | — | |
+| **3.19 Admin dashboard** | partial | core listening | the video, questionnaire, announcement, sound-profile, external-publishing and SOS surfaces |
+| 3.19.1 | partial | core listening | the Contributor role — the dashboard is Admin-only |
+| 3.19.2 | partial | core listening | scripture references and back-catalogue items in the queue; it carries draft summaries and metadata |
+| 3.19.3–3.19.4 | complete | core listening | |
+| 3.19.5 | partial | core listening | artwork upload; reordering and merging |
+| 3.19.6–3.19.8 | not started | — | |
+| 3.19.9 | complete | core listening | |
+| 3.19.10–3.19.12 | not started | — | |
+| 3.19.13 | complete | core listening | |
+| **3.20 External distribution** | not started | — | |
+| **3.21 Content pipeline & back-catalogue processing** | partial | core listening | audio processing, mind map and cross-reference steps; bulk back-catalogue processing |
+| 3.21.1 | partial | core listening | steps 3, 6, 7 and 10–13 have no feature behind them yet |
+| 3.21.2.1 | partial | core listening | only transcription and draft generation run automatically — steps 3, 6 and 7 do not exist |
+| 3.21.2.2–3.21.2.7 | complete | core listening | |
+| 3.21.3 | not started | — | |
+
+_Statuses for features this scope did not touch are carried from the ✅ / 🔨 / 📝 markers the
+requirements already carried, spot-checked against the code rather than re-audited._

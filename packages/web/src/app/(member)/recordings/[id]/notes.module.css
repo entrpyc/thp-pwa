@@ -317,12 +317,6 @@
   font-weight: 600;
 }
 
-.edited {
-  color: var(--color-text-dim);
-  font-size: var(--fs-meta);
-  font-style: italic;
-}
-
 /* One dim italic line in place of an author and a text, and nothing about who removed it (5.3.3). */
 .tombstone {
   margin: 0;

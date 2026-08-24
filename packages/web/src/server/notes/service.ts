@@ -497,7 +497,6 @@ function describe(
     mine: row.authorId === reader.id,
     text: row.text ?? '',
     createdAt: row.createdAt.toISOString(),
-    editedAt: row.editedAt === null ? null : row.editedAt.toISOString(),
     deleted,
     pinned,
     replies: [],
