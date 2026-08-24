@@ -521,9 +521,9 @@ a reload.
 
 ### Task 1.8 — The composer
 
-**Delivers:** a member can write a note anchored to the moment they were hearing when the composer
-opened, choose whether the group sees it, and get their text back rather than lose it to a failed
-save.
+**Delivers:** a member can write a note anchored to the moment they were hearing when they started
+writing it, choose whether the group sees it, and get their text back rather than lose it to a
+failed save.
 **References:** active-scope architecture § 4.6 Notes panel and composer, § 5.1 `PlayerProvider`
 gains the notes store and the composer anchor; active-scope prd 3.1.1, 3.1.3, 3.1.4, 3.1.5, 3.1.7,
 3.1.8, 3.1.11, 5.1.2, 5.1.3, 5.1.4;
@@ -536,16 +536,20 @@ gains the notes store and the composer anchor; active-scope prd 3.1.1, 3.1.3, 3.
 **Acceptance criteria**
 
 - [x] **1.8.1** The composer is pinned above the list as a `--color-surface-raised` panel showing the
-  position the player held **at the instant it opened**, frozen, displayed as `mm:ss` or
-  `h:mm:ss` past an hour, and not editable by the author — verified by
-  `packages/web/tests/integration/notes-screen.test.ts`
+  moment a note written now would carry — **following playback until the first character is typed
+  and held from then on** — displayed as `mm:ss` or `h:mm:ss` past an hour, and not editable by the
+  author in either state — verified by `packages/web/tests/integration/notes-screen.test.ts`
   - the anchor is held by `PlayerProvider`, not by the panel
   - placeholder **"What landed at this moment?"**
-- [x] **1.8.2** Opening the composer neither pauses nor moves playback, so a note about a moment does
-  not drift to a moment thirty seconds later while it is being typed — verified by
+  - _reworded 2026-08-24: see the Record, and active-scope prd 3.1.1_
+- [x] **1.8.2** Neither opening the composer nor typing in it pauses or moves playback, and the moment
+  stops following the teaching at the first character — so a note about a moment does not drift to a
+  moment thirty seconds later while it is being typed, and a second note written in the same sitting
+  carries the moment it was actually written at — verified by
   `packages/web/tests/integration/notes-screen.test.ts`
-- [x] **1.8.3** With nothing yet played, the anchor is the position the player currently holds — the
-  restored resume position where one exists, and `00:00` where none does — verified by
+  - _reworded 2026-08-24: see the Record, and active-scope prd 3.1.1_
+- [x] **1.8.3** With nothing yet played, the moment shown is the position the player currently holds —
+  the restored resume position where one exists, and `00:00` where none does — verified by
   `packages/web/tests/integration/notes-screen.test.ts`
 - [x] **1.8.4** The visibility control is a two-state segmented pill opening on **Private**, with one
   dim line switching between **"Only you will see this."** and **"Everyone in the group will see

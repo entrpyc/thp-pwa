@@ -582,7 +582,7 @@ describe('the All / Public / Mine filter', () => {
 // =================================================================================================
 
 describe('the composer', () => {
-  it('is pinned above the list at a frozen position the author cannot change', async () => {
+  it('is pinned above the list, follows the teaching, and holds from the first character', async () => {
     // The reading fixture, so there is a list for the composer to be pinned above.
     const page = await openTeaching(readingId);
     try {
@@ -594,11 +594,11 @@ describe('the composer', () => {
 
       await openNotes(page);
       const form = page.getByRole('form', { name: 'Write a note' });
-      const anchor = await form.locator('p').first().innerText();
+      const onOpening = await form.locator('p').first().innerText();
       // Where the teaching actually was, not a default. A composer that fell back to `00:00` would
       // satisfy a shape check while saying nothing, so the seconds are read and compared.
-      expect(anchor).toMatch(/^At 00:\d{2}$/);
-      expect(secondsIn(anchor)).toBeGreaterThanOrEqual(5);
+      expect(onOpening).toMatch(/^At 00:\d{2}$/);
+      expect(secondsIn(onOpening)).toBeGreaterThanOrEqual(5);
 
       // Pinned above everything below it (5.1.2).
       expect(await followsTheComposer(page, '[aria-label="Which notes to show"]')).toBe(true);
@@ -608,13 +608,76 @@ describe('the composer', () => {
       // Nothing editable but the note itself — the position is a label, not a field.
       expect(await form.getByRole('textbox').count()).toBe(1);
 
-      const before = (await audioState(page)).currentTime;
+      /*
+       * **Armed, not frozen.** Nothing has been typed, so the moment follows the teaching — a
+       * member who opened this tab ten minutes ago has not decided anything yet, and a composer
+       * still offering the moment they opened it at would anchor their note ten minutes early.
+       */
+      await expect
+        .poll(() => form.locator('p').first().innerText(), { timeout: 30_000 })
+        .not.toBe(onOpening);
+
+      // The first character is the decision.
+      await page.getByLabel('Your note').fill('T');
+      const held = await form.locator('p').first().innerText();
+      expect(secondsIn(held)).toBeGreaterThanOrEqual(secondsIn(onOpening));
+
+      // And from there it holds, while the teaching runs on underneath it (3.1.1's whole point).
+      const typingFrom = (await audioState(page)).currentTime;
       await expect
         .poll(async () => (await audioState(page)).currentTime, { timeout: 30_000 })
-        .toBeGreaterThan(before + 3);
+        .toBeGreaterThan(typingFrom + 3);
+      await page.getByLabel('Your note').fill('The moment this actually lands.');
+      expect(await form.locator('p').first().innerText()).toBe(held);
+    } finally {
+      await page.context().close();
+    }
+  }, 180_000);
 
-      // Frozen: the teaching has moved on by seconds and the anchor has not.
-      expect(await form.locator('p').first().innerText()).toBe(anchor);
+  it('starts the next note from where the teaching has reached, not from the last one', async () => {
+    // The gap the old wording left: with the moment fixed when the tab opened, every note written
+    // in one sitting landed on the same second — and collapsed into one marker on the transport.
+    const sittingId = await publishedRecording(`Notes sitting ${RUN}`);
+    const page = await openTeaching(sittingId);
+    try {
+      await waitForAudio(page);
+      await page.getByRole('button', { name: 'Play' }).first().click();
+      await openNotes(page);
+
+      await page.getByLabel('Your note').fill('The first thing that landed.');
+      const first = await page
+        .getByRole('form', { name: 'Write a note' })
+        .locator('p')
+        .first()
+        .innerText();
+      await page.getByRole('button', { name: 'Save note' }).click();
+      await expect
+        .poll(() => page.locator('ol[aria-label="Notes"] > li').count(), { timeout: 30_000 })
+        .toBe(1);
+
+      // Let the teaching run on, then write the second note.
+      const savedAt = (await audioState(page)).currentTime;
+      await expect
+        .poll(async () => (await audioState(page)).currentTime, { timeout: 30_000 })
+        .toBeGreaterThan(savedAt + 4);
+      await page.getByLabel('Your note').fill('And the second, later on.');
+      await page.getByRole('button', { name: 'Save note' }).click();
+      await expect
+        .poll(() => page.locator('ol[aria-label="Notes"] > li').count(), { timeout: 30_000 })
+        .toBe(2);
+
+      // Two notes, two moments — asserted as *different seconds*, which is the whole finding.
+      const moments = await page
+        .locator('ol[aria-label="Notes"] > li')
+        .evaluateAll((rows) =>
+          rows.map((row) => row.querySelector('button')?.textContent?.trim() ?? ''),
+        );
+      expect(moments).toHaveLength(2);
+      expect(moments[0]).not.toBe(moments[1]);
+      expect(secondsIn(`At ${moments[0] ?? ''}`)).toBeGreaterThanOrEqual(secondsIn(first));
+      expect(secondsIn(`At ${moments[1] ?? ''}`)).toBeGreaterThan(
+        secondsIn(`At ${moments[0] ?? ''}`),
+      );
     } finally {
       await page.context().close();
     }

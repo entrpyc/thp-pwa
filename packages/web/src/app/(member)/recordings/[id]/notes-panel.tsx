@@ -77,15 +77,16 @@ export function NotesPanel({
   const [highlighted, setHighlighted] = useState<string | null>(null);
 
   /**
-   * Opening the tab **is** opening the composer, which is the instant the anchor freezes
-   * ([3.1.1](docs/active-scope/prd.md)). Closing the tab lets it go, so the next opening anchors
-   * where the member is by then rather than where they were.
+   * Opening the tab opens a composer **armed**, not frozen: the moment it shows follows the
+   * teaching until the member types their first character
+   * ([3.1.1](docs/active-scope/prd.md)). Closing the tab arms it again rather than leaving a moment
+   * held, so a composer re-opened an hour later does not still be pointing at where it was shut.
    */
-  const { openComposer, closeComposer } = player;
+  const { releaseComposerAnchor } = player;
   useEffect(() => {
-    openComposer();
-    return () => closeComposer();
-  }, [openComposer, closeComposer]);
+    releaseComposerAnchor();
+    return () => releaseComposerAnchor();
+  }, [releaseComposerAnchor]);
 
   /**
    * Take the member to the note a transport marker named ([3.2.5](docs/active-scope/prd.md)).
@@ -138,13 +139,11 @@ export function NotesPanel({
   return (
     <div className={styles.panel}>
       {/*
-        Rendered only once the anchor is frozen, which is one tick after this mounts. A composer
-        painted before then would show `00:00` for that tick and then jump — and `00:00` is a real
-        answer (3.1.3), so a member could not tell the flicker from the truth.
+        Rendered from the first paint. An armed composer shows the position the player already
+        holds — the restored resume position, or `00:00` (3.1.3) — so there is no instant at which
+        it is showing a moment it does not mean.
       */}
-      {player.composerAnchorMs === null ? null : (
-        <NoteComposer recordingId={recordingId} anchorMs={player.composerAnchorMs} />
-      )}
+      <NoteComposer recordingId={recordingId} />
 
       {/* The recording strip's own treatment, per 5.2.5 — the same control, one level down. */}
       <div className={styles.filters} role="tablist" aria-label="Which notes to show">

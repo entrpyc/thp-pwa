@@ -69,12 +69,10 @@ export function refusalFor(caught: unknown, gone: string, fallback: string): str
 
 export function NoteComposer({
   recordingId,
-  anchorMs,
   title,
   onSaved,
 }: {
   recordingId: string;
-  anchorMs: number;
   /**
    * The teaching's title, shown above the frozen timestamp — **only on the sheet**
    * ([5.1.5](docs/active-scope/prd.md)). Inline under the tab it would name the page the member is
@@ -87,6 +85,15 @@ export function NoteComposer({
   const player = usePlayer();
   const [text, setText] = useState('');
   const [visibility, setVisibility] = useState<NoteVisibility>('private');
+  /**
+   * The moment this note will carry: the one the player is holding while nothing has been typed,
+   * and the one it was holding at the first keystroke ever after.
+   *
+   * Read from the player rather than taken as a prop, so the inline mount and the transport's sheet
+   * cannot be looking at two different moments — which is what 3.1.2's *"both produce the same
+   * note"* has to mean once the same composer is on screen twice.
+   */
+  const anchorMs = player.composerAnchorMs ?? player.currentMs;
   const [saving, setSaving] = useState(false);
   const [failure, setFailure] = useState<string | null>(null);
 
@@ -95,7 +102,7 @@ export function NoteComposer({
   const count = text.trim().length;
   const overLimit = count > MAX_NOTE_LENGTH;
 
-  const { refreshNotes } = player;
+  const { refreshNotes, lockComposerAnchor, releaseComposerAnchor } = player;
 
   return (
     <form
@@ -113,6 +120,9 @@ export function NoteComposer({
         })
           .then(() => {
             setText('');
+            // Armed again: the member has finished this note, so the next one starts from wherever
+            // the teaching has reached rather than from where this one did (3.1.1).
+            releaseComposerAnchor();
             refreshNotes();
             onSaved?.();
           })
@@ -124,7 +134,10 @@ export function NoteComposer({
     >
       {title === undefined ? null : <p className={styles.sheetTitle}>{title}</p>}
 
-      {/* Frozen at the instant the composer opened, and not the author's to change (3.1.1). */}
+      {/*
+        Follows the teaching until the first character is typed, and holds from then on — and is
+        never the author's to change either way (3.1.1).
+      */}
       <p className={styles.anchor}>At {formatTimecode(anchorMs)}</p>
 
       <label className={styles.field}>
@@ -134,7 +147,12 @@ export function NoteComposer({
           rows={4}
           placeholder="What landed at this moment?"
           value={text}
-          onChange={(event) => setText(event.target.value)}
+          onChange={(event) => {
+            // **The first character is the decision.** Every later one finds the moment already
+            // held, so this is a no-op for the rest of the note.
+            lockComposerAnchor();
+            setText(event.target.value);
+          }}
         />
       </label>
 

@@ -109,12 +109,18 @@ export interface PlayerApi {
   /** Whether the last notes fetch for the loaded teaching failed. Drives 5.2.7's retry. */
   readonly notesFailed: boolean;
   /**
-   * The position the composer is anchored to, **frozen when it opened**, or `null` while it is
-   * closed (active-scope prd 3.1.1).
+   * The moment a note being written is anchored to — **or `null` while it is still following
+   * playback** (active-scope prd 3.1.1).
+   *
+   * A composer opens *armed*: the moment it shows is wherever the player is, and it moves with the
+   * teaching, because a member who opened the tab ten minutes ago has not decided anything yet. The
+   * **first keystroke** is the decision, and it locks the moment here — so a note about a sentence
+   * does not drift to a sentence thirty seconds later while it is being typed. Saving arms it again
+   * for the next note.
    *
    * Held here rather than by the panel because 3.1.2's second entry point is the transport, which
    * outlives the recording page — two entry points reading one anchor cannot disagree about which
-   * moment is being annotated.
+   * moment is being annotated, and neither can two mounts of the same composer.
    */
   readonly composerAnchorMs: number | null;
   /**
@@ -143,9 +149,10 @@ export interface PlayerApi {
   applyCorrection(segment: TranscriptSegmentView): void;
   /** Read the loaded teaching's notes again — after a write, or after a failure the member retried. */
   refreshNotes(): void;
-  /** Freeze the anchor at the position the player holds right now, and open the composer. */
-  openComposer(): void;
-  closeComposer(): void;
+  /** Let the moment follow playback again — a composer opening, closing, or having just saved. */
+  releaseComposerAnchor(): void;
+  /** Fix the moment where the player is now. The first keystroke calls it; every later one is a no-op. */
+  lockComposerAnchor(): void;
   /** Ask whichever screen is showing the notes to scroll to this one and mark it. */
   revealNote(noteId: string): void;
   /** Said by the screen that has done it, so the next press is a fresh request. */
@@ -579,23 +586,32 @@ export function PlayerProvider({
   }, [loadNotes]);
 
   /**
-   * Freeze the anchor at the position the player holds **now**.
+   * Let the moment follow playback again.
+   *
+   * Called when a composer opens, when it closes, and **after every save** — a member who has just
+   * written one note is composing nothing, so the next note starts from wherever the teaching has
+   * reached rather than from where they opened the tab.
+   */
+  const releaseComposerAnchor = useCallback((): void => {
+    setComposerAnchorMs(null);
+  }, []);
+
+  /**
+   * Fix the moment where the player is **now**, and only if it is not already fixed.
+   *
+   * The updater form is what makes "the first keystroke decides" true without reading state: every
+   * later keystroke calls this and finds a moment already held.
    *
    * `positionRef` rather than the `currentMs` state, because it is the position that is right
    * before anything has played: `open()` seeds it with the restored resume position, so a note
    * written on a teaching that has never been played anchors there rather than at `00:00`
    * (active-scope prd 3.1.3).
    *
-   * **Nothing here touches the element.** Opening the composer neither pauses nor moves playback
-   * (3.1.2 of the composer's own rules, 3.1.1's second sentence) — the freeze is what stops the
-   * moment drifting while the note is typed, not a pause.
+   * **Nothing here touches the element.** Writing a note neither pauses nor moves playback (3.1.1) —
+   * the lock is what stops the moment drifting while the note is typed, not a pause.
    */
-  const openComposer = useCallback((): void => {
-    setComposerAnchorMs(positionRef.current);
-  }, []);
-
-  const closeComposer = useCallback((): void => {
-    setComposerAnchorMs(null);
+  const lockComposerAnchor = useCallback((): void => {
+    setComposerAnchorMs((held) => held ?? positionRef.current);
   }, []);
 
   const revealNote = useCallback((noteId: string): void => {
@@ -628,8 +644,8 @@ export function PlayerProvider({
       setCaptions,
       applyCorrection,
       refreshNotes,
-      openComposer,
-      closeComposer,
+      releaseComposerAnchor,
+      lockComposerAnchor,
       revealNote,
       clearRevealedNote,
     }),
@@ -654,8 +670,8 @@ export function PlayerProvider({
       setCaptions,
       applyCorrection,
       refreshNotes,
-      openComposer,
-      closeComposer,
+      releaseComposerAnchor,
+      lockComposerAnchor,
       revealNote,
       clearRevealedNote,
     ],

@@ -107,10 +107,18 @@ _Refines: project prd 3.12.1, 3.12.3, 3.12.4, 3.12.5_
 **Functional requirements**
 
 - **3.1.1** A member writing a note on the recording page anchors it to the position the player is at
-  **when the composer opens**, not when it is submitted. The position is frozen at that instant,
-  displayed in the composer as `mm:ss` (or `h:mm:ss` past an hour), and cannot be changed by the
-  author. Playback is not paused or altered by opening the composer, so a note written about a moment
-  does not drift to a moment thirty seconds later while it is being typed. _(refines 3.12.1)_
+  **when they begin writing it** — the first character typed — and not to where it is when they
+  submit. Until then the composer is _armed_ rather than frozen: the position it displays follows
+  playback, because a member who opened the Notes tab ten minutes ago has not yet decided anything.
+  From the first character the position is held, displayed as `mm:ss` (or `h:mm:ss` past an hour),
+  and cannot be changed by the author. Saving arms it again for the next note. Playback is never
+  paused or altered by any of this, so a note written about a moment does not drift to a moment
+  thirty seconds later while it is being typed. _(refines 3.12.1)_
+  - _Reworded during implementation of Group 2 (2026-08-24). This requirement previously froze the
+    position "when the composer opens". Opening the composer is opening the Notes tab, and a tab
+    stays open — so the anchor was fixed at whatever moment the tab was first pressed and never
+    moved again, and two notes written in one sitting both landed there. The anti-drift guarantee
+    the requirement exists for is about the interval spent **typing**, which this keeps._
 - **3.1.2** The composer is reachable from two places: the Notes tab on the recording page, and the
   transport's opened menu (`bottom-navigation/menu-opened.png`), which anchors to the recording
   currently loaded in the transport regardless of which screen the member is on. Both produce the

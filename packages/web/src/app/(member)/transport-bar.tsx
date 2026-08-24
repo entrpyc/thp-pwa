@@ -126,9 +126,9 @@ export function TransportBar() {
             type="button"
             aria-label="Write a note"
             onClick={() => {
-              // The anchor freezes on the press, exactly as opening the tab freezes it — one
-              // player, one frozen moment, so the two entry points cannot disagree (3.1.1).
-              player.openComposer();
+              // The sheet opens armed, exactly as the tab does — one player, one moment, so the
+              // two entry points cannot disagree about which one a note carries (3.1.1, 3.1.2).
+              player.releaseComposerAnchor();
               setSheetOpen(true);
               setToolbarOpen(false);
             }}
@@ -147,11 +147,10 @@ export function TransportBar() {
         </nav>
       ) : null}
 
-      {sheetOpen && player.composerAnchorMs !== null ? (
+      {sheetOpen ? (
         <section className={styles.sheet} aria-label="Note composer">
           <NoteComposer
             recordingId={player.loaded.id}
-            anchorMs={player.composerAnchorMs}
             title={player.loaded.title}
             onSaved={() => setSheetOpen(false)}
           />
@@ -160,7 +159,7 @@ export function TransportBar() {
             type="button"
             onClick={() => {
               setSheetOpen(false);
-              player.closeComposer();
+              player.releaseComposerAnchor();
             }}
           >
             Cancel
