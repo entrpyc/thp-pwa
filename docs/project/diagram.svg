@@ -1,0 +1,168 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 920 850" width="920" height="850" role="img" aria-labelledby="t d">
+  <title id="t">Teaching Hub — system</title>
+  <desc id="d">One codebase in three runtime roles — a client, an API and a feed, and a worker pool — over one Postgres and one object store. Members reach only the CDN and the API. Every external model call sits behind the queue in the worker pool, and bulk audio bypasses the application entirely.</desc>
+
+  <style>
+    .n    { font: 600 13px system-ui, -apple-system, "Segoe UI", Roboto, sans-serif; }
+    .sub  { font: 400 11px system-ui, -apple-system, "Segoe UI", Roboto, sans-serif; }
+    .grp  { font: 600 11.5px system-ui, -apple-system, "Segoe UI", Roboto, sans-serif; fill: #6c6a65; letter-spacing: .02em; }
+    .edge { font: 400 10.5px system-ui, -apple-system, "Segoe UI", Roboto, sans-serif; fill: #4a4844; }
+    .note { font: 400 12px system-ui, -apple-system, "Segoe UI", Roboto, sans-serif; fill: #444441; }
+    .ttl  { font: 700 15px system-ui, -apple-system, "Segoe UI", Roboto, sans-serif; fill: #2b2a28; }
+    .l    { fill: none; stroke: #7b7975; stroke-width: 1.6; }
+    .ld   { fill: none; stroke: #7b7975; stroke-width: 1.6; stroke-dasharray: 5 4; }
+    .cl   { fill: #ffffff; fill-opacity: .55; stroke: #c3c1bb; stroke-width: 1.2; stroke-dasharray: 4 4; }
+  </style>
+
+  <defs>
+    <marker id="a" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse">
+      <path d="M0 0 L10 5 L0 10 z" fill="#7b7975"/>
+    </marker>
+  </defs>
+
+  <rect x="0" y="0" width="920" height="850" fill="#fbfbf9" stroke="#e2e0da"/>
+  <text class="ttl" x="32" y="28">Teaching Hub — system</text>
+
+  <!-- ── clusters ─────────────────────────────────────────────── -->
+  <rect class="cl" x="32" y="44"  width="420" height="192" rx="8"/>
+  <text class="grp" x="44" y="64">CLIENT — ONE CODEBASE, THREE DELIVERY ROUTES</text>
+
+  <rect class="cl" x="32" y="266" width="420" height="88" rx="8"/>
+  <text class="grp" x="44" y="286">CLOUDFLARE EDGE</text>
+
+  <rect class="cl" x="32" y="384" width="420" height="248" rx="8"/>
+  <text class="grp" x="44" y="404">APPLICATION PLATFORM</text>
+
+  <rect class="cl" x="520" y="44"  width="370" height="310" rx="8"/>
+  <text class="grp" x="532" y="64">REACHED ONLY FROM THE WORKER POOL</text>
+
+  <rect class="cl" x="520" y="384" width="370" height="216" rx="8"/>
+  <text class="grp" x="532" y="404">REACHED FROM THE API</text>
+
+  <rect class="cl" x="520" y="640" width="370" height="96" rx="8"/>
+  <text class="grp" x="532" y="660">POLLS THE FEED — NOTHING IS PUSHED TO IT</text>
+
+  <!-- ── client ───────────────────────────────────────────────── -->
+  <g fill="#eeedfe" stroke="#534ab7" stroke-width="1.3">
+    <rect x="52"  y="80"  width="170" height="56" rx="6"/>
+    <rect x="242" y="80"  width="170" height="56" rx="6"/>
+    <rect x="52"  y="156" width="360" height="56" rx="6"/>
+  </g>
+  <g fill="#3c3489" text-anchor="middle">
+    <text class="n"   x="137" y="103">Capacitor shell</text>
+    <text class="sub" x="137" y="120">App Store / Play</text>
+    <text class="n"   x="327" y="103">React PWA shell</text>
+    <text class="sub" x="327" y="120">player, admin console, offline UI</text>
+    <text class="n"   x="232" y="179">Service worker + on-device store</text>
+    <text class="sub" x="232" y="196">app shell cache, downloaded media, write outbox</text>
+  </g>
+
+  <!-- ── edge ─────────────────────────────────────────────────── -->
+  <rect x="52" y="300" width="360" height="42" rx="6" fill="#e1f5ee" stroke="#0f6e56" stroke-width="1.3"/>
+  <text class="n" x="232" y="320" fill="#085041" text-anchor="middle">CDN + WAF</text>
+  <text class="sub" x="232" y="334" fill="#085041" text-anchor="middle">signed-URL media delivery</text>
+
+  <!-- ── application ──────────────────────────────────────────── -->
+  <g fill="#e1f5ee" stroke="#0f6e56" stroke-width="1.3">
+    <rect x="52" y="418" width="360" height="58" rx="6"/>
+    <rect x="52" y="492" width="360" height="58" rx="6"/>
+    <rect x="52" y="566" width="360" height="58" rx="6"/>
+  </g>
+  <g fill="#085041" text-anchor="middle">
+    <text class="n"   x="232" y="441">API service</text>
+    <text class="sub" x="232" y="458">auth, RBAC, member state, review gate, sync</text>
+    <text class="sub" x="232" y="470">the only writer to Postgres</text>
+    <text class="n"   x="232" y="515">Feed service</text>
+    <text class="sub" x="232" y="532">podcast RSS, shared mind map</text>
+    <text class="sub" x="232" y="544">the one unauthenticated surface</text>
+    <text class="n"   x="232" y="589">Worker pool</text>
+    <text class="sub" x="232" y="606">pipeline steps, video render, external publish</text>
+    <text class="sub" x="232" y="618">the job ledger is the queue — no broker</text>
+  </g>
+
+  <!-- ── stores ───────────────────────────────────────────────── -->
+  <g fill="#f1efe8" stroke="#5f5e5a" stroke-width="1.3">
+    <rect x="32"  y="672" width="200" height="64" rx="6"/>
+    <rect x="252" y="672" width="200" height="64" rx="6"/>
+  </g>
+  <g fill="#444441" text-anchor="middle">
+    <text class="n"   x="132" y="697">PostgreSQL + pgvector</text>
+    <text class="sub" x="132" y="713">relational state, segments,</text>
+    <text class="sub" x="132" y="726">embeddings, job ledger + queue</text>
+    <text class="n"   x="352" y="697">Object storage</text>
+    <text class="sub" x="352" y="713">original + processed audio,</text>
+    <text class="sub" x="352" y="726">video, artwork — never public</text>
+  </g>
+
+  <!-- ── externals ────────────────────────────────────────────── -->
+  <g fill="#faece7" stroke="#993c1d" stroke-width="1.3">
+    <rect x="540" y="80"  width="330" height="44" rx="6"/>
+    <rect x="540" y="134" width="330" height="44" rx="6"/>
+    <rect x="540" y="188" width="330" height="44" rx="6"/>
+    <rect x="540" y="242" width="330" height="44" rx="6"/>
+    <rect x="540" y="296" width="330" height="44" rx="6"/>
+    <rect x="540" y="420" width="330" height="44" rx="6"/>
+    <rect x="540" y="474" width="330" height="44" rx="6"/>
+    <rect x="540" y="528" width="330" height="44" rx="6"/>
+    <rect x="540" y="676" width="330" height="44" rx="6"/>
+  </g>
+  <g fill="#712b13" text-anchor="middle">
+    <text class="n"   x="705" y="99">Speech-to-text</text>
+    <text class="sub" x="705" y="114">segment timestamps</text>
+    <text class="n"   x="705" y="153">Language model</text>
+    <text class="sub" x="705" y="168">summary, tags, scripture, mind map, scripts</text>
+    <text class="n"   x="705" y="207">Embedding model</text>
+    <text class="sub" x="705" y="222">cross-reference and search, one index</text>
+    <text class="n"   x="705" y="261">Video render + TTS</text>
+    <text class="sub" x="705" y="276">template path default, generative behind it</text>
+    <text class="n"   x="705" y="315">Instagram / TikTok / LinkedIn</text>
+    <text class="sub" x="705" y="330">publish-only, per-item status</text>
+    <text class="n"   x="705" y="439">Bible text API</text>
+    <text class="sub" x="705" y="454">verse text, cached</text>
+    <text class="n"   x="705" y="493">APNs / FCM / Web Push</text>
+    <text class="sub" x="705" y="508">store builds and browser</text>
+    <text class="n"   x="705" y="547">Transactional email</text>
+    <text class="sub" x="705" y="562">invitation and password reset only</text>
+    <text class="n"   x="705" y="695">Spotify podcast ingestion</text>
+    <text class="sub" x="705" y="710">feed-level state only, never per episode</text>
+  </g>
+
+  <!-- ── edges ────────────────────────────────────────────────── -->
+  <path class="l"  d="M222 108 H242"                          marker-end="url(#a)"/>
+  <path class="l"  d="M327 136 V156"                          marker-end="url(#a)"/>
+  <path class="l"  d="M412 108 H432 V321 H412"                marker-end="url(#a)" marker-start="url(#a)"/>
+  <path class="l"  d="M232 342 V418"                          marker-end="url(#a)"/>
+  <path class="l"  d="M412 331 H442 V521 H412"                marker-end="url(#a)"/>
+  <path class="l"  d="M132 632 V672"                          marker-end="url(#a)"/>
+  <path class="l"  d="M412 595 H442 V652 H352 V672"           marker-end="url(#a)" marker-start="url(#a)"/>
+  <path class="l"  d="M412 310 H470 V704 H452"                marker-end="url(#a)" marker-start="url(#a)"/>
+  <path class="l"  d="M412 580 H490 V199 H520"                marker-end="url(#a)"/>
+  <path class="l"  d="M412 447 H520"                          marker-end="url(#a)"/>
+  <path class="ld" d="M540 698 H505 V540 H412"                marker-end="url(#a)"/>
+
+  <!-- edge labels, each on its own plate so the line never runs through the text -->
+  <g>
+    <rect x="437" y="196" width="86" height="16" rx="3" fill="#fbfbf9"/>
+    <text class="edge" x="480" y="208" text-anchor="middle">streaming + downloads</text>
+
+    <rect x="474" y="486" width="72" height="16" rx="3" fill="#fbfbf9"/>
+    <text class="edge" x="510" y="498" text-anchor="middle">range requests</text>
+
+    <rect x="358" y="644" width="146" height="16" rx="3" fill="#fbfbf9"/>
+    <text class="edge" x="431" y="656" text-anchor="middle">read original, write processed</text>
+
+    <rect x="424" y="431" width="84" height="16" rx="3" fill="#fbfbf9"/>
+    <text class="edge" x="466" y="443" text-anchor="middle">request-path calls</text>
+
+    <rect x="428" y="524" width="74" height="16" rx="3" fill="#fbfbf9"/>
+    <text class="edge" x="465" y="536" text-anchor="middle">polls the feed</text>
+
+    <rect x="146" y="644" width="72" height="16" rx="3" fill="#fbfbf9"/>
+    <text class="edge" x="182" y="656" text-anchor="middle">all three roles</text>
+  </g>
+
+  <text class="note" x="32" y="775">What the drawing proves: no external model call and no bulk media byte ever sits inside a member request. Members touch only the</text>
+  <text class="note" x="32" y="793">CDN and the API; every model call lives behind the queue in the worker pool, and audio bypasses the application entirely. That is what</text>
+  <text class="note" x="32" y="811">makes project prd 6.5 — a failure in AI generation never blocks listening — structural rather than aspirational, and it is why the feed is</text>
+  <text class="note" x="32" y="829">drawn as its own component: it is the one unauthenticated surface, so it is kept out of the service that must never have one.</text>
+</svg>
