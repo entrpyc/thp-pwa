@@ -1,9 +1,9 @@
 # Teaching Hub — PRD
 
-| Platform | Progressive Web App — delivered on the web and listed in the Apple App Store and Google Play |
-| :---- | :---- |
-| Target Users | 100 members at launch → 1,000+ |
-| Scope | Full scope — everything the product is meant to be |
+| Platform     | Progressive Web App — delivered on the web and listed in the Apple App Store and Google Play |
+| :----------- | :-------------------------------------------------------------------------------------------- |
+| Target Users | 100 members at launch → 1,000+                                                               |
+| Scope        | Full scope — everything the product is meant to be                                           |
 
 ## 1. Executive summary
 
@@ -17,14 +17,14 @@ It is built as a Progressive Web App on a single codebase, reachable from any br
 
 ## 2. Product overview
 
-| Product name | Teaching Hub (working title) |
-| :---- | :---- |
-| Product type | Progressive Web App, distributed via web and app stores |
-| Target audience | Private ministry group members — 100 at launch, scaling to 1,000+ |
-| Access model | Invite-only, login required, all content member-exclusive |
-| Content cadence | Weekly teaching upload, plus back-catalogue processing |
-| External distribution | Spotify (teaching series as podcasts); Instagram, TikTok and LinkedIn (video reels) |
-| Core purpose | A single hub where every teaching becomes durable, searchable and interconnected — and where members engage with it all week rather than hearing it once |
+| Product name          | Teaching Hub (working title)                                                                                                                              |
+| :-------------------- | :-------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| Product type          | Progressive Web App, distributed via web and app stores                                                                                                   |
+| Target audience       | Private ministry group members — 100 at launch, scaling to 1,000+                                                                                        |
+| Access model          | Invite-only, login required, all content member-exclusive                                                                                                 |
+| Content cadence       | Weekly teaching upload, plus back-catalogue processing                                                                                                    |
+| External distribution | Spotify (teaching series as podcasts); Instagram, TikTok and LinkedIn (video reels)                                                                       |
+| Core purpose          | A single hub where every teaching becomes durable, searchable and interconnected — and where members engage with it all week rather than hearing it once |
 
 ## 3. Features
 
@@ -32,11 +32,11 @@ It is built as a Progressive Web App on a single codebase, reachable from any br
 
 *Everything in the product sits behind this. The group is private by design: there is no public surface and no self-signup.*
 
-| Role | Description | Permissions |
-| :---- | :---- | :---- |
-| Admin | Owner and designated group members who control the platform | Everything a Contributor can do, plus: manage users and roles, review and publish AI summaries and metadata, moderate and pin timestamp notes, author and attach questionnaires, curate Flow Tracker question banks, configure audio processing settings, publish to external platforms, broadcast announcements, close or remove SOS signals |
-| Contributor | Trusted members who help produce content | Upload recordings, manage series and series artwork, correct transcripts, generate AI videos, generate and edit AI summary drafts, generate and curate recording mind maps |
-| Member | Authenticated group members | Stream and download recordings, view published videos and summaries, generate personal mind maps, write timestamp notes, complete questionnaires, use the Flow Tracker, manage Highlights, raise and respond to SOS signals, search the library |
+| Role        | Description                                                 | Permissions                                                                                                                                                                                                                                                                                                                                   |
+| :---------- | :---------------------------------------------------------- | :-------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| Admin       | Owner and designated group members who control the platform | Everything a Contributor can do, plus: manage users and roles, review and publish AI summaries and metadata, moderate and pin timestamp notes, author and attach questionnaires, curate Flow Tracker question banks, configure audio processing settings, publish to external platforms, broadcast announcements, close or remove SOS signals |
+| Contributor | Trusted members who help produce content                    | Upload recordings, manage series and series artwork, correct transcripts, generate AI videos, generate and edit AI summary drafts, generate and curate recording mind maps                                                                                                                                                                    |
+| Member      | Authenticated group members                                 | Stream and download recordings, view published videos and summaries, generate personal mind maps, write timestamp notes, complete questionnaires, use the Flow Tracker, manage Highlights, raise and respond to SOS signals, search the library                                                                                               |
 
 **Functional requirements**
 
@@ -153,15 +153,15 @@ It is built as a Progressive Web App on a single codebase, reachable from any br
 
 **Functional requirements**
 
-- **3.7.1** Scripture references are automatically suggested from the transcript (3.5) and the recording's topics, produced as suggestions rather than published facts.
-- **3.7.2** An admin reviews suggested references and can accept, edit, remove or manually add references before the recording publishes (4.17.2).
-- **3.7.3** References are stored as structured citations — book, chapter, and verse or verse range — not as free text, so they can be compared across teachings.
-- **3.7.4** Each reference displays the full verse text, readable without leaving the recording page.
-- **3.7.5** Published references appear on the recording page alongside the summary (3.6.7).
-- **3.7.6** Each displayed reference is a navigable link into the cross-referencing layer (3.9.4).
-- **3.7.7** Members can find teachings by scripture citation through search (3.10.5).
-- **3.7.8** A teaching in which no scripture is found still reaches the review queue holding an empty list, so an admin confirms that it cites none rather than the item never arriving. "Reviewed and found none" is a different fact from "nobody has looked yet", and the empty item is what makes 3.7.2's manual addition reachable for a teaching the automatic suggestion missed entirely.
-- **3.7.9** Verse text is drawn from one free-to-use translation, named in deployment configuration rather than in code. The product holds one translation at a time and offers a member no choice between translations; the translation in use is named wherever its verse text is read, so nobody has to guess which words they are looking at.
+- - 🔨 3.7.1 Scripture references are automatically suggested from the transcript (3.5) and the recording's topics, produced as suggestions rather than published facts.
+- - ✅ 3.7.2 An admin reviews suggested references and can accept, edit, remove or manually add references before the recording publishes (4.17.2).
+- - ✅ 3.7.3 References are stored as structured citations — book, chapter, and verse or verse range — not as free text, so they can be compared across teachings.
+- - ✅ 3.7.4 Each reference displays the full verse text, readable without leaving the recording page.
+- - ✅ 3.7.5 Published references appear on the recording page alongside the summary (3.6.7).
+- - 📝 3.7.6 Each displayed reference is a navigable link into the cross-referencing layer (3.9.4).
+- - 📝 3.7.7 Members can find teachings by scripture citation through search (3.10.5).
+- - ✅ 3.7.8 A teaching in which no scripture is found still reaches the review queue holding an empty list, so an admin confirms that it cites none rather than the item never arriving. "Reviewed and found none" is a different fact from "nobody has looked yet", and the empty item is what makes 3.7.2's manual addition reachable for a teaching the automatic suggestion missed entirely.
+- - ✅ 3.7.9 Verse text is drawn from one free-to-use translation, named in deployment configuration rather than in code. The product holds one translation at a time and offers a member no choice between translations; the translation in use is named wherever its verse text is read, so nobody has to guess which words they are looking at.
 
 ### 📝 3.8 Mind maps
 
@@ -350,12 +350,12 @@ It is built as a Progressive Web App on a single codebase, reachable from any br
 
 *A prayer emergency channel. Any member can reach the whole group, and the group can respond.*
 
-| Colour | When to use |
-| :---- | :---- |
-| 🔴 Red | Immediate crisis — acute danger or medical emergency |
-| 🟠 Orange | Serious situation needing prompt prayer |
-| 🟡 Yellow | Difficult but not urgent — an ongoing struggle |
-| 🟢 Green | General prayer request, no urgency |
+| Colour    | When to use                                           |
+| :-------- | :---------------------------------------------------- |
+| 🔴 Red    | Immediate crisis — acute danger or medical emergency |
+| 🟠 Orange | Serious situation needing prompt prayer               |
+| 🟡 Yellow | Difficult but not urgent — an ongoing struggle       |
+| 🟢 Green  | General prayer request, no urgency                    |
 
 **Functional requirements**
 
@@ -385,17 +385,17 @@ It is built as a Progressive Web App on a single codebase, reachable from any br
 
 **Events**
 
-| # | Event | Trigger | Who receives it |
-| :---- | :---- | :---- | :---- |
-| 3.17.4 | New recording published | An admin publishes a recording (3.2.2) | All members |
-| 3.17.5 | New video published | A video is approved and published (3.11.4.6) | All members |
-| 3.17.6 | Note reply | Another member replies to your public note (3.12.16) | Note author |
-| 3.17.7 | SOS raised | A member raises a signal (3.16.3) | All members |
-| 3.17.8 | SOS reply | A member replies to your signal (3.16.7) | Signal author |
-| 3.17.9 | Admin announcement | An admin sends a manual broadcast | All members |
-| 3.17.10 | Summary ready for review | An AI summary reaches draft state (3.6.3) | Admins |
-| 3.17.11 | Video generation complete | Generation finishes or fails (3.11.4.5) | The creator who triggered it |
-| 3.17.12 | Processing failure | Audio processing or transcription fails (3.4.11, 3.5.8) | Admins |
+| #       | Event                     | Trigger                                                 | Who receives it              |
+| :------ | :------------------------ | :------------------------------------------------------ | :--------------------------- |
+| 3.17.4  | New recording published   | An admin publishes a recording (3.2.2)                  | All members                  |
+| 3.17.5  | New video published       | A video is approved and published (3.11.4.6)            | All members                  |
+| 3.17.6  | Note reply                | Another member replies to your public note (3.12.16)    | Note author                  |
+| 3.17.7  | SOS raised                | A member raises a signal (3.16.3)                       | All members                  |
+| 3.17.8  | SOS reply                 | A member replies to your signal (3.16.7)                | Signal author                |
+| 3.17.9  | Admin announcement        | An admin sends a manual broadcast                       | All members                  |
+| 3.17.10 | Summary ready for review  | An AI summary reaches draft state (3.6.3)               | Admins                       |
+| 3.17.11 | Video generation complete | Generation finishes or fails (3.11.4.5)                 | The creator who triggered it |
+| 3.17.12 | Processing failure        | Audio processing or transcription fails (3.4.11, 3.5.8) | Admins                       |
 
 **Preferences**
 
@@ -478,21 +478,21 @@ It is built as a Progressive Web App on a single codebase, reachable from any br
 
 #### 🔨 3.21.1 Weekly pipeline
 
-| Step | Action | Owner | Feature |
-| :---- | :---- | :---- | :---- |
-| 1 | Record teaching session | Teacher / Admin | — |
-| 2 | Upload recording | Admin / Contributor | 3.2.1 |
-| 3 | Audio processing: noise reduction, voice enhancement, normalisation | Automated | 3.4 |
-| 4 | Transcription | Automated | 3.5 |
-| 5 | Summary, scripture references and tags generated as drafts | Automated | 3.6, 3.7, 4.17.1 |
-| 6 | Mind map generated | Automated | 3.8.1 |
-| 7 | Cross-references computed against the existing library | Automated | 3.9.6 |
-| 8 | Metadata, summary and references reviewed and approved | Admin | 4.17.2 |
-| 9 | Recording published, members notified | Admin | 3.2.2, 3.17.4 |
-| 10 | Reflective questionnaire authored and attached | Admin | 3.13 |
-| 11 | Video content produced from the teaching | Admin / Contributor | 3.11 |
-| 12 | Members listen, annotate, reflect | All members | 3.2, 3.12, 3.13 |
-| 13 | External distribution to Spotify and social platforms | Admin | 3.20 |
+| Step | Action                                                              | Owner               | Feature          |
+| :--- | :------------------------------------------------------------------ | :------------------ | :--------------- |
+| 1    | Record teaching session                                             | Teacher / Admin     | —               |
+| 2    | Upload recording                                                    | Admin / Contributor | 3.2.1            |
+| 3    | Audio processing: noise reduction, voice enhancement, normalisation | Automated           | 3.4              |
+| 4    | Transcription                                                       | Automated           | 3.5              |
+| 5    | Summary, scripture references and tags generated as drafts          | Automated           | 3.6, 3.7, 4.17.1 |
+| 6    | Mind map generated                                                  | Automated           | 3.8.1            |
+| 7    | Cross-references computed against the existing library              | Automated           | 3.9.6            |
+| 8    | Metadata, summary and references reviewed and approved              | Admin               | 4.17.2           |
+| 9    | Recording published, members notified                               | Admin               | 3.2.2, 3.17.4    |
+| 10   | Reflective questionnaire authored and attached                      | Admin               | 3.13             |
+| 11   | Video content produced from the teaching                            | Admin / Contributor | 3.11             |
+| 12   | Members listen, annotate, reflect                                   | All members         | 3.2, 3.12, 3.13  |
+| 13   | External distribution to Spotify and social platforms               | Admin               | 3.20             |
 
 #### 🔨 3.21.2 Pipeline requirements
 
@@ -519,188 +519,188 @@ It is built as a Progressive Web App on a single codebase, reachable from any br
 
 ### 4.1 User account
 
-| Field | Set by | Notes |
-| :---- | :---- | :---- |
-| Email address | User-set at invitation | Identity and login (3.1.1) |
-| Display name | User-set | Shown on public notes and SOS signals (3.1.12) |
-| Avatar | User-set | Optional |
-| Role | Admin-set | Admin, Contributor or Member (3.1) |
-| Status | Admin-set | Invited, active or deactivated; deactivation is reversible (3.1.7) |
-| Notification preferences | User-set | Per event category (3.17.13) |
-| Preferred playback speed | User-set | One of the six steps at 3.2.4, applied to every recording on every device |
-| Password | User-set | Held only as a hash; reset, never recovered (3.1.6, 3.1.13) |
-| Date joined | Auto-set | On invitation acceptance |
+| Field                    | Set by                 | Notes                                                                     |
+| :----------------------- | :--------------------- | :------------------------------------------------------------------------ |
+| Email address            | User-set at invitation | Identity and login (3.1.1)                                                |
+| Display name             | User-set               | Shown on public notes and SOS signals (3.1.12)                            |
+| Avatar                   | User-set               | Optional                                                                  |
+| Role                     | Admin-set              | Admin, Contributor or Member (3.1)                                        |
+| Status                   | Admin-set              | Invited, active or deactivated; deactivation is reversible (3.1.7)        |
+| Notification preferences | User-set               | Per event category (3.17.13)                                              |
+| Preferred playback speed | User-set               | One of the six steps at 3.2.4, applied to every recording on every device |
+| Password                 | User-set               | Held only as a hash; reset, never recovered (3.1.6, 3.1.13)               |
+| Date joined              | Auto-set               | On invitation acceptance                                                  |
 
 ### 4.2 Recording
 
-| Field | Set by | Notes |
-| :---- | :---- | :---- |
-| Title | Admin-set | Confirmed at upload |
-| Description | AI-suggested, admin-editable | 1–3 sentences from the transcript |
-| Topics / tags | AI-suggested, admin-editable | Admin can add or remove (4.7) |
-| Scripture references | AI-suggested, admin-editable | Structured citations (3.7.3) |
-| Date recorded | Admin-set | Primary sort key (3.3.1) |
-| Series | Admin-set | Optional (3.3.9) |
-| Duration | Not stored | Read from the media by the player at playback time. Nothing inspects the file on upload, so no list shows a running time and no progress is expressed as a percentage |
-| Publication status | Admin-set | Draft or published (3.2.2, 3.2.11) |
-| Original audio | Auto-retained | Unmodified upload, held in object storage that is never publicly addressable and reachable only through a signed URL (3.4.9, 3.2.13) |
-| Processed audio | Auto-generated | Output of 3.4. Until that step exists, the original is what is streamed |
+| Field                | Set by                       | Notes                                                                                                                                                                 |
+| :------------------- | :--------------------------- | :-------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| Title                | Admin-set                    | Confirmed at upload                                                                                                                                                   |
+| Description          | AI-suggested, admin-editable | 1–3 sentences from the transcript                                                                                                                                    |
+| Topics / tags        | AI-suggested, admin-editable | Admin can add or remove (4.7)                                                                                                                                         |
+| Scripture references | AI-suggested, admin-editable | Structured citations (3.7.3)                                                                                                                                          |
+| Date recorded        | Admin-set                    | Primary sort key (3.3.1)                                                                                                                                              |
+| Series               | Admin-set                    | Optional (3.3.9)                                                                                                                                                      |
+| Duration             | Not stored                   | Read from the media by the player at playback time. Nothing inspects the file on upload, so no list shows a running time and no progress is expressed as a percentage |
+| Publication status   | Admin-set                    | Draft or published (3.2.2, 3.2.11)                                                                                                                                    |
+| Original audio       | Auto-retained                | Unmodified upload, held in object storage that is never publicly addressable and reachable only through a signed URL (3.4.9, 3.2.13)                                  |
+| Processed audio      | Auto-generated               | Output of 3.4. Until that step exists, the original is what is streamed                                                                                               |
 
 ### 4.3 Series
 
-| Field | Set by | Notes |
-| :---- | :---- | :---- |
-| Title | Admin-set | Also the podcast feed title (3.20.10) |
-| Description | Admin-written | Series themes and goals |
-| Cover artwork | Admin-uploaded | Series poster and podcast artwork (3.3.3) |
-| Date range | Auto-calculated | Earliest to latest recording the reader may see |
-| Recording count | Auto-calculated | Over the recordings the reader may see, so a member counts published recordings only (3.3.5) |
-| External publication status | Auto-tracked | Per platform (3.20.7) |
+| Field                       | Set by          | Notes                                                                                        |
+| :-------------------------- | :-------------- | :------------------------------------------------------------------------------------------- |
+| Title                       | Admin-set       | Also the podcast feed title (3.20.10)                                                        |
+| Description                 | Admin-written   | Series themes and goals                                                                      |
+| Cover artwork               | Admin-uploaded  | Series poster and podcast artwork (3.3.3)                                                    |
+| Date range                  | Auto-calculated | Earliest to latest recording the reader may see                                              |
+| Recording count             | Auto-calculated | Over the recordings the reader may see, so a member counts published recordings only (3.3.5) |
+| External publication status | Auto-tracked    | Per platform (3.20.7)                                                                        |
 
 ### 4.4 Transcript
 
-| Field | Set by | Notes |
-| :---- | :---- | :---- |
-| Source recording | Auto-set | One transcript per recording |
-| Segments | Auto-generated | Each with start and end timestamps (3.5.2) |
-| Text | Auto-generated, admin-correctable | 3.5.5 |
-| Language | Pinned | English, recorded on the transcript rather than detected (3.5.7) |
-| Speaker | Auto-generated | The provider's anonymous index, per segment, nullable and never editable (3.5.9) |
-| Corrected by / at | Auto-set | Recorded per segment when a human changes it (3.5.5) |
-| Confidence | Auto-generated | Drives the flag at 3.5.8 |
+| Field             | Set by                            | Notes                                                                            |
+| :---------------- | :-------------------------------- | :------------------------------------------------------------------------------- |
+| Source recording  | Auto-set                          | One transcript per recording                                                     |
+| Segments          | Auto-generated                    | Each with start and end timestamps (3.5.2)                                       |
+| Text              | Auto-generated, admin-correctable | 3.5.5                                                                            |
+| Language          | Pinned                            | English, recorded on the transcript rather than detected (3.5.7)                 |
+| Speaker           | Auto-generated                    | The provider's anonymous index, per segment, nullable and never editable (3.5.9) |
+| Corrected by / at | Auto-set                          | Recorded per segment when a human changes it (3.5.5)                             |
+| Confidence        | Auto-generated                    | Drives the flag at 3.5.8                                                         |
 
 ### 4.5 AI summary
 
-| Field | Set by | Notes |
-| :---- | :---- | :---- |
-| Source recording | Auto-set | One summary per recording |
-| Text | AI-generated, admin-editable | Plain text with line breaks (3.6.8) |
-| Status | Admin-set | Draft or published (3.6.2, 3.6.12) |
-| Date generated | Auto-set | Reset on regeneration |
-| Generated by | Auto-set | Which model, which model version and which prompt version produced it (4.17.5) |
-| Regeneration prompt | Admin-set | Optional steer, retained with the draft it produced (3.6.9) |
+| Field               | Set by                       | Notes                                                                          |
+| :------------------ | :--------------------------- | :----------------------------------------------------------------------------- |
+| Source recording    | Auto-set                     | One summary per recording                                                      |
+| Text                | AI-generated, admin-editable | Plain text with line breaks (3.6.8)                                            |
+| Status              | Admin-set                    | Draft or published (3.6.2, 3.6.12)                                             |
+| Date generated      | Auto-set                     | Reset on regeneration                                                          |
+| Generated by        | Auto-set                     | Which model, which model version and which prompt version produced it (4.17.5) |
+| Regeneration prompt | Admin-set                    | Optional steer, retained with the draft it produced (3.6.9)                    |
 
 ### 4.6 Scripture reference
 
-| Field | Set by | Notes |
-| :---- | :---- | :---- |
-| Book, chapter, verse range | AI-suggested, admin-editable | Structured, not free text (3.7.3) |
-| Source recording | Auto-set | Which teaching cites it |
-| Origin | Auto-set | Whether the machine proposed this reference or an admin added it (4.17.5) |
-| Edited by admin | Auto-set | Whether an admin changed it before approving (4.17.5) |
+| Field                      | Set by                       | Notes                                                                     |
+| :------------------------- | :--------------------------- | :------------------------------------------------------------------------ |
+| Book, chapter, verse range | AI-suggested, admin-editable | Structured, not free text (3.7.3)                                         |
+| Source recording           | Auto-set                     | Which teaching cites it                                                   |
+| Origin                     | Auto-set                     | Whether the machine proposed this reference or an admin added it (4.17.5) |
+| Edited by admin            | Auto-set                     | Whether an admin changed it before approving (4.17.5)                     |
 
 A reference carries no status of its own. Suggested-versus-accepted is the state of the review item that holds the draft (4.17.6): a reference exists only once an admin has approved the list it belongs to, so a status field here would be a second answer to a question the review item already answers.
 
 ### 4.7 Topic / tag
 
-| Field | Set by | Notes |
-| :---- | :---- | :---- |
-| Name | Admin-set | Admins can create new tags at any time |
-| Applied to | AI-suggested, admin-editable | Typically 3–6 per item |
+| Field      | Set by                       | Notes                                  |
+| :--------- | :--------------------------- | :------------------------------------- |
+| Name       | Admin-set                    | Admins can create new tags at any time |
+| Applied to | AI-suggested, admin-editable | Typically 3–6 per item                |
 
 - Tags form a single shared taxonomy across recordings and videos: a tag used on a recording is the same tag used on a video.
 - Tags are a foundation for cross-referencing (3.9.3) and search (3.10.4).
 
 ### 4.8 Video
 
-| Field | Set by | Notes |
-| :---- | :---- | :---- |
-| Title | Admin-set | Can differ from the parent recording title |
-| Description | Admin-written | Short context for the video |
-| Topics / tags | Inherited from parent, admin-overridable | 3.11.5.4 |
-| Video type | Admin-set | Reel or summary video (3.11.1) |
-| Parent recording | Auto-set | The source teaching |
-| Style preset | Admin-set | 3.11.2 |
-| Audio layer | Admin-set | Original or AI voiceover (3.11.4.4) |
-| Duration | Auto-extracted | On generation |
-| Publication status | Admin-set | Internal and per external platform (3.20.7) |
+| Field              | Set by                                   | Notes                                       |
+| :----------------- | :--------------------------------------- | :------------------------------------------ |
+| Title              | Admin-set                                | Can differ from the parent recording title  |
+| Description        | Admin-written                            | Short context for the video                 |
+| Topics / tags      | Inherited from parent, admin-overridable | 3.11.5.4                                    |
+| Video type         | Admin-set                                | Reel or summary video (3.11.1)              |
+| Parent recording   | Auto-set                                 | The source teaching                         |
+| Style preset       | Admin-set                                | 3.11.2                                      |
+| Audio layer        | Admin-set                                | Original or AI voiceover (3.11.4.4)         |
+| Duration           | Auto-extracted                           | On generation                               |
+| Publication status | Admin-set                                | Internal and per external platform (3.20.7) |
 
 ### 4.9 Mind map
 
-| Field | Set by | Notes |
-| :---- | :---- | :---- |
-| Source | Auto-set | Parent recording or video |
-| Kind | Auto-set | Recording map (3.8.1) or personal map (3.8.5) |
-| Generated by | Auto-set | Determines visibility |
-| Date generated | Auto-set | Sort key in the personal library (3.8.8) |
-| Nodes and relationships | AI-generated; admin-editable for recording maps only | 3.8.2, 3.8.11 |
-| Share link | User-set | Personal maps only, reversible (3.8.13) |
+| Field                   | Set by                                               | Notes                                         |
+| :---------------------- | :--------------------------------------------------- | :-------------------------------------------- |
+| Source                  | Auto-set                                             | Parent recording or video                     |
+| Kind                    | Auto-set                                             | Recording map (3.8.1) or personal map (3.8.5) |
+| Generated by            | Auto-set                                             | Determines visibility                         |
+| Date generated          | Auto-set                                             | Sort key in the personal library (3.8.8)      |
+| Nodes and relationships | AI-generated; admin-editable for recording maps only | 3.8.2, 3.8.11                                 |
+| Share link              | User-set                                             | Personal maps only, reversible (3.8.13)       |
 
 Mind maps carry no title: the source recording or video title labels them in the library.
 
 ### 4.10 Timestamp note
 
-| Field | Set by | Notes |
-| :---- | :---- | :---- |
-| Recording | Auto-set | Which teaching the note belongs to |
-| Timestamp | Auto-set | Playback position at creation (3.12.1) |
-| Author | Auto-set | The member who wrote it |
-| Text | User-set | Plain text, 1,000 characters (3.12.5) |
-| Visibility | User-set at creation | Public or private (3.12.4) |
-| Parent note | Auto-set | Present on replies only, one level (3.12.7) |
-| Reactions | User-set | One per member per note (3.12.14) |
-| Pinned | Admin-set | Any number per recording; a note is pinned at most once (3.12.15) |
-| Status | Auto-set | Active or deleted |
+| Field       | Set by               | Notes                                                             |
+| :---------- | :------------------- | :---------------------------------------------------------------- |
+| Recording   | Auto-set             | Which teaching the note belongs to                                |
+| Timestamp   | Auto-set             | Playback position at creation (3.12.1)                            |
+| Author      | Auto-set             | The member who wrote it                                           |
+| Text        | User-set             | Plain text, 1,000 characters (3.12.5)                             |
+| Visibility  | User-set at creation | Public or private (3.12.4)                                        |
+| Parent note | Auto-set             | Present on replies only, one level (3.12.7)                       |
+| Reactions   | User-set             | One per member per note (3.12.14)                                 |
+| Pinned      | Admin-set            | Any number per recording; a note is pinned at most once (3.12.15) |
+| Status      | Auto-set             | Active or deleted                                                 |
 
 ### 4.11 Questionnaire & response
 
-| Field | Set by | Notes |
-| :---- | :---- | :---- |
-| Recording | Admin-set | One questionnaire per recording (3.13.1) |
-| Questions | Admin-written | Open reflection, multiple choice or scripture prompt (3.13.4) |
-| Response | User-set | Private to the member (3.13.8) |
-| Response status | Auto-set | In progress or complete (3.13.7) |
-| Last updated | Auto-set | Responses remain editable (3.13.9) |
+| Field           | Set by        | Notes                                                         |
+| :-------------- | :------------ | :------------------------------------------------------------ |
+| Recording       | Admin-set     | One questionnaire per recording (3.13.1)                      |
+| Questions       | Admin-written | Open reflection, multiple choice or scripture prompt (3.13.4) |
+| Response        | User-set      | Private to the member (3.13.8)                                |
+| Response status | Auto-set      | In progress or complete (3.13.7)                              |
+| Last updated    | Auto-set      | Responses remain editable (3.13.9)                            |
 
 ### 4.12 Flow tracker session
 
-| Field | Set by | Notes |
-| :---- | :---- | :---- |
-| Member | Auto-set | Strictly private (3.14.8) |
-| Divergence point | User-set | The teaching they fell behind at (3.14.2) |
-| Questions presented | Auto-assembled | From content and question banks (3.14.4) |
-| Responses | User-set | Never scored (3.14.9) |
-| Recommendations | Auto-generated | Recording plus timestamp links (3.14.7) |
-| Session status | Auto-set | In progress or complete (3.14.10) |
+| Field               | Set by         | Notes                                     |
+| :------------------ | :------------- | :---------------------------------------- |
+| Member              | Auto-set       | Strictly private (3.14.8)                 |
+| Divergence point    | User-set       | The teaching they fell behind at (3.14.2) |
+| Questions presented | Auto-assembled | From content and question banks (3.14.4)  |
+| Responses           | User-set       | Never scored (3.14.9)                     |
+| Recommendations     | Auto-generated | Recording plus timestamp links (3.14.7)   |
+| Session status      | Auto-set       | In progress or complete (3.14.10)         |
 
 ### 4.13 Question bank
 
-| Field | Set by | Notes |
-| :---- | :---- | :---- |
-| Scope | Admin-set | Attached to a teaching or a topic |
-| Questions | Admin-written | Feeds the Flow Tracker (3.14.11) |
+| Field     | Set by        | Notes                             |
+| :-------- | :------------ | :-------------------------------- |
+| Scope     | Admin-set     | Attached to a teaching or a topic |
+| Questions | Admin-written | Feeds the Flow Tracker (3.14.11)  |
 
 ### 4.14 Highlight entry
 
-| Field | Set by | Notes |
-| :---- | :---- | :---- |
-| Member | Auto-set | Private to them (3.15.9) |
-| Target | User-set | Recording, segment or own note (3.15.1–3.15.3) |
-| Timestamp | Auto-set | Present for segment and note entries |
-| Date pinned | Auto-set | Shown in the playlist (3.15.6) |
+| Field       | Set by   | Notes                                           |
+| :---------- | :------- | :---------------------------------------------- |
+| Member      | Auto-set | Private to them (3.15.9)                        |
+| Target      | User-set | Recording, segment or own note (3.15.1–3.15.3) |
+| Timestamp   | Auto-set | Present for segment and note entries            |
+| Date pinned | Auto-set | Shown in the playlist (3.15.6)                  |
 
 ### 4.15 SOS signal
 
-| Field | Set by | Notes |
-| :---- | :---- | :---- |
-| Author | Auto-set | Never anonymous (3.16.13) |
-| Urgency | User-set | Red, orange, yellow or green (3.16.1) |
-| Description | User-set | Short free text (3.16.2) |
-| Raised at | Auto-set | Sort key (3.16.4) |
-| Praying acknowledgements | User-set | One per member (3.16.5) |
-| Replies | User-set | Visible to all members (3.16.6) |
-| Status | Author or admin-set | Open, closed or removed (3.16.8–3.16.11) |
-| Closing note | Author-set | Optional (3.16.8) |
+| Field                    | Set by              | Notes                                     |
+| :----------------------- | :------------------ | :---------------------------------------- |
+| Author                   | Auto-set            | Never anonymous (3.16.13)                 |
+| Urgency                  | User-set            | Red, orange, yellow or green (3.16.1)     |
+| Description              | User-set            | Short free text (3.16.2)                  |
+| Raised at                | Auto-set            | Sort key (3.16.4)                         |
+| Praying acknowledgements | User-set            | One per member (3.16.5)                   |
+| Replies                  | User-set            | Visible to all members (3.16.6)           |
+| Status                   | Author or admin-set | Open, closed or removed (3.16.8–3.16.11) |
+| Closing note             | Author-set          | Optional (3.16.8)                         |
 
 ### 4.16 Notification
 
-| Field | Set by | Notes |
-| :---- | :---- | :---- |
-| Event type | Auto-set | One of 3.17.4–3.17.12 |
-| Recipient | Auto-derived | From the event's audience |
-| Source item | Auto-set | What to open when selected (3.17.3) |
-| Read state | Auto-set | Drives the unread count |
-| Delivered channels | Auto-set | Push, in-app, or both per preferences (3.17.13) |
+| Field              | Set by       | Notes                                           |
+| :----------------- | :----------- | :---------------------------------------------- |
+| Event type         | Auto-set     | One of 3.17.4–3.17.12                          |
+| Recipient          | Auto-derived | From the event's audience                       |
+| Source item        | Auto-set     | What to open when selected (3.17.3)             |
+| Read state         | Auto-set     | Drives the unread count                         |
+| Delivered channels | Auto-set     | Push, in-app, or both per preferences (3.17.13) |
 
 ### 4.17 Metadata population workflow
 
@@ -715,30 +715,30 @@ Mind maps carry no title: the source recording or video title labels them in the
 
 *One row per run of one automated step, and the record the pipeline status view (3.19.4) reads.*
 
-| Field | Set by | Notes |
-| :---- | :---- | :---- |
-| Recording | Auto-set | Which teaching the step belongs to |
-| Step | Auto-set | Which stage of the pipeline (3.21.1) |
-| Status | Auto-set | Pending, running, succeeded or failed. There is no retrying state, because nothing retries by itself (3.21.2.5) |
-| Attempt | Auto-set | Which run of that step this is. Every run is its own record; earlier ones are kept |
-| Error | Auto-set | Why the latest attempt failed, shown on the pipeline view (3.19.4) |
-| Enqueued / started / finished | Auto-set | The three timestamps the pipeline view reads |
-| Provider metadata | Auto-set | Model, billed quantity, spend and the provider's request id (3.19.13) |
-| Correlation id | Auto-set | Ties the job back to the request that caused it (§6, Auditability) |
+| Field                         | Set by   | Notes                                                                                                           |
+| :---------------------------- | :------- | :-------------------------------------------------------------------------------------------------------------- |
+| Recording                     | Auto-set | Which teaching the step belongs to                                                                              |
+| Step                          | Auto-set | Which stage of the pipeline (3.21.1)                                                                            |
+| Status                        | Auto-set | Pending, running, succeeded or failed. There is no retrying state, because nothing retries by itself (3.21.2.5) |
+| Attempt                       | Auto-set | Which run of that step this is. Every run is its own record; earlier ones are kept                              |
+| Error                         | Auto-set | Why the latest attempt failed, shown on the pipeline view (3.19.4)                                              |
+| Enqueued / started / finished | Auto-set | The three timestamps the pipeline view reads                                                                    |
+| Provider metadata             | Auto-set | Model, billed quantity, spend and the provider's request id (3.19.13)                                           |
+| Correlation id                | Auto-set | Ties the job back to the request that caused it (§6, Auditability)                                             |
 
 ## 5. Platform & distribution
 
 ### 5.1 Progressive Web App
 
-| Capability | Requirement | Notes |
-| :---- | :---- | :---- |
-| Installable | Add to home screen on iOS and Android | Behaves as an app once installed |
-| Offline support | Downloaded recordings and their attached content available with no connectivity | Full requirements at 3.18 |
-| Background audio | Playback continues when backgrounded or the device is locked, with lock-screen controls | Critical for mobile listening (3.2.6) |
-| Push notifications | Device-level delivery when the app is closed | Event model at 3.17 |
-| Responsive design | Usable on phone, tablet and desktop from one codebase | Admin work is desktop-weighted; member use is phone-weighted |
-| Media handling | Large audio upload, streaming playback, video playback | 3.2, 3.11 |
-| Local storage | Downloaded media and pending offline writes held on device | 3.18.11, 3.18.14 |
+| Capability         | Requirement                                                                             | Notes                                                        |
+| :----------------- | :-------------------------------------------------------------------------------------- | :----------------------------------------------------------- |
+| Installable        | Add to home screen on iOS and Android                                                   | Behaves as an app once installed                             |
+| Offline support    | Downloaded recordings and their attached content available with no connectivity         | Full requirements at 3.18                                    |
+| Background audio   | Playback continues when backgrounded or the device is locked, with lock-screen controls | Critical for mobile listening (3.2.6)                        |
+| Push notifications | Device-level delivery when the app is closed                                            | Event model at 3.17                                          |
+| Responsive design  | Usable on phone, tablet and desktop from one codebase                                   | Admin work is desktop-weighted; member use is phone-weighted |
+| Media handling     | Large audio upload, streaming playback, video playback                                  | 3.2, 3.11                                                    |
+| Local storage      | Downloaded media and pending offline writes held on device                              | 3.18.11, 3.18.14                                             |
 
 ### 5.2 App store distribution
 
@@ -765,24 +765,24 @@ Mind maps carry no title: the source recording or video title labels them in the
 
 ## 6. Non-functional requirements
 
-| Category | Requirement |
-| :---- | :---- |
-| Scalability | Supports 100 members at launch and scales to 1,000+ without re-architecture. Content volume grows unbounded: weekly additions plus the full back catalogue. |
-| Performance | Audio streaming begins within 2 seconds of pressing play. Search returns results within 2 seconds. Video plays smoothly at target resolutions. |
-| Processing latency | The automated pipeline (3.21.2.1) completes within a few hours of upload, so a recording uploaded after a session is reviewable the same day. |
-| Storage | Permanent retention of original and processed audio, transcripts, generated videos, mind maps, notes and all member-generated content. Nothing expires. |
-| Availability | Downloaded content remains fully usable during any outage. Degradation is graceful: a failure in AI generation or external publishing never blocks listening. |
-| Security | Authentication required for all content. Role-based access enforced server-side. Media storage is not publicly addressable. Every authorisation decision is evaluated in one place, against an actor, an action and a resource, and denies by default — a capability nobody wrote a rule for is refused rather than permitted. The unauthenticated surface is an enumerated list of routes rather than a convention, and no entry on it returns content. Passwords are held only as hashes; sessions are server-side and revocable on the spot; media is reached only through short-lived signed URLs issued after the authorisation check has already passed. |
-| Privacy | Private member content — private notes, personal mind maps, questionnaire responses, Flow Tracker sessions, Highlights — is never visible to other members or to admins, and never surfaces in another member's search results (3.10.9). |
-| Audio quality | One consistent sound profile across the entire library, with output suitable for both in-app playback and podcast distribution. |
-| Offline capability | Offline is a first-class mode, not a fallback. Members can complete a full listening session with no connectivity and sync cleanly on return. |
-| API-first | The product's capabilities are exposed through an API layer rather than being embedded in the interface, so store-packaged builds, the browser PWA and external publishing all work against the same contract. |
-| Content integrity | AI-generated content accurately reflects the teaching it derives from. Every AI output passes an admin review gate before any member sees it (4.17.3). |
-| Auditability | External publishes (3.20.8) and admin actions on member content (3.12.10, 3.16.11) are logged with actor and timestamp. Every request and every pipeline job carries one correlation id through the application, the worker and the logs, so a single action is followable end to end across both processes. |
-| Operability | The product answers a health check that reflects a real database round-trip and is readable without a session, so monitoring never needs a credential. Both processes are supervised, start on boot and restart on failure. Logs are structured and carry the correlation id of the request or job that produced them. |
-| Durability | The database is backed up nightly with continuous write-ahead archiving to object storage held separately from the media bucket, and a restore is proven by drill rather than assumed. An unverified backup is not a backup. |
-| Cost accountability | Every provider call records what it spent — model, billed quantity, cost and the provider's request id — against the job that made it, so running cost is measured rather than estimated. A single switch puts every external provider into a local mock, so no development or test run can reach a paid one by accident. |
-| Accessibility | Text is legible at increased system font sizes, controls are reachable by keyboard on desktop, and media controls carry accessible labels. |
+| Category            | Requirement                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                     |
+| :------------------ | :-------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| Scalability         | Supports 100 members at launch and scales to 1,000+ without re-architecture. Content volume grows unbounded: weekly additions plus the full back catalogue.                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                     |
+| Performance         | Audio streaming begins within 2 seconds of pressing play. Search returns results within 2 seconds. Video plays smoothly at target resolutions.                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                  |
+| Processing latency  | The automated pipeline (3.21.2.1) completes within a few hours of upload, so a recording uploaded after a session is reviewable the same day.                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                   |
+| Storage             | Permanent retention of original and processed audio, transcripts, generated videos, mind maps, notes and all member-generated content. Nothing expires.                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                         |
+| Availability        | Downloaded content remains fully usable during any outage. Degradation is graceful: a failure in AI generation or external publishing never blocks listening.                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                   |
+| Security            | Authentication required for all content. Role-based access enforced server-side. Media storage is not publicly addressable. Every authorisation decision is evaluated in one place, against an actor, an action and a resource, and denies by default — a capability nobody wrote a rule for is refused rather than permitted. The unauthenticated surface is an enumerated list of routes rather than a convention, and no entry on it returns content. Passwords are held only as hashes; sessions are server-side and revocable on the spot; media is reached only through short-lived signed URLs issued after the authorisation check has already passed. |
+| Privacy             | Private member content — private notes, personal mind maps, questionnaire responses, Flow Tracker sessions, Highlights — is never visible to other members or to admins, and never surfaces in another member's search results (3.10.9).                                                                                                                                                                                                                                                                                                                                                                                                                      |
+| Audio quality       | One consistent sound profile across the entire library, with output suitable for both in-app playback and podcast distribution.                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                 |
+| Offline capability  | Offline is a first-class mode, not a fallback. Members can complete a full listening session with no connectivity and sync cleanly on return.                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                   |
+| API-first           | The product's capabilities are exposed through an API layer rather than being embedded in the interface, so store-packaged builds, the browser PWA and external publishing all work against the same contract.                                                                                                                                                                                                                                                                                                                                                                                                                                                  |
+| Content integrity   | AI-generated content accurately reflects the teaching it derives from. Every AI output passes an admin review gate before any member sees it (4.17.3).                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                          |
+| Auditability        | External publishes (3.20.8) and admin actions on member content (3.12.10, 3.16.11) are logged with actor and timestamp. Every request and every pipeline job carries one correlation id through the application, the worker and the logs, so a single action is followable end to end across both processes.                                                                                                                                                                                                                                                                                                                                                    |
+| Operability         | The product answers a health check that reflects a real database round-trip and is readable without a session, so monitoring never needs a credential. Both processes are supervised, start on boot and restart on failure. Logs are structured and carry the correlation id of the request or job that produced them.                                                                                                                                                                                                                                                                                                                                          |
+| Durability          | The database is backed up nightly with continuous write-ahead archiving to object storage held separately from the media bucket, and a restore is proven by drill rather than assumed. An unverified backup is not a backup.                                                                                                                                                                                                                                                                                                                                                                                                                                    |
+| Cost accountability | Every provider call records what it spent — model, billed quantity, cost and the provider's request id — against the job that made it, so running cost is measured rather than estimated. A single switch puts every external provider into a local mock, so no development or test run can reach a paid one by accident.                                                                                                                                                                                                                                                                                                                                     |
+| Accessibility       | Text is legible at increased system font sizes, controls are reachable by keyboard on desktop, and media controls carry accessible labels.                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                      |
 
 ## 7. Technical feasibility & high-level approach
 
@@ -821,75 +821,75 @@ Mind maps carry no title: the source recording or video title labels them in the
 _Per feature and functional requirement. Written by active-scope-finalize, once per delivered scope._
 _This table is the only record of what is left to build._
 
-| Requirement | Status | Scope | Missing |
-| :---- | :---- | :---- | :---- |
-| **3.1 Accounts & access** | partial | core listening | self-service account deletion and what it does to authored content; avatars |
-| 3.1.1–3.1.7 | complete | core listening | |
-| 3.1.8–3.1.10 | not started | — | |
-| 3.1.11 | complete | core listening | |
-| 3.1.12 | partial | core listening, notes | the avatar — the display name is stored and is what a note's author line shows |
-| 3.1.13–3.1.14 | complete | core listening | |
-| **3.2 Audio recordings & playback** | partial | core listening | background and lock-screen playback, listening history, completion state, replacing a recording's audio |
-| 3.2.1 | partial | core listening | the Contributor role — uploading is Admin-only |
-| 3.2.2–3.2.5 | complete | core listening | |
-| 3.2.6–3.2.8 | not started | — | |
-| 3.2.9 | complete | core listening | |
-| 3.2.10 | not started | — | |
-| 3.2.11–3.2.14 | complete | core listening | |
-| **3.3 Content organisation & series** | partial | core listening | series artwork, podcast-shaped series metadata, videos in the series view |
-| 3.3.1–3.3.2 | complete | core listening | |
-| 3.3.3 | not started | — | |
-| 3.3.4–3.3.5 | complete | core listening | |
-| 3.3.6 | partial | core listening | reordering and merging series; the Contributor role |
-| 3.3.7–3.3.8 | not started | — | |
-| 3.3.9–3.3.10 | complete | core listening | |
-| **3.4 Audio processing & quality** | not started | — | |
-| **3.5 Transcription** | partial | core listening | the Contributor role; regeneration of the derived artefacts that do not exist yet |
-| 3.5.1–3.5.4 | complete | core listening | |
-| 3.5.5 | partial | core listening | the Contributor role — correcting is Admin-only |
-| 3.5.6 | partial | core listening, scripture | the offer reaches the summary and the scripture references; the mind map, tags and cross-references it also names are unbuilt |
-| 3.5.7–3.5.10 | complete | core listening | |
-| **3.6 AI summaries** | partial | core listening | the in-app notification that a draft is ready to review |
-| 3.6.1–3.6.2 | complete | core listening | |
-| 3.6.3 | not started | — | |
-| 3.6.4–3.6.8 | complete | core listening | |
-| 3.6.9 | partial | core listening | the notification when the regenerated draft is ready — steering and the one-in-flight rule are built |
-| 3.6.10–3.6.14 | complete | core listening | |
-| **3.7 Scripture references** | partial | scripture | the link into cross-referencing and the search by citation, each waiting on a layer that does not exist; topics as a second input to drafting |
-| 3.7.1 | partial | scripture | the recording's topics as a second input — references are drafted from the transcript alone, because tags (4.7) are not built |
-| 3.7.2–3.7.5 | complete | scripture | |
-| 3.7.6 | not started | — | |
-| 3.7.7 | not started | — | |
-| 3.7.8–3.7.9 | complete | scripture | |
-| **3.8 Mind maps** | not started | — | |
-| **3.9 Intelligent cross-referencing** | not started | — | |
-| **3.10 Semantic search** | not started | — | |
-| **3.11 AI video generation** | not started | — | |
-| **3.12 Timestamp notes** | partial | notes | the reply notification (3.12.16) and pinning a note to Highlights (3.12.17) — each waits on a feature nothing has built |
-| 3.12.1–3.12.15 | complete | notes | |
-| 3.12.16–3.12.17 | not started | — | |
-| 3.12.18–3.12.20 | complete | notes | |
-| **3.13 Reflective questionnaires** | not started | — | |
-| **3.14 Flow tracker** | not started | — | |
-| **3.15 Highlights playlist** | not started | — | |
-| **3.16 SOS signal** | not started | — | |
-| **3.17 Notifications** | not started | — | |
-| **3.18 Offline support & downloads** | not started | — | |
-| **3.19 Admin dashboard** | partial | core listening, scripture | the video, questionnaire, announcement, sound-profile, external-publishing and SOS surfaces |
-| 3.19.1 | partial | core listening | the Contributor role — the dashboard is Admin-only |
-| 3.19.2 | partial | core listening, scripture | back-catalogue items (3.21.3.4); the queue carries draft summaries, metadata and scripture references |
-| 3.19.3–3.19.4 | complete | core listening | |
-| 3.19.5 | partial | core listening | artwork upload; reordering and merging |
-| 3.19.6–3.19.8 | not started | — | |
-| 3.19.9 | complete | core listening | |
-| 3.19.10–3.19.12 | not started | — | |
-| 3.19.13 | complete | core listening | |
-| **3.20 External distribution** | not started | — | |
-| **3.21 Content pipeline & back-catalogue processing** | partial | core listening | audio processing, mind map and cross-reference steps; bulk back-catalogue processing |
-| 3.21.1 | partial | core listening, scripture | steps 3, 6, 7 and 10–13 have no feature behind them yet; step 5's tags are unbuilt, its summary, description and scripture references are not |
-| 3.21.2.1 | partial | core listening | only transcription and draft generation run automatically — steps 3, 6 and 7 do not exist |
-| 3.21.2.2–3.21.2.7 | complete | core listening | |
-| 3.21.3 | not started | — | |
+| Requirement                                                 | Status      | Scope                     | Missing                                                                                                                                        |
+| :---------------------------------------------------------- | :---------- | :------------------------ | :--------------------------------------------------------------------------------------------------------------------------------------------- |
+| **3.1 Accounts & access**                             | partial     | core listening            | self-service account deletion and what it does to authored content; avatars                                                                    |
+| 3.1.1–3.1.7                                                | complete    | core listening            |                                                                                                                                                |
+| 3.1.8–3.1.10                                               | not started | —                        |                                                                                                                                                |
+| 3.1.11                                                      | complete    | core listening            |                                                                                                                                                |
+| 3.1.12                                                      | partial     | core listening, notes     | the avatar — the display name is stored and is what a note's author line shows                                                                |
+| 3.1.13–3.1.14                                              | complete    | core listening            |                                                                                                                                                |
+| **3.2 Audio recordings & playback**                   | partial     | core listening            | background and lock-screen playback, listening history, completion state, replacing a recording's audio                                        |
+| 3.2.1                                                       | partial     | core listening            | the Contributor role — uploading is Admin-only                                                                                                |
+| 3.2.2–3.2.5                                                | complete    | core listening            |                                                                                                                                                |
+| 3.2.6–3.2.8                                                | not started | —                        |                                                                                                                                                |
+| 3.2.9                                                       | complete    | core listening            |                                                                                                                                                |
+| 3.2.10                                                      | not started | —                        |                                                                                                                                                |
+| 3.2.11–3.2.14                                              | complete    | core listening            |                                                                                                                                                |
+| **3.3 Content organisation & series**                 | partial     | core listening            | series artwork, podcast-shaped series metadata, videos in the series view                                                                      |
+| 3.3.1–3.3.2                                                | complete    | core listening            |                                                                                                                                                |
+| 3.3.3                                                       | not started | —                        |                                                                                                                                                |
+| 3.3.4–3.3.5                                                | complete    | core listening            |                                                                                                                                                |
+| 3.3.6                                                       | partial     | core listening            | reordering and merging series; the Contributor role                                                                                            |
+| 3.3.7–3.3.8                                                | not started | —                        |                                                                                                                                                |
+| 3.3.9–3.3.10                                               | complete    | core listening            |                                                                                                                                                |
+| **3.4 Audio processing & quality**                    | not started | —                        |                                                                                                                                                |
+| **3.5 Transcription**                                 | partial     | core listening            | the Contributor role; regeneration of the derived artefacts that do not exist yet                                                              |
+| 3.5.1–3.5.4                                                | complete    | core listening            |                                                                                                                                                |
+| 3.5.5                                                       | partial     | core listening            | the Contributor role — correcting is Admin-only                                                                                               |
+| 3.5.6                                                       | partial     | core listening, scripture | the offer reaches the summary and the scripture references; the mind map, tags and cross-references it also names are unbuilt                  |
+| 3.5.7–3.5.10                                               | complete    | core listening            |                                                                                                                                                |
+| **3.6 AI summaries**                                  | partial     | core listening            | the in-app notification that a draft is ready to review                                                                                        |
+| 3.6.1–3.6.2                                                | complete    | core listening            |                                                                                                                                                |
+| 3.6.3                                                       | not started | —                        |                                                                                                                                                |
+| 3.6.4–3.6.8                                                | complete    | core listening            |                                                                                                                                                |
+| 3.6.9                                                       | partial     | core listening            | the notification when the regenerated draft is ready — steering and the one-in-flight rule are built                                          |
+| 3.6.10–3.6.14                                              | complete    | core listening            |                                                                                                                                                |
+| **3.7 Scripture references**                          | partial     | scripture                 | the link into cross-referencing and the search by citation, each waiting on a layer that does not exist; topics as a second input to drafting  |
+| 3.7.1                                                       | partial     | scripture                 | the recording's topics as a second input — references are drafted from the transcript alone, because tags (4.7) are not built                 |
+| 3.7.2–3.7.5                                                | complete    | scripture                 |                                                                                                                                                |
+| 3.7.6                                                       | not started | —                        |                                                                                                                                                |
+| 3.7.7                                                       | not started | —                        |                                                                                                                                                |
+| 3.7.8–3.7.9                                                | complete    | scripture                 |                                                                                                                                                |
+| **3.8 Mind maps**                                     | not started | —                        |                                                                                                                                                |
+| **3.9 Intelligent cross-referencing**                 | not started | —                        |                                                                                                                                                |
+| **3.10 Semantic search**                              | not started | —                        |                                                                                                                                                |
+| **3.11 AI video generation**                          | not started | —                        |                                                                                                                                                |
+| **3.12 Timestamp notes**                              | partial     | notes                     | the reply notification (3.12.16) and pinning a note to Highlights (3.12.17) — each waits on a feature nothing has built                       |
+| 3.12.1–3.12.15                                             | complete    | notes                     |                                                                                                                                                |
+| 3.12.16–3.12.17                                            | not started | —                        |                                                                                                                                                |
+| 3.12.18–3.12.20                                            | complete    | notes                     |                                                                                                                                                |
+| **3.13 Reflective questionnaires**                    | not started | —                        |                                                                                                                                                |
+| **3.14 Flow tracker**                                 | not started | —                        |                                                                                                                                                |
+| **3.15 Highlights playlist**                          | not started | —                        |                                                                                                                                                |
+| **3.16 SOS signal**                                   | not started | —                        |                                                                                                                                                |
+| **3.17 Notifications**                                | not started | —                        |                                                                                                                                                |
+| **3.18 Offline support & downloads**                  | not started | —                        |                                                                                                                                                |
+| **3.19 Admin dashboard**                              | partial     | core listening, scripture | the video, questionnaire, announcement, sound-profile, external-publishing and SOS surfaces                                                    |
+| 3.19.1                                                      | partial     | core listening            | the Contributor role — the dashboard is Admin-only                                                                                            |
+| 3.19.2                                                      | partial     | core listening, scripture | back-catalogue items (3.21.3.4); the queue carries draft summaries, metadata and scripture references                                          |
+| 3.19.3–3.19.4                                              | complete    | core listening            |                                                                                                                                                |
+| 3.19.5                                                      | partial     | core listening            | artwork upload; reordering and merging                                                                                                         |
+| 3.19.6–3.19.8                                              | not started | —                        |                                                                                                                                                |
+| 3.19.9                                                      | complete    | core listening            |                                                                                                                                                |
+| 3.19.10–3.19.12                                            | not started | —                        |                                                                                                                                                |
+| 3.19.13                                                     | complete    | core listening            |                                                                                                                                                |
+| **3.20 External distribution**                        | not started | —                        |                                                                                                                                                |
+| **3.21 Content pipeline & back-catalogue processing** | partial     | core listening            | audio processing, mind map and cross-reference steps; bulk back-catalogue processing                                                           |
+| 3.21.1                                                      | partial     | core listening, scripture | steps 3, 6, 7 and 10–13 have no feature behind them yet; step 5's tags are unbuilt, its summary, description and scripture references are not |
+| 3.21.2.1                                                    | partial     | core listening            | only transcription and draft generation run automatically — steps 3, 6 and 7 do not exist                                                     |
+| 3.21.2.2–3.21.2.7                                          | complete    | core listening            |                                                                                                                                                |
+| 3.21.3                                                      | not started | —                        |                                                                                                                                                |
 
 _Statuses for features this scope did not touch are carried from the ✅ / 🔨 / 📝 markers the
 requirements already carried, spot-checked against the code rather than re-audited._
