@@ -9,7 +9,7 @@ import { logger } from '@/server/observability/logger';
  * **The one place a playback URL is minted** (Story 4 Ticket 02).
  *
  * It is one function on purpose, and the reason is written down in
- * docs/epics/epic-core-listening/architecture.md § Extension points under *Second media pointer*:
+ * core-listening scope tdd § Extension points under *Second media pointer*:
  * [§3.4](docs/project/prd.md) later gives a recording a processed rendition and makes playback
  * prefer it, falling back to the original — and that is a change to one function only if there is
  * one of it. A second call site is what turns a back-fill that runs recording by recording into a

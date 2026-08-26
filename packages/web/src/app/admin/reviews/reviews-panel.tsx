@@ -539,7 +539,7 @@ function ReviewRow({
  * Every row is the four things a citation is made of, as four controls — a book to pick, a
  * chapter, and the verses it runs between. Never a text box: a citation typed as prose is a
  * citation somebody has to parse back, which is the whole of what
- * [§ 6 Content integrity](docs/active-scope/prd.md) refuses.
+ * scope prd refuses.
  *
  * **A row is thrown out on one press.** Removing one is an edit to a draft that is not saved until
  * the admin approves, so the confirming press stays where it belongs — on discard, which is what
@@ -551,7 +551,7 @@ function ReviewRow({
  *
  * **An empty list says so in words** (1.5.3). An empty box would read as a draft that failed; what
  * actually happened is that the machine read the teaching and found no scripture in it — and the
- * admin can still add what it missed, which is the only way [3.2.4](docs/active-scope/prd.md) is
+ * admin can still add what it missed, which is the only way scope prd 3.2.4 is
  * reachable at all for such a teaching.
  */
 function CitationList({
@@ -672,10 +672,10 @@ function CitationList({
 
 /**
  * **The passage under a citation, resolved while the form is open**
- * ([3.3.1](docs/active-scope/prd.md), [3.3.4](docs/active-scope/prd.md)).
+ * (scope prd 3.3.1, scope prd 3.3.4).
  *
  * Read from the API rather than carried on the draft, and that is what makes
- * [3.3.4](docs/active-scope/prd.md) work at all: a row an admin has just typed has no draft to have
+ * scope prd 3.3.4 work at all: a row an admin has just typed has no draft to have
  * carried anything, and the machine's rows and the admin's rows then resolve by the same route
  * instead of by two mechanisms that could disagree.
  *
@@ -684,12 +684,12 @@ function CitationList({
  * the one every fetch on this codebase uses — an in-flight answer for a citation the admin has
  * already moved on from is dropped rather than rendered.
  *
- * **A passage that could not be loaded still shows its citation** ([3.3.6](docs/active-scope/prd.md)),
+ * **A passage that could not be loaded still shows its citation** (scope prd 3.3.6),
  * with a quiet line where the words would be. A source that is down is the worst case the
  * architecture already names, and it degrades the row rather than the form.
  *
  * **Nothing here is editable, and there is nothing to edit it with**
- * ([3.3.8](docs/active-scope/prd.md)) — a paragraph, not a control.
+ * (scope prd 3.3.8) — a paragraph, not a control.
  */
 function Passage({ row }: { row: DraftRow }) {
   const checked = checkRow(row);

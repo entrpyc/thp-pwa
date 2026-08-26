@@ -12,7 +12,7 @@ import {
  * The one step between a model's answer and a draft an admin opens, and it does exactly two
  * things: it drops what cannot be a citation, and it collapses what is the same citation twice.
  *
- * Both are [3.1.3](docs/active-scope/prd.md)–[3.1.5](docs/active-scope/prd.md), and both exist for
+ * Both are scope prd 3.1.3–scope prd 3.1.5, and both exist for
  * the same reason — *the admin reviews what the machine got right*. A review spent deleting
  * `Hezekiah 3:2` and the same verse listed twice is a review nobody finishes, and neither of those
  * is a judgement a person is needed for.
@@ -38,7 +38,7 @@ export interface ScriptureDraft {
  * Resolve a model's proposals into the draft an admin will see.
  *
  * Canon order rather than the order the model happened to propose them
- * ([3.4.2](docs/active-scope/prd.md)) — the list is read top to bottom by a person who knows what
+ * (scope prd 3.4.2) — the list is read top to bottom by a person who knows what
  * order the books come in, and the machine's order carries no information.
  */
 export function resolveProposedCitations(

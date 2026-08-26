@@ -5,7 +5,7 @@
  * the same shape as the mail and media boundaries, and enforced the same way:
  * tests/guards/asr-boundary.test.ts fails the build if anything outside the adapter imports a
  * provider SDK or names its API. That is the low reversal cost
- * docs/epics/epic-core-listening/architecture.md § Key choices claims for the managed-ASR row, and
+ * core-listening scope tdd § Key choices claims for the managed-ASR row, and
  * it is only a claim while this is the only door to a provider.
  *
  * The port takes **where the audio is and what language to transcribe it in**, and answers with

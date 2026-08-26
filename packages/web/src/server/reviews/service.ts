@@ -52,7 +52,7 @@ import { logger } from '@/server/observability/logger';
  *    the queue port with the kind and the steering sentence in the payload.
  *
  * **Every transition is logged with actor, action, target and timestamp** — the standing
- * constraint of docs/epics/epic-core-listening/implementation-plan.md § Standing constraints, and
+ * constraint of core-listening scope plan § Standing constraints, and
  * the reason a closed item is readable as *what happened* rather than only as *what it now says*.
  */
 
@@ -165,21 +165,21 @@ export async function resolveReview(
 }
 
 /**
- * **Approving a list makes it the teaching's references** ([3.2.6](docs/active-scope/prd.md)).
+ * **Approving a list makes it the teaching's references** (scope prd 3.2.6).
  *
  * The write-through for a list-shaped kind, and the same two statements in the same one
  * transaction the text kinds use: what was approved goes to the canonical table, and the item that
  * proposed it closes. A failure in either leaves neither, so there is no state in which a teaching
  * carries references nobody approved.
  *
- * **The list written is the admin's, when they sent one** ([2.1.4](docs/active-scope/implementation-plan.md)).
+ * **The list written is the admin's, when they sent one** (scope plan 2.1.4).
  * A body carrying no list approves the item's own, which is what taking the machine's as it stands
  * means. Either way the *draft* is left exactly as it was written: the correction is a fact about
  * what was approved, and overwriting the proposal with it would lose the comparison that makes a
  * closed item worth keeping.
  *
  * An empty list is legal and correct: it deletes whatever the teaching had and records, in the
- * closed item, that somebody looked and found none ([3.2.7](docs/active-scope/prd.md)).
+ * closed item, that somebody looked and found none (scope prd 3.2.7).
  */
 async function approveList(
   actor: Actor,
@@ -210,7 +210,7 @@ async function approveList(
         status: 'published',
         // `fields` deliberately unset: the draft stays the machine's proposal. What was approved,
         // and where each reference in it came from, goes beside the model that proposed it
-        // ([2.2.4](docs/active-scope/implementation-plan.md)).
+        // (scope plan 2.2.4).
         reviewedBy: actor.id,
         provenance: withEntries(item.provenance, field, references, edited),
       },
@@ -248,8 +248,8 @@ function asProposed(citations: readonly ScriptureCitation[]): ScriptureReference
 }
 
 /**
- * **What the admin sent, checked and placed** ([2.1.5](docs/active-scope/implementation-plan.md),
- * [2.2.3](docs/active-scope/implementation-plan.md)).
+ * **What the admin sent, checked and placed** (scope plan 2.1.5,
+ * scope plan 2.2.3).
  *
  * Two questions per entry, and the order matters. First, *is this a citation* — asked of the same
  * validator the worker refuses a model's proposal with, because what one screen allowed is not what
@@ -258,7 +258,7 @@ function asProposed(citations: readonly ScriptureCitation[]): ScriptureReference
  * itself.
  *
  * **The same passage twice is refused.** The form will not build such a list
- * ([3.2.5](docs/active-scope/prd.md)), and the references table will not hold one — so refusing it
+ * (scope prd 3.2.5), and the references table will not hold one — so refusing it
  * here is what turns a unique-violation into a sentence an admin can act on.
  *
  * Refusals throw before the transaction opens, so a list holding one bad entry writes nothing at
@@ -449,7 +449,7 @@ function withEdit(provenance: unknown, field: string, edited: boolean): ReviewPr
 /**
  * The provenance a closed list-shaped item carries: what generation wrote, plus what was actually
  * approved and where each reference in it came from
- * ([2.2.4](docs/active-scope/implementation-plan.md)).
+ * (scope plan 2.2.4).
  */
 function withEntries(
   provenance: unknown,

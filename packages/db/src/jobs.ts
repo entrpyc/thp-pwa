@@ -11,7 +11,7 @@ import { job } from './schema';
  * than intended.
  *
  * The ledger is the queue: there is no broker and no second store
- * (docs/project/architecture.md § Key technology choices). And it is **append-only** — a step that
+ * (project tdd 4.7). And it is **append-only** — a step that
  * runs again is a new row, not a status reset — which is what makes `attempt` a count rather than
  * a flag and what makes the uniqueness rule a *partial* one.
  */
@@ -193,7 +193,7 @@ export interface ReclaimedJob {
  * **Correct only while exactly one worker process runs.** A second worker booting would reclaim the
  * first's jobs mid-flight — from this function's point of view an in-flight job and an abandoned one
  * are the same row. The deployment pins concurrency to 1
- * (docs/project/architecture.md § Estimated running costs); the caller logs that it assumes it.
+ * (project tdd 8.2); the caller logs that it assumes it.
  *
  * Fail-then-enqueue, in one transaction and in that order. The order is what keeps the partial
  * unique index satisfied — the old row stops being unfinished before the new one starts. The

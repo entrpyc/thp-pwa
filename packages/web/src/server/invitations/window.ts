@@ -1,7 +1,7 @@
 /**
  * How long an invitation lives.
  *
- * docs/project/prd.md 3.1.4 says only "a fixed window"; docs/epics/epic-core-listening/implementation-plan.md § Ticket 3 settles it at
+ * docs/project/prd.md 3.1.4 says only "a fixed window"; core-listening scope plan § Ticket 3 settles it at
  * **7 days**. Long enough to survive a holiday weekend and an inbox somebody reads on Sunday, short
  * enough that a link found in an old mailbox is dead. Resend restarts it rather than extending it,
  * so a forgotten invitation cannot be quietly kept alive.

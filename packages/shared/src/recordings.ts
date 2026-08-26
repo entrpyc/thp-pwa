@@ -4,7 +4,7 @@
  * Read by the API, by the admin upload screen and by the media store, so none of the three can
  * invent its own idea of what is acceptable. The size ceiling and the accepted formats are
  * **operator decisions** recorded in
- * docs/epics/epic-core-listening/architecture.md § Key choices, "Two inputs this epic needs and
+ * core-listening scope tdd § Key choices, "Two inputs this epic needs and
  * nothing defines", item 2 — stated once here so the screen can say the limit *before* a file is
  * chosen and the API can refuse the same file for the same reason.
  *
@@ -267,7 +267,7 @@ export interface RecordingView {
   readonly series: RecordingSeriesRef | null;
   /**
    * Whether this teaching has any approved scripture references at all
-   * ([3.4.4](docs/active-scope/prd.md)) — Group 4.
+   * (scope prd 3.4.4) — Group 4.
    *
    * A boolean rather than the references themselves, and that is the whole of why it is here: the
    * recording page has to decide whether to draw the **Scripture** tab *before* anything is

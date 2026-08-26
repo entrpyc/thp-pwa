@@ -29,7 +29,7 @@ const DATABASE_PACKAGES = ['@thp/db'];
  *
  * `@thp/bible` joined it in the scripture scope for the same reason and by the same route: the
  * worker needs a verse while it drafts and the API needs one while an admin reviews, so the port
- * lives beside both rather than inside either ([3.1.1](docs/active-scope/implementation-plan.md)).
+ * lives beside both rather than inside either (scope plan 3.1.1).
  * A client that imported it would be a client holding the source's configuration and calling the
  * source from the browser — which is neither cached nor authorised.
  */

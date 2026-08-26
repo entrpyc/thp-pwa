@@ -13,7 +13,7 @@ import type { Role } from './roles';
  * complete request — and neither is a representation of a reset.
  *
  * **No shape in this file carries an avatar.** docs/project/prd.md 3.1.12 names one and
- * docs/epics/epic-core-listening/implementation-plan.md § Ticket 4 defers it; a nullable field "for later" is how deferral
+ * core-listening scope plan § Ticket 4 defers it; a nullable field "for later" is how deferral
  * quietly stops being deferral.
  */
 

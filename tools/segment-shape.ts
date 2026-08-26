@@ -3,7 +3,7 @@
  *
  * The timestamped segment is the atom of the whole system: notes, highlights, mind maps, search,
  * cross-references and Flow Tracker all resolve through `(recording_id, timestamp_ms)` in later
- * epics (docs/project/architecture.md § Data model). The client, the API and the worker agree on
+ * scopes (project tdd 3.1). The client, the API and the worker agree on
  * one shape for it — `packages/shared/src/segment.ts` — and the table was matched to that type
  * rather than invented beside it. A column the type does not have, or a field the table does not
  * have, is the two quietly becoming two shapes.

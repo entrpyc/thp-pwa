@@ -95,7 +95,7 @@ function collectWorkerFiles(): string[] {
 
 /**
  * **The worker and the API resolve a passage through the same port**
- * ([3.1.1](docs/active-scope/implementation-plan.md)).
+ * (scope plan 3.1.1).
  *
  * The same argument the media port settled and for the same reason: both processes need a verse,
  * neither may import the other, so the port is a package beside them rather than a folder inside

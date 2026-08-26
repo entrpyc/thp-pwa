@@ -8,7 +8,7 @@ import { walkFiles } from './fs-walk';
  * The same shape of rule as "every outbound message goes through one module"
  * (tools/mail-boundary.ts) and "every call to the object store goes through one module"
  * (tools/media-boundary.ts), and it exists for the reason those do. The managed-ASR row of
- * docs/epics/epic-core-listening/architecture.md § Key choices claims a deliberately *low reversal
+ * core-listening scope tdd § Key choices claims a deliberately *low reversal
  * cost* — swapping providers is one file — and that claim is only true while one file is the only
  * place a provider is named.
  *

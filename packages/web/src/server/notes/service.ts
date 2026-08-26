@@ -39,8 +39,8 @@ import { audit } from '@/server/observability/audit';
 import { logger } from '@/server/observability/logger';
 
 /**
- * **Notes, written and read** (active-scope architecture § 4.3) — [3.1](docs/active-scope/prd.md)
- * through [3.6](docs/active-scope/prd.md).
+ * **Notes, written and read** (active-scope architecture § 4.3) — scope prd 3.1
+ * through scope prd 3.6.
  *
  * The order every path here asks its questions in is the one § 8 sets: **recording still published
  * → actor permitted → resource in a state that admits the action → write → audit if the write was
@@ -58,8 +58,8 @@ import { logger } from '@/server/observability/logger';
  *
  * **The publication gate answers `not_found` on both paths, and says different things.** A read of
  * an unpublished teaching is a refusal rather than an empty list
- * ([3.2.12](docs/active-scope/prd.md)); a write to one carries
- * [5.1.4](docs/active-scope/prd.md)'s message, because the composer prints it beside text the
+ * (scope prd 3.2.12); a write to one carries
+ * scope prd 5.1.4's message, because the composer prints it beside text the
  * member is about to lose otherwise.
  */
 
@@ -115,7 +115,7 @@ export async function createNote(
   const row = await insertNote({
     recordingId,
     authorId: actor.id,
-    // Public in every case ([3.3.3](docs/active-scope/prd.md)): a reply to a note everyone can see,
+    // Public in every case (scope prd 3.3.3): a reply to a note everyone can see,
     // that only its author could see, would be a message to nobody. There is nothing to choose, so
     // nothing here reads what the body asked for beyond refusing an explicit `private`.
     visibility: 'public',
@@ -135,10 +135,10 @@ export async function createNote(
 }
 
 /**
- * Correct your own words ([3.5.1](docs/active-scope/prd.md)).
+ * Correct your own words (scope prd 3.5.1).
  *
  * **Text alone.** The store's `updateNoteText` takes no other parameter, so
- * [3.5.3](docs/active-scope/prd.md) — a timestamp and a visibility are not editable in either
+ * scope prd 3.5.3 — a timestamp and a visibility are not editable in either
  * direction — is a fact about the call rather than a rule this function has to remember: a body
  * carrying either is read for its `text` and nothing else. Raising a private note would publish
  * text written in confidence and lowering a public one would strand its replies, so neither is a
@@ -146,7 +146,7 @@ export async function createNote(
  *
  * Who may is `note.edit`'s answer, and it carries `requiresOwnership` — which is why an admin
  * editing a note they did not write is refused here with no special case: moderation is deletion,
- * never rewriting somebody's words ([3.6.2](docs/active-scope/prd.md)).
+ * never rewriting somebody's words (scope prd 3.6.2).
  */
 export async function editNote(actor: Actor, noteId: string, body: unknown): Promise<NotePayload> {
   const existing = await requireNote(actor, noteId, 'note.edit');
@@ -166,15 +166,15 @@ export async function editNote(actor: Actor, noteId: string, body: unknown): Pro
 
 /**
  * Take a note down — **your own, or, for an admin, anybody's public one**
- * ([3.5.2](docs/active-scope/prd.md), [3.6.1](docs/active-scope/prd.md)).
+ * (scope prd 3.5.2, scope prd 3.6.1).
  *
  * The two are one route and two policy answers, asked in order (active-scope architecture § 7):
  * the owned `note.delete` first, and `note.moderate` only where it denied. No id is compared here
  * and no role is read — the ownership comparison stays inside the rule table, and which of the two
- * answered is also exactly [3.6.4](docs/active-scope/prd.md)'s audit condition, so an admin
+ * answered is also exactly scope prd 3.6.4's audit condition, so an admin
  * deleting their own note takes the owned path and is not logged as moderation.
  *
- * **The delete and the pin-clear are one transaction** ([3.6.9](docs/active-scope/prd.md)). A soft
+ * **The delete and the pin-clear are one transaction** (scope prd 3.6.9). A soft
  * delete never fires a cascade, so the pin has to be cleared by a second statement — and two
  * statements that can half-happen would leave a recording showing a pinned tombstone.
  */
@@ -188,7 +188,7 @@ export async function deleteNote(actor: Actor, noteId: string): Promise<NotePayl
   });
   if (moderating) {
     authorise(actor, 'note.moderate', `note:${noteId}`);
-    // An admin may not reach a private note at all ([3.6.2](docs/active-scope/prd.md)): it is
+    // An admin may not reach a private note at all (scope prd 3.6.2): it is
     // absent from every admin-facing response this scope builds, and moderating one would be
     // acting on something they are not entitled to have seen.
     requirePublic(existing, 'This note is private. Only its author can remove it.');
@@ -214,7 +214,7 @@ export async function deleteNote(actor: Actor, noteId: string): Promise<NotePayl
 // Reactions
 // =================================================================================================
 
-/** Set or replace this member's reaction ([3.4.3](docs/active-scope/prd.md)). */
+/** Set or replace this member's reaction (scope prd 3.4.3). */
 export async function setReaction(
   actor: Actor,
   noteId: string,
@@ -235,7 +235,7 @@ export async function setReaction(
 }
 
 /**
- * Take this member's reaction back ([3.4.4](docs/active-scope/prd.md)).
+ * Take this member's reaction back (scope prd 3.4.4).
  *
  * Clearing when nothing is set succeeds. A member pressing the emoji they already chose and a
  * member acting on a screen that has already been cleared asked for the same end state, and both
@@ -251,12 +251,12 @@ export async function clearReaction(actor: Actor, noteId: string): Promise<NoteP
 // Pins
 // =================================================================================================
 
-/** Raise a note so the group reads it first ([3.6.5](docs/active-scope/prd.md)). */
+/** Raise a note so the group reads it first (scope prd 3.6.5). */
 export async function pinNoteFor(actor: Actor, noteId: string): Promise<NotePayload> {
   const existing = await requireNote(actor, noteId, 'note.pin');
   authorise(actor, 'note.pin', `note:${noteId}`);
   requireStanding(existing, NOTE_ALREADY_REMOVED_MESSAGE);
-  // Only a top-level public note is a thing to raise ([3.6.8](docs/active-scope/prd.md)). A reply
+  // Only a top-level public note is a thing to raise (scope prd 3.6.8). A reply
   // has no moment of its own, and a private note is nobody else's to read.
   if (existing.parentId !== null) {
     throw ApiError.invalidInput('A reply cannot be pinned — only the note it hangs under.');
@@ -269,7 +269,7 @@ export async function pinNoteFor(actor: Actor, noteId: string): Promise<NotePayl
   return { note: await describeOne(existing, actor) };
 }
 
-/** Lower one raised note, leaving every other pin in place ([3.6.7](docs/active-scope/prd.md)). */
+/** Lower one raised note, leaving every other pin in place (scope prd 3.6.7). */
 export async function unpinNoteFor(actor: Actor, noteId: string): Promise<NotePayload> {
   const existing = await requireNote(actor, noteId, 'note.unpin');
   authorise(actor, 'note.unpin', `note:${noteId}`);
@@ -373,7 +373,7 @@ async function requirePublished(
  *
  * **No privacy condition is applied to the lookup**, deliberately: the refusals this scope owes are
  * stated per actor rather than per visibility — a reply to a private note is `invalid_input` for
- * *every* actor including its author ([3.3.5](docs/active-scope/prd.md)) — and a lookup that hid
+ * *every* actor including its author (scope prd 3.3.5) — and a lookup that hid
  * the row would answer `not_found` to everyone but the author and make one rule give two answers.
  */
 async function requireNote(actor: Actor, noteId: string, action: string): Promise<NoteRow> {
@@ -389,14 +389,14 @@ async function requireReactable(actor: Actor, noteId: string): Promise<NoteRow> 
   authorise(actor, 'note.react', `note:${noteId}`);
   requireStanding(existing, NOTE_REMOVED_MESSAGE);
   // Private notes take no reactions, for every actor including the author
-  // ([3.4.8](docs/active-scope/prd.md)) — there is nobody for a reaction on one to be seen by.
+  // (scope prd 3.4.8) — there is nobody for a reaction on one to be seen by.
   requirePublic(existing, 'A private note takes no reactions.');
   return existing;
 }
 
 /**
  * The note being replied to, or the refusal — every rule
- * [3.3](docs/active-scope/prd.md) puts on a parent, in one place.
+ * scope prd 3.3 puts on a parent, in one place.
  */
 async function requireReplyableParent(
   parentId: unknown,
@@ -415,13 +415,13 @@ async function requireReplyableParent(
   const parent = await findNoteById(parentId);
   if (parent === null) throw ApiError.invalidInput('There is no note with that id to reply to.');
 
-  // The recording in the path is authoritative ([3.1.5](docs/active-scope/implementation-plan.md)):
+  // The recording in the path is authoritative (scope plan 3.1.5):
   // a parent on another teaching would put a reply in a list its thread does not belong to.
   if (parent.recordingId !== recordingId) {
     throw ApiError.invalidInput('That note is not on this teaching.');
   }
   // One level, and no more. Re-pointing at the grandparent would silently move a member's reply to
-  // a conversation they were not answering ([3.3.4](docs/active-scope/prd.md)).
+  // a conversation they were not answering (scope prd 3.3.4).
   if (parent.parentId !== null) {
     throw ApiError.invalidInput('A reply cannot be replied to — answer the note it hangs under.');
   }
@@ -433,7 +433,7 @@ async function requireReplyableParent(
 
 /**
  * Refuse an action on a note somebody has already removed
- * ([5.4.1](docs/active-scope/implementation-plan.md)).
+ * (scope plan 5.4.1).
  *
  * `note_removed` rather than `invalid_input`, because the request was well-formed against an
  * affordance that was real when it was rendered — a **Reply** control, a reaction pill, an **Edit**
@@ -467,13 +467,13 @@ function groupReactions(rows: readonly NoteReactionRow[]): Map<string, NoteReact
 /**
  * A row as a member is answered.
  *
- * `deletedBy` is dropped here ([3.5.8](docs/active-scope/prd.md)) — this is the boundary the store's
+ * `deletedBy` is dropped here (scope prd 3.5.8) — this is the boundary the store's
  * "answer what is stored" stops at, and the author of an admin-removed note reads the same tombstone
  * as everybody else.
  *
  * **A tombstone carries nothing but the fact that it is one.** Its text is already `null` — the
  * delete cleared the column — and its reactions are dropped rather than counted
- * ([3.4.10](docs/active-scope/prd.md)): a row of responses to words nobody can read any more is a
+ * (scope prd 3.4.10): a row of responses to words nobody can read any more is a
  * reaction to nothing.
  */
 function describe(
@@ -550,13 +550,13 @@ function asObject(body: unknown, complaint: string): Record<string, unknown> {
 /**
  * The text, or the refusal.
  *
- * **Trimmed, then measured** ([3.1.6](docs/active-scope/prd.md)): padding cannot push a real note
+ * **Trimmed, then measured** (scope prd 3.1.6): padding cannot push a real note
  * over the ceiling, and a note of nothing but spaces is a note of nothing. Over-long text is
  * refused rather than truncated — a member who wrote 1,200 characters is owed the refusal, not a
  * silently shortened note they will discover later.
  *
  * One function for the composer, the reply field and the edit form, because
- * [3.3.1](docs/active-scope/prd.md) and [3.5.1](docs/active-scope/prd.md) both say *the rules at
+ * scope prd 3.3.1 and scope prd 3.5.1 both say *the rules at
  * 3.1 apply unchanged* — and the only way to mean that is to run the same code.
  */
 function parseText(value: unknown): string {

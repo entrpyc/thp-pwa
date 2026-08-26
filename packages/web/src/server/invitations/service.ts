@@ -48,7 +48,7 @@ import { invitationExpiryFrom } from './window';
  *
  * Every transition logs actor, action and target. The logger supplies the timestamp and the
  * request's correlation id, so one search on that id returns the whole story
- * (docs/project/architecture.md § Cross-cutting concerns).
+ * (project tdd 6.7).
  *
  * **Nothing here logs or returns a raw token**; the only place one appears is the accept URL handed
  * to the mailer.
@@ -334,7 +334,7 @@ export interface AcceptedInvitationResult {
 /**
  * Set a password, get an account and a session in the same response.
  *
- * There is no sign-in form between the two — docs/epics/epic-core-listening/prd.md § Epic flows → A says the invitee
+ * There is no sign-in form between the two — core-listening scope prd § Epic flows → A says the invitee
  * "sets a password → signs in", and a screen that hands somebody an account and then asks them to
  * authenticate against it has made them do the same thing twice.
  */

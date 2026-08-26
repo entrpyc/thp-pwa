@@ -23,7 +23,7 @@ import { logger } from '@/server/observability/logger';
  * got to (Story 4 Tickets 03 and 04).
  *
  * Both are held client-side while a member is listening and pushed here — which is the shape
- * docs/epics/epic-core-listening/architecture.md § Extension points calls *Client-owned playback
+ * core-listening scope tdd § Extension points calls *Client-owned playback
  * state*, and the reason [§3.18](docs/project/prd.md)'s offline sync is an addition rather than a
  * rewrite. The endpoint takes **a position, not a stream of events**: there is no history to
  * reconcile, no outbox and no batch, and adding those later is a second endpoint beside this one.

@@ -21,7 +21,7 @@ import { DRAFT_TOOL_NAME } from '../../src/generate/prompt';
  *
  * 1. **One request carries the whole transcript**, with the tool forced and only the asked-for
  *    fields on it. That is the cost and consistency decision
- *    docs/epics/epic-core-listening/architecture.md § Key choices took, and it is only true if the
+ *    core-listening scope tdd § Key choices took, and it is only true if the
  *    request says so.
  * 2. **The mapping**, from the provider's content blocks to two strings and five numbers.
  * 3. **The prose answer fails.** Structured output here is a forced tool call rather than a schema
@@ -231,7 +231,7 @@ describe('the response the adapter maps', () => {
 
   it('prices the call from the token counts the provider reported', () => {
     // $0.30/M in and $1.20/M out: an ~80k-token transcript and ~1k of output is about $0.025, which
-    // is the number docs/project/architecture.md § Estimated running costs is being checked against.
+    // is the number project tdd 8.2 is being checked against.
     expect(costOf(81_234, 1_000)).toBeCloseTo(0.025_57, 5);
     expect(costOf(0, 0)).toBe(0);
     expect(mapResponse(TOOL_CALL, [...REVIEW_KINDS]).spend.costUsd).toBeCloseTo(0.025_0, 3);

@@ -79,7 +79,7 @@ export function NotesPanel({
   /**
    * Opening the tab opens a composer **armed**, not frozen: the moment it shows follows the
    * teaching until the member types their first character
-   * ([3.1.1](docs/active-scope/prd.md)). Closing the tab arms it again rather than leaving a moment
+   * (scope prd 3.1.1). Closing the tab arms it again rather than leaving a moment
    * held, so a composer re-opened an hour later does not still be pointing at where it was shut.
    */
   const { releaseComposerAnchor } = player;
@@ -89,7 +89,7 @@ export function NotesPanel({
   }, [releaseComposerAnchor]);
 
   /**
-   * Take the member to the note a transport marker named ([3.2.5](docs/active-scope/prd.md)).
+   * Take the member to the note a transport marker named (scope prd 3.2.5).
    *
    * The request is cleared as soon as it is acted on, so pressing the same marker twice scrolls
    * twice — a marker press is an instruction, not a selection that could go stale.
@@ -129,7 +129,7 @@ export function NotesPanel({
 
   const listed = notes === null ? null : notes.filter((one) => matches(one, filter));
   // Pinned notes read above the list and are **not repeated** at their position in it
-  // ([3.6.5](docs/active-scope/prd.md)), so every note is read once. Both halves keep the payload's
+  // (scope prd 3.6.5), so every note is read once. Both halves keep the payload's
   // own order, which is the list's total order and therefore also 3.6.5's.
   const pinned = listed === null ? [] : listed.filter((one) => one.pinned);
   const chronological = listed === null ? null : listed.filter((one) => !one.pinned);
@@ -219,15 +219,15 @@ interface CardProps {
 }
 
 /**
- * One note, as `style-guide.md`'s standard card ([5.2.1](docs/active-scope/prd.md)–5.2.4).
+ * One note, as `style-guide.md`'s standard card (scope prd 5.2.1–5.2.4).
  *
- * The text is rendered as **the characters it is** ([3.1.6](docs/active-scope/prd.md)): React
+ * The text is rendered as **the characters it is** (scope prd 3.1.6): React
  * escapes it, so markdown, HTML and a URL all read as themselves, and the stylesheet preserves the
  * line breaks rather than collapsing them.
  *
  * **A tombstone is this same card with almost everything taken away** — one dim italic line in place
  * of the author and the text, the timestamp and the thread kept, and no reaction row, no reply
- * control and nothing at all about who removed it ([5.3.3](docs/active-scope/prd.md)). The author of
+ * control and nothing at all about who removed it (scope prd 5.3.3). The author of
  * an admin-removed note sees exactly this, like everyone else.
  */
 function NoteCard({ note, canModerate, highlighted }: CardProps) {
@@ -251,8 +251,8 @@ function NoteCard({ note, canModerate, highlighted }: CardProps) {
    * A refused write is what forces it. The member presses **Reply** or **Save**, the API answers
    * `note_removed`, and the list refreshes to the tombstone in the same breath — so a tombstone
    * rendered by a separate return would unmount the very message and the very field the refusal is
-   * supposed to leave standing ([5.3.4](docs/active-scope/prd.md),
-   * [5.5.4](docs/active-scope/prd.md)). The refusal line and an already-open reply field therefore
+   * supposed to leave standing (scope prd 5.3.4,
+   * scope prd 5.5.4). The refusal line and an already-open reply field therefore
    * live below the branch, where a note going away underneath the member cannot take them.
    *
    * What the tombstone does drop is every affordance: no author line, no text, no reactions, no
@@ -327,10 +327,10 @@ function NoteCard({ note, canModerate, highlighted }: CardProps) {
 }
 
 /**
- * The thread under a note ([5.3.1](docs/active-scope/prd.md)).
+ * The thread under a note (scope prd 5.3.1).
  *
  * **A note with no replies renders nothing at all** — not an empty list
- * ([3.3.7](docs/active-scope/prd.md)) — which is why this returns `null` rather than an `<ol>` with
+ * (scope prd 3.3.7) — which is why this returns `null` rather than an `<ol>` with
  * no children.
  */
 function Thread({ note, canModerate, highlighted }: CardProps) {
@@ -345,7 +345,7 @@ function Thread({ note, canModerate, highlighted }: CardProps) {
 }
 
 /**
- * The timestamp, pressable ([5.2.2](docs/active-scope/prd.md), 3.2.5).
+ * The timestamp, pressable (scope prd 5.2.2, 3.2.5).
  *
  * Seeks and does **not** start playback — the same rule selecting a transcript line already
  * follows, and for the same reason: a member finding their place has not asked for sound.
@@ -366,11 +366,11 @@ function TimeLink({ note }: { note: NoteView }) {
 }
 
 /**
- * The reaction row and the picker ([5.4.1](docs/active-scope/prd.md), 5.4.2).
+ * The reaction row and the picker (scope prd 5.4.1, 5.4.2).
  *
  * Every control carries the emoji's **name**, because a bare emoji is unreadable to a screen
  * reader — and a glyph that has left the vocabulary is labelled by itself rather than by nothing
- * ([3.4.2](docs/active-scope/prd.md)), which is what `reactionName` answers.
+ * (scope prd 3.4.2), which is what `reactionName` answers.
  */
 function ReactionRow({
   note,
@@ -452,7 +452,7 @@ function ReactionRow({
 }
 
 /**
- * The `···` overflow ([5.5.1](docs/active-scope/prd.md), [5.6.1](docs/active-scope/prd.md)).
+ * The `···` overflow (scope prd 5.5.1, scope prd 5.6.1).
  *
  * The author's own **Edit** and **Delete**; for an admin, **Delete** and **Pin** / **Unpin** on any
  * public note. A note that offers nothing draws no control at all rather than an empty menu.
@@ -555,7 +555,7 @@ function Overflow({
 }
 
 /**
- * What the confirmation says ([5.5.2](docs/active-scope/prd.md), 5.6.1).
+ * What the confirmation says (scope prd 5.5.2, 5.6.1).
  *
  * Three sentences, because three different things are about to be lost: a note on its own, a note
  * whose thread will outlive it, and somebody else's note whose removal goes on the record.
@@ -570,10 +570,10 @@ function confirmationFor(note: NoteView): string {
 }
 
 /**
- * The edit form ([5.5.3](docs/active-scope/prd.md)) — the card turned into the composer.
+ * The edit form (scope prd 5.5.3) — the card turned into the composer.
  *
  * The timestamp and the visibility are **shown and not editable**
- * ([3.5.3](docs/active-scope/prd.md)); they are rendered by the card above rather than repeated as
+ * (scope prd 3.5.3); they are rendered by the card above rather than repeated as
  * disabled controls here, which is the same thing said with less.
  */
 function EditForm({
@@ -644,13 +644,13 @@ function EditForm({
 }
 
 /**
- * The inline reply field ([5.3.2](docs/active-scope/prd.md)).
+ * The inline reply field (scope prd 5.3.2).
  *
- * **No visibility control**, because a reply is always public ([3.3.3](docs/active-scope/prd.md)) —
+ * **No visibility control**, because a reply is always public (scope prd 3.3.3) —
  * there is nothing to choose, so there is nothing to render.
  *
  * **The text stays in the field when the note went away underneath it**
- * ([5.3.4](docs/active-scope/prd.md)): the member can copy out what they wrote before the list
+ * (scope prd 5.3.4): the member can copy out what they wrote before the list
  * refreshes under them, which is the whole reason that refusal has a message of its own.
  */
 function ReplyComposer({

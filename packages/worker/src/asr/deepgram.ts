@@ -28,7 +28,7 @@ export const DEEPGRAM_ENDPOINT = 'https://api.deepgram.com/v1/listen';
 
 /**
  * Nova-3, monolingual. The model the cost table is built on
- * (docs/project/architecture.md § Estimated running costs): the multilingual variant is ~21% more
+ * (project tdd 8.2): the multilingual variant is ~21% more
  * and, with English pinned, buys nothing.
  */
 export const DEEPGRAM_MODEL = 'nova-3';
@@ -142,7 +142,7 @@ export function deepgramTranscriber(options: DeepgramOptions = {}): Transcriber 
  * `diarize` is asked for **unconditionally** rather than behind a setting: a knob with one caller
  * is a knob nobody needs, and a transcript that records who was speaking is not something one
  * deployment would want and another would not. It does not change the pre-recorded rate, which is
- * what keeps docs/project/architecture.md § Estimated running costs standing as written.
+ * what keeps project tdd 8.2 standing as written.
  */
 function requestUrl(request: TranscriptionRequest): string {
   const query = new URLSearchParams({

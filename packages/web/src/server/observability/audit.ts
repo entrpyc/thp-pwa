@@ -18,7 +18,7 @@ import type { Actor } from '@/server/auth/policy';
  * prefix with extra steps. Callers pass the whole target string.
  *
  * What the Auditability NFR asks for is a structured log and not a table
- * ([§ Auditability](docs/active-scope/prd.md)), so there is no row written anywhere here.
+ * (scope prd), so there is no row written anywhere here.
  */
 export function audit(actor: Actor, action: string, target: string): Record<string, unknown> {
   return {

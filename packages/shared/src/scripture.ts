@@ -313,7 +313,7 @@ export function isScriptureCitation(value: unknown): value is ScriptureCitation 
 }
 
 /**
- * Where a stored reference came from ([3.2.9](docs/active-scope/prd.md)).
+ * Where a stored reference came from (scope prd 3.2.9).
  *
  * Declared here once and derived into the Postgres enum, as every other domain enum in the product
  * is. `person` is unreachable until an admin can add a reference by hand; the column exists now
@@ -336,11 +336,11 @@ export interface ScriptureReferenceView extends ScriptureCitation {
 }
 
 /**
- * **Where a citation's verse text is read** ([3.3.4](docs/active-scope/prd.md)).
+ * **Where a citation's verse text is read** (scope prd 3.3.4).
  *
  * A `GET` with the citation in the query, because that is what it is — a lookup of somebody else's
  * words by their reference. There is deliberately **no write here and nowhere else**: verse text is
- * what the source says ([3.3.8](docs/active-scope/prd.md)), so no route in the product accepts any,
+ * what the source says (scope prd 3.3.8), so no route in the product accepts any,
  * and correcting a passage means correcting the citation.
  */
 export const SCRIPTURE_PASSAGE_PATH = '/scripture/passage';
@@ -360,7 +360,7 @@ export function passagePath(citation: ScriptureCitation): string {
  * Payload of `GET /api/v1/scripture/passage`.
  *
  * `null` is a real answer and the common one when a source is down: the citation stands and has no
- * text yet ([3.3.6](docs/active-scope/prd.md)). It is not an error, and a caller that treated it as
+ * text yet (scope prd 3.3.6). It is not an error, and a caller that treated it as
  * one would turn a missing convenience into a broken screen.
  */
 export interface PassagePayload {
@@ -368,7 +368,7 @@ export interface PassagePayload {
 }
 
 /**
- * **One approved reference as a member reads it** ([3.4.3](docs/active-scope/prd.md)).
+ * **One approved reference as a member reads it** (scope prd 3.4.3).
  *
  * The citation and its words, and deliberately nothing else. `origin` and `editedByAdmin` are on
  * the stored row and are an operator's record of how the list was arrived at — a reader has no
@@ -376,13 +376,13 @@ export interface PassagePayload {
  * carried them would invite a surface to draw the difference.
  *
  * `passage` is `null` when the source has no text for it, which is a real answer rather than a
- * failure ([3.3.6](docs/active-scope/prd.md)) — the citation stands either way.
+ * failure (scope prd 3.3.6) — the citation stands either way.
  */
 export interface ScriptureReadingView extends ScriptureCitation {
   readonly passage: string | null;
 }
 
-/** This teaching's published scripture, under the API prefix ([3.4.2](docs/active-scope/prd.md)). */
+/** This teaching's published scripture, under the API prefix (scope prd 3.4.2). */
 export function recordingScripturePath(recordingId: string): string {
   return `${RECORDINGS_PATH}/${recordingId}/scripture`;
 }
@@ -391,7 +391,7 @@ export function recordingScripturePath(recordingId: string): string {
  * Payload of `GET /api/v1/recordings/:id/scripture`.
  *
  * **An empty list is the ordinary answer**, not an error: a teaching whose draft nobody has
- * approved, and one an admin approved as empty ([3.2.7](docs/active-scope/prd.md)), both read as no
+ * approved, and one an admin approved as empty (scope prd 3.2.7), both read as no
  * references. What separates the two is the review queue, and a member is not looking at it.
  */
 export interface RecordingScripturePayload {

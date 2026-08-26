@@ -5,8 +5,8 @@ import { bibleSource } from './configured';
 import type { BibleSource, Verse } from './source';
 
 /**
- * **Verse text is fetched once and held** ([3.3.1](docs/active-scope/prd.md)–
- * [3.3.2](docs/active-scope/prd.md)).
+ * **Verse text is fetched once and held** (scope prd 3.3.1–
+ * scope prd 3.3.2).
  *
  * The cache-aside read, in the one place both callers reach it: the draft step resolves what the
  * machine proposed, and the review form resolves what an admin just typed. Neither of them decides
@@ -15,14 +15,14 @@ import type { BibleSource, Verse } from './source';
  * **What is already held is never fetched again**, across teachings as much as within one — the
  * cache is keyed by the passage rather than by the citer, so the second teaching to quote a verse
  * pays nothing for it. That is the line
- * docs/project/architecture.md § Estimated running costs is built on.
+ * project tdd 8.2 is built on.
  *
  * **Held is read once, for every chapter at issue, before anything is fetched.** A list of ten
  * citations is one read and then only the calls that are actually missing — asking per citation
  * would make a teaching that quotes one chapter ten times ten reads of the same rows.
  *
  * **Nothing here throws over a source that has no text.** The port already promises that
- * ([3.1.5](docs/active-scope/prd.md)); this keeps the promise by treating a passage with no verses
+ * (scope prd 3.1.5); this keeps the promise by treating a passage with no verses
  * as a real answer — the citation stands and has no text yet — rather than as a failure to report.
  */
 
@@ -33,7 +33,7 @@ export interface ResolvedPassage {
 }
 
 /**
- * What a resolution did, which is what [3.3.9](docs/active-scope/prd.md) is recorded from: how many
+ * What a resolution did, which is what scope prd 3.3.9 is recorded from: how many
  * verses were fetched, how many were served from what we already held, and the source's own
  * identifier for the call.
  */

@@ -18,7 +18,7 @@ import styles from '../screens.module.css';
  * There is no `pages/library.png`. The nearest reference is `pages/series-listing.png`, and the
  * layout is taken from it: a page title, one sentence under it, then rounded rows with a chevron.
  * What is dropped is its artwork thumbnail — artwork is deferred
- * ([epic prd § In scope → 4](docs/epics/epic-core-listening/prd.md)) — and the row carries the date
+ * (core-listening scope prd) — and the row carries the date
  * recorded in its place, which is the thing that actually orders this list.
  *
  * **The order is the query's, never re-sorted here.** `GET /api/v1/recordings` orders by

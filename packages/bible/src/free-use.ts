@@ -13,7 +13,7 @@ import { NO_TEXT, type BibleSource, type Passage, type Verse } from './source';
  * application and somebody's release cadence for no gain.
  *
  * **Three things about the source are held here and nowhere else**, which is what
- * [3.1.2](docs/active-scope/implementation-plan.md) means by "its HTTP shape":
+ * scope plan 3.1.2 means by "its HTTP shape":
  *
  * 1. **The URL** — `{base}/api/{translation}/{book}/{chapter}.simple.json`.
  * 2. **The book codes.** The source names books by their standard three-letter code, and the canon
@@ -21,11 +21,11 @@ import { NO_TEXT, type BibleSource, type Passage, type Verse } from './source';
  *    not about the canon, so it lives with the source.
  * 3. **The simple format.** The source publishes each chapter twice — once with the poetry
  *    indentation, the words of Jesus and the footnote callers marked up, and once as plain
- *    sentences. This asks for the plain one, because [§ 5.1](docs/active-scope/prd.md) says verse
+ *    sentences. This asks for the plain one, because scope prd says verse
  *    text is plain text: markup we would only have to strip is markup not worth fetching.
  *
- * **Nothing here throws**, which is the port's promise ([3.1.5](docs/active-scope/prd.md)) and the
- * reason [3.3.5](docs/active-scope/prd.md)'s pipeline step stays green when the source is down.
+ * **Nothing here throws**, which is the port's promise (scope prd 3.1.5) and the
+ * reason scope prd 3.3.5's pipeline step stays green when the source is down.
  * Every way of having no text — a refusal, a timeout, a body in the wrong shape, a chapter that
  * does not hold the verses asked for — comes back as {@link NO_TEXT}.
  */

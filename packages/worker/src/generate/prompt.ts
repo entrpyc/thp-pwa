@@ -87,7 +87,7 @@ export function buildUserPrompt(request: GenerationRequest): string {
 /**
  * What one citation looks like in the tool call.
  *
- * **Structured, never prose** ([3.1.2](docs/active-scope/prd.md)): the book, the chapter and the
+ * **Structured, never prose** (scope prd 3.1.2): the book, the chapter and the
  * range come back as four values the model filled in, rather than as a phrase somebody downstream
  * would have to parse. The book is asked for as words because that is what a model has; turning
  * those words into a book of the canon — or dropping the citation — happens after the answer, in

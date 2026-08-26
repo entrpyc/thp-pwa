@@ -11,7 +11,7 @@ import {
 const REPO_ROOT = resolve(import.meta.dirname, '..', '..');
 
 /**
- * [3.1.2](docs/active-scope/implementation-plan.md) — nothing outside the adapter names the source
+ * scope plan 3.1.2 — nothing outside the adapter names the source
  * or its HTTP shape, and a module that does fails the build.
  */
 describe('one Bible source module', () => {

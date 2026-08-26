@@ -24,7 +24,7 @@ import { DRAFT_TOOL_NAME, PROMPT_VERSION, SYSTEM_PROMPT, buildToolSchema, buildU
  * **Two things worth knowing before the code.**
  *
  * 1. **The architecture says Claude and this is MiniMax.**
- *    docs/epics/epic-core-listening/architecture.md § Key choices names Claude behind a `generate`
+ *    core-listening scope tdd § Key choices names Claude behind a `generate`
  *    adapter; the operator chose MiniMax M3 instead. That same row calls the reversal cost
  *    *deliberately low* — a narrow port, one file — so the seam is working as designed rather than
  *    breaking. Recording it as a third entry under § Divergence from the north star is a Phase 4
@@ -219,7 +219,7 @@ export function mapResponse(body: string, kinds: readonly ReviewKind[]): Generat
       // **A list is required to be a list.** A model that wrote its citations as a sentence — or
       // as a list of sentences — has not answered in the structure that was required, and the
       // honest thing is to fail the job rather than store prose as though it were citations
-      // ([3.1.2](docs/active-scope/prd.md)). An *empty* list is a real answer and passes.
+      // (scope prd 3.1.2). An *empty* list is a real answer and passes.
       if (!Array.isArray(value) || value.some((entry) => typeof entry !== 'object' || entry === null)) {
         throw new GenerationError(
           `The generation provider answered the ${field.name} as something other than a list of ` +

@@ -44,7 +44,7 @@ import { logger } from '@/server/observability/logger';
  * admin transcript surface and no `?surface=` parameter on the route.
  *
  * Every correction and every regeneration is logged with actor, action, target and timestamp — the
- * standing constraint of docs/epics/epic-core-listening/implementation-plan.md § Standing
+ * standing constraint of core-listening scope plan § Standing
  * constraints, and the same `logger.info` shape the review gate's transitions use.
  */
 
@@ -196,7 +196,7 @@ export async function regenerateSummary(
   const enqueued = await queue().enqueue({
     recordingId,
     step: 'generate_draft',
-    // **The summary and the scripture references** ([3.1.10](docs/active-scope/prd.md)). Both are
+    // **The summary and the scripture references** (scope prd 3.1.10). Both are
     // read out of the words that just changed, so a correction invalidates both — which is the half
     // of docs/project/prd.md 3.5.6 that could not be honoured until scripture existed. Mind maps and
     // tags are not generated yet, so they are not here.

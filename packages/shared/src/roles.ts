@@ -3,7 +3,7 @@
  * worker and the database layer all read it from this module rather than restating it.
  *
  * `contributor` is deliberately absent — this epic has two roles only
- * (docs/epics/epic-core-listening/implementation-plan.md, Ticket 2).
+ * (core-listening scope plan, Ticket 2).
  */
 export const ROLES = ['admin', 'member'] as const;
 

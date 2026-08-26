@@ -178,7 +178,7 @@ describe('finalising an upload', () => {
 
     const rows = await ledger(created.body.id);
     // The id crosses the process boundary on the row — there is no async frame to inherit it from
-    // in the worker (docs/epics/epic-core-listening/architecture.md § Key choices).
+    // in the worker (core-listening scope tdd § Key choices).
     expect(rows[0]?.correlation_id).toBe(correlationId);
   }, 90_000);
 

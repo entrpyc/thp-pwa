@@ -7,7 +7,7 @@ import { job, recording } from './schema';
  * **What the pipeline is doing to every recording, in one query.**
  *
  * docs/project/prd.md 3.19.4 asks an admin to be able to read the state of every step of every
- * recording, and docs/epics/epic-core-listening/architecture.md § Job ledger is explicit that the
+ * recording, and core-listening scope tdd § Job ledger is explicit that the
  * ledger being *queryable pipeline state* is half of why it lives in Postgres rather than behind a
  * broker. This module is that read.
  *

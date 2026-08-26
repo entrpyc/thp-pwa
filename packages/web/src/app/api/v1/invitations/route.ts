@@ -11,7 +11,7 @@ export const dynamic = 'force-dynamic';
  *
  * Admin-only through the policy module, which is what makes "a member cannot invite" a refusal the
  * API issues rather than a control the interface happens not to render. There is no interface for
- * either method yet; docs/epics/epic-core-listening/implementation-plan.md § Ticket 5 builds it over exactly these two.
+ * either method yet; core-listening scope plan § Ticket 5 builds it over exactly these two.
  */
 
 /** Issue. `201` — the invitation is a resource, and this is the request that created it. */

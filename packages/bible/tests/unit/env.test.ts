@@ -8,7 +8,7 @@ import {
 } from '../../src/env';
 
 /**
- * [3.1.3](docs/active-scope/implementation-plan.md) — the translation is configuration, and a run
+ * scope plan 3.1.3 — the translation is configuration, and a run
  * that has not been told which one it publishes refuses to start rather than picking one.
  */
 describe('the translation', () => {

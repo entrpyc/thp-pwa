@@ -16,7 +16,7 @@ export const dynamic = 'force-dynamic';
  * editing rather than writing, and member visibility is one condition an admin deliberately opens.
  *
  * The same carve-out the first three panels took — no admin reference PNG exists, so it is composed
- * from docs/design referencess png/style-guide.md and the token layer, and `reviews.module.css`
+ * from docs/design-references/style-guide.md and the token layer, and `reviews.module.css`
  * composes from `admin.module.css` rather than restating it, so the four panels cannot drift.
  *
  * **The gate decides what to render and authorises nothing.** `GET /api/v1/reviews`, the resolve

@@ -1,10 +1,10 @@
 /**
  * The review gate's vocabulary and wire contract (Story 3).
  *
- * **One table, one queue, one query** — docs/epics/epic-core-listening/architecture.md § Data model
- * (epic) settles that every AI artefact this product ever generates arrives as a `review_item` with
+ * **One table, one queue, one query** — core-listening scope tdd § Data model
+ * settles that every AI artefact this product ever generates arrives as a `review_item` with
  * a `kind`, rather than as a table of its own. Scripture references, tags, topics, mind maps and
- * video scripts each add a value to {@link REVIEW_KINDS} in a later epic and change nothing else:
+ * video scripts each add a value to {@link REVIEW_KINDS} in a later scope and change nothing else:
  * not the queue read, not the form, not the route. That property is the whole reason this file is
  * shaped the way it is.
  *
@@ -21,7 +21,7 @@ import type { ProposedCitation, ScriptureCitation, ScriptureReferenceView } from
  *
  * Two in this epic. `summary` is the teaching's summary ([3.6.1](docs/project/prd.md));
  * `recording_metadata` is the suggested description ([4.17.1](docs/project/prd.md) — topics, tags
- * and scripture references are deferred with the epics that generate them).
+ * and scripture references are deferred with the scopes that generate them).
  */
 export const REVIEW_KINDS = ['summary', 'recording_metadata', 'scripture'] as const;
 
@@ -55,7 +55,7 @@ export function isReviewStatus(value: unknown): value is ReviewStatus {
  *
  * `text` is one string, which is what every kind was until scripture arrived. `list` is a list of
  * structured entries — the first artefact whose draft is not a paragraph, and, per
- * [1.4](docs/active-scope/prd.md), the first of four: tags, mind maps and video scripts are queued
+ * scope prd 1.4, the first of four: tags, mind maps and video scripts are queued
  * behind it and are not one string either.
  *
  * The distinction lives here rather than in the form so that the form can *ask* rather than
@@ -83,7 +83,7 @@ export interface ReviewFieldSpec {
  * canonical entity.
  *
  * It widened from a bare field *name* to a name and a shape when scripture arrived
- * ([1.2.2](docs/active-scope/implementation-plan.md)). The two text kinds are read and written
+ * (scope plan 1.2.2). The two text kinds are read and written
  * exactly as they were; what a reader now has is a way to ask what it is holding without knowing
  * which kinds exist.
  *
@@ -150,7 +150,7 @@ export interface FieldProvenance {
   readonly editedByAdmin: boolean;
   /**
    * **For a list-shaped field: what was approved, entry by entry, and where each entry came from**
-   * ([3.2.9](docs/active-scope/prd.md)).
+   * (scope prd 3.2.9).
    *
    * Written by the approve path and only by it, so an open draft does not carry one. The draft
    * itself stays what the machine proposed — which is what lets a closed item be read as *what was
@@ -160,14 +160,14 @@ export interface FieldProvenance {
 }
 
 /**
- * **One row of a list-shaped draft, as the form sends it back** ([3.2.3](docs/active-scope/prd.md),
- * [3.2.4](docs/active-scope/prd.md)).
+ * **One row of a list-shaped draft, as the form sends it back** (scope prd 3.2.3,
+ * scope prd 3.2.4).
  *
  * The citation as it now reads — unresolved, because a form submits words and numbers and whether
  * they are a citation is the server's question — and **which proposal it came from**: `from` is the
  * entry's index in the machine's list, or `null` for a reference a person added.
  *
- * That one field is the whole of [3.2.9](docs/active-scope/prd.md)'s three-way distinction. A row
+ * That one field is the whole of scope prd 3.2.9's three-way distinction. A row
  * carrying a `from` whose citation has changed was *edited*; a row carrying none was *added*; and
  * everything else is the machine's as it stood. The server works all three out for itself rather
  * than being told, so nothing here is a claim a client makes about its own provenance.

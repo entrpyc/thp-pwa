@@ -4,7 +4,7 @@ import type { UserRow } from '@thp/db';
 /**
  * **The single place `(actor, action, resource)` is evaluated.**
  *
- * This is one of the three structures docs/epics/epic-core-listening/prd.md § Rationale names as making this epic
+ * This is one of the three structures core-listening scope prd § Rationale names as making this epic
  * throwaway if skipped: Contributor arriving in a later epic is one enum value plus four widened
  * cases *only if* every check in the product goes through here. Nothing else in `src/` is allowed
  * to read a role or compare against one — tools/role-usage.ts fails the build if anything does,
@@ -127,7 +127,7 @@ export const POLICY_ACTIONS = [
    * are the same question only while there are two roles.
    *
    * The split is not decoration here. Widening series management to Contributor is one of the four
-   * cases docs/epics/epic-core-listening/architecture.md § Extension points already names, and
+   * cases core-listening scope tdd § Extension points already names, and
    * "widen four cases" is only true if the cases exist to be widened.
    *
    * `series.list` / `series.browse` are the `recording.list` / `recording.browse` pair again, and
@@ -148,7 +148,7 @@ export const POLICY_ACTIONS = [
    * same way. The six that moderate, edit, delete, react and pin arrive with the tasks that need
    * them — an action with no route behind it is a rule nobody can see fail.
    *
-   * Both roles, on the same terms ([3.1.12](docs/active-scope/prd.md)): nothing about writing a
+   * Both roles, on the same terms (scope prd 3.1.12): nothing about writing a
    * note differs by role, and nothing about reading one does either. **What a member sees through
    * `note.read` is the query's answer, not this one** — the private-note condition lives in
    * `packages/db/src/notes.ts` and an admin is not a caller it bends for.
@@ -163,7 +163,7 @@ export const POLICY_ACTIONS = [
    * on what you wrote and on nothing else, with the comparison inside the rule rather than at a
    * route. They are two rather than one `note.own`, because the day the two part is the day
    * `note.moderate` arrives — and it already has: an admin may delete a member's note and may not
-   * rewrite it ([3.6.2](docs/active-scope/prd.md)), which is one action widened and one left alone.
+   * rewrite it (scope prd 3.6.2), which is one action widened and one left alone.
    *
    * `note.pin` and `note.unpin` are two for the reason `recording.publish` / `unpublish` are two.
    * They were arguably one while re-pinning was how a pin got replaced; with any number of pins

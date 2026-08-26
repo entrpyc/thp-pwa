@@ -471,7 +471,7 @@ describe('what the log records', () => {
         (line) => line.message === DOMAIN_EVENT_MESSAGE && line['recordingId'] === recordingId,
       ),
     );
-    // docs/epics/epic-core-listening/architecture.md § Extension points: §3.17's "a teaching you
+    // core-listening scope tdd § Extension points: §3.17's "a teaching you
     // follow has been published" fans out from this exact event. Nothing consumes it, and no
     // notification row exists.
     const event = lines.find(

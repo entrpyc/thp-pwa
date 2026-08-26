@@ -13,7 +13,7 @@ import { buildMediaStore } from './s3-store';
  *
  * **That property is what is missing. There is no delete.** "The original is never overwritten or
  * deleted" (docs/project/prd.md, 3.4.9;
- * docs/epics/epic-core-listening/architecture.md § Media store calls it the one non-negotiable) is
+ * core-listening scope tdd § Media store calls it the one non-negotiable) is
  * a fact about this type rather than about anybody's discipline: there is nothing to call. An
  * upload that is refused at finalisation leaves its object where it is, and that orphan is the
  * price — it is invisible, the list reads `recording` rows, and it is cheaper than any mechanism
@@ -101,7 +101,7 @@ export const UPLOAD_GRANT_SECONDS = 60 * 60;
  * for rather than from the name, so the two can never disagree.
  *
  * `originals/` is a prefix rather than a bucket, because
- * docs/epics/epic-core-listening/architecture.md § Extension points has processed renditions
+ * core-listening scope tdd § Extension points has processed renditions
  * arriving beside it later.
  */
 export function mintOriginalKey(contentType: string): string {

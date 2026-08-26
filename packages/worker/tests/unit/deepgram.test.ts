@@ -187,8 +187,8 @@ describe('what the adapter makes of the answer', () => {
   });
 
   it('prices a job at the published monolingual rate', () => {
-    // $0.0043/min = $0.258/hr, which is where docs/project/architecture.md § Estimated running
-    // costs' ~$0.26/hr came from. A 90-minute teaching is ~$0.39.
+    // $0.0043/min = $0.258/hr, which is where project tdd 8.2's ~$0.26/hr came from.
+    // A 90-minute teaching is ~$0.39.
     expect(DEEPGRAM_USD_PER_MINUTE).toBe(0.0043);
     expect(costOf(3600)).toBeCloseTo(0.258, 6);
     expect(costOf(90 * 60)).toBeCloseTo(0.387, 6);

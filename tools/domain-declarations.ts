@@ -219,7 +219,7 @@ function stringLiterals(line: string): string[] {
 
 /**
  * **No source file but the canon spells a book of the Bible**
- * ([1.1.1](docs/active-scope/implementation-plan.md)).
+ * (scope plan 1.1.1).
  *
  * The stronger half of the rule the registry above enforces. A duplicate *tuple* is the obvious
  * way the canon gets restated; the likely one is a screen writing `John 3:16` into a heading, or a

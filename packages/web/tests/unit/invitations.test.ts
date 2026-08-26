@@ -91,7 +91,7 @@ describe('the payload an admin sees', () => {
 
 describe('the window', () => {
   it('is seven days', () => {
-    // docs/epics/epic-core-listening/implementation-plan.md § Ticket 3 settles what docs/project/prd.md 3.1.4 leaves as "a fixed window".
+    // core-listening scope plan § Ticket 3 settles what docs/project/prd.md 3.1.4 leaves as "a fixed window".
     expect(INVITATION_LIFETIME_MS).toBe(7 * 24 * 60 * 60 * 1000);
   });
 

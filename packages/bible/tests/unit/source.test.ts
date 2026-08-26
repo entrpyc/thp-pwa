@@ -5,8 +5,8 @@ import { fakeBibleSource } from '../../src/fake';
 import { freeUseBibleSource, type HttpTransport } from '../../src/free-use';
 
 /**
- * **The port, and the one adapter behind it** ([3.1.1](docs/active-scope/implementation-plan.md),
- * [3.1.5](docs/active-scope/implementation-plan.md)).
+ * **The port, and the one adapter behind it** (scope plan 3.1.1,
+ * scope plan 3.1.5).
  *
  * Every case here drives the adapter through an injected transport, so the suite reaches no source
  * — which is the same property `THP_MOCK_EXTERNAL` gives a running process, held here by

@@ -42,7 +42,7 @@ describe('the segment table is the shared Segment type', () => {
   it('carries exactly the columns the type declares, and no others', () => {
     // Matched rather than re-invented. A column the type does not have — an embedding, a
     // per-segment confidence — is the table and the contract quietly becoming two shapes, and this is where
-    // that stops. docs/epics/epic-core-listening/architecture.md § Extension points names the
+    // that stops. core-listening scope tdd § Extension points names the
     // `ALTER TABLE` that adds an embedding, and it belongs to a later epic.
     expect(actualColumns()).toEqual(expectedColumns());
   });
@@ -50,7 +50,7 @@ describe('the segment table is the shared Segment type', () => {
   it('would report a field the table does not have', () => {
     // `embedding` rather than a speaker: the speaker is a real column now, and a counterexample the
     // table actually has would make this assertion pass for the wrong reason. `embedding` is the
-    // column docs/epics/epic-core-listening/architecture.md § Extension points defers to a later
+    // column core-listening scope tdd § Extension points defers to a later
     // epic, which makes it the field most likely to be added here by mistake.
     const withExtra = sharedSource.replace(
       '  readonly text: string;',

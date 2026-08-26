@@ -32,12 +32,12 @@ import styles from './transcript.module.css';
  *   {@link scrollToCurrent}.
  * - **An admin corrects a line in place** ([3.5.5](docs/project/prd.md)) and is then offered a
  *   summary and a set of scripture references built on the corrected words
- *   ([3.5.6](docs/project/prd.md), [3.1.10](docs/active-scope/prd.md)). The offer never fires by
+ *   ([3.5.6](docs/project/prd.md), scope prd 3.1.10). The offer never fires by
  *   itself, and declining it does nothing at all.
  *
  * `canCorrect` hides the affordance and grants nothing: the API is what refuses a member, which is
  * the standing constraint of
- * docs/epics/epic-core-listening/implementation-plan.md § Standing constraints.
+ * core-listening scope plan § Standing constraints.
  */
 export function TranscriptPanel({
   recordingId,

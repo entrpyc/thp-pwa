@@ -14,7 +14,7 @@ export const CORRELATION_ID_HEADER = 'x-correlation-id';
  * reading a log or a screen and is never parsed.
  *
  * The three refusal codes are deliberately distinct, because
- * docs/project/architecture.md § Cross-cutting concerns makes error types part of the contract:
+ * project tdd 6.4 makes error types part of the contract:
  *
  * - `unauthenticated` — no usable session. The caller does not get to learn whether the route even
  *   exists; an unknown path answers this too.

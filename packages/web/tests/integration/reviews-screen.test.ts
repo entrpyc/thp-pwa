@@ -894,8 +894,8 @@ describe('correcting a list before approving', () => {
 });
 
 /**
- * **The passage under each citation** ([3.3.1](docs/active-scope/implementation-plan.md)–
- * [3.3.3](docs/active-scope/implementation-plan.md)).
+ * **The passage under each citation** (scope plan 3.3.1–
+ * scope plan 3.3.3).
  *
  * The whole point of putting verse text on this screen is that a citation which *reads* right and
  * *is* wrong is catchable — so what is asserted is that the words are under the row, that a row the

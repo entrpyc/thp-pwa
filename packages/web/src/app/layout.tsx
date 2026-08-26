@@ -8,7 +8,7 @@ export const metadata = {
 
 /**
  * The document, plus the two stylesheets every screen depends on: the token layer built from
- * docs/design referencess png/style-guide.md, and the document-level base composed from it.
+ * docs/design-references/style-guide.md, and the document-level base composed from it.
  *
  * Still no navigation chrome — the top and bottom navigation have design references and arrive
  * with the steps that own them.

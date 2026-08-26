@@ -8,8 +8,8 @@ import { walkFiles } from './fs-walk';
  * The same shape of rule as "every call to the transcription provider goes through one module"
  * (tools/asr-boundary.ts) and "every call to the generation provider goes through one module"
  * (tools/generate-boundary.ts), and it exists for the reason those do:
- * [3.3.7](docs/active-scope/prd.md) says which translation a deployment publishes is *its* answer
- * rather than a change of code, and [3.3.5](docs/active-scope/prd.md) says a source that is down
+ * scope prd 3.3.7 says which translation a deployment publishes is *its* answer
+ * rather than a change of code, and scope prd 3.3.5 says a source that is down
  * degrades to citations without text rather than failing anything. Neither survives a second door —
  * one that reads no configuration, has no timeout, and throws where the port promises not to.
  *

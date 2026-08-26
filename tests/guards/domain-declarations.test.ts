@@ -38,7 +38,7 @@ describe('domain declarations exist exactly once', () => {
    * is in the place, so this does.
    *
    * The names matter as much as the glyphs: a bare emoji is unreadable to a screen reader, so the
-   * accessible name travels beside every one of them ([5.4.1](docs/active-scope/prd.md)).
+   * accessible name travels beside every one of them (scope prd 5.4.1).
    */
   it('names exactly the six reactions, each with its accessible name', () => {
     expect(REACTIONS.map((one) => `${one.emoji} ${one.name}`)).toEqual([

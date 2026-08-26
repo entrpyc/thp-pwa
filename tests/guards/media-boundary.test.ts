@@ -50,7 +50,7 @@ describe('one media store module', () => {
 describe('nothing is ever deleted from the store', () => {
   it('the port declares no delete operation', () => {
     // docs/project/prd.md 3.4.9, and the one non-negotiable of
-    // docs/epics/epic-core-listening/architecture.md § Media store. Held by the *type*: an adapter
+    // core-listening scope tdd § Media store. Held by the *type*: an adapter
     // can only offer what the interface declares, so there is nothing for a caller to reach for.
     expect(findDeleteOperations(portSource)).toEqual([]);
   });

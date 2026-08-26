@@ -8,7 +8,7 @@ import { NO_TEXT, type BibleSource, type Passage, type Verse } from './source';
  * exactly as `ASR_PROVIDER=fake` and `MAIL_TRANSPORT=capture` are — so "the suite reaches no Bible
  * source" is a property of how the process was configured rather than of a stub somebody remembered
  * to install in each file. `THP_MOCK_EXTERNAL=true` forces it, which is
- * [3.3.10](docs/active-scope/prd.md).
+ * scope prd 3.3.10.
  *
  * **It answers with a stand-in that says what it is**, rather than with scripture. Two reasons, and
  * neither is convenience: a development database must not fill up with real verse text nobody

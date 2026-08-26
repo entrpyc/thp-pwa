@@ -9,7 +9,7 @@ import { recording, reviewItem, segment, transcript } from './schema';
  *
  * **The read below is the property this epic is protecting.** docs/project/prd.md 3.19.2 asks for
  * one place holding everything waiting on an admin, and
- * docs/project/architecture.md § Cross-cutting concerns says that must not degrade into a union of
+ * project tdd 6.2 says that must not degrade into a union of
  * six as artefact types arrive. {@link listPendingReviews} filters **one column** and branches on
  * `kind` nowhere at all; a later epic adding scripture references, tags, mind maps or video scripts
  * adds a value to the enum and does not touch this file.

@@ -18,7 +18,7 @@ import { walkFiles } from './fs-walk';
  *
  * **The worker is deliberately not covered.** It claims, runs and completes against `@thp/db`
  * directly; the port exists for the API's dispatch, not for the worker's reads
- * (docs/epics/epic-core-listening/architecture.md § Extension points, *Queue port*).
+ * (core-listening scope tdd § Extension points, *Queue port*).
  */
 
 export interface QueueBoundaryViolation {

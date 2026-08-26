@@ -19,7 +19,7 @@ import { logger } from '@/server/observability/logger';
  * Two halves that go different ways on purpose:
  *
  * 1. **The read goes straight to `@thp/db`'s pipeline module**, not through the queue port.
- *    docs/epics/epic-core-listening/architecture.md § Extension points promises that a broker
+ *    core-listening scope tdd § Extension points promises that a broker
  *    arriving leaves "the ledger and the dashboard query untouched", so the dashboard query is not
  *    a dispatch concern and wrapping it in the port would be inventing one.
  * 2. **The re-run goes through the port**, like every other enqueue in this package — so the row

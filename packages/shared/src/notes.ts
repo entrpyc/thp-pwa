@@ -43,7 +43,7 @@ export const MAX_NOTE_LENGTH = 1_000;
 
 /**
  * A recording's notes — read with `GET`, written with `POST`
- * ([3.2.1](docs/active-scope/prd.md), [3.1.1](docs/active-scope/prd.md)).
+ * (scope prd 3.2.1, scope prd 3.1.1).
  *
  * **One path for both**, because both answer the same question about the same collection: which
  * notes belong to this teaching. The recording in the path is authoritative.
@@ -54,12 +54,12 @@ export function recordingNotesPath(recordingId: string): string {
 
 /**
  * **How many of the group chose one glyph** — the aggregate the reaction row renders
- * ([5.4.1](docs/active-scope/prd.md)).
+ * (scope prd 5.4.1).
  *
- * Only emoji somebody has actually chosen appear ([3.4.5](docs/active-scope/prd.md)): an emoji at
+ * Only emoji somebody has actually chosen appear (scope prd 3.4.5): an emoji at
  * zero is absent from the array rather than present carrying a `0`, so the row has nothing to
  * filter. The glyph travels rather than a key, because a reaction stored under an emoji that has
- * left the vocabulary still counts ([3.4.2](docs/active-scope/prd.md)) — `reactionName` labels it.
+ * left the vocabulary still counts (scope prd 3.4.2) — `reactionName` labels it.
  */
 export interface ReactionCount {
   readonly emoji: string;
@@ -69,31 +69,31 @@ export interface ReactionCount {
 /**
  * One note, as the reading member is answered.
  *
- * **`deletedBy` is not here and never will be** ([3.5.8](docs/active-scope/prd.md)) — who removed a
+ * **`deletedBy` is not here and never will be** (scope prd 3.5.8) — who removed a
  * note is stored and is not a member's business. This is the shape that drop happens in.
  *
  * **A reply is this same shape.** A reply is a note with a parent ([4.10](docs/project/prd.md)), and
- * every capability this scope adds — reacting to it ([3.4.7](docs/active-scope/prd.md)), editing
+ * every capability this scope adds — reacting to it (scope prd 3.4.7), editing
  * it, deleting it — applies to both on the same terms, so one card component renders either. What a
  * reply cannot have is said by the field rather than by a second interface: `timestampMs` is null
- * because a reply has no moment of its own ([3.3.2](docs/active-scope/prd.md)), `visibility` is
- * always `public` ([3.3.3](docs/active-scope/prd.md)), `pinned` is always false
- * ([3.6.8](docs/active-scope/prd.md)) and `replies` is always empty, because threads are one level
- * deep ([3.3.4](docs/active-scope/prd.md)).
+ * because a reply has no moment of its own (scope prd 3.3.2), `visibility` is
+ * always `public` (scope prd 3.3.3), `pinned` is always false
+ * (scope prd 3.6.8) and `replies` is always empty, because threads are one level
+ * deep (scope prd 3.3.4).
  *
  * `mine` is derived rather than compared on the client. The server already knows who is reading, so
  * "is this mine" is answered once, on the side that cannot get it wrong — and the **Private** badge
- * ([3.2.2](docs/active-scope/prd.md)), the **Mine** filter ([3.2.3](docs/active-scope/prd.md)) and
+ * (scope prd 3.2.2), the **Mine** filter (scope prd 3.2.3) and
  * every author control read one field rather than each re-deriving an identity comparison.
  *
- * `visibility` travels because [5.2.3](docs/active-scope/prd.md)'s badge is drawn from it. It is a
+ * `visibility` travels because scope prd 5.2.3's badge is drawn from it. It is a
  * field to *render*, never a field to filter by: what a member may see was decided by the query.
  */
 export interface NoteView {
   readonly id: string;
   /**
    * Where in the recording it was written, in milliseconds — **null on a reply**, which belongs to
-   * its parent's moment rather than to one of its own ([3.3.2](docs/active-scope/prd.md)).
+   * its parent's moment rather than to one of its own (scope prd 3.3.2).
    */
   readonly timestampMs: number | null;
   /** The author's display name ([3.1.12](docs/project/prd.md)). A monogram is drawn from it. */
@@ -104,26 +104,26 @@ export interface NoteView {
   /**
    * The text, or the empty string on a tombstone.
    *
-   * A deleted note's text is returned to nobody ([3.5.9](docs/active-scope/prd.md)) — and it is not
+   * A deleted note's text is returned to nobody (scope prd 3.5.9) — and it is not
    * *withheld* here, it is gone: the delete cleared the column, so there is nothing to withhold.
    */
   readonly text: string;
   /** ISO 8601. */
   readonly createdAt: string;
   /**
-   * Whether this is a tombstone ([5.3.3](docs/active-scope/prd.md)) — a note that was removed and
+   * Whether this is a tombstone (scope prd 5.3.3) — a note that was removed and
    * whose replies are still read under it.
    *
    * It says **that** the note was removed and nothing about **who** removed it
-   * ([3.5.8](docs/active-scope/prd.md)); the author of an admin-removed note reads exactly what
+   * (scope prd 3.5.8); the author of an admin-removed note reads exactly what
    * everyone else reads.
    */
   readonly deleted: boolean;
-  /** Whether an admin has raised it above the list ([3.6.5](docs/active-scope/prd.md)). */
+  /** Whether an admin has raised it above the list (scope prd 3.6.5). */
   readonly pinned: boolean;
-  /** The thread under it, oldest first ([3.3.6](docs/active-scope/prd.md)). Empty is no thread. */
+  /** The thread under it, oldest first (scope prd 3.3.6). Empty is no thread. */
   readonly replies: readonly NoteView[];
-  /** Only emoji somebody chose, most-chosen first ([3.4.5](docs/active-scope/prd.md)). */
+  /** Only emoji somebody chose, most-chosen first (scope prd 3.4.5). */
   readonly reactions: readonly ReactionCount[];
   /** The reading member's own choice, or `null` — what marks their pill and the picker's row. */
   readonly myReaction: string | null;
@@ -138,7 +138,7 @@ export interface NotesPayload {
  * Body of `POST /api/v1/recordings/{id}/notes`.
  *
  * All three together. The visibility is explicit rather than defaulted server-side, because
- * [3.1.4](docs/active-scope/prd.md) makes choosing it part of writing a note — a body that omitted
+ * scope prd 3.1.4 makes choosing it part of writing a note — a body that omitted
  * it would make "the member did not choose" and "the client forgot" the same request.
  */
 export interface CreateNoteRequest {
@@ -149,12 +149,12 @@ export interface CreateNoteRequest {
 
 /**
  * Body of `POST /api/v1/recordings/{id}/notes` **when it is a reply**
- * ([3.3.1](docs/active-scope/prd.md)).
+ * (scope prd 3.3.1).
  *
  * One create route, not two (active-scope architecture § 7): a reply is a note with a parent, and a
  * second route would be a second validation path for one set of text rules. So the body carries the
  * parent instead of the moment — a reply has no moment of its own — and the visibility is not the
- * writer's to choose, because a reply is always public ([3.3.3](docs/active-scope/prd.md)).
+ * writer's to choose, because a reply is always public (scope prd 3.3.3).
  */
 export interface CreateReplyRequest {
   readonly text: string;
@@ -168,7 +168,7 @@ export interface CreateNotePayload {
 
 /**
  * What a member is told when the teaching goes away underneath their composer
- * ([3.1.11](docs/active-scope/prd.md), [5.1.4](docs/active-scope/prd.md)).
+ * (scope prd 3.1.11, scope prd 5.1.4).
  *
  * One statement for the same reason {@link MAX_NOTE_LENGTH} is one: the API refuses with it and the
  * composer prints it beside text the member has not lost, and the two saying different things is a
@@ -181,18 +181,18 @@ export const NOTE_RECORDING_GONE_MESSAGE =
 // The single-note routes (active-scope architecture § 4.4)
 // =================================================================================================
 
-/** `PATCH` to edit ([3.5.1](docs/active-scope/prd.md)), `DELETE` to take down (3.5.2). */
+/** `PATCH` to edit (scope prd 3.5.1), `DELETE` to take down (3.5.2). */
 export function notePath(noteId: string): string {
   return `/notes/${noteId}`;
 }
 
-/** `PUT` to set or replace, `DELETE` to clear ([3.4.3](docs/active-scope/prd.md), 3.4.4). */
+/** `PUT` to set or replace, `DELETE` to clear (scope prd 3.4.3, 3.4.4). */
 export function noteReactionPath(noteId: string): string {
   return `${notePath(noteId)}/reaction`;
 }
 
 /**
- * `PUT` to raise, `DELETE` to lower ([3.6.5](docs/active-scope/prd.md), 3.6.7).
+ * `PUT` to raise, `DELETE` to lower (scope prd 3.6.5, 3.6.7).
  *
  * Addressed on the **note** rather than on the recording, because with any number of pins allowed a
  * recording no longer has *a* pin to `PUT` (active-scope architecture § 4.4).
@@ -203,7 +203,7 @@ export function notePinPath(noteId: string): string {
 
 /**
  * Body of `PATCH /api/v1/notes/{id}` — **text and nothing else**
- * ([3.5.3](docs/active-scope/prd.md)).
+ * (scope prd 3.5.3).
  *
  * There is no `timestampMs` and no `visibility` here, and their absence is the requirement rather
  * than an omission: raising a private note would publish text written in confidence, and lowering a
@@ -229,8 +229,8 @@ export interface NotePayload {
 
 /**
  * The four sentences a member reads when a note went away underneath their screen
- * ([5.3.4](docs/active-scope/prd.md), [5.4.3](docs/active-scope/prd.md),
- * [5.5.4](docs/active-scope/prd.md)).
+ * (scope prd 5.3.4, scope prd 5.4.3,
+ * scope prd 5.5.4).
  *
  * Here rather than beside each component for the reason {@link NOTE_RECORDING_GONE_MESSAGE} is
  * here: the API refuses with `note_removed` and the client prints one of these, and the two saying

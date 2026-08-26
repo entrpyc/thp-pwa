@@ -8,7 +8,7 @@
  *
  * **It is not a convenience.** Development runs against the MinIO container, and the worker hands
  * the ASR provider a signed URL to *fetch the object itself* rather than sending it bytes
- * (docs/epics/epic-core-listening/implementation-plan.md, the *provider is handed a location*
+ * (core-listening scope plan, the *provider is handed a location*
  * decision). A bucket on `127.0.0.1` is not reachable from Deepgram, so a MinIO development
  * environment **cannot** use real transcription at all. This switch is the honest statement of
  * that rather than a shortcut around it.

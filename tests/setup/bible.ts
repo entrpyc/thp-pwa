@@ -2,7 +2,7 @@
  * The suite's verse source and translation.
  *
  * **The suite's, not the developer's** — the same argument tests/setup/media-bucket.ts makes about
- * the bucket. `.env` names a real Bible source, and [3.3.10](docs/active-scope/prd.md) says a test
+ * the bucket. `.env` names a real Bible source, and scope prd 3.3.10 says a test
  * run reaches none: leaving it to be inherited would make "no test reaches a source" true only for
  * developers who happened to set `THP_MOCK_EXTERNAL`. The translation is named too, because it is
  * the first part of every cached verse's key and a suite whose key came from `.env` would hold

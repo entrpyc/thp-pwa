@@ -233,7 +233,7 @@ export const passwordReset = pgTable(
 
 /**
  * A named series of teachings (Story 6 Ticket 01) — the **left-hand end** of the spine
- * docs/epics/epic-core-listening/architecture.md § Data model draws as
+ * core-listening scope tdd § Data model draws as
  * `Series 1—* Recording 1—1 Transcript 1—* Segment`, and the only entity this story adds.
  *
  * **Four columns, and the absences are the design.** No `recording_count` and no `date_range`:
@@ -260,13 +260,13 @@ export const series = pgTable('series', {
 
 /**
  * A recording (Story 2 Ticket 01) — the first row in the spine
- * docs/epics/epic-core-listening/architecture.md § Data model draws as
+ * core-listening scope tdd § Data model draws as
  * `Series 1—* Recording 1—1 Transcript 1—* Segment`.
  *
  * **What is absent is the design.** There is no `duration`, because nothing inspects the media in
  * this epic ([§3.4](docs/project/prd.md) is deferred whole); no `processed_media_key`, because no
  * processed rendition exists and that column is the named seam
- * (docs/epics/epic-core-listening/architecture.md § Extension points, "Second media pointer").
+ * (core-listening scope tdd § Extension points, "Second media pointer").
  * `series_id` **arrived in Story 6 Ticket 01** — see the column — and it arrived with the routes
  * and the screens that write and read it rather than "for later", which is the whole distinction
  * this paragraph is about. A nullable column added ahead of a use is how deferral quietly stops
@@ -328,7 +328,7 @@ export const recording = pgTable(
  * A single run of a single pipeline step for a single recording (Story 2 Ticket 02) — **the ledger
  * and the queue at once**. There is no broker and no second store: the rows the worker dispatches
  * from are the same rows an operator queries and Ticket 04 renders a dashboard out of
- * (docs/project/architecture.md § Key technology choices, the ledger-is-the-queue row).
+ * (project tdd 4.7).
  *
  * **The table is append-only.** A step that is re-run is a *new row*, not a status reset, with
  * `attempt` counting 1, 2, 3 for a `(recording_id, step)` pair — so a failure that was later
@@ -337,7 +337,7 @@ export const recording = pgTable(
  *
  * **`correlation_id` is a column, not an inference.** The worker is a second process with no
  * request behind it, so the id that
- * docs/epics/epic-core-listening/architecture.md § Key choices wants spanning API request → job →
+ * core-listening scope tdd § Key choices wants spanning API request → job →
  * provider call cannot live in an async-context frame — it has to survive the process boundary, and
  * a column is the only form of that which does. `text` because the API adopts a caller's id when
  * it is usable, and what it adopts is not necessarily a UUID.
@@ -467,12 +467,12 @@ export const transcript = pgTable(
 
 /**
  * A timestamped segment — **the atom of the whole system**
- * (docs/epics/epic-core-listening/architecture.md § Extension points).
+ * (core-listening scope tdd § Extension points).
  *
  * The columns are the fields of the `Segment` type in `@thp/shared`, matched rather than
  * re-invented; tests/guards/segment-shape.test.ts fails the build if the two ever disagree. Notes,
  * highlights, mind maps, search and Flow Tracker all resolve through `(recording_id, timestamp_ms)`
- * in later epics, and this row is where that pair becomes real.
+ * in later scopes, and this row is where that pair becomes real.
  *
  * `start_ms` is inclusive and `end_ms` exclusive, as the shared type's documentation already says.
  * Milliseconds as integers, not seconds as floats: a seek lands on an integer or it lands on
@@ -529,10 +529,10 @@ export const segment = pgTable(
 /**
  * **The review gate** (Story 3 Ticket 01) — one table for every AI artefact this product will ever
  * generate, not one table per artefact
- * (docs/epics/epic-core-listening/architecture.md § Data model (epic)).
+ * (core-listening scope tdd § Data model).
  *
  * That is the whole design, and it buys one property:
- * docs/project/architecture.md § Cross-cutting concerns asks that "everything waiting on an admin"
+ * project tdd 6.2 asks that "everything waiting on an admin"
  * stay **one query over one column** rather than degrading into a union of six. Scripture
  * references, tags, topics, mind maps and video scripts each add a value to `review_kind` in a
  * later epic and change nothing here — not the queue read, not the form, not a route.
@@ -614,7 +614,7 @@ export const summary = pgTable(
 /**
  * **Where a member had got to** (Story 4 Ticket 04, [3.2.5](docs/project/prd.md)) — the only
  * member-owned entity in this epic
- * (docs/epics/epic-core-listening/architecture.md § Data model (epic), *Member-owned state*).
+ * (core-listening scope tdd § Data model, *Member-owned state*).
  *
  * **One row per (person, teaching)**, said by the composite primary key rather than by the code
  * that writes it: the write is an upsert onto that pair, so there is no history to reconcile and
@@ -677,7 +677,7 @@ export const playbackProgress = pgTable(
  *
  * **`author_id` restricts rather than cascades**, unlike every other member-owned row in this
  * codebase — deliberately, and it is the one deviation worth reading twice.
- * docs/project/architecture.md § Data model states outright that public notes must not cascade from
+ * project tdd 3.4 states outright that public notes must not cascade from
  * users, and re-attribution ([3.1.10](docs/project/prd.md)) is unbuilt. Until it exists, deleting an
  * account that has written a note is *meant* to fail: a hand at the database cannot take a group's
  * study notes with one person's account by accident.
@@ -789,13 +789,13 @@ export const note = pgTable(
  * per note, and no row for a member who has not chosen.
  *
  * **The primary key is the requirement.** `(note_id, user_id)` *is*
- * [3.4.3](docs/active-scope/prd.md) — one reaction per member — and it is also
- * [3.4.11](docs/active-scope/prd.md): replacing is `on conflict do update` rather than
+ * scope prd 3.4.3 — one reaction per member — and it is also
+ * scope prd 3.4.11: replacing is `on conflict do update` rather than
  * delete-then-insert, and two members reacting in the same instant are two rows that cannot
  * collide. Neither behaviour is code that has to remember.
  *
  * **`emoji` is `text`, deliberately not an enum and deliberately not a foreign key.**
- * [3.4.2](docs/active-scope/prd.md) requires that a reaction stored under a glyph that later leaves
+ * scope prd 3.4.2 requires that a reaction stored under a glyph that later leaves
  * the vocabulary still renders and still counts. An enum makes removing a value a migration; a
  * foreign key makes it a cascade — both rewrite a member's past response, which is precisely what
  * that requirement forbids. The column stores the glyph itself, and `reactionName` in
@@ -823,12 +823,12 @@ export const noteReaction = pgTable(
 
 /**
  * **A note an admin raised above the rest** (active-scope architecture § 6.3) —
- * [3.6.5](docs/active-scope/prd.md) to 3.6.10.
+ * scope prd 3.6.5 to 3.6.10.
  *
  * **`note_id` is the whole primary key**, which is what makes "a note is pinned at most once"
- * ([3.6.10](docs/active-scope/prd.md)) a key rather than a check somebody has to write. Pinning an
+ * (scope prd 3.6.10) a key rather than a check somebody has to write. Pinning an
  * already-pinned note is then one `on conflict (note_id) do nothing`, and an admin acting on a
- * stale screen has still got what they asked for ([3.6.6](docs/active-scope/prd.md)).
+ * stale screen has still got what they asked for (scope prd 3.6.6).
  *
  * **`recording_id` is carried rather than derived**, so "the pins on this recording" is one indexed
  * read instead of a join back through `note`. The composite foreign key is what keeps that honest:
@@ -839,7 +839,7 @@ export const noteReaction = pgTable(
  * ascending, creation time as tie-break — so the product has one answer to what order notes read
  * in and pinning does not invent a second. There is nothing for an admin to drag.
  *
- * A soft delete never fires a cascade, so [3.6.9](docs/active-scope/prd.md)'s pin-clear is a second
+ * A soft delete never fires a cascade, so scope prd 3.6.9's pin-clear is a second
  * statement inside the delete's transaction rather than a foreign key.
  */
 export const notePin = pgTable(
@@ -864,12 +864,12 @@ export const notePin = pgTable(
 
 /**
  * **A teaching's approved scripture references** (Task 1.4) —
- * [3.2.6](docs/active-scope/prd.md), and § 4 *Scripture reference — new*.
+ * scope prd 3.2.6, and § 4 *Scripture reference — new*.
  *
  * One row per citation on one recording, written only when an admin approves the list it belongs
  * to. **A row existing is what "approved" means**, which is why there is no status column here:
  * `project prd 4.6`'s *suggested or accepted* is the state of the `review_item` holding the draft
- * (docs/active-scope/prd.md § 8), and a column repeating it would be a second answer to the same
+ * (scope prd § 8), and a column repeating it would be a second answer to the same
  * question that somebody would eventually have to reconcile.
  *
  * **The citation is structured, never prose.** `book` is the canon identity `@thp/shared`'s
@@ -878,13 +878,13 @@ export const notePin = pgTable(
  * [3.7.6](docs/project/prd.md)'s cross-referencing and [3.7.7](docs/project/prd.md)'s search read
  * later, and the reason this scope's data model is what unblocks them.
  *
- * `origin` and `edited_by_admin` are [3.2.9](docs/active-scope/prd.md)'s per-reference record: what
+ * `origin` and `edited_by_admin` are scope prd 3.2.9's per-reference record: what
  * the machine proposed, what an admin changed, and what they added by hand. Both are written by
  * the approve path; nothing else may set them.
  *
  * **Unique on the passage**, so approving a list holding the same verse twice is impossible at the
  * database rather than only at the validator. Approving a later draft replaces the set
- * ([3.2.11](docs/active-scope/prd.md)) rather than appending to it, so there is no version to
+ * (scope prd 3.2.11) rather than appending to it, so there is no version to
  * thread and no `superseded_by`.
  */
 export const scriptureReference = pgTable(
@@ -918,13 +918,13 @@ export const scriptureReference = pgTable(
 );
 
 /**
- * **The verse text cache** ([3.3.1](docs/active-scope/prd.md), [4](docs/active-scope/prd.md)).
+ * **The verse text cache** (scope prd 3.3.1, scope prd 4).
  *
  * One row per verse, per translation. Not a column on `scripture_reference`, and that is the whole
  * design: a verse cited by a second teaching is **the same row**, not a second copy — which is what
- * makes [3.3.2](docs/active-scope/prd.md)'s "text already held is never fetched again" true across
+ * makes scope prd 3.3.2's "text already held is never fetched again" true across
  * teachings rather than only within one, and what keeps the lookup volume near
- * docs/project/architecture.md § Estimated running costs's assumption.
+ * project tdd 8.2's assumption.
  *
  * **The key is the passage, not an id.** `(translation, book, chapter, verse)` is the primary key
  * because that quadruple *is* the identity of a verse: an id column would let the same verse be
@@ -946,7 +946,7 @@ export const verseText = pgTable(
     book: text('book').notNull(),
     chapter: integer('chapter').notNull(),
     verse: integer('verse').notNull(),
-    /** What the source says the verse says. Plain text; never edited ([3.3.8](docs/active-scope/prd.md)). */
+    /** What the source says the verse says. Plain text; never edited (scope prd 3.3.8). */
     text: text('text').notNull(),
     fetchedAt: timestamp('fetched_at', { withTimezone: true }).notNull().defaultNow(),
   },

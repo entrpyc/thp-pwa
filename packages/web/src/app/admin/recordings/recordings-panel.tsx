@@ -37,7 +37,7 @@ import styles from './recordings.module.css';
  *
  * 1. **The limits are printed before a file is chosen, not after one is refused.** A 200 MB ceiling
  *    discovered at the end of a twenty-minute upload is a ceiling that wastes twenty minutes, and
- *    docs/epics/epic-core-listening/architecture.md § Key choices says so in as many words. The
+ *    core-listening scope tdd § Key choices says so in as many words. The
  *    sentence about WAV and FLAC is there for the same reason: a 90-minute teaching genuinely does
  *    not fit in either, and finding that out by trying is the expensive way.
  * 2. **The browser refuses a bad file the moment it is chosen — no request is made at all.** That

@@ -29,7 +29,7 @@ import { fakeGenerator } from '../../../worker/src/generate';
 import { closeTestDatabase, signedInAccount, type TestAccount } from '../support/accounts';
 
 /**
- * **The story, end to end** — docs/epics/epic-core-listening/prd.md § Epic flows' review path.
+ * **The story, end to end** — core-listening scope prd § Epic flows' review path.
  *
  * Upload → transcribe → generate_draft → queue → approve both kinds → publish, and then read the
  * result back **as a member**, which is the only reading that proves anything. Then the other half

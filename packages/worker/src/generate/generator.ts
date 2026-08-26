@@ -7,7 +7,7 @@ import type { ProposedCitation, ReviewKind } from '@thp/shared';
  * the same shape as the ASR, mail and media boundaries, and enforced the same way:
  * tests/guards/generate-boundary.test.ts fails the build if anything outside the adapter imports a
  * model SDK or names a provider's API. That is the *deliberately low reversal cost*
- * docs/epics/epic-core-listening/architecture.md § Key choices claims for the generate adapter, and
+ * core-listening scope tdd § Key choices claims for the generate adapter, and
  * it is only a claim while this is the only door to a provider.
  *
  * The port takes **the whole transcript and which artefacts are wanted**, and answers with one
@@ -51,7 +51,7 @@ export interface GenerationSpend {
 /**
  * What the model wrote for one kind: a paragraph, or a list of citations it proposed.
  *
- * The list arm is [1.3.1](docs/active-scope/implementation-plan.md)'s widening — the port answers
+ * The list arm is scope plan 1.3.1's widening — the port answers
  * with one string *or one list* per kind, and which of the two a kind wants is `REVIEW_FIELD`'s
  * declared shape rather than anything the provider decides.
  *

@@ -30,7 +30,7 @@ import styles from './pipeline.module.css';
  *    finished pipeline should not query forever; the poll is a consequence of there being work,
  *    not a property of the screen being open. There is no manual refresh button, and no websocket
  *    — the browser asking again is the whole mechanism
- *    (docs/epics/epic-core-listening/architecture.md § Deliberately deferred).
+ *    (core-listening scope tdd § Deliberately deferred).
  * 3. **A failure shows its reason in the row.** `job.error` is capped at 2000 characters by the
  *    writer and the full text is in the log under the same correlation id, but the sentence an
  *    operator needs is the one printed here.

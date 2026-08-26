@@ -10,7 +10,7 @@ import { withCorrelationId } from '@/server/observability/correlation';
  * What is asserted here and nowhere else is the property that only exists on the API side of the
  * seam: **the row carries the correlation id of the request that caused it**, without the caller
  * passing one. The worker is a second process with no request behind it
- * (docs/epics/epic-core-listening/architecture.md § Key choices, the correlation-id row), so the id
+ * (core-listening scope tdd § Key choices, the correlation-id row), so the id
  * has to be on the row — and it gets there by the port reading the same async store the logger
  * reads, which is a thing only an in-process test can see.
  *

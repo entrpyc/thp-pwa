@@ -14,7 +14,7 @@ import {
 } from '../../tools/style-tokens';
 
 const REPO_ROOT = resolve(import.meta.dirname, '..', '..');
-const STYLE_GUIDE = resolve(REPO_ROOT, 'docs/design referencess png/style-guide.md');
+const STYLE_GUIDE = resolve(REPO_ROOT, 'docs/design-references/style-guide.md');
 const WEB_SRC = resolve(REPO_ROOT, 'packages/web/src');
 const TOKEN_FILE = resolve(WEB_SRC, 'app/tokens.css');
 

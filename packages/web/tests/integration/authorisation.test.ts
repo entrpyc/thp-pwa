@@ -47,7 +47,7 @@ describe('the refusal is the API’s, not the client’s', () => {
     expect(anonymous.status).toBe(401);
     expect(refused).toBe('forbidden');
     expect(turnedAway).toBe('unauthenticated');
-    // Error types are part of the contract (docs/project/architecture.md § Cross-cutting concerns), so a
+    // Error types are part of the contract (project tdd 6.4), so a
     // client can tell "sign in" from "you may not" without parsing a message.
     expect(refused).not.toBe(turnedAway);
   });

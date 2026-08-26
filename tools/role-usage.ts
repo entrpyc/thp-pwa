@@ -6,8 +6,8 @@ import { walkFiles } from './fs-walk';
 /**
  * **One place decides.**
  *
- * docs/project/architecture.md § Cross-cutting concerns puts every authorisation decision in one policy
- * layer expressed as `(actor, action, resource)`, and docs/epics/epic-core-listening/prd.md § Rationale says missing
+ * project tdd 6.1 puts every authorisation decision in one policy
+ * layer expressed as `(actor, action, resource)`, and core-listening scope prd § Rationale says missing
  * that makes this epic throwaway. The property is only worth having if it can fail on its own:
  * this check reads application source and reports anything outside the policy module that touches
  * a role at all — reading `.role`, or spelling a role as a string literal.

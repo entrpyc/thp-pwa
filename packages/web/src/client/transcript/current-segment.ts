@@ -2,7 +2,7 @@
  * **Which segment covers this offset.**
  *
  * `(recording_id, timestamp_ms)` is the pair
- * docs/epics/epic-core-listening/architecture.md § Extension points names as the seam notes,
+ * core-listening scope tdd § Extension points names as the seam notes,
  * cross-references, search and the Flow Tracker all resolve "open at the moment" through. This is
  * where that pair stops being a schema comment and becomes an answer, and it is **a pure function
  * in its own module** for exactly that reason: the follow-along list and the caption pill both call

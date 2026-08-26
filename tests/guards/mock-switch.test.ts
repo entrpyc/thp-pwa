@@ -11,7 +11,7 @@ import { readTransportName } from '../../packages/web/src/server/mail/env';
  * The guard is here rather than beside any one of the four readers because the property is that
  * they agree — a switch that silences ASR and generation but still sends real mail is worse than no
  * switch, since it reads as a guarantee and is not one. The verse source joined them in the
- * scripture scope ([3.1.4](docs/active-scope/implementation-plan.md)), and joining the guard is what
+ * scripture scope (scope plan 3.1.4), and joining the guard is what
  * makes it part of the same promise rather than a fourth thing to remember.
  */
 

@@ -25,7 +25,7 @@ import { logger } from '@/server/observability/logger';
  * The admin half of the account lifecycle — listing, deactivating, reactivating, changing a role —
  * and the one self-service half, editing your own display name.
  *
- * There is no interface for any of it yet; docs/epics/epic-core-listening/implementation-plan.md § Ticket 5 builds the console
+ * There is no interface for any of it yet; core-listening scope plan § Ticket 5 builds the console
  * over exactly these calls, exactly as it will over ticket 3's. Every rule below is therefore
  * asserted against the **API**, because that is what has to hold against a direct request.
  *
@@ -132,7 +132,7 @@ function settle(
  * End an account's access (docs/project/prd.md, 3.1.7).
  *
  * The sessions are revoked **immediately**, not at the next expiry — that is the behaviour
- * docs/epics/epic-core-listening/architecture.md § Data model says server-side sessions exist to make possible, and
+ * core-listening scope tdd § Data model says server-side sessions exist to make possible, and
  * with a 30-day rolling window the difference between the two is a month. Any reset in flight is
  * revoked with them, so a link mailed a minute ago cannot be used to walk back in.
  */

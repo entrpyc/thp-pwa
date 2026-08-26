@@ -16,7 +16,7 @@ import styles from './transport.module.css';
  *
  * One thing in the reference is not here, and it is the same decision the chrome takes:
  * **the thumbnail in the left slot is artwork**, and artwork is deferred
- * ([epic prd § In scope → 4](docs/epics/epic-core-listening/prd.md)). The slot carries the
+ * (core-listening scope prd). The slot carries the
  * recording's title instead, which is what a member actually needs to know is playing.
  *
  * **The `···` control** opens the side toolbar of `bottom-navigation/menu-opened.png`. The reference
@@ -48,7 +48,7 @@ function totalLabel(durationMs: number): string {
 
 /**
  * How close two notes have to be to read as one tick — **1% of the recording's duration**
- * ([3.2.6](docs/active-scope/prd.md)).
+ * (scope prd 3.2.6).
  *
  * Computed here rather than server-side because **nothing in this product stores a duration**: the
  * media element is the only source of one, so the server has no number to collapse against. That is
@@ -89,7 +89,7 @@ function collapse(notes: readonly NoteView[], durationMs: number): Marker[] {
   return markers;
 }
 
-/** What a screen reader says for a tick ([5.7.2](docs/active-scope/prd.md)). */
+/** What a screen reader says for a tick (scope prd 5.7.2). */
 function markerLabel(marker: Marker): string {
   const at = formatTimecode(marker.positionMs);
   return marker.notes.length === 1

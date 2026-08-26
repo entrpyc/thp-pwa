@@ -12,7 +12,7 @@ import { correlationIdForJob, type EnqueueRequest, type EnqueuedJob, type Queue 
  * the port declares.
  *
  * "Postgres" is the name because the ledger *is* the queue
- * (docs/project/architecture.md § Key technology choices). A broker would be a sibling of this
+ * (project tdd 4.7). A broker would be a sibling of this
  * file, not an edit to it.
  */
 export function buildQueue(): Queue {

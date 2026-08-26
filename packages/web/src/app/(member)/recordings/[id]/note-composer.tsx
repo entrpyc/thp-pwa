@@ -14,25 +14,25 @@ import { usePlayer } from '../../player-context';
 import styles from './notes.module.css';
 
 /**
- * **The composer** ([5.1.2](docs/active-scope/prd.md)–5.1.5), in its own module because it is
+ * **The composer** (scope prd 5.1.2–5.1.5), in its own module because it is
  * mounted twice from one implementation.
  *
  * Inline at the top of the notes panel, and as a **sheet over whatever screen the member is on**
- * from the transport's own menu ([3.1.2](docs/active-scope/prd.md)). Two mounts and one
+ * from the transport's own menu (scope prd 3.1.2). Two mounts and one
  * implementation is the whole point: both read the frozen anchor from the player (§5.1), so the two
  * entry points cannot disagree about which moment is being annotated, and every text rule is
  * written once.
  *
  * **The text survives a refusal.** Every failure path below leaves `text` exactly where it was, so a
  * teaching that went away underneath the member costs them a press rather than a paragraph
- * ([3.1.11](docs/active-scope/prd.md)).
+ * (scope prd 3.1.11).
  *
  * Every rule this applies is applied again by the API independently (3.1.7, 3.1.8) — the standing
  * rule the transcript panel's `canCorrect` prop already follows.
  */
 
 /**
- * When the count appears ([3.1.7](docs/active-scope/prd.md)).
+ * When the count appears (scope prd 3.1.7).
  *
  * Not a fraction of the ceiling: the requirement is a number of characters, and deriving it would
  * make changing the ceiling silently move where the warning starts.
@@ -44,7 +44,7 @@ export const CEILING_LABEL = MAX_NOTE_LENGTH.toLocaleString('en-GB');
 
 /**
  * The count, on one rule for the composer, the reply field and the edit form
- * ([5.3.2](docs/active-scope/prd.md) says the reply's count is *the same rule as 5.1.4*, and the
+ * (scope prd 5.3.2 says the reply's count is *the same rule as 5.1.4*, and the
  * only way to mean that is to render the same component).
  */
 export function CharacterCount({ count }: { count: number }) {
@@ -75,7 +75,7 @@ export function NoteComposer({
   recordingId: string;
   /**
    * The teaching's title, shown above the frozen timestamp — **only on the sheet**
-   * ([5.1.5](docs/active-scope/prd.md)). Inline under the tab it would name the page the member is
+   * (scope prd 5.1.5). Inline under the tab it would name the page the member is
    * already looking at; over another screen it is the only thing that says which teaching this note
    * is about.
    */

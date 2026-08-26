@@ -7,7 +7,7 @@
  * **No source is compiled in**, and **the translation has no default.** A default *source* is a
  * thing, and it is the real one, exactly as `ASR_PROVIDER` defaults to `deepgram`. A default
  * translation is not: which translation a deployment publishes is a licensing decision and an
- * editorial one ([3.3.7](docs/active-scope/prd.md)), and quietly picking one on a deployment's
+ * editorial one (scope prd 3.3.7), and quietly picking one on a deployment's
  * behalf is how a teaching ends up carrying words nobody chose.
  */
 
@@ -30,7 +30,7 @@ export type BibleSourceName = (typeof BIBLE_SOURCES)[number];
 /**
  * `THP_MOCK_EXTERNAL` is read first and **wins over an explicitly named real source** — see
  * `@thp/shared/mock` for why the switch can have no exceptions and still mean anything
- * ([3.3.10](docs/active-scope/prd.md)).
+ * (scope prd 3.3.10).
  */
 export function readBibleSource(env: EnvSource = process.env): BibleSourceName {
   if (isExternalMocked(env)) return 'fake';
@@ -55,7 +55,7 @@ function require_(env: EnvSource, name: string, because: string): string {
 }
 
 /**
- * **The one translation this deployment publishes** ([3.3.7](docs/active-scope/prd.md)).
+ * **The one translation this deployment publishes** (scope prd 3.3.7).
  *
  * Required whichever source is in use, and never defaulted: it is the first part of the verse
  * cache's key, so a run that has not been told which translation it is holding cannot store a verse

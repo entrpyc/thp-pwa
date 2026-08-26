@@ -158,7 +158,7 @@ export function createGenerateDraftHandler(deps: GenerateDraftDependencies = {})
 
       if (field.shape === 'text') return typeof value === 'string' ? value : '';
 
-      // **The structure was required, so prose is a failure** ([3.1.2](docs/active-scope/prd.md)).
+      // **The structure was required, so prose is a failure** (scope prd 3.1.2).
       // Thrown before anything is written, so a run that answered in the wrong shape leaves no
       // partial draft behind it. The adapter refuses this too; this is the handler refusing to
       // trust that it did.
@@ -182,7 +182,7 @@ export function createGenerateDraftHandler(deps: GenerateDraftDependencies = {})
     }));
 
     // **The verses of what was just drafted, before the item is written**
-    // ([3.2.3](docs/active-scope/implementation-plan.md)). Before rather than after, so an admin
+    // (scope plan 3.2.3). Before rather than after, so an admin
     // opening the item the moment it appears reads the passages rather than watching them arrive.
     const verses = await resolveVerses(citationsIn(items), deps, fields);
 
@@ -196,11 +196,11 @@ export function createGenerateDraftHandler(deps: GenerateDraftDependencies = {})
       outputTokens: result.spend.outputTokens,
       costUsd: result.spend.costUsd,
       requestId: result.spend.requestId,
-      // [3.1.3](docs/active-scope/prd.md): what the machine proposed and could not be stored is a
+      // scope prd 3.1.3: what the machine proposed and could not be stored is a
       // number on the run that proposed it, so a prompt going wrong is visible rather than quiet.
       citationsDropped: dropped,
       citationsDuplicated: duplicates,
-      // [3.3.9](docs/active-scope/prd.md): what the lookups cost, on the job that caused them. A
+      // scope prd 3.3.9: what the lookups cost, on the job that caused them. A
       // free source spends nothing and says so; what is worth reading is the second number — the
       // calls the cache meant nobody had to make.
       versesFetched: verses.fetched,
@@ -248,10 +248,10 @@ function citationsIn(items: readonly NewReviewItem[]): ScriptureCitation[] {
 
 /**
  * **Resolve the passages, and never fail the step over them**
- * ([3.2.4](docs/active-scope/implementation-plan.md)).
+ * (scope plan 3.2.4).
  *
  * The deliberate exception to docs/project/prd.md 3.21.2.3's halt-on-failure rule, and the reason
- * it is deliberate is [3.3.5](docs/active-scope/prd.md): the artefact this step produces is the
+ * it is deliberate is scope prd 3.3.5: the artefact this step produces is the
  * citation, and verse text is a convenience on top of it. A source that is down leaves the
  * references exactly where they are, marked as having no text yet by there being none — which is
  * the state the review form and the member surface already draw a quiet line for.

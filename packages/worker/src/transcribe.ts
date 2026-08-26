@@ -145,7 +145,7 @@ export function createTranscribeHandler(deps: TranscribeDependencies = {}): JobH
       ...fields,
       provider: asr.name,
       // The provider's own id for the call, which is what completes the API request → job →
-      // provider call span docs/epics/epic-core-listening/architecture.md § Key choices asks for.
+      // provider call span core-listening scope tdd § Key choices asks for.
       // The correlation id is on every line already; the runner bound it before calling this.
       requestId: result.spend.requestId,
       language: result.language,

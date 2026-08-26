@@ -16,7 +16,7 @@ export const dynamic = 'force-dynamic';
  * anywhere but a log line.
  *
  * The same carve-out the first two panels took — no admin reference PNG exists, so it is composed
- * from docs/design referencess png/style-guide.md and the token layer, and `pipeline.module.css`
+ * from docs/design-references/style-guide.md and the token layer, and `pipeline.module.css`
  * composes from `admin.module.css` rather than restating it, so the three panels cannot drift.
  *
  * **The gate decides what to render and authorises nothing.** `GET /api/v1/pipeline` and the

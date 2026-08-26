@@ -27,7 +27,7 @@ import { mailOffset, waitForMail } from '../support/mail';
  * Deactivation, reactivation, role change, the last-admin guard and profile editing — driven over
  * HTTP against the running server.
  *
- * **There is no interface for any of this yet** (docs/epics/epic-core-listening/implementation-plan.md § Ticket 5 builds it),
+ * **There is no interface for any of this yet** (core-listening scope plan § Ticket 5 builds it),
  * which is not a gap in this file: docs/project/prd.md 3.1.11 says the invariant is enforced in the API, so
  * every assertion here is deliberately a direct request. A greyed-out button would satisfy none of
  * them.

@@ -7,7 +7,7 @@ import { segmentAt } from '@/client/transcript/current-segment';
  * The function is pure, so this suite needs no clock, no element and no browser — which is the
  * whole reason it is a module rather than a `find` inside the transcript component. The four
  * features that later resolve "open at the moment" through the same pair
- * (docs/epics/epic-core-listening/architecture.md § Extension points) inherit exactly these
+ * (core-listening scope tdd § Extension points) inherit exactly these
  * answers.
  */
 

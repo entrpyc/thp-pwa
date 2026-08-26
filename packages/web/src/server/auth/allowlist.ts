@@ -16,7 +16,7 @@ import {
  * tests/guards/route-sweep — which discovers routes from the filesystem — subtracts exactly this
  * list before asserting that everything else refuses an anonymous caller.
  *
- * Seven entries, where docs/epics/epic-core-listening/architecture.md § Extension points names one. The architecture row
+ * Seven entries, where core-listening scope tdd § Extension points names one. The architecture row
  * says `GET /api/v1/health` is the only unauthenticated route; taken literally that is not
  * satisfiable, because **the sign-in route cannot require a session**. The property that row was
  * actually protecting is "no unauthenticated route carrying content", and every entry holds it:

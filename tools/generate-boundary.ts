@@ -7,7 +7,7 @@ import { walkFiles } from './fs-walk';
  *
  * The same shape of rule as tools/asr-boundary.ts, and it exists for a sharper version of the same
  * reason. The generate-adapter row of
- * docs/epics/epic-core-listening/architecture.md § Key choices claims a deliberately *low reversal
+ * core-listening scope tdd § Key choices claims a deliberately *low reversal
  * cost* — swapping the model is one file — and this epic has already exercised that claim once: the
  * architecture names Claude and the operator chose MiniMax. A claim that has been cashed in should
  * be checkable rather than intended.

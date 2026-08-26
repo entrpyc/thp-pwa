@@ -5,7 +5,7 @@ import type { PolicyRules } from '@/server/auth/policy';
  *
  * This is exactly the state every existing policy case would be in the moment `contributor` is
  * added to the role enum. The property being pinned is what makes
- * docs/epics/epic-core-listening/architecture.md § Extension points' "one enum value plus four widened cases" true:
+ * core-listening scope tdd § Extension points' "one enum value plus four widened cases" true:
  * the compiler names the cases, so nobody has to search for them and nobody can miss one.
  *
  * Nothing here suppresses the error — the guard test reads tsc's output for this filename.

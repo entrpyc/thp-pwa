@@ -35,7 +35,7 @@ import { logger } from '@/server/observability/logger';
  * 1. **Grant** — the admin declares a size and a content type, and gets back a presigned `PUT`
  *    bound to a key we minted and to the type we signed for.
  * 2. **The browser `PUT`s the bytes straight to the store.** Nothing here sees them, in either
- *    direction (docs/epics/epic-core-listening/architecture.md § Media store).
+ *    direction (core-listening scope tdd § Media store).
  * 3. **Finalise** — the admin names the key, a title and the date recorded, and the row is written.
  *
  * The whole design turns on what step 3 is allowed to believe. The client's declared size in step 1

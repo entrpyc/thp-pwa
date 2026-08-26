@@ -16,7 +16,7 @@ export const dynamic = 'force-dynamic';
  * scrubbing work without a CDN.
  *
  * The minting is one function (`mintPlaybackGrant`) and this route is its only caller. That is the
- * seam docs/epics/epic-core-listening/architecture.md § Extension points reserves for a processed
+ * seam core-listening scope tdd § Extension points reserves for a processed
  * rendition, so it stays singular deliberately.
  */
 export const GET = apiRoute(permits('recording.browse'), async (_request, context) =>

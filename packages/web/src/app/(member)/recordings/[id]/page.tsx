@@ -14,7 +14,7 @@ export const dynamic = 'force-dynamic';
  * The two things asked server-side are `transcript.correct` and `note.moderate`, and each decides
  * **whether an affordance is drawn** and nothing else — the same shape the member layout already uses
  * for the console link. Both routes refuse on their own
- * ([3.1.5](docs/project/prd.md), [3.7](docs/active-scope/prd.md)); a member who forged either flag
+ * ([3.1.5](docs/project/prd.md), scope prd 3.7); a member who forged either flag
  * would see a control that does not work.
  */
 export default async function RecordingPage({ params }: { params: Promise<{ id: string }> }) {

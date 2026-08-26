@@ -57,7 +57,7 @@ export function fakeGenerator(script: FakeDraftScript): FakeGenerator {
         if (field.shape === 'list') {
           // A list-shaped field the script says nothing about answers **empty** rather than
           // failing: a teaching the machine finds no scripture in is a real result the pipeline has
-          // to produce ([3.1.6](docs/active-scope/prd.md)), and a fake that could not produce it
+          // to produce (scope prd 3.1.6), and a fake that could not produce it
           // would make that case untestable end to end.
           if (value !== undefined && !Array.isArray(value)) {
             throw new GenerationError(`the fake script's ${field.name} is not a list of entries`);

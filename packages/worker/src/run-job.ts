@@ -39,7 +39,7 @@ export interface RunJobOptions {
  *
  * **The correlation id comes off the row** and is carried to the successor, so one upload's whole
  * chain shares the id of the request that started it
- * (docs/epics/epic-core-listening/architecture.md § Key choices).
+ * (core-listening scope tdd § Key choices).
  */
 export async function runJob(
   job: JobRow,

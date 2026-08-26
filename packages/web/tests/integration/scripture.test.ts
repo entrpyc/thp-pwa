@@ -26,7 +26,7 @@ import { closeTestDatabase, signedInAccount } from '../support/accounts';
  *
  * The whole of what this file is for is the gate rather than the list: a reference reaches a member
  * only when an admin approved the list it was in **and** the recording is published
- * ([3.2.13](docs/active-scope/prd.md), [3.4.5](docs/active-scope/prd.md)). Every case below is one
+ * (scope prd 3.2.13, scope prd 3.4.5). Every case below is one
  * of the ways that can fail to be true.
  *
  * Rows are seeded through `@thp/db`, but the **approve and discard presses go through the real

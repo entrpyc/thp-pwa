@@ -358,7 +358,7 @@ describe('who may resolve one', () => {
  *
  * The form sends the list it rendered, one entry per row, each naming the proposal it came from —
  * `from` is the index in the machine's list, or `null` for a reference a person added. That one
- * field is what lets the server say which of the three things [3.2.9](docs/active-scope/prd.md)
+ * field is what lets the server say which of the three things scope prd 3.2.9
  * asks about happened to each reference, without trusting a client to assert it.
  */
 describe('approving an edited list', () => {
@@ -547,8 +547,8 @@ describe('asking for the scripture references again', () => {
 });
 
 /**
- * **Verse text is editable nowhere** ([3.3.4](docs/active-scope/implementation-plan.md),
- * [3.3.8](docs/active-scope/prd.md)).
+ * **Verse text is editable nowhere** (scope plan 3.3.4,
+ * scope prd 3.3.8).
  *
  * The half of that which is a fact about the API rather than about a screen: nothing in the product
  * accepts verse text, so correcting a passage means correcting the citation. Asserted from the

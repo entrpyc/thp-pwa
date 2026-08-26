@@ -37,13 +37,13 @@ export interface NewScriptureReference {
 /**
  * **Make this list the recording's references**, replacing whatever was there.
  *
- * Delete-then-insert, which is [3.2.11](docs/active-scope/prd.md) said as a write: approving a
+ * Delete-then-insert, which is scope prd 3.2.11 said as a write: approving a
  * later draft *replaces* rather than appends, so the approved set is what the last approval said,
  * in full. Appending would leave a teaching carrying the union of every draft ever approved for it,
  * which nobody could correct without deleting rows by hand.
  *
  * **An empty list is a legal call** and deletes everything — that is
- * [3.2.7](docs/active-scope/prd.md)'s "this teaching has no scripture references", written as the
+ * scope prd 3.2.7's "this teaching has no scripture references", written as the
  * absence of rows. What distinguishes it from "nobody has looked yet" is the closed `review_item`,
  * not anything here.
  *
@@ -69,8 +69,8 @@ export async function replaceScriptureReferences(
 }
 
 /**
- * **The verse text cache** ([3.2.1](docs/active-scope/implementation-plan.md)–
- * [3.2.2](docs/active-scope/implementation-plan.md)).
+ * **The verse text cache** (scope plan 3.2.1–
+ * scope plan 3.2.2).
  *
  * Two statements, because two is what the cache does: read what is held, and hold what was just
  * fetched. Deciding *which* verses are missing is not a question about storage and is not asked
@@ -135,7 +135,7 @@ export async function findHeldVerses(
  * **`do nothing` rather than an update**, and that is the point of the cache rather than a detail
  * of it: what is held is what the source said the first time, and two teachings resolving the same
  * chapter at the same moment must not turn into a unique violation on a path that
- * [3.2.4](docs/active-scope/implementation-plan.md) requires to keep succeeding.
+ * scope plan 3.2.4 requires to keep succeeding.
  */
 export async function saveVerseTexts(
   verses: readonly NewVerseText[],
@@ -161,7 +161,7 @@ export async function saveVerseTexts(
  * **Ordered by the table, not by the canon.** Canon order is the position of a book in
  * `BIBLE_BOOKS`, which is a fact about a declaration in `@thp/shared` rather than a fact about a
  * column — expressing it in SQL would mean a second copy of the canon's order in this package, and
- * a second copy is exactly what [1.1.1](docs/active-scope/implementation-plan.md) forbids. The
+ * a second copy is exactly what scope plan 1.1.1 forbids. The
  * caller sorts with `compareCitations`. This order is stable so the rows arrive the same way twice.
  */
 export async function findScriptureReferences(

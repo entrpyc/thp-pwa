@@ -10,12 +10,12 @@ export const dynamic = 'force-dynamic';
  * `/admin/series` — the console's fifth panel: name a study, and see what is in it.
  *
  * The same carve-out every other panel took — there is no admin reference PNG, so it is composed
- * from docs/design referencess png/style-guide.md and the token layer, and `series.module.css`
+ * from docs/design-references/style-guide.md and the token layer, and `series.module.css`
  * composes from `admin.module.css` rather than restating it.
  *
  * **This panel owns create, rename and description, and nothing else.** Putting a recording *into*
  * a series is a control on the Recordings panel, because
- * docs/epics/epic-core-listening/prd.md § Epic flows → B assigns a series while reviewing a
+ * core-listening scope prd § Epic flows → B assigns a series while reviewing a
  * teaching immediately before publishing it — which is the screen the admin is already on.
  *
  * **The gate decides what to render and authorises nothing.** Every series route refuses a member

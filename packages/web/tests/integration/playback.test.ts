@@ -25,7 +25,7 @@ import { closeTestDatabase, signedInAccount } from '../support/accounts';
  *    anonymous caller both leave with nothing they could replay.
  * 2. **The grant carries no object key**, so a client cannot name the object it was let at.
  * 3. **Minting is one function, and this route is its only caller** — the seam
- *    docs/epics/epic-core-listening/architecture.md § Extension points reserves for a processed
+ *    core-listening scope tdd § Extension points reserves for a processed
  *    rendition. That one is asserted against the source, because it is a claim about the shape of
  *    the codebase rather than about a response.
  */

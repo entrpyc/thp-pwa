@@ -21,7 +21,7 @@ import { createThrowawayDatabase, type ThrowawayDatabase } from '../../../../tes
  *
  * **The property this suite exists for is the first one**: everything waiting on an admin comes
  * back from a single call filtering a single column. docs/project/prd.md 3.19.2 asks for one place
- * holding it, and docs/project/architecture.md § Cross-cutting concerns says that must not degrade
+ * holding it, and project tdd 6.2 says that must not degrade
  * into a union of six as artefact types arrive — so the test seeds **both kinds in all three
  * statuses** and asserts that only the drafts come back, from one read that never mentions `kind`.
  */

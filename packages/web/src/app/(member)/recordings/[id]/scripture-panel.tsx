@@ -14,28 +14,28 @@ import styles from './scripture.module.css';
  * **The `Scripture` tab of `pages/recording.png`** — the passages a teaching was built on.
  *
  * The reference draws the tab and **nothing draws the panel**
- * ([§ 5.1](docs/active-scope/prd.md)), so this is `style-guide.md` filling it the way the
+ * (scope prd), so this is `style-guide.md` filling it the way the
  * transcript and notes panels already do: one card per reference, the citation as its heading and
  * the verse text as its body.
  *
  * Four things it deliberately does not decide:
  *
  * - **Which references exist.** The payload is what an admin approved on a published teaching
- *   ([3.4.5](docs/active-scope/prd.md)); nothing here filters and nothing here could widen it.
+ *   (scope prd 3.4.5); nothing here filters and nothing here could widen it.
  * - **What order they are in.** Canon order is the API's answer
- *   ([3.4.2](docs/active-scope/prd.md)), computed from the one canon table — a second sort here
+ *   (scope prd 3.4.2), computed from the one canon table — a second sort here
  *   would be a second opinion about the same question.
  * - **How a citation is spelled.** `formatCitation` is the review form's function too, so the two
  *   surfaces cannot drift.
  * - **Whether there is a tab at all.** That is the strip's decision, taken off the recording
- *   payload before this component is ever mounted ([3.4.4](docs/active-scope/prd.md)).
+ *   payload before this component is ever mounted (scope prd 3.4.4).
  *
  * **Fetched on mount**, which is the strip's "fetched when first opened"
- * ([3.4.6](docs/active-scope/prd.md)) — the panel exists only while the tab is open, so opening it
- * is what asks. **A failure stays inside it** ([3.4.7](docs/active-scope/prd.md)): the player, the
+ * (scope prd 3.4.6) — the panel exists only while the tab is open, so opening it
+ * is what asks. **A failure stays inside it** (scope prd 3.4.7): the player, the
  * notes and the transcript are unaffected by anything that happens here.
  *
- * **Nothing in it navigates** ([3.4.8](docs/active-scope/prd.md)). A citation is text, because the
+ * **Nothing in it navigates** (scope prd 3.4.8). A citation is text, because the
  * destination `project prd 3.7.6` would give it is the cross-referencing layer and that layer does
  * not exist — a link to nowhere is worse than no link.
  */

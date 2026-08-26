@@ -5,7 +5,7 @@ import { hash, verify, type Algorithm, type Options } from '@node-rs/argon2';
  * never needs a compiler toolchain.
  *
  * The parameters below are a budget, not a copied default. The target host
- * (docs/project/architecture.md § the netcup VPS) also runs Postgres and the worker, so 64 MiB of memory
+ * (project tdd 8.1) also runs Postgres and the worker, so 64 MiB of memory
  * per in-flight sign-in is the ceiling worth paying. Measured at ~30 ms on the development machine
  * — the right order for a box several times slower under load, where it lands near 100 ms. Sign-in
  * is a once-a-month action, so that is invisible to the person and expensive to an attacker.

@@ -8,7 +8,7 @@ import { createThrowawayDatabase, type ThrowawayDatabase } from '../../../../tes
 
 /**
  * **The verse cache, read the way the product reads it**
- * ([3.2.2](docs/active-scope/implementation-plan.md)).
+ * (scope plan 3.2.2).
  *
  * The resolver lives beside the source and the rows live here, so the property worth asserting is
  * the one that spans them: a passage already held is never asked for again, and a passage that is

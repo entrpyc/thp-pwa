@@ -32,7 +32,7 @@ import type { NoteVisibility } from '@thp/shared';
  * below name their columns rather than selecting everything.
  *
  * `deletedBy` is on the row because the store answers what is stored. It is never sent to a member
- * ([3.5.8](docs/active-scope/prd.md)) — the wire contract is where it is dropped, not here.
+ * (scope prd 3.5.8) — the wire contract is where it is dropped, not here.
  */
 export interface NoteRow {
   readonly id: string;
@@ -55,11 +55,11 @@ export interface NoteRow {
 
 /**
  * A note row plus **the one thing about its author a reader is shown** — the display name
- * ([3.2.8](docs/active-scope/prd.md)).
+ * (scope prd 3.2.8).
  *
  * Joined here rather than gathered by the caller because this module owns every statement against
  * `note` and a read that answers a list is one statement or it is N+1. A deactivated account still
- * matches: deactivation ends access, not authorship ([3.2.9](docs/active-scope/prd.md)).
+ * matches: deactivation ends access, not authorship (scope prd 3.2.9).
  */
 export interface NoteWithAuthorRow extends NoteRow {
   readonly authorDisplayName: string;
@@ -97,7 +97,7 @@ const NOTE_COLUMNS = {
  *
  * Takes an executor rather than a handle, like every write since Ticket 02, so a caller with more
  * than one statement to make — the pin-clear and the delete that
- * [3.6.9](docs/active-scope/prd.md) will not let happen separately — can pull this into its
+ * scope prd 3.6.9 will not let happen separately — can pull this into its
  * transaction.
  *
  * **Nothing is checked here.** The shape rules are the table's: a top-level note without a position
@@ -128,21 +128,21 @@ export async function insertNote(
 /**
  * A recording's notes **as this reader may see them** — every public note on it, plus that reader's
  * own private ones, and no other member's private note in any position
- * ([3.1.9](docs/active-scope/prd.md)).
+ * (scope prd 3.1.9).
  *
  * The condition is stated here rather than applied to a set somebody else selected, which is the
  * whole reason this is a module: a caller that hands over a pre-filtered list has already made the
  * decision this file exists to own, and an admin asking is not a caller the condition bends for.
  *
  * **Ordered by position, then by when it was written** — the `(recording_id, timestamp_ms,
- * created_at)` index exactly, so [3.2.1](docs/active-scope/prd.md)'s order is one index scan and is
+ * created_at)` index exactly, so scope prd 3.2.1's order is one index scan and is
  * total: two notes at the same moment come back oldest-first, every time, rather than in whatever
  * order the rows happen to be on disk.
  *
  * **Top-level only.** A reply has no position, so it has no place in a list ordered by one; the
  * thread under a note is its own read and arrives with replies.
  *
- * **The tombstone rule is here too** ([3.5.4](docs/active-scope/prd.md)): a removed note comes back
+ * **The tombstone rule is here too** (scope prd 3.5.4): a removed note comes back
  * only while a live reply still hangs off it, so the conversation other members wrote survives its
  * parent. A removed note with nothing under it is simply not in the list — and because the markers
  * derive from this same set, its tick leaves the transport in the same breath rather than being a
@@ -182,7 +182,7 @@ export async function listNotesForReader(
  * A correlated `exists` rather than a join or a second pass: the list read is one index scan and
  * this keeps it one, and the answer is needed as a *condition* rather than as data — the caller
  * never sees how many replies there are, only whether the tombstone still stands
- * ([3.3.9](docs/active-scope/prd.md)).
+ * (scope prd 3.3.9).
  */
 function hasLiveReply() {
   const reply = alias(note, 'live_reply');
@@ -200,8 +200,8 @@ function hasLiveReply() {
  * That is not an oversight and it is not a hole: every caller is the service asking *what state is
  * this note in* before refusing an action on it, and the answers it must give are stated per actor
  * rather than per visibility. A reply to a private note is refused `invalid_input` **for every
- * actor including its own author** ([3.3.5](docs/active-scope/prd.md)), and so is a reaction to one
- * ([3.4.8](docs/active-scope/prd.md)) — a lookup that hid the row would answer `not_found` to
+ * actor including its own author** (scope prd 3.3.5), and so is a reaction to one
+ * (scope prd 3.4.8) — a lookup that hid the row would answer `not_found` to
  * everyone but the author and make the refusal disagree with itself.
  *
  * Which notes a member may **read** is still {@link listNotesForReader}'s answer and nothing
@@ -217,7 +217,7 @@ export async function findNoteById(
 
 /**
  * The threads under these notes, oldest first — **and no deleted reply at all**
- * ([3.3.10](docs/active-scope/prd.md)).
+ * (scope prd 3.3.10).
  *
  * A second read rather than a widening of {@link listNotesForReader}, exactly as Task 1.2 settled:
  * a reply carries no position and has no place in a list ordered by one, so folding the two into
@@ -249,14 +249,14 @@ export async function listRepliesForNotes(
 /**
  * Put new words in a note, and mark it edited.
  *
- * **Text and `edited_at`, and nothing else** ([3.5.3](docs/active-scope/prd.md)): there is no
+ * **Text and `edited_at`, and nothing else** (scope prd 3.5.3): there is no
  * parameter here for a position or a visibility, so "editing changes text alone" is a fact about
  * this function's signature rather than a rule a caller has to respect. No prior text is kept —
- * [3.5.1](docs/active-scope/prd.md) says an edit is permanent and has no history, so a revision
+ * scope prd 3.5.1 says an edit is permanent and has no history, so a revision
  * row would be building the undo the requirement refuses.
  *
  * A note already removed answers `null` rather than coming back to life, which is how the service
- * tells [3.5.7](docs/active-scope/prd.md)'s refusal from a success.
+ * tells scope prd 3.5.7's refusal from a success.
  */
 export async function updateNoteText(
   id: string,
@@ -274,11 +274,11 @@ export async function updateNoteText(
 /**
  * Take a note down: `deleted_at`, `deleted_by`, and **`text` cleared to null**.
  *
- * The clear is the decision (active-scope architecture § 7). [3.5.9](docs/active-scope/prd.md) says
+ * The clear is the decision (active-scope architecture § 7). scope prd 3.5.9 says
  * a deleted note's text is returned to nobody — its author and an admin included — and text nothing
  * may read is content with no reader and a standing disclosure risk. Clearing it makes that true by
  * construction rather than by every future query remembering; the row, the authorship, the moment
- * and the thread all survive, which is what [3.3.9](docs/active-scope/prd.md) actually needs.
+ * and the thread all survive, which is what scope prd 3.3.9 actually needs.
  *
  * `deleted_at is null` in the where clause is what makes a second delete answer `null` rather than
  * silently re-stamping a tombstone with a new remover and a new time.
@@ -312,7 +312,7 @@ export interface NoteReactionRow {
  * Set this member's reaction, replacing whatever they had chosen before.
  *
  * **`on conflict (note_id, user_id) do update` rather than delete-then-insert**, which is the whole
- * of [3.4.3](docs/active-scope/prd.md) and [3.4.11](docs/active-scope/prd.md): a member pressing
+ * of scope prd 3.4.3 and scope prd 3.4.11: a member pressing
  * twice in a second settles on their last selection because the second statement overwrites the
  * first, and two members reacting in the same instant are two rows that cannot collide because the
  * key holds them apart. Neither is a read-then-write the interface has to get right.
@@ -335,7 +335,7 @@ export async function setNoteReaction(
 /**
  * Take this member's reaction back.
  *
- * Deleting nothing is a success, not an error ([3.4.4](docs/active-scope/prd.md)): a member who
+ * Deleting nothing is a success, not an error (scope prd 3.4.4): a member who
  * presses the emoji they already chose and a member acting on a screen that has already been
  * cleared both asked for the same end state, and both have got it.
  */
@@ -354,7 +354,7 @@ export async function clearNoteReaction(
  *
  * The alternative is one row per reaction travelling to the service to be counted there, which for
  * a well-used teaching is the largest thing on the wire and is a count Postgres will do faster.
- * Only emoji somebody actually chose come back, which is [3.4.5](docs/active-scope/prd.md): an
+ * Only emoji somebody actually chose come back, which is scope prd 3.4.5: an
  * emoji nobody chose has no row to group.
  *
  * **Most-chosen first, ties broken by the glyph**, so a reload does not reshuffle a row of equal
@@ -389,7 +389,7 @@ export async function listReactionsForNotes(
 /**
  * Raise a note, or leave it raised.
  *
- * One `on conflict (note_id) do nothing`, which is [3.6.6](docs/active-scope/prd.md) exactly:
+ * One `on conflict (note_id) do nothing`, which is scope prd 3.6.6 exactly:
  * pinning something already pinned succeeds and changes nothing, so an admin acting on a stale
  * screen has still got what they asked for rather than a refusal for having been slow.
  *
@@ -409,9 +409,9 @@ export async function pinNote(
 
 /**
  * Lower one raised note, leaving every other pin on the recording where it is
- * ([3.6.7](docs/active-scope/prd.md)).
+ * (scope prd 3.6.7).
  *
- * Also what [3.6.9](docs/active-scope/prd.md)'s delete calls, inside the delete's own transaction:
+ * Also what scope prd 3.6.9's delete calls, inside the delete's own transaction:
  * a soft delete never fires a cascade, so clearing the pin is a second statement rather than a
  * foreign key, and a recording never shows a pinned tombstone.
  */

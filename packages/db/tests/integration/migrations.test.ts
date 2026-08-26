@@ -190,7 +190,7 @@ describe('migrations apply to an empty database by one command', () => {
  * The `recording` table, asserted by its **exact column set**.
  *
  * Exact rather than "contains", because what is absent is the design.
- * docs/epics/epic-core-listening/architecture.md § Extension points names `processed_media_key` as
+ * core-listening scope tdd § Extension points names `processed_media_key` as
  * the seam audio processing attaches to, `series_id` belongs to Story 6, and no `duration` exists
  * because nothing in this epic inspects the media. A nullable column added "for later" is how
  * deferral quietly stops being deferral — and a `toContain` assertion would not notice one arriving.
@@ -463,7 +463,7 @@ describe('the job ledger, and nothing beside it', () => {
  * Asserted the way `recording` and `job` are, and for the same reason: by their **exact column
  * sets**, before and after, so a column added "for later" is a failing test rather than a comment
  * nobody reads. The one that matters most is an embedding on `segment`, which
- * docs/epics/epic-core-listening/architecture.md § Extension points names as a later epic's
+ * core-listening scope tdd § Extension points names as a later epic's
  * `ALTER TABLE` — a nullable vector column arriving here would be deferral quietly stopping being
  * deferral, and no reader of the schema would notice.
  *
@@ -563,7 +563,7 @@ describe('the transcript and its segments, and nothing beside them', () => {
       'transcript_id',
     ]);
 
-    // The one that matters: docs/epics/epic-core-listening/architecture.md § Extension points has
+    // The one that matters: core-listening scope tdd § Extension points has
     // pgvector, the embedding column and the HNSW index arriving in a later epic, together.
     for (const deferred of ['embedding', 'confidence', 'words']) {
       expect(after.get('segment'), `${deferred} is deferred and must not exist`).not.toContain(
@@ -759,7 +759,7 @@ describe('the speaker column, and nothing beside it', () => {
  * after, so a column added "for later" is a failing test rather than a comment nobody reads. The
  * one that matters most here is a *second* `review_item`-shaped table — a `scripture_reference` or
  * a `tag_suggestion` — which would be the first crack in the property
- * docs/project/architecture.md § Cross-cutting concerns is protecting: everything waiting on an
+ * project tdd 6.2 is protecting: everything waiting on an
  * admin is one query over one column, not a union of six.
  *
  * Four properties beyond the columns are asserted here rather than in the query layer, because they
@@ -1467,7 +1467,7 @@ describe('series, and nothing beside it', () => {
  * that can fail on a database with rows already in it. And the table deliberately has **no status
  * column**: `project prd 4.6`'s *suggested or accepted* is the state of the review item holding the
  * draft, and a second answer to it here is exactly what
- * docs/active-scope/prd.md § 8 records as the refinement.
+ * scope prd § 8 records as the refinement.
  */
 describe('scripture references, and nothing beside them', () => {
   let target: ThrowawayDatabase;
@@ -1620,7 +1620,7 @@ describe('scripture references, and nothing beside them', () => {
  * The verse text cache, asserted by its **exact column set**, for the reason every block above is:
  * what is absent is the design.
  *
- * [3.2.1](docs/active-scope/implementation-plan.md) — one row per translation, book, chapter and
+ * scope plan 3.2.1 — one row per translation, book, chapter and
  * verse, with the text and when it was fetched, keyed so that a verse cited by a second teaching is
  * the same row rather than a second copy.
  */

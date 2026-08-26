@@ -10,7 +10,7 @@ export const dynamic = 'force-dynamic';
  * `/admin/recordings` — the console's second panel: put a teaching in, and see what is already in.
  *
  * The same carve-out as the first panel — no admin reference PNG exists, so it is composed from
- * docs/design referencess png/style-guide.md and the token layer, and `recordings.module.css`
+ * docs/design-references/style-guide.md and the token layer, and `recordings.module.css`
  * composes from `admin.module.css` rather than restating it, so the two panels cannot drift.
  *
  * **The gate decides what to render and authorises nothing.** `GET /api/v1/recordings` and both

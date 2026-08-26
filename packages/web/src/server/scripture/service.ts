@@ -13,7 +13,7 @@ import { logger } from '@/server/observability/logger';
 
 /**
  * **The passage behind a citation, while the review form is open**
- * ([3.3.4](docs/active-scope/prd.md)).
+ * (scope prd 3.3.4).
  *
  * One read, and it is what makes a wrong-but-plausible citation catchable: an admin who has just
  * typed `Romans 8:1–4` sees the words before they approve it, so a reference that reads right and
@@ -24,12 +24,12 @@ import { logger } from '@/server/observability/logger';
  * citation nobody has ever cited is fetched once and held for everybody afterwards.
  *
  * **A passage with no text is `null`, not a failure.** A source that is down is
- * [3.3.6](docs/active-scope/prd.md)'s worst case and degrades to a citation without text; answering
+ * scope prd 3.3.6's worst case and degrades to a citation without text; answering
  * with an error would make the review form unusable over a convenience.
  *
  * **Nothing here writes verse text on anybody's say-so.** The only input is a citation, checked by
  * the same validator the worker and the approve path use — which is the half of
- * [3.3.8](docs/active-scope/prd.md) that is a fact about the API rather than about a screen.
+ * scope prd 3.3.8 that is a fact about the API rather than about a screen.
  */
 export async function readPassageFor(
   actor: Actor,
@@ -55,7 +55,7 @@ export async function readPassageFor(
     held: resolved.held,
   });
 
-  // Joined into one paragraph, with no verse numbers in it — [§ 5.1](docs/active-scope/prd.md) says
+  // Joined into one paragraph, with no verse numbers in it — scope prd says
   // the passage is plain text, and a number the reader did not ask for is markup by another name.
   return { passage: verses.length === 0 ? null : verses.map((one) => one.text).join(' ') };
 }
@@ -67,11 +67,11 @@ function numberOrNull(value: string | null): number | null {
 }
 
 /**
- * **A published teaching's scripture, as a member reads it** ([3.4.2](docs/active-scope/prd.md)–
- * [3.4.5](docs/active-scope/prd.md)).
+ * **A published teaching's scripture, as a member reads it** (scope prd 3.4.2–
+ * scope prd 3.4.5).
  *
  * **One gate, and it is the recording's.** References ride publication
- * ([3.2.13](docs/active-scope/prd.md)), so the only question asked here is the one
+ * (scope prd 3.2.13), so the only question asked here is the one
  * `findVisibleRecording` already answers for the teaching itself — the same read the recording page
  * and the transcript go through, reached through the same `recording.browse` the route declares.
  * There is no second publication state on a reference and nothing here compares one.

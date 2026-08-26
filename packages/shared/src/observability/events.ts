@@ -4,7 +4,7 @@ import { logger } from './logger';
 /**
  * **Domain events — emitted, logged, and subscribed to by nothing.**
  *
- * docs/epics/epic-core-listening/architecture.md § Extension points names *Domain events at job
+ * core-listening scope tdd § Extension points names *Domain events at job
  * completion and at publish* as the seam [§3.17](docs/project/prd.md) attaches to: notifications
  * fan out `Notification` rows per recipient from these exact events. §3.17 is deferred whole, so
  * this epic emits them and stops there — **there is no consumer, no notification row and no

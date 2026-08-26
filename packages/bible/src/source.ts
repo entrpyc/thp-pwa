@@ -5,19 +5,19 @@
  * the same shape as the ASR, generation, mail and media boundaries, and enforced the same way:
  * tests/guards/bible-boundary.test.ts fails the build if anything outside the adapter names a Bible
  * API. That is what makes the worker and the API resolve a passage *the same way*
- * ([3.1.1](docs/active-scope/implementation-plan.md)) rather than each reaching for a source of its
+ * (scope plan 3.1.1) rather than each reaching for a source of its
  * own.
  *
  * The port takes **a citation** and answers with **the verses of it, one by one**. Verse by verse
  * rather than as one paragraph, because that is the grain the cache is keyed at
- * ([3.3.1](docs/active-scope/prd.md)): a verse fetched for one teaching is a verse already held for
+ * (scope prd 3.3.1): a verse fetched for one teaching is a verse already held for
  * the next, whatever range the next teaching cites it in.
  *
  * **Nothing here throws.** A source that fails, times out, or simply has no text for a passage
- * answers with *no verses* ([3.1.5](docs/active-scope/prd.md)), because every caller does the same
+ * answers with *no verses* (scope prd 3.1.5), because every caller does the same
  * thing with all three: keeps the citation and records that it has no text yet. An exception would
  * make each caller interpret a failure it has no way to act on, and the one caller that forgot
- * would fail a pipeline step over a convenience ([3.3.5](docs/active-scope/prd.md)).
+ * would fail a pipeline step over a convenience (scope prd 3.3.5).
  */
 
 import type { ScriptureCitation } from '@thp/shared';
@@ -34,7 +34,7 @@ export interface Verse {
  * `verses` is empty when there is no text — the failure, the timeout and the empty passage are the
  * same answer here, deliberately.
  *
- * `requestId` is **the source's own identifier for the call** ([3.3.9](docs/active-scope/prd.md)),
+ * `requestId` is **the source's own identifier for the call** (scope prd 3.3.9),
  * which is what completes the correlation span from our job row into somebody else's logs. `null`
  * when the source gave none, which a local fake never does.
  */

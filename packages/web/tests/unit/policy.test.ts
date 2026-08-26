@@ -328,7 +328,7 @@ describe('the six moderation, ownership and reaction actions', () => {
 /**
  * 4.1.4 — **the member's scripture read goes through the decision that already existed.**
  *
- * References ride the recording's publication ([3.2.13](docs/active-scope/prd.md)), so reading them
+ * References ride the recording's publication (scope prd 3.2.13), so reading them
  * is `recording.browse` asked again rather than a second action with a second set of rules. The
  * assertion worth having is therefore the *absence* of a scripture action: a route that invented
  * one would still refuse an anonymous caller and still permit a member, and would have quietly

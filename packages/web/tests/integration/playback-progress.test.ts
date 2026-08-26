@@ -156,7 +156,7 @@ describe('a position is stored per user per recording and survives to another de
 describe('the newest write sets the position, including one that moves it backwards', () => {
   it('stores 10:00 after 40:00', async () => {
     // Last-write-wins, plainly. This is the assertion that contradicts the word *furthest* in
-    // docs/epics/epic-core-listening/architecture.md § Data model (epic): taken as furthest, a
+    // core-listening scope tdd § Data model: taken as furthest, a
     // member who scrubbed back to re-hear something would be returned to 40:00, which is the
     // opposite of what 3.2.5 promises.
     await put(phone, recordingId, { positionMs: 40 * 60 * 1000 });

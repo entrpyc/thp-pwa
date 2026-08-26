@@ -12,7 +12,7 @@ import { buildQueue } from './postgres-queue';
  * the request's correlation id, does not go through the partial unique index's no-op, and does not
  * compute `attempt` inside the insert.
  *
- * The port is the seam docs/epics/epic-core-listening/architecture.md § Extension points names as
+ * The port is the seam core-listening scope tdd § Extension points names as
  * *Queue port*: the day the ledger is not enough, a broker arrives as a second adapter and nothing
  * that calls `enqueue` changes. Nothing in this epic anticipates that further.
  *
@@ -61,7 +61,7 @@ export interface Queue {
    * `executor` runs the enqueue inside a transaction the caller already opened, so the job and
    * the row that caused it land together or not at all. **This is the one place the port admits
    * what is behind it**, and deliberately: transactional enqueue is the entire reason
-   * docs/project/architecture.md § Key technology choices made the ledger the queue. A broker
+   * project tdd 4.7 made the ledger the queue. A broker
    * adapter could not honour it, and the day one arrives that is the conversation to have — not a
    * detail to have hidden here in advance.
    */

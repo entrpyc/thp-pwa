@@ -9,7 +9,7 @@ import { runJob } from './run-job';
  * Two seconds, in code rather than in the environment.
  *
  * Dispatch latency is invisible at ~4.3 recordings a month
- * (docs/epics/epic-core-listening/architecture.md § Key choices), so the number does not need to be
+ * (core-listening scope tdd § Key choices), so the number does not need to be
  * tunable per deployment — and a knob nobody has a reason to turn is a knob somebody eventually
  * turns for a reason nobody records. The loop takes it as an argument so tests can drive it fast.
  */
@@ -36,7 +36,7 @@ export interface WorkerLoop {
  *
  * **One job at a time**, because the loop awaits each run before claiming again. Concurrency is
  * pinned to 1 by the shape of this function rather than by a setting — the deployment is one small
- * process (docs/project/architecture.md § Estimated running costs), and a pool would be a second
+ * process (project tdd 8.1), and a pool would be a second
  * thing to reason about for a queue that is empty almost always.
  *
  * **It polls; nothing wakes it.** No `LISTEN`/`NOTIFY`, no broker — seconds of latency cost nothing

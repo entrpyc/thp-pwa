@@ -527,7 +527,7 @@ describe('what it says happened', () => {
     const job = await claimedJob();
     await run(job);
 
-    // docs/epics/epic-core-listening/architecture.md § Extension points: §3.17's notifications fan
+    // core-listening scope tdd § Extension points: §3.17's notifications fan
     // out from this exact event. Nothing consumes it, and no notification row exists — the only
     // sink is the logger, and this is what makes the seam real rather than described.
     const events = captured.filter((line) => line.message === DOMAIN_EVENT_MESSAGE);
@@ -545,8 +545,8 @@ describe('what it says happened', () => {
 
 /**
  * **The passage is held before an admin opens the item**
- * ([3.2.3](docs/active-scope/implementation-plan.md)–
- * [3.2.5](docs/active-scope/implementation-plan.md)).
+ * (scope plan 3.2.3–
+ * scope plan 3.2.5).
  *
  * The source is handed in exactly as the generator is, so nothing here reaches a Bible API — and
  * the cache is the real table, because the whole of 3.2.3 is that a row is there afterwards.
