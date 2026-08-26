@@ -74,8 +74,11 @@ export function checkRoleUsage(
       const relativeFile = toPosix(relative(root, file));
       if (allowed.has(relativeFile) || relativeFile === SELF) continue;
 
+      // Either ending, because a Windows checkout is CRLF and the comment stripper below is
+      // anchored: a trailing `\r` is a character `.*$` cannot reach past, so on such a checkout
+      // every JSDoc line explaining this very rule would be read as code.
       readFileSync(file, 'utf8')
-        .split('\n')
+        .split(/\r?\n/)
         .forEach((raw, index) => {
           // A comment explaining the rule is not a use of it.
           const code = raw.replace(/\/\/.*$/, '').replace(/^\s*\*.*$/, '');

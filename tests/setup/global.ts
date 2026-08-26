@@ -10,6 +10,7 @@ import {
   startNextServer,
   type RunningServer,
 } from './next-server';
+import { TEST_BIBLE } from './bible';
 import { createThrowawayDatabase, type ThrowawayDatabase } from './throwaway-db';
 import { TEST_MEDIA, ensureTestBucket, type MediaEnvironment } from './media-bucket';
 
@@ -24,21 +25,6 @@ const UNREACHABLE_DATABASE_URL = 'postgres://nobody:nobody@127.0.0.1:1/nothing';
  * failure leaves the invitation in place" is a thing the suite can drive rather than a claim.
  */
 const MAIL_FROM = 'Teaching Hub <invitations@example.test>';
-
-/**
- * Verse text, for every server the suite starts.
- *
- * **The suite's, not the developer's** — the same argument tests/setup/media-bucket.ts makes about
- * the bucket. `.env` names a real Bible source, and [3.3.10](docs/active-scope/prd.md) says a test
- * run reaches none: leaving it to be inherited would make "no test reaches a source" true only for
- * developers who happened to set `THP_MOCK_EXTERNAL`. The translation is named too, because it is
- * the first part of every cached verse's key and a suite whose key came from `.env` would hold
- * different rows on different machines.
- */
-const TEST_BIBLE = {
-  BIBLE_SOURCE: 'fake',
-  BIBLE_TRANSLATION: 'test-translation',
-} as const;
 
 /**
  * **The `mail-down` server's transport, said in a way `.env` cannot overrule.**
