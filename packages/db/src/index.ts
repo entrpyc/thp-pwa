@@ -129,6 +129,7 @@ export {
   findSeriesById,
   insertSeries,
   setRecordingSeries,
+  setSeriesArtwork,
   updateSeries,
   type NewSeries,
   type SeriesRow,

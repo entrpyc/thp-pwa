@@ -64,6 +64,17 @@ describe('nothing is ever deleted from the store', () => {
     expect(members.length).toBeGreaterThanOrEqual(2);
   });
 
+  it('the artwork minter is in the port and brought no delete with it', () => {
+    // scope plan 1.1.9. Artwork is a **second use of this port, not a second boundary**
+    // (scope tdd 1.1): a cover reaches the store through the same three operations the audio does,
+    // so the property above has to still hold with a second key minter beside the first. Asserting
+    // the minter is here is what stops this being vacuous — without it the "no delete" claim would
+    // pass for a port artwork never went through.
+    expect(portSource).toMatch(/export function mintArtworkKey\(/);
+    expect(portSource).toMatch(/export function mintOriginalKey\(/);
+    expect(findDeleteOperations(portSource)).toEqual([]);
+  });
+
   it('would report a delete if one were added', () => {
     const withDelete = portSource.replace(
       'head(key: string): Promise<StoredObject | null>;',

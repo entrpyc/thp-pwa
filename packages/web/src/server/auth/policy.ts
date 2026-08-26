@@ -141,6 +141,17 @@ export const POLICY_ACTIONS = [
   'series.list',
   'series.browse',
   /**
+   * **Setting a series' cover** (scope tdd 1.5), and its own action rather than more of
+   * `series.update`. The split is the one every pair above takes: naming a study and giving it a
+   * face are the same question only while there are two roles, and
+   * [3.1](docs/project/prd.md)'s role table already points at the day they part — a Contributor
+   * manages series *and series artwork*, and either could arrive without the other.
+   *
+   * One action covers both calls of the upload, because they are two halves of one act: a grant
+   * nobody may finalise is a grant nobody should have been given.
+   */
+  'series.artwork',
+  /**
    * **The two note actions this scope's first group needs** (active-scope architecture § 8).
    *
    * Two rather than one `note.use`, and the same split every group above takes: reading what the
@@ -289,6 +300,10 @@ const RULES: PolicyRules = {
   // visibility condition, not here — the policy answers "may this person ask", and the query
   // answers "about which rows".
   'series.browse': { roles: { admin: true, member: true } },
+  // Giving a study a face. Admin-only **in this scope** — the Contributor role that
+  // [3.1](docs/project/prd.md) grants series artwork to does not exist in the enum yet, so this is
+  // the only reachable answer, and widening it is one line the day it does.
+  'series.artwork': { roles: { admin: true, member: false } },
   // Both roles, on the same terms. Reading a teaching's notes and writing one are the two things
   // every member of a study group does with notes, and an admin does them as a member does — the
   // moderation actions this scope adds later are where the roles part.

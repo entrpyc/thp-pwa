@@ -2,6 +2,7 @@ export { MEDIA_VARIABLES, readMediaSettings, type EnvSource, type MediaSettings 
 export {
   UPLOAD_GRANT_SECONDS,
   mediaStore,
+  mintArtworkKey,
   mintOriginalKey,
   type MediaStore,
   type PresignedPut,

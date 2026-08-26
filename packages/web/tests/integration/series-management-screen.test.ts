@@ -305,3 +305,195 @@ describe('at every width', () => {
     }, 120_000);
   }
 });
+
+// =================================================================================================
+
+describe('setting a cover from the console', () => {
+  /**
+   * A real PNG of `edge × edge`, built **in the browser** rather than in Node, so what the console
+   * is handed is a file a canvas will genuinely decode. Noisy rather than flat: a flat PNG
+   * compresses to almost nothing, and a source that is already tiny would make "what was stored is
+   * under the ceiling" vacuously true.
+   */
+  async function pngFile(page: Page, edge: number): Promise<Buffer> {
+    const dataUrl = await page.evaluate((size: number) => {
+      const canvas = document.createElement('canvas');
+      canvas.width = size;
+      canvas.height = size;
+      const context = canvas.getContext('2d');
+      if (context === null) throw new Error('no canvas context');
+      const image = context.createImageData(size, size);
+      for (let index = 0; index < image.data.length; index += 4) {
+        image.data[index] = (index * 7) % 256;
+        image.data[index + 1] = (index * 13) % 256;
+        image.data[index + 2] = (index * 29) % 256;
+        image.data[index + 3] = 255;
+      }
+      context.putImageData(image, 0, 0);
+      return canvas.toDataURL('image/png');
+    }, edge);
+    return Buffer.from(dataUrl.split(',')[1] ?? '', 'base64');
+  }
+
+  /** What the API says this series' cover is now. */
+  async function coverOf(seriesId: string): Promise<string | null> {
+    const response = await fetch(`${baseUrl}${API_PREFIX}/series`, {
+      headers: { accept: 'application/json', cookie: adminCookie },
+    });
+    const body = (await response.json()) as { series: { id: string; artworkUrl: string | null }[] };
+    return body.series.find((one) => one.id === seriesId)?.artworkUrl ?? null;
+  }
+
+  async function chooseCover(page: Page, title: string, bytes: Buffer): Promise<void> {
+    await rowFor(page, title)
+      .getByLabel('Cover image')
+      .setInputFiles({ name: 'cover.png', mimeType: 'image/png', buffer: bytes });
+  }
+
+  it('sends one bounded WebP however large the image chosen was', async () => {
+    // scope plan 1.4.4, and the whole of scope tdd 1.2: the file the admin picked is not what is
+    // stored. Asserted against the bucket rather than against the encoder, because "what lands" is
+    // the property and the encoder is the plumbing.
+    const page = await openPanel();
+    try {
+      const title = `Bounded cover ${RUN}`;
+      await createThrough(page, title);
+      const seriesId = await idOf(title);
+
+      const chosen = await pngFile(page, 3_000);
+      expect(chosen.byteLength).toBeGreaterThan(2 * 1024 * 1024);
+      await chooseCover(page, title, chosen);
+
+      await expect.poll(() => coverOf(seriesId), { timeout: 60_000 }).not.toBeNull();
+
+      const stored = await fetch((await coverOf(seriesId)) as string);
+      expect(stored.status).toBe(200);
+      expect(stored.headers.get('content-type')).toBe('image/webp');
+      expect((await stored.arrayBuffer()).byteLength).toBeLessThan(2 * 1024 * 1024);
+    } finally {
+      await page.context().close();
+    }
+  }, 180_000);
+
+  it('refuses a file that is not an image this accepts, before anything is sent', async () => {
+    // scope plan 1.4.5. The refusal is on the screen and it costs no request — which is what makes
+    // "the series still has no cover" a statement rather than a race.
+    const page = await openPanel();
+    try {
+      const title = `Refused cover ${RUN}`;
+      await createThrough(page, title);
+      const seriesId = await idOf(title);
+
+      await rowFor(page, title)
+        .getByLabel('Cover image')
+        .setInputFiles({
+          name: 'notes.txt',
+          mimeType: 'text/plain',
+          buffer: Buffer.from('not an image at all'),
+        });
+
+      await expect
+        .poll(() => rowFor(page, title).getByRole('alert').innerText(), { timeout: 30_000 })
+        .toContain('JPEG, PNG or WebP');
+      expect(await coverOf(seriesId)).toBeNull();
+    } finally {
+      await page.context().close();
+    }
+  }, 120_000);
+
+  it('shows the cover on the row it was set on, without reloading the page', async () => {
+    // scope plan 1.4.6, and scope prd 3.2.5: an admin reads what they uploaded on the screen they
+    // uploaded it from.
+    const page = await openPanel();
+    try {
+      const title = `Shown cover ${RUN}`;
+      await createThrough(page, title);
+
+      expect(await rowFor(page, title).locator('img').count()).toBe(0);
+      await chooseCover(page, title, await pngFile(page, 400));
+
+      await expect
+        .poll(() => rowFor(page, title).locator('img').count(), { timeout: 60_000 })
+        .toBe(1);
+      // Painted, not merely present: a broken frame would satisfy a count and nothing else.
+      await expect
+        .poll(
+          () =>
+            rowFor(page, title)
+              .locator('img')
+              .evaluate((node: HTMLImageElement) => node.naturalWidth),
+          { timeout: 30_000 },
+        )
+        .toBeGreaterThan(0);
+    } finally {
+      await page.context().close();
+    }
+  }, 180_000);
+
+  it('replaces what the row shows when a second image is chosen', async () => {
+    // scope plan 1.4.7, and scope prd 3.1.5 as a person experiences it: uploading again is how a
+    // wrong cover is corrected, because there is nothing to remove one with.
+    const page = await openPanel();
+    try {
+      const title = `Replaced cover ${RUN}`;
+      await createThrough(page, title);
+      const seriesId = await idOf(title);
+
+      await chooseCover(page, title, await pngFile(page, 400));
+      await expect.poll(() => coverOf(seriesId), { timeout: 60_000 }).not.toBeNull();
+      const first = await coverOf(seriesId);
+
+      await chooseCover(page, title, await pngFile(page, 600));
+      await expect
+        .poll(async () => (await coverOf(seriesId)) === first, { timeout: 60_000 })
+        .toBe(false);
+
+      await expect
+        .poll(() => rowFor(page, title).locator('img').count(), { timeout: 30_000 })
+        .toBe(1);
+    } finally {
+      await page.context().close();
+    }
+  }, 180_000);
+
+  it('leaves every other row untouched', async () => {
+    // scope plan 1.4.8. A cover is a property of one series, and the list re-reads rather than
+    // patching a row in place — so the assertion is that the re-read moved nothing else.
+    const page = await openPanel();
+    try {
+      const covered = `Covered neighbour ${RUN}`;
+      const bystander = `Uncovered neighbour ${RUN}`;
+      await createThrough(page, covered);
+      await createThrough(page, bystander);
+      const bystanderId = await idOf(bystander);
+
+      await chooseCover(page, covered, await pngFile(page, 400));
+      await expect
+        .poll(() => rowFor(page, covered).locator('img').count(), { timeout: 60_000 })
+        .toBe(1);
+
+      expect(await coverOf(bystanderId)).toBeNull();
+      expect(await rowFor(page, bystander).locator('img').count()).toBe(0);
+    } finally {
+      await page.context().close();
+    }
+  }, 180_000);
+
+  it('renders the cover with no alternative text, because the title is beside it', async () => {
+    // scope plan 1.4.9, and scope prd 4.3. Decorative here: a screen reader announcing the series
+    // name twice is worse than announcing it once.
+    const page = await openPanel();
+    try {
+      const title = `Decorative cover ${RUN}`;
+      await createThrough(page, title);
+      await chooseCover(page, title, await pngFile(page, 400));
+
+      await expect
+        .poll(() => rowFor(page, title).locator('img').count(), { timeout: 60_000 })
+        .toBe(1);
+      expect(await rowFor(page, title).locator('img').getAttribute('alt')).toBe('');
+    } finally {
+      await page.context().close();
+    }
+  }, 180_000);
+});

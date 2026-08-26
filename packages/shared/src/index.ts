@@ -1,5 +1,6 @@
 export * from './accounts';
 export * from './api';
+export * from './artwork';
 export * from './auth';
 export * from './health';
 export * from './invitations';

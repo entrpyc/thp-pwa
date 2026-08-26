@@ -229,6 +229,15 @@ export interface VisibleSeriesRow {
   readonly id: string;
   readonly title: string;
   readonly description: string | null;
+  /**
+   * The object key of this series' cover, or `null`.
+   *
+   * **A key and not a URL**, and it stops here: the layer above turns it into a signed grant minted
+   * for that response (scope tdd 1.4), because signing is not a database concern and a stored URL
+   * would be a stored expiry. `null` is the ordinary state (scope prd 3.1.7), not an absence the
+   * caller has to interpret.
+   */
+  readonly artworkKey: string | null;
   readonly recordingCount: number;
   /** `YYYY-MM-DD`, or `null` when the series holds nothing this caller may see. */
   readonly firstRecordedAt: string | null;
@@ -288,13 +297,14 @@ export async function listVisibleSeries(
       id: series.id,
       title: series.title,
       description: series.description,
+      artworkKey: series.artworkKey,
       recordingCount: sql<number>`count(${recording.id})::int`,
       firstRecordedAt: sql<string | null>`min(${recording.recordedAt})::text`,
       lastRecordedAt: sql<string | null>`max(${recording.recordedAt})::text`,
     })
     .from(series)
     .leftJoin(recording, counted)
-    .groupBy(series.id, series.title, series.description)
+    .groupBy(series.id, series.title, series.description, series.artworkKey)
     .having(options.includeUnpublished ? undefined : sql`count(${recording.id}) > 0`)
     .orderBy(sql`max(${recording.recordedAt}) desc nulls last`, asc(series.title));
 
@@ -327,7 +337,9 @@ export async function findVisibleSeries(
   const on = queryable(executor);
 
   const found = await on.select().from(series).where(eq(series.id, id)).limit(1);
-  const row = found[0] as { id: string; title: string; description: string | null } | undefined;
+  const row = found[0] as
+    | { id: string; title: string; description: string | null; artworkKey: string | null }
+    | undefined;
   if (row === undefined) return null;
 
   const rows = await on
@@ -365,6 +377,7 @@ export async function findVisibleSeries(
       id: row.id,
       title: row.title,
       description: row.description,
+      artworkKey: row.artworkKey,
       recordingCount: recordings.length,
       firstRecordedAt: recordings[0]?.recordedAt ?? null,
       lastRecordedAt: recordings[recordings.length - 1]?.recordedAt ?? null,

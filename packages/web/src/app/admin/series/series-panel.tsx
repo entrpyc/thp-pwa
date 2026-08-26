@@ -1,13 +1,25 @@
 'use client';
 
-import { useCallback, useEffect, useId, useState, type FormEvent } from 'react';
 import {
+  useCallback,
+  useEffect,
+  useId,
+  useState,
+  type ChangeEvent,
+  type FormEvent,
+} from 'react';
+import {
+  ACCEPTED_ARTWORK_TYPES,
   SERIES_PATH,
+  seriesArtworkPath,
+  seriesArtworkUploadsPath,
   seriesPath,
   type SeriesListPayload,
   type SeriesView,
+  type UploadGrantPayload,
 } from '@thp/shared';
 import { ApiClientError, apiFetch } from '@/client/api-client';
+import { checkChosenArtwork, encodeArtwork } from '@/client/artwork/encode';
 import styles from './series.module.css';
 
 /**
@@ -29,6 +41,10 @@ import styles from './series.module.css';
  *    comparing the two screens should read a rule rather than a bug.
  * 3. **Renaming is an inline form, not a separate screen.** A series is a title and a description
  *    and nothing else, so editing one is two inputs and a press.
+ * 4. **A cover is set by choosing a file and nothing more.** No staging, no second press, no
+ *    preview to confirm: the image is re-encoded, sent straight to the store and finalised, and the
+ *    row shows what the API says the cover now is. Uploading again is how a wrong one is
+ *    corrected, because there is nothing to remove one with (scope prd 3.1.5).
  */
 
 /** One fixed rendering of a date, matching every other list in the product. */
@@ -247,8 +263,84 @@ function SeriesRow({
     }
   }
 
+  /**
+   * **Choose an image and it is on its way** — no second press, and no staging state.
+   *
+   * The file input is the whole control: a picker that then waits for a "Save cover" would be a
+   * form with one field in it. Three things happen in order and each one refuses before the next
+   * costs anything (scope tdd 1.2, 1.3):
+   *
+   * 1. **The type is checked here**, against the same vocabulary the API applies, so a file the
+   *    product does not accept never becomes a request.
+   * 2. **The image is re-encoded here**, to one bounded WebP. What is stored is this output and not
+   *    the file that was picked (scope prd 3.1.2).
+   * 3. **Grant, `PUT`, finalise.** The bytes go straight to the store; nothing about them passes
+   *    through the API in either direction.
+   *
+   * The list is re-read at the end rather than the row being patched in place, for the reason the
+   * rename already re-reads: the cover a surface shows is a signed URL the API minted, and the
+   * client has no business inventing one.
+   */
+  async function onCoverChosen(event: ChangeEvent<HTMLInputElement>): Promise<void> {
+    const chosen = event.target.files?.[0];
+    // Clearing the input is what makes choosing the same file twice a second upload rather than
+    // nothing at all — the browser fires no change event for an unchanged value.
+    event.target.value = '';
+    if (chosen === undefined || busy) return;
+
+    const complaint = checkChosenArtwork(chosen);
+    if (complaint !== null) {
+      setNote(complaint);
+      return;
+    }
+
+    setBusy(true);
+    setNote(null);
+    try {
+      const encoded = await encodeArtwork(chosen);
+      const grant = await apiFetch<UploadGrantPayload>(seriesArtworkUploadsPath(entry.id), {
+        method: 'POST',
+        credentials: 'include',
+        headers: { 'content-type': 'application/json' },
+        body: JSON.stringify({
+          filename: chosen.name,
+          contentType: encoded.contentType,
+          size: encoded.blob.size,
+        }),
+      });
+
+      const sent = await fetch(grant.url, {
+        method: 'PUT',
+        headers: { 'content-type': grant.contentType },
+        body: encoded.blob,
+      });
+      if (!sent.ok) throw new Error('the upload did not complete');
+
+      await apiFetch(seriesArtworkPath(entry.id), {
+        method: 'PUT',
+        credentials: 'include',
+        headers: { 'content-type': 'application/json' },
+        body: JSON.stringify({ key: grant.key }),
+      });
+      await onChanged();
+    } catch (caught) {
+      setNote(describeFailure(caught));
+    } finally {
+      setBusy(false);
+    }
+  }
+
   return (
     <li className={styles.listRow}>
+      {/*
+       * Decorative, and deliberately unlabelled: the title is rendered beside it, and a screen
+       * reader announcing the series name twice is worse than announcing it once (scope prd 4.3).
+       * Absent rather than an empty frame when there is no cover (scope prd 3.2.6).
+       */}
+      {entry.artworkUrl === null ? null : (
+        <img className={styles.rowCover} src={entry.artworkUrl} alt="" />
+      )}
+
       <div className={styles.rowIdentity}>
         <p className={styles.rowName}>{entry.title}</p>
         {entry.description === null ? null : (
@@ -258,6 +350,19 @@ function SeriesRow({
       </div>
 
       <div className={styles.rowControls}>
+        <label className={styles.action} htmlFor={`series-cover-${entry.id}`}>
+          {busy ? 'Working…' : entry.artworkUrl === null ? 'Add cover' : 'Replace cover'}
+        </label>
+        <input
+          className={styles.fileInput}
+          id={`series-cover-${entry.id}`}
+          name="cover"
+          type="file"
+          accept={ACCEPTED_ARTWORK_TYPES.join(',')}
+          aria-label="Cover image"
+          disabled={busy}
+          onChange={(event) => void onCoverChosen(event)}
+        />
         <button
           className={styles.action}
           type="button"

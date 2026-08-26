@@ -239,8 +239,7 @@ export const passwordReset = pgTable(
  * **Four columns, and the absences are the design.** No `recording_count` and no `date_range`:
  * docs/project/prd.md 4.3 calls both auto-calculated, and a denormalised count is a second answer
  * to a question one query already answers — the console's count and a member's count of the same
- * series legitimately differ (3.2.2), which a column could not express. No `artwork_key`, because
- * 3.3.3 is deferred and both design references draw covers this epic does not ship. No `position`
+ * series legitimately differ (3.2.2), which a column could not express. No `position`
  * or `sort_order`, because reordering a series is deferred and the order inside one is
  * `recorded_at` and nothing else. No slug, because the id is what every other resource here is
  * addressed by. No podcast or external-publication field — those arrive with distribution
@@ -255,6 +254,21 @@ export const series = pgTable('series', {
   title: text('title').notNull(),
   /** Optional, and empty is stored as `null` — one representation of "nothing written here". */
   description: text('description'),
+  /**
+   * **The object key of this series' cover, or none** (scope tdd 2.1).
+   *
+   * One nullable pointer and nothing beside it. No width, height, byte size, content type or
+   * uploaded-at: the bound is enforced before this is written (scope prd 3.1.2, 3.1.4) and the
+   * store's own `head` already answers everything those columns would restate. No rendition
+   * columns, because there are no renditions — one object serves every surface. No original key,
+   * because the file the admin chose is not kept.
+   *
+   * **Nullable, and that is the ordinary state** (scope prd 3.1.7): most series have no cover and
+   * every surface renders without one rather than reserving an empty frame. Replacing a cover
+   * rewrites this column and leaves the object the old key named where it is — the store has no
+   * delete, so a repoint is the whole of "replace" (scope prd 3.1.5).
+   */
+  artworkKey: text('artwork_key'),
   createdAt: timestamp('created_at', { withTimezone: true }).notNull().defaultNow(),
 });
 

@@ -1,5 +1,5 @@
 import { randomUUID } from 'node:crypto';
-import { extensionForContentType } from '@thp/shared';
+import { extensionForArtworkType, extensionForContentType } from '@thp/shared';
 import { buildMediaStore } from './s3-store';
 
 /**
@@ -124,4 +124,28 @@ let store: MediaStore | undefined;
 export function mediaStore(): MediaStore {
   store ??= buildMediaStore();
   return store;
+}
+
+/**
+ * `artwork/<uuid>.<ext>` — **`mintOriginalKey`'s rule, one prefix over** (scope tdd 1.1).
+ *
+ * A series cover is a second use of this one port rather than a second boundary, so the key it is
+ * stored under is minted the same way and for the same two reasons: the name a person's file
+ * carried is arbitrary and can collide, and a server-minted uuid is what a presigned URL's
+ * reusability costs us. The extension comes from the content type the grant will be signed for, so
+ * the object's name and its format cannot disagree.
+ *
+ * **It brings no delete with it.** Replacing a cover writes a new key and repoints the series
+ * (scope prd 3.1.5); the superseded object stays where it is, unreferenced and invisible, which is
+ * the same accepted price the refused-audio-upload case already pays.
+ */
+export function mintArtworkKey(contentType: string): string {
+  const extension = extensionForArtworkType(contentType);
+  if (extension === null) {
+    // Unreachable from the routes — the content type is checked before a key is asked for. Stated
+    // rather than assumed, so a future caller that skips the check fails here instead of writing an
+    // object nobody can name the format of.
+    throw new Error(`no accepted artwork extension for content type "${contentType}"`);
+  }
+  return `artwork/${randomUUID()}.${extension}`;
 }

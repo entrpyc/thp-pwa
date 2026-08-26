@@ -9,6 +9,7 @@ import {
   listVisibleSeries,
   setRecordingPublication,
   setRecordingSeries,
+  setSeriesArtwork,
   updateSeries,
   upsertPlaybackProgress,
   insertUser,
@@ -213,5 +214,76 @@ describe('the counts are over the recordings the caller may see', () => {
       (one) => one.id === created.id,
     );
     expect(forMember).toBeUndefined();
+  });
+});
+
+// =================================================================================================
+
+describe('the artwork pointer', () => {
+  it('reads back null on a series nobody has given a cover', async () => {
+    // scope plan 1.1.2. `null` is the ordinary no-cover state of scope prd 3.1.7, not an error and
+    // not a series that is somehow incomplete — which is why nothing about creating one changed.
+    const created = await insertSeries({ title: `Uncovered ${RUN}`, description: null }, handle);
+    expect((await findSeriesById(created.id, handle))?.artworkKey).toBeNull();
+  });
+
+  it('points a series with no cover at a key', async () => {
+    // scope plan 1.1.3.
+    const created = await insertSeries({ title: `Covered ${RUN}`, description: null }, handle);
+    const key = `artwork/${RUN}-first.webp`;
+
+    expect((await setSeriesArtwork(created.id, key, handle))?.artworkKey).toBe(key);
+    expect((await findSeriesById(created.id, handle))?.artworkKey).toBe(key);
+  });
+
+  it('replaces the key on a series that already has one', async () => {
+    // scope plan 1.1.4, and scope prd 3.1.5 at the database: replacing is a repoint and nothing
+    // else. What happens to the object the old key named is not this layer's business — the store
+    // has no delete (scope tdd 1.1) and the row simply stops naming it.
+    const created = await insertSeries({ title: `Replaced ${RUN}`, description: null }, handle);
+    await setSeriesArtwork(created.id, `artwork/${RUN}-old.webp`, handle);
+
+    await setSeriesArtwork(created.id, `artwork/${RUN}-new.webp`, handle);
+
+    expect((await findSeriesById(created.id, handle))?.artworkKey).toBe(`artwork/${RUN}-new.webp`);
+  });
+
+  it('leaves the title and the description exactly as they were', async () => {
+    // scope plan 1.1.5. The same property the assignment block asserts about a recording, for the
+    // same reason: "setting a cover changes nothing else" is a fact about the statement rather than
+    // about the test that checks it, and it is compared field by field rather than argued.
+    const created = await insertSeries(
+      { title: `Untouched ${RUN}`, description: 'The wording nobody asked to change.' },
+      handle,
+    );
+    const before = await findSeriesById(created.id, handle);
+
+    await setSeriesArtwork(created.id, `artwork/${RUN}-untouched.webp`, handle);
+    const after = await findSeriesById(created.id, handle);
+
+    // The write actually happened — otherwise the three assertions below hold for a statement that
+    // did nothing at all, which is the one way "it changed nothing else" can be vacuously true.
+    expect(after?.artworkKey).toBe(`artwork/${RUN}-untouched.webp`);
+    expect(after?.title).toBe(before?.title);
+    expect(after?.description).toBe(before?.description);
+    expect(after?.createdAt?.getTime()).toBe(before?.createdAt?.getTime());
+  });
+
+  it('returns null for an id that is not a series, and writes nothing', async () => {
+    // scope plan 1.1.6. `null` back is what the route turns into `not_found`, and it has to come
+    // from the write finding no row rather than from a lookup the write could race.
+    const created = await insertSeries({ title: `Bystander ${RUN}`, description: null }, handle);
+    await setSeriesArtwork(created.id, `artwork/${RUN}-bystander.webp`, handle);
+
+    const missing = await setSeriesArtwork(
+      '00000000-0000-4000-8000-000000000000',
+      `artwork/${RUN}-nowhere.webp`,
+      handle,
+    );
+
+    expect(missing).toBeNull();
+    expect((await findSeriesById(created.id, handle))?.artworkKey).toBe(
+      `artwork/${RUN}-bystander.webp`,
+    );
   });
 });

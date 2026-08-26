@@ -22,6 +22,8 @@ export interface SeriesRow {
   readonly id: string;
   readonly title: string;
   readonly description: string | null;
+  /** The object key of this series' cover, or `null` — the ordinary state (scope prd 3.1.7). */
+  readonly artworkKey: string | null;
   readonly createdAt: Date;
 }
 
@@ -93,4 +95,33 @@ export async function setRecordingSeries(
     .where(eq(recording.id, recordingId))
     .returning({ id: recording.id, seriesId: recording.seriesId });
   return (rows[0] as { id: string; seriesId: string | null } | undefined) ?? null;
+}
+
+/**
+ * Point a series at its cover, or at a different one (scope prd 3.1.4, 3.1.5).
+ *
+ * **One column is written and no other**, which is the same property `setRecordingSeries` above
+ * holds and it is what makes "setting a cover changes nothing else" a fact about the statement
+ * rather than about the test: the title, the description and the created-at are not in it, and
+ * neither is any recording.
+ *
+ * **Replacing is a repoint, and that is the whole of it.** The object the previous key named is
+ * left in the store — there is nothing on the media port to delete with (scope tdd 1.1) — and it
+ * becomes unreachable the moment this row stops naming it. That orphan is the accepted price, the
+ * same one a refused audio finalisation already pays.
+ *
+ * `null` back means there is no such series, which the caller turns into `not_found`. It comes
+ * from the update finding no row rather than from a lookup this write could race.
+ */
+export async function setSeriesArtwork(
+  id: string,
+  key: string,
+  executor: Executor = getDatabase(),
+): Promise<{ readonly id: string; readonly artworkKey: string | null } | null> {
+  const rows = await queryable(executor)
+    .update(series)
+    .set({ artworkKey: key })
+    .where(eq(series.id, id))
+    .returning({ id: series.id, artworkKey: series.artworkKey });
+  return (rows[0] as { id: string; artworkKey: string | null } | undefined) ?? null;
 }

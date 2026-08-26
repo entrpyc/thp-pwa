@@ -74,7 +74,8 @@ It is built as a Progressive Web App on a single codebase, reachable from any br
 - ✅ **3.2.11** An admin can unpublish a recording, removing it from member view without deleting it or its associated content.
 - ✅ **3.2.12** A member's landing offers the teaching they were most recently listening to, showing how far they had got. Opening it restores that position and deliberately does not start playing — a member who tapped a card has not asked for sound.
 - ✅ **3.2.13** Audio is streamed through a signed URL minted per request after an authorisation check and valid for an hour, never from a publicly addressable location. The player renews the grant before it expires, so a teaching longer than an hour plays through without interruption and without the client ever learning where the file lives.
-- ✅ **3.2.14** The transport travels with the member: it is docked to every member screen, so playback continues while they move between the library, a series and a recording rather than stopping when they navigate.
+- ✅ **3.2.14** The transport travels with the member: it is docked to every member screen, so playback continues while they move between the library, a series and a recording rather than stopping when they navigate. It is one of two playback surfaces rather than the only one — the expanded view at 3.2.15 is the other — and it is the one a member uses everywhere else.
+- 📝 **3.2.15** An expanded now-playing view, opened from the docked transport (3.2.14) and closed back to it, showing the cover artwork of what is playing (3.3.3) and the published scripture references of that teaching (3.7.5). It is a second view of one playback session rather than a second player: opening it and leaving it never interrupt the audio, and it holds no transport state of its own. A recording that belongs to no series (3.3.9) has no artwork to show and the view renders without it rather than substituting a placeholder.
 
 ### 🔨 3.3 Content organisation & series
 

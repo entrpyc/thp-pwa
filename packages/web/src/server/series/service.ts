@@ -5,30 +5,47 @@ import {
   insertSeries,
   listVisibleSeries,
   setRecordingSeries,
+  setSeriesArtwork,
   updateSeries,
   type SeriesRow,
   type VisibleSeriesRow,
 } from '@thp/db';
-import type {
-  AssignSeriesRequest,
-  CreateSeriesRequest,
-  SeriesPayload,
-  SeriesRecordingView,
-  SeriesView,
-  UpdateSeriesRequest,
+import {
+  ACCEPTED_ARTWORK_LABEL,
+  MAX_ARTWORK_BYTES,
+  MAX_ARTWORK_LABEL,
+  describeBytes,
+  isAcceptedArtworkType,
+  type ArtworkGrantRequest,
+  type AssignSeriesRequest,
+  type CreateSeriesRequest,
+  type SeriesPayload,
+  type SeriesRecordingView,
+  type SeriesView,
+  type SetSeriesArtworkRequest,
+  type UpdateSeriesRequest,
+  type UploadGrantPayload,
 } from '@thp/shared';
+import { UPLOAD_GRANT_SECONDS, mediaStore, mintArtworkKey } from '@thp/media';
 import { ApiError } from '@/server/api/errors';
 import { can, type Actor } from '@/server/auth/policy';
 import { audit } from '@/server/observability/audit';
 import { logger } from '@/server/observability/logger';
+import { mintArtworkGrant } from '@/server/series/artwork-grant';
 import type { Surface } from '@/server/recordings/service';
 
 /**
  * **Series — three writes and two reads** (Story 6).
  *
- * The writes are the whole of [3.3.6](docs/project/prd.md) minus what it defers: create, rename
- * and move. There is no delete and no reorder and no merge, and there is no artwork upload; each
- * of those has a named home and none of them is here.
+ * The writes are the whole of [3.3.6](docs/project/prd.md) minus what it defers: create, rename,
+ * move, and — since scope plan 1.2 — setting the cover. There is no delete and no reorder and no
+ * merge; each of those has a named home and none of them is here.
+ *
+ * **The cover arrives in two calls and one `PUT` that never touches this process**, exactly as a
+ * recording's audio does (scope tdd 1.3): grant, then the browser sends the bytes straight to the
+ * store, then finalise. What makes it safe is what the finalisation is allowed to believe — the
+ * declared size in the grant is a convenience that fails an oversized request early, and the
+ * authoritative check is the `head` against the store's own metadata.
  *
  * **The one property worth stating up front: assigning a recording writes one column.** Not the
  * title, not the date, not the description, not the summary, not the transcript, not the jobs, not
@@ -62,23 +79,32 @@ function readsAsOperator(actor: Actor, surface: Surface): boolean {
   return surface.memberSurface === true ? false : can(actor, 'series.list');
 }
 
-/** A freshly written series, as the admin who wrote it reads it back: nothing in it yet. */
-function describeNew(row: SeriesRow): SeriesView {
+/**
+ * A freshly written series, as the admin who wrote it reads it back: nothing in it yet.
+ *
+ * Async since the cover arrived, because a `SeriesView` carries a signed URL rather than a key and
+ * signing is the store's answer, not this function's. A creation has no cover by construction; a
+ * rename reads this too, and its `artworkKey` is whatever the series already had — which is what
+ * stops a rename blanking the cover in the response it answers with.
+ */
+async function describeNew(row: SeriesRow): Promise<SeriesView> {
   return {
     id: row.id,
     title: row.title,
     description: row.description,
+    artworkUrl: await mintArtworkGrant(row.artworkKey),
     recordingCount: 0,
     firstRecordedAt: null,
     lastRecordedAt: null,
   };
 }
 
-function describe(row: VisibleSeriesRow): SeriesView {
+async function describe(row: VisibleSeriesRow): Promise<SeriesView> {
   return {
     id: row.id,
     title: row.title,
     description: row.description,
+    artworkUrl: await mintArtworkGrant(row.artworkKey),
     recordingCount: row.recordingCount,
     firstRecordedAt: row.firstRecordedAt,
     lastRecordedAt: row.lastRecordedAt,
@@ -102,7 +128,7 @@ export async function createSeries(actor: Actor, body: unknown): Promise<SeriesV
 
   logger.info('series.create', audit(actor, 'series.create', `series:${row.id}`));
 
-  return describeNew(row);
+  return await describeNew(row);
 }
 
 /**
@@ -122,7 +148,7 @@ export async function renameSeries(
 
   logger.info('series.update', audit(actor, 'series.update', `series:${id}`));
 
-  return describeNew(row);
+  return await describeNew(row);
 }
 
 /**
@@ -183,7 +209,7 @@ export async function listSeriesFor(
     asOperator,
   });
 
-  return rows.map(describe);
+  return Promise.all(rows.map(describe));
 }
 
 /**
@@ -226,7 +252,165 @@ export async function readSeriesFor(
     positionMs: row.positionMs,
   }));
 
-  return { series: describe(found.series), recordings };
+  return { series: await describe(found.series), recordings };
+}
+
+/**
+ * **Permission to send the cover, and nothing else** (scope prd 3.1.3; scope tdd 1.3).
+ *
+ * The recording upload's grant, one resource down, and it earns its shape the same way: every
+ * refusal happens **before the store is asked for anything**, so a rejected format or an oversized
+ * declaration costs a request and leaves no URL behind. An error carrying a presigned `PUT` is an
+ * error a client could ignore.
+ *
+ * The series is looked up first so a grant is never minted against an id that does not exist — a
+ * key in the bucket for nothing is an orphan nobody can even name the owner of.
+ */
+export async function grantArtworkUpload(
+  actor: Actor,
+  seriesId: string,
+  body: unknown,
+): Promise<UploadGrantPayload> {
+  const requested = parseArtworkGrantRequest(body);
+
+  if ((await findSeriesById(seriesId)) === null) throw notFound();
+
+  const key = mintArtworkKey(requested.contentType);
+  const expiresAt = new Date(Date.now() + UPLOAD_GRANT_SECONDS * 1000);
+  const url = await mediaStore().presignPut({
+    key,
+    contentType: requested.contentType,
+    expiresInSeconds: UPLOAD_GRANT_SECONDS,
+  });
+
+  logger.info('series.artwork.granted', {
+    ...audit(actor, 'series.artwork', `series:${seriesId}`),
+    mediaKey: key,
+    // What the person chose it as, so an operator reading the log can tell which upload this was.
+    // It is not what the key is built from — see `mintArtworkKey`.
+    filename: requested.filename,
+    contentType: requested.contentType,
+    declaredSize: requested.size,
+  });
+
+  return { url, key, contentType: requested.contentType, expiresAt: expiresAt.toISOString() };
+}
+
+/**
+ * **Point the series at the cover that landed** (scope prd 3.1.4, 3.1.5).
+ *
+ * The order is the finalisation's whole argument. The key is read first, so a malformed request is
+ * refused without a round trip to the store; then **the store is asked what is actually behind
+ * it**, because that is the only thing "re-checked server-side" can mean when the API never sees
+ * the file; and only then is the pointer written. A client that declared 1 KB and uploaded 3 MB
+ * gets a grant it cannot finalise.
+ *
+ * **Every refusal leaves the series' cover exactly as it was.** Nothing is written before all three
+ * checks pass, so there is no state in which a series has half a cover — it has the one it had, or
+ * the new one, and no third answer. The object behind a refused key stays in the bucket, invisible,
+ * for the same reason a refused audio finalisation's does: there is nothing to delete it with.
+ */
+export async function setArtwork(
+  actor: Actor,
+  seriesId: string,
+  body: unknown,
+): Promise<SeriesView> {
+  const key = parseArtworkKey(body);
+
+  const stored = await mediaStore().head(key);
+  if (stored === null) {
+    throw refuseArtwork(
+      actor,
+      seriesId,
+      'nothing-at-key',
+      'That upload did not finish. Choose the image again and re-upload it.',
+    );
+  }
+  if (stored.size > MAX_ARTWORK_BYTES) {
+    throw refuseArtwork(
+      actor,
+      seriesId,
+      'over-ceiling',
+      `The image that arrived is ${describeBytes(stored.size)}; the limit is ${MAX_ARTWORK_LABEL}.`,
+    );
+  }
+  if (!isAcceptedArtworkType(stored.contentType)) {
+    throw refuseArtwork(
+      actor,
+      seriesId,
+      'unaccepted-content-type',
+      `The file that arrived is not an image this accepts. Upload ${ACCEPTED_ARTWORK_LABEL}.`,
+    );
+  }
+
+  const row = await setSeriesArtwork(seriesId, key);
+  if (row === null) throw notFound();
+
+  logger.info('series.artwork', {
+    ...audit(actor, 'series.artwork', `series:${seriesId}`),
+    mediaKey: key,
+    size: stored.size,
+    contentType: stored.contentType,
+  });
+
+  const found = await findSeriesById(seriesId);
+  if (found === null) throw notFound();
+  return await describeNew(found);
+}
+
+function refuseArtwork(
+  actor: Actor,
+  seriesId: string,
+  reason: string,
+  message: string,
+): ApiError {
+  logger.warn('series.artwork.refused', {
+    ...audit(actor, 'series.artwork', `series:${seriesId}`),
+    reason,
+    code: 'invalid_input',
+  });
+  return ApiError.invalidInput(message);
+}
+
+function parseArtworkGrantRequest(body: unknown): {
+  readonly filename: string;
+  readonly contentType: string;
+  readonly size: number;
+} {
+  if (typeof body !== 'object' || body === null) {
+    throw ApiError.invalidInput('Send a JSON object with a filename, a content type and a size.');
+  }
+  const { filename, contentType, size } = body as Partial<ArtworkGrantRequest>;
+
+  if (typeof filename !== 'string' || filename.trim() === '' || filename.length > MAX_FIELD_LENGTH) {
+    throw ApiError.invalidInput('Name the image you are uploading.');
+  }
+  if (typeof contentType !== 'string' || !isAcceptedArtworkType(contentType)) {
+    throw ApiError.invalidInput(
+      `That is not an image this accepts. Upload ${ACCEPTED_ARTWORK_LABEL}.`,
+    );
+  }
+  if (typeof size !== 'number' || !Number.isInteger(size) || size <= 0) {
+    throw ApiError.invalidInput('Say how large the image is, in bytes.');
+  }
+  if (size > MAX_ARTWORK_BYTES) {
+    throw ApiError.invalidInput(
+      `That image is ${describeBytes(size)}; the limit is ${MAX_ARTWORK_LABEL}.`,
+    );
+  }
+
+  return { filename: filename.trim(), contentType: contentType.trim().toLowerCase(), size };
+}
+
+function parseArtworkKey(body: unknown): string {
+  if (typeof body !== 'object' || body === null) {
+    throw ApiError.invalidInput('Send a JSON object with the key of the upload.');
+  }
+  const { key } = body as Partial<SetSeriesArtworkRequest>;
+  if (typeof key !== 'string' || key.trim() === '' || key.length > MAX_FIELD_LENGTH) {
+    throw ApiError.invalidInput('Name the upload this cover is for.');
+  }
+  return key.trim();
 }
 
 function notFound(): ApiError {

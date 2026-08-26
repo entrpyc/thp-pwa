@@ -103,6 +103,15 @@ export interface AssignSeriesRequest {
 export interface SeriesView {
   readonly id: string;
   readonly title: string;
+  /**
+   * **A short-lived signed URL for this series' cover, or `null`** (scope prd 3.1.6; scope tdd 1.4).
+   *
+   * Minted for this response after the policy check the rest of the row already passed, never
+   * stored and never a key: media is not publicly addressable, so a URL with an expiry on it is
+   * the only way anything reads a cover. `null` is the ordinary state and every surface renders
+   * without artwork rather than reserving an empty frame (scope prd 3.1.7, 3.2.6).
+   */
+  readonly artworkUrl: string | null;
   readonly description: string | null;
   readonly recordingCount: number;
   /** `YYYY-MM-DD` — the earliest date recorded in the series, or `null` when it holds nothing. */
@@ -151,3 +160,40 @@ export interface SeriesPayload {
   readonly recordings: readonly SeriesRecordingView[];
 }
 
+
+/**
+ * **Where a series' cover is granted and finalised** — a sub-resource of the series, because what
+ * the request changes is the series (scope tdd 1.3).
+ *
+ * Two calls, for the reason the recording upload takes two: the bytes never pass through the API.
+ * `POST …/artwork/uploads` authorises and answers with a presigned `PUT`; the browser sends the
+ * image straight to the store; `PUT …/artwork` names the key and the pointer is written after the
+ * store has been asked what actually landed.
+ */
+export function seriesArtworkPath(seriesId: string): string {
+  return `${seriesPath(seriesId)}/artwork`;
+}
+
+export function seriesArtworkUploadsPath(seriesId: string): string {
+  return `${seriesArtworkPath(seriesId)}/uploads`;
+}
+
+/**
+ * Body of `POST /api/v1/series/{id}/artwork/uploads`.
+ *
+ * The same three fields the audio grant takes, and they mean the same things: the filename is
+ * logged and never used to build the key, and the size is a **convenience** that fails an oversized
+ * request before an upload rather than after one. The authoritative check is the `head` at
+ * finalisation, which is the only thing "re-checked server-side" can mean when the API never sees
+ * the file.
+ */
+export interface ArtworkGrantRequest {
+  readonly filename: string;
+  readonly contentType: string;
+  readonly size: number;
+}
+
+/** Body of `PUT /api/v1/series/{id}/artwork`. The key from the grant, now with bytes behind it. */
+export interface SetSeriesArtworkRequest {
+  readonly key: string;
+}

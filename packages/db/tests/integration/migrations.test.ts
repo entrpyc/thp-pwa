@@ -1744,3 +1744,91 @@ describe('the verse text cache, and nothing beside it', () => {
     expect(rows).toHaveLength(1);
   });
 });
+
+describe('the series artwork pointer, and nothing beside it', () => {
+  let target: ThrowawayDatabase;
+  let before: Map<string, string[]>;
+  let after: Map<string, string[]>;
+  let sql: ReturnType<typeof postgres>;
+  /** A series written before the column existed, to read back afterwards. */
+  let existingSeriesId: string;
+
+  beforeAll(async () => {
+    target = await createThrowawayDatabase(inject('databaseUrl'), 'series_artwork_migration');
+
+    const priorCount = journalCountBefore('0016_series_artwork');
+    await runMigrations({ url: target.url, migrationsFolder: migrationsFolderUpTo(priorCount) });
+    before = await readColumnSets(target.url);
+
+    sql = postgres(target.url, { max: 2, onnotice: () => {} });
+    const [written] = await sql<{ id: string }[]>`
+      insert into series (title, description)
+      values ('A study from before covers', 'Written when a series had no artwork.')
+      returning id
+    `;
+    existingSeriesId = written?.id as string;
+
+    await runMigrations({ url: target.url, migrationsFolder: migrationsFolderUpTo(priorCount + 1) });
+    after = await readColumnSets(target.url);
+  }, 120_000);
+
+  afterAll(async () => {
+    await sql?.end({ timeout: 5 });
+    await target?.drop();
+  }, 60_000);
+
+  it('did not exist before this migration and does after — otherwise the comparison is vacuous', () => {
+    expect(before.get('series')).not.toContain('artwork_key');
+    expect(after.get('series')).toContain('artwork_key');
+  });
+
+  it('adds one column to series and nothing anywhere else', () => {
+    // scope plan 1.1.1. One nullable pointer is the whole of scope tdd 2.1, and this is the
+    // before-and-after that says so rather than a list somebody typed out.
+    for (const [table, columns] of before) {
+      const expected = table === 'series' ? [...columns, 'artwork_key'].sort() : columns;
+      expect(after.get(table), `${table} changed`).toEqual(expected);
+    }
+    expect([...after.keys()].sort()).toEqual([...before.keys()].sort());
+  });
+
+  it('gives series exactly these columns, and none of the deferred ones', () => {
+    expect(after.get('series')).toEqual([
+      'artwork_key',
+      'created_at',
+      'description',
+      'id',
+      'title',
+    ]);
+
+    // Every one of these is excluded with a named reason. Width, height, byte size, content type
+    // and an uploaded-at are a second copy of what the store already knows and `head` already
+    // answers (scope tdd 2.1). The rendition columns are scope prd § 5 — there are no renditions.
+    // `artwork_original_key` is the same section: the file the admin chose is not kept.
+    for (const deferred of [
+      'artwork_width',
+      'artwork_height',
+      'artwork_bytes',
+      'artwork_content_type',
+      'artwork_uploaded_at',
+      'artwork_thumbnail_key',
+      'artwork_banner_key',
+      'artwork_original_key',
+      'artwork_url',
+      'cover_image',
+    ]) {
+      expect(after.get('series'), `${deferred} must not exist`).not.toContain(deferred);
+    }
+  });
+
+  it('leaves a series written before the column with no cover rather than a default one', async () => {
+    // Nullable, and no backfill: scope prd 3.1.7 makes "no cover" ordinary, so every series that
+    // already existed keeps being an ordinary series rather than acquiring a placeholder.
+    const rows = await sql<{ artwork_key: string | null; title: string }[]>`
+      select artwork_key, title from series where id = ${existingSeriesId}
+    `;
+    expect(rows).toHaveLength(1);
+    expect(rows[0]?.artwork_key).toBeNull();
+    expect(rows[0]?.title).toBe('A study from before covers');
+  });
+});

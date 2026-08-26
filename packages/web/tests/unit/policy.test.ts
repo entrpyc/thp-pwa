@@ -348,3 +348,32 @@ describe('reading a teaching’s scripture is the recording’s own authorisatio
     expect(can(null, 'recording.browse')).toBe(false);
   });
 });
+
+describe('setting a series cover is its own action, not more of series.update', () => {
+  it('permits series.artwork for an admin and refuses it for a member', () => {
+    // scope plan 1.2.10, and scope prd 3.1.8: the refusal is the API's. Admin-only in this scope
+    // because the Contributor role does not exist in the enum yet (scope tdd 1.5).
+    expect(can(actorWith(ROLE.admin), 'series.artwork')).toBe(true);
+    expect(can(actorWith(ROLE.member), 'series.artwork')).toBe(false);
+  });
+
+  it('is a real action in the table, distinct from the three series actions already there', () => {
+    // Distinct rather than a widening: the day a Contributor may set a cover without being able to
+    // rename the study, this split stops being decoration.
+    expect(isPolicyAction('series.artwork')).toBe(true);
+    expect(POLICY_ACTIONS.filter((action) => action === 'series.artwork')).toHaveLength(1);
+    for (const other of ['series.create', 'series.update', 'series.assign'] as const) {
+      expect(other).not.toBe('series.artwork');
+      expect(isPolicyAction(other)).toBe(true);
+    }
+    // And the nearby names nobody wrote a rule for are still denied, for both roles.
+    for (const role of ROLES) {
+      expect(can(actorWith(role), 'series.artwork.delete'), role).toBe(false);
+      expect(can(actorWith(role), 'artwork.upload'), role).toBe(false);
+    }
+  });
+
+  it('refuses it to an anonymous caller', () => {
+    expect(can(null, 'series.artwork')).toBe(false);
+  });
+});

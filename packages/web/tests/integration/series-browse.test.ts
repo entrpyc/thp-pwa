@@ -18,6 +18,7 @@ import {
   setRecordingDescription,
   setRecordingPublication,
   setRecordingSeries,
+  setSeriesArtwork,
   upsertPlaybackProgress,
   type DatabaseHandle,
 } from '@thp/db';
@@ -321,5 +322,41 @@ describe('a recording carries the series it belongs to', () => {
     const loose = await newRecording(`No series at all ${RUN}`, '2026-05-21', null, true);
     const alone = await get<RecordingPayload>(memberRecordingPath(loose), memberCookie);
     expect(alone.body.recording.series).toBeNull();
+  });
+});
+
+describe('a series carries its cover, as a grant rather than a key', () => {
+  /** Written straight at the database: what is under test here is the *read*, not the upload. */
+  const COVER_KEY = `artwork/browse-${RUN}.webp`;
+
+  beforeAll(async () => {
+    await setSeriesArtwork(liveSeriesId, COVER_KEY, handle);
+  }, 60_000);
+
+  it('answers artworkUrl on the member series list', async () => {
+    // scope plan 1.3.2. A member reads a cover on the listing exactly as the console does — the
+    // URL is minted for the response after the same policy check the rest of the row passed.
+    const list = await get<SeriesListPayload>(MEMBER_SERIES_PATH, memberCookie);
+    const covered = list.body.series.find((one) => one.id === liveSeriesId);
+
+    expect(covered?.artworkUrl).toContain('X-Amz-Signature');
+    expect(covered?.artworkUrl).toContain(COVER_KEY);
+  });
+
+  it('answers artworkUrl on the series detail payload', async () => {
+    // scope plan 1.3.3.
+    const detail = await get<SeriesPayload>(memberSeriesPath(liveSeriesId), memberCookie);
+
+    expect(detail.body.series.artworkUrl).toContain('X-Amz-Signature');
+    expect(detail.body.series.artworkUrl).toContain(COVER_KEY);
+  });
+
+  it('answers null on both for a series nobody has covered', async () => {
+    const list = await get<SeriesListPayload>(MEMBER_SERIES_PATH, memberCookie);
+    const uncovered = list.body.series.find((one) => one.id === orderedSeriesId);
+    const detail = await get<SeriesPayload>(memberSeriesPath(orderedSeriesId), memberCookie);
+
+    expect(uncovered?.artworkUrl).toBeNull();
+    expect(detail.body.series.artworkUrl).toBeNull();
   });
 });
