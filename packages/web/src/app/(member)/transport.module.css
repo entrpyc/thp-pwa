@@ -21,6 +21,16 @@
   right: 0;
   bottom: 0;
   padding: var(--space-3) var(--space-4);
+  /*
+   * Installed to a home screen there is no browser toolbar under the dock, and on a phone with a
+   * home indicator the bar would otherwise sit beneath it — reachable only by a swipe the system
+   * takes for itself. The inset is zero everywhere that has no such gesture area, including every
+   * desktop and the same phone in a browser tab, so this costs those nothing.
+   *
+   * It works because the root layout asks for `viewportFit: 'cover'`; without that the document
+   * never reaches under the indicator and `env()` resolves to zero.
+   */
+  padding-bottom: calc(var(--space-3) + env(safe-area-inset-bottom));
   pointer-events: none;
   /*
    * Three stacked things now, bottom-anchored: the side toolbar of `menu-opened.png`, the caption

@@ -20,8 +20,13 @@
 .screen {
   min-height: 100vh;
   background: var(--color-bg);
-  /* Bottom padding leaves the docked transport somewhere to sit without covering the last card. */
-  padding: var(--space-4) var(--space-4) calc(var(--space-8) * 4);
+  /*
+   * Bottom padding leaves the docked transport somewhere to sit without covering the last card —
+   * plus the home-indicator inset the dock now pads itself with, so the clearance is unchanged on
+   * a phone running the installed app.
+   */
+  padding: var(--space-4) var(--space-4)
+    calc(var(--space-8) * 4 + env(safe-area-inset-bottom));
 }
 
 .shell {
@@ -151,9 +156,10 @@
 
 /*
  * `top-navigation/menu-opened.png`: a panel below the bar, rows divided by a hairline rather than
- * by gaps. Four entries at most — Dashboard, All recordings, Admin console, Sign out — because
- * *All series* and *All chapters* have no destination in this epic and are dropped rather than
- * rendered dead.
+ * by gaps. Dashboard, All series, All recordings, Admin console, Install app, Sign out — *All
+ * chapters* has no destination in this epic and is dropped rather than rendered dead, and the two
+ * conditional rows render only where they lead somewhere: the console for an actor the policy
+ * allows, and Install app on a device that can actually install.
  */
 .menuPanel {
   background: var(--color-surface);
@@ -192,4 +198,17 @@
 .menuSignOut .menuLink {
   border-bottom: none;
   color: var(--color-text-muted);
+}
+
+/*
+ * The line under *Install app* on iOS, where the share sheet has to be described because Safari
+ * offers no prompt to fire. A row that is read rather than pressed, so it takes the muted, smaller
+ * voice the guide gives meta text instead of the .menuLink shape beside it.
+ */
+.menuHint {
+  padding: var(--space-3) var(--space-5);
+  border-bottom: 1px solid var(--color-border);
+  color: var(--color-text-muted);
+  font-size: var(--fs-meta);
+  line-height: 1.5;
 }

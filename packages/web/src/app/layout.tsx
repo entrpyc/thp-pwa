@@ -1,9 +1,26 @@
 import type { ReactNode } from 'react';
+import type { Viewport } from 'next';
 import './tokens.css';
 import './globals.css';
+import { ServiceWorkerRegistration } from './service-worker-registration';
 
 export const metadata = {
   title: 'Teaching Hub',
+};
+
+/**
+ * **Installed-to-the-home-screen is a supported way to run the hub**, and both fields here are for
+ * that case rather than for the browser.
+ *
+ * `themeColor` is what Android paints the status bar and the task-switcher header with, and it is
+ * the token layer's `--color-bg`, so the system chrome continues the document rather than framing
+ * it. `viewportFit: 'cover'` lets the document reach under the rounded corners and the home
+ * indicator — a standalone window has no Safari toolbar keeping the transport bar clear of it, so
+ * the bar pads itself with the safe-area inset that this unlocks.
+ */
+export const viewport: Viewport = {
+  themeColor: '#01101F',
+  viewportFit: 'cover',
 };
 
 /**
@@ -16,7 +33,10 @@ export const metadata = {
 export default function RootLayout({ children }: { children: ReactNode }) {
   return (
     <html lang="en">
-      <body>{children}</body>
+      <body>
+        <ServiceWorkerRegistration />
+        {children}
+      </body>
     </html>
   );
 }

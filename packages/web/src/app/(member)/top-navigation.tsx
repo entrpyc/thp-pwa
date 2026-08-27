@@ -9,6 +9,7 @@ import {
   MEMBER_SERIES_PAGE_PATH,
 } from '@thp/shared';
 import { SignOutButton } from '../sign-out-button';
+import { InstallApp } from './install-app';
 import { useBreadcrumbTrailValue } from './player-context';
 import styles from './member.module.css';
 
@@ -148,6 +149,7 @@ export function TopNavigation({ canSeeConsole }: { canSeeConsole: boolean }) {
                 </Link>
               </li>
             ) : null}
+            <InstallApp className={styles.menuLink} hintClassName={styles.menuHint} />
             <li className={styles.menuSignOut}>
               <SignOutButton className={styles.menuLink} />
             </li>
