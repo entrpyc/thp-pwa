@@ -1,7 +1,13 @@
 'use client';
 
+import Link from 'next/link';
 import { useState } from 'react';
-import { formatPlaybackSpeed, formatTimecode, type NoteView } from '@thp/shared';
+import {
+  NOW_PLAYING_PAGE_PATH,
+  formatPlaybackSpeed,
+  formatTimecode,
+  type NoteView,
+} from '@thp/shared';
 import { segmentAt } from '@/client/transcript/current-segment';
 import { NoteComposer } from './recordings/[id]/note-composer';
 import { usePlayer } from './player-context';
@@ -39,8 +45,11 @@ import styles from './transport.module.css';
  * **The bar renders only when something is loaded**, so the landing before a first play is the
  * reference's layout unchanged.
  *
- * `pages/player.png` — the now-playing screen — ships nothing in this epic: its two contents are
- * hero artwork and a scripture-reference list, both deferred. **This bar is the player.**
+ * **The left slot opens `pages/player.png`** — the now-playing view (scope prd 3.3.1). It is a link
+ * to a route under this same layout, so pressing it re-renders the page slot and leaves this bar
+ * and its `<audio>` element exactly where they were (scope prd 3.3.4; scope tdd 1.6). **This bar is
+ * still the player**: the view holds no transport control of its own, and every press that changes
+ * playback is here.
  */
 
 /** `0` duration means the element has not said yet — an unknown total, not a zero-length teaching. */
@@ -185,22 +194,47 @@ export function TransportBar() {
 
       <section className={styles.bar} aria-label="Player">
         {/*
-          The reference's thumbnail slot, filled at last (scope prd 3.2.4). **Labelled**, unlike
-          every other cover in this scope: it stands alone rather than beside a title, so 4.3 asks
-          for the series' name on it rather than for silence. Nothing is drawn when there is no
-          cover — the title beside it is then the whole of the slot (scope prd 3.2.6).
-        */}
-        {player.loaded.artworkUrl === null ? null : (
-          <img
-            className={styles.tile}
-            src={player.loaded.artworkUrl}
-            alt={player.loaded.seriesTitle ?? ''}
-          />
-        )}
+          **The slot is the way into the now-playing view** (scope prd 3.3.1). The reference draws
+          no separate control for it, and the thing a member presses to see what is playing is what
+          is playing — so the whole slot takes the press, which is also what keeps the gesture there
+          on a teaching that has no cover to press.
 
-        <p className={styles.nowPlaying} title={player.loaded.title}>
-          {player.loaded.title}
-        </p>
+          A `Link` rather than a button: scope tdd 1.6 puts the view at a route inside this layout,
+          so it has an address, a back button, and a client-side transition that leaves the
+          `<audio>` element mounted.
+
+          **It covers the slot rather than wrapping it**, and it carries its own name. A link
+          wrapping the tile and the title would take its accessible name from them — and there is
+          already a link named after that teaching on the library and on its series page, going
+          somewhere else. Two links with one name and two destinations is a thing a member using a
+          screen reader cannot tell apart, so the press is a named layer over the slot and the tile
+          and the title stay ordinary content, read in their own right.
+        */}
+        <div className={styles.slot}>
+          {/*
+            The reference's thumbnail slot, filled at last (scope prd 3.2.4). **Labelled**, unlike
+            every other cover in this scope: it stands alone rather than beside a title, so 4.3 asks
+            for the series' name on it rather than for silence. Nothing is drawn when there is no
+            cover — the title beside it is then the whole of the slot (scope prd 3.2.6).
+          */}
+          {player.loaded.artworkUrl === null ? null : (
+            <img
+              className={styles.tile}
+              src={player.loaded.artworkUrl}
+              alt={player.loaded.seriesTitle ?? ''}
+            />
+          )}
+
+          <p className={styles.nowPlaying} title={player.loaded.title}>
+            {player.loaded.title}
+          </p>
+
+          <Link
+            className={styles.slotPress}
+            href={NOW_PLAYING_PAGE_PATH}
+            aria-label="Open the full player"
+          />
+        </div>
 
         <div className={styles.controls}>
           <button

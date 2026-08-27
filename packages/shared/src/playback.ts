@@ -64,6 +64,20 @@ export function nextPlaybackSpeed(speed: number): PlaybackSpeed {
  */
 export const MIN_STORED_POSITION_MS = 5_000;
 
+/**
+ * **The now-playing view** — `pages/player.png`, opened from the docked transport
+ * ([3.3.1](docs/scope/prd.md)).
+ *
+ * A page path rather than an API path, and it lives here rather than in `recordings.ts` because
+ * what the route shows is *the playback session* rather than any one teaching: there is no id in
+ * it, and there could not be — the address means "whatever is playing", which is the only thing
+ * that keeps it truthful after the member opens a second teaching.
+ *
+ * A route under the member layout, so the `<audio>` element and the transport that owns it stay
+ * mounted across the transition ([3.3.4](docs/scope/prd.md); scope tdd 1.6).
+ */
+export const NOW_PLAYING_PAGE_PATH = '/now-playing';
+
 /** Where a member asks for a signed `GET` to hear a recording with. */
 export function recordingPlaybackPath(recordingId: string): string {
   return `${RECORDINGS_PATH}/${recordingId}/playback`;

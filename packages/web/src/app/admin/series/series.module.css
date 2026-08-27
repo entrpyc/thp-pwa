@@ -178,7 +178,12 @@
   width: 1px;
   height: 1px;
   padding: 0;
-  margin: -1px;
+  /*
+   * `0` rather than the `-1px` of the older clip-rect recipe: `clip-path: inset(50%)` collapses the
+   * box on its own, and a negative pixel margin is a spacing value no token expresses — which is
+   * what `tools/style-tokens.ts` was reporting. Same rule `screens.module.css` gives `.hiddenTitle`.
+   */
+  margin: 0;
   overflow: hidden;
   clip-path: inset(50%);
   white-space: nowrap;

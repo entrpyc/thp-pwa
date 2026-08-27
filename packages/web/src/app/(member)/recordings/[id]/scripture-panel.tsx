@@ -38,6 +38,12 @@ import styles from './scripture.module.css';
  * **Nothing in it navigates** (scope prd 3.4.8). A citation is text, because the
  * destination `project prd 3.7.6` would give it is the cross-referencing layer and that layer does
  * not exist — a link to nowhere is worse than no link.
+ *
+ * **It is now on two screens.** The now-playing view of `pages/player.png` mounts this same panel
+ * for the teaching that is playing (scope prd 3.3.3; scope tdd 1.7), which is what stops that view
+ * from being a second reading of the same passages under different rules. Nothing about the panel
+ * changed to allow it: it already took a recording id and already read the one route, and the
+ * empty case it already states is what scope prd 3.3.6 asks that view for.
  */
 export function ScripturePanel({ recordingId }: { recordingId: string }) {
   const [references, setReferences] = useState<readonly ScriptureReadingView[] | null>(null);

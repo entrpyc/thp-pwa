@@ -170,15 +170,22 @@ describe('signed-URL minting for playback is one function', () => {
     expect(sources.length).toBeGreaterThan(30);
   });
 
-  it('calls the media store`s presignGet in exactly one place', () => {
+  it('calls the media store`s presignGet in exactly one place per kind of media', () => {
     // [§3.4](docs/project/prd.md) later makes playback prefer a processed rendition and fall back to
     // the original. That is a change to one function only if there is one of it — so a second
     // caller appearing is a failing test rather than something review has to notice.
+    //
+    // **Two entries rather than one since the artwork scope** (scope plan 1.3): a cover is signed
+    // by `mintArtworkGrant` and audio by `mintPlaybackGrant`, and the property is unchanged in what
+    // it protects — each kind of media is signed in exactly one place, so the day either grows an
+    // expiry, a rendition or a fallback there is one function to change. A *third* entry is what
+    // this still refuses.
     const callers = sources
       .filter((source) => /presignGet\s*\(/.test(source.text))
       .map((source) => source.path);
-    expect(callers.map((path) => path.slice(path.indexOf('packages/web')))).toEqual([
+    expect(callers.map((path) => path.slice(path.indexOf('packages/web'))).sort()).toEqual([
       'packages/web/src/server/playback/grant.ts',
+      'packages/web/src/server/series/artwork-grant.ts',
     ]);
   });
 

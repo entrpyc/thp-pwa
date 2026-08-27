@@ -314,9 +314,14 @@ describe('progress on a series row is the reader`s own', () => {
 describe('a recording carries the series it belongs to', () => {
   it('names it on the member surface, and answers null for a recording in none', async () => {
     const inSeries = await get<RecordingPayload>(memberRecordingPath(sharedId), memberCookie);
+    // `artworkUrl` joined the ref in scope plan 2.3, and it is stated here rather than loosened
+    // away: the whole value is compared so that a *fourth* field arriving is a failure somebody
+    // has to look at, which is the only reason to compare a whole object rather than a key of it.
     expect(inSeries.body.recording.series).toEqual({
       id: liveSeriesId,
       title: `Live series ${RUN}`,
+      // This series has no cover; the covered case is asserted further down this file.
+      artworkUrl: null,
     });
 
     const loose = await newRecording(`No series at all ${RUN}`, '2026-05-21', null, true);

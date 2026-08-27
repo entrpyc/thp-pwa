@@ -2,8 +2,25 @@
 
 ## Status
 
-51/65 criteria met.
+65/65 criteria met.
 _Maintained by the build phase — see the checkboxes for detail._
+
+**Four suites were red before step 3 began, each left by an earlier step, and all four were repaired
+in this run** — the scope cannot claim a criterion is verified against a suite that does not pass:
+
+- `tests/guards/style-tokens.test.ts` — 1.4's visually-hidden file input spelled `margin: -1px`, a
+  spacing value no token expresses. Now `margin: 0`, which is the rule `screens.module.css` already
+  gives `.hiddenTitle` and which `clip-path: inset(50%)` makes sufficient on its own.
+- `tests/guards/route-access-typecheck.test.ts` — 1.2 added the `series.artwork` capability and the
+  positive-control fixture that has to list every action was never extended, so the control that is
+  supposed to compile did not. One line in `tests/fixtures/type-errors/policy-rules-complete.ts`.
+- `packages/web/tests/integration/series-browse.test.ts` — 2.3 put `artworkUrl` on the recording's
+  series ref and this suite still compared the whole ref against two fields. Now three, stated
+  rather than loosened, so a fourth field arriving is still a failure somebody has to look at.
+- `packages/web/tests/integration/playback.test.ts` — 1.3 added `mintArtworkGrant`, a second caller
+  of the store's `presignGet`, and the guard read "exactly one place". Now "exactly one place per
+  kind of media", naming both: the property it protects is unchanged, and a third caller still
+  fails it.
 
 ---
 
@@ -355,25 +372,40 @@ _None._
 **Delivers:** a route under the member layout that the transport opens and that closes back, with playback untouched either way.
 **References:** scope prd 3.3.1, 3.3.4; scope tdd 1.6, 1.7
 **Touches:** new `packages/web/src/app/(member)/now-playing/page.tsx`, new `packages/web/src/app/(member)/now-playing/now-playing-view.tsx`, new `packages/web/src/app/(member)/now-playing/now-playing.module.css`, `packages/web/src/app/(member)/transport-bar.tsx`, `packages/web/src/app/(member)/transport.module.css`, `packages/shared/src/playback.ts` (the page path constant), `packages/web/src/app/(member)/layout.tsx` (read, to confirm the mount point), new `packages/web/tests/integration/now-playing-screen.test.ts`, `packages/web/tests/integration/route-sweep.test.ts`
+_Corrected during the build: `route-sweep.test.ts` was **read and not changed** — it discovers `api/v1` route files and this substep adds a page, so there was nothing for it to find. `tests/guards/style-tokens.test.ts` was changed instead, and is not in the list above: it names every stylesheet it reads, and a new one that is not named is a file the guard silently skips. `packages/web/tests/integration/transcript-screen.test.ts` and `player-screen.test.ts` were read when the transport's link first shadowed them — see the first assumption; neither needed changing once the link was given a name of its own._
 **Out of scope:** what the view contains — that is 3.2 and 3.3. This substep's view is the frame and the two transitions.
 
 **Acceptance criteria**
 
-- [ ] **3.1.1** The docked transport offers a control that opens the now-playing view. — verified by `packages/web/tests/integration/now-playing-screen.test.ts`
-- [ ] **3.1.2** The view closes back to the screen the member opened it from. — verified by `packages/web/tests/integration/now-playing-screen.test.ts`
-- [ ] **3.1.3** Opening the view leaves a playing teaching playing. — verified by `packages/web/tests/integration/now-playing-screen.test.ts`
-- [ ] **3.1.4** Closing the view leaves a playing teaching playing. — verified by `packages/web/tests/integration/now-playing-screen.test.ts`
-- [ ] **3.1.5** The `<audio>` element is the same element after opening the view as before it, so no fresh playback grant is requested. — verified by `packages/web/tests/integration/now-playing-screen.test.ts`
-- [ ] **3.1.6** The view renders no play, pause, seek or speed control of its own — the docked transport is still the only one on screen. — verified by `packages/web/tests/integration/now-playing-screen.test.ts`
+- [x] **3.1.1** The docked transport offers a control that opens the now-playing view. — verified by `packages/web/tests/integration/now-playing-screen.test.ts`
+- [x] **3.1.2** The view closes back to the screen the member opened it from. — verified by `packages/web/tests/integration/now-playing-screen.test.ts`
+      _Asserted from two screens in one run — the recording page and the library — because a close that always went to the recording page would pass the first half and fail the second, and the transport travels precisely so that the second half happens._
+- [x] **3.1.3** Opening the view leaves a playing teaching playing. — verified by `packages/web/tests/integration/now-playing-screen.test.ts`
+- [x] **3.1.4** Closing the view leaves a playing teaching playing. — verified by `packages/web/tests/integration/now-playing-screen.test.ts`
+- [x] **3.1.5** The `<audio>` element is the same element after opening the view as before it, so no fresh playback grant is requested. — verified by `packages/web/tests/integration/now-playing-screen.test.ts`
+- [x] **3.1.6** The view renders no play, pause, seek or speed control of its own — the docked transport is still the only one on screen. — verified by `packages/web/tests/integration/now-playing-screen.test.ts`
 
 **Assumptions**
-_Written by the build phase — leave empty here._
+
+- **The control is a named link covering the transport's left slot, not a link wrapping it.** — major, user-facing, and **decided by a failure during the build**: wrapping the tile and the title took the link's accessible name from them, and there is already a link named after that teaching on the library and on its series page going somewhere else. Two of the existing suites broke on it — they ask for "the link named after this teaching" and got the transport's — which is the same ambiguity a member using a screen reader would meet. So the press is a `position: absolute` layer named *Open the full player*, and the tile and the title stay ordinary content read in their own right.
+- **The whole slot is the target, rather than a separate expand control beside the `···`.** — major, user-facing: `bottom-navigation/default.png` draws no entry point at all, so one had to be invented either way, and pressing what is playing is the gesture every player a member has used already has. It is also the only shape that survives a teaching with no cover, which a tile-only press would not.
+- **Closing is `router.back()`, not a link to a named screen.** — major, user-facing: the view is opened from a bar that is on every member screen, so the destination is a different screen each time and only "back" is right more than once. The cost is stated in the edge cases below.
+- **The address carries no recording id — `/now-playing` means "whatever is playing".** — major, hard to change later: every link to the view binds to it, and an id in the path would be a second answer to a question the player context already owns, wrong the moment a member opens a different teaching.
+- **`packages/web/tests/integration/route-sweep.test.ts` was read and not changed.** — minor. The sweep discovers `api/v1` route files, and this substep adds a page rather than an API route; there was nothing for it to find. The plan named it in Touches on the assumption a route was involved.
+- **`tests/guards/style-tokens.test.ts` was changed, and is not in the Touches list.** — minor. It names every stylesheet it reads, so that "no violations" cannot come to mean "this file was never read", and a new stylesheet that is not named is a file the guard silently skips.
+- **The view carries an unpainted `h1`.** — minor. `pages/player.png` prints no title, and a screen with no heading at all is one a screen reader cannot summarise. It is the rule `screens.module.css` already gives the dashboard, repeated in the new stylesheet rather than shared, because the two files have no other rule in common.
 
 **Edge cases**
-_Written by the build phase — leave empty here._
+
+- **A view opened by its address directly has nothing of ours behind it**, and *Close* then leaves the product the way any back press would — to the previous site, or to nothing. Accepted rather than solved: a fallback destination would be wrong on every press that did have something behind it, and there is no way to ask the browser which case this is.
+- Opening the address before anything has been played renders the view's one line of its own — *Nothing is playing yet* — with no cover and no scripture. The transport is not on screen in that state either, so nothing on the page contradicts it.
+- The breadcrumb names the playing teaching while the view is open, which reads as `home › teaching` even when the member walked in from a series page. The trail is set by the page that is mounted, and this page knows what is playing rather than how it was reached.
+- Closing lands on a screen that re-mounts and re-fetches — the recording page asks for the teaching and the position again. `open` is a no-op for what is already loaded, so nothing is re-pointed and no second grant is minted; that is asserted, because it is the whole mechanism and it is one early return deep.
+- Two presses of the transport's slot in quick succession push two entries; two *Close* presses then walk back through both. Nothing collapses them, and nothing about playback notices.
 
 **Manual steps**
-_Written by the build phase — leave empty here._
+
+- Open the view on a phone-width window while a teaching is playing, and press *Close*. The suite proves the two transitions, the element's identity and the absence of a second player; it cannot judge whether an invisible press layer over the slot feels like a target — whether the whole strip reads as pressable rather than only the words on it.
 
 ### 3.2 — The square cover
 
@@ -384,39 +416,61 @@ _Written by the build phase — leave empty here._
 
 **Acceptance criteria**
 
-- [ ] **3.2.1** The view renders the playing teaching's series cover as a square. — verified by `packages/web/tests/integration/now-playing-screen.test.ts`
-- [ ] **3.2.2** The square is cropped from the centre rather than stretched to a square from a non-square source. — verified by `packages/web/tests/integration/now-playing-screen.test.ts`
-- [ ] **3.2.3** The square is labelled with the series it belongs to, because it stands alone. — verified by `packages/web/tests/integration/now-playing-screen.test.ts`
-- [ ] **3.2.4** A playing recording that belongs to no series renders the view with no image element in it. — verified by `packages/web/tests/integration/now-playing-screen.test.ts`
+- [x] **3.2.1** The view renders the playing teaching's series cover as a square. — verified by `packages/web/tests/integration/now-playing-screen.test.ts`
+- [x] **3.2.2** The square is cropped from the centre rather than stretched to a square from a non-square source. — verified by `packages/web/tests/integration/now-playing-screen.test.ts`
+- [x] **3.2.3** The square is labelled with the series it belongs to, because it stands alone. — verified by `packages/web/tests/integration/now-playing-screen.test.ts`
+- [x] **3.2.4** A playing recording that belongs to no series renders the view with no image element in it. — verified by `packages/web/tests/integration/now-playing-screen.test.ts`
 
 **Assumptions**
-_Written by the build phase — leave empty here._
+
+- **The cover is read off the loaded teaching and nothing is fetched for it.** — major, and it is 2.4's decision arriving where it was aimed: `LoadedRecording` has carried `artworkUrl` since the transport's tile, so this view needed no data path of its own. A fetch here would be a second answer to a question the recording payload gave when the teaching was opened, and it would have to be re-asked every time the view was opened.
+- **The square is labelled, like the transport's tile and unlike every other cover in this scope.** — major, user-facing, and scope prd 4.3 read literally: nothing on this view prints the series' name, so a decorative square would leave a screen reader with a page that never says which study is playing.
+- **The square is capped at 26 rem and centred rather than filling the column.** — minor. `pages/player.png` draws it at roughly two thirds of the reading column, and a square any wider stops reading as artwork and starts reading as a background. `aspect-ratio` rather than a height, so it scales with the column instead of being a number that is only right at one width.
+- **The square is asserted through the computed `object-fit`, `object-position` and the rendered box, not through pixels.** — minor. The seeded cover is a key with nothing behind it, so what the suite can state is that the box is square and crops from its centre; that the stored bytes are a real image is scope plan 1.2's property, proved against the real store.
+- **3.2.4 waits for the scripture list to state its own answer before looking for the absent image.** — minor, and it is 2.5's rule being copied as that substep said it should be: an assertion that something is *not* there passes trivially against a page that has not finished loading.
 
 **Edge cases**
-_Written by the build phase — leave empty here._
+
+- A landscape cover is cropped hard to a square here and to 3:1 on the two hero bands, so the same picture keeps a different part of itself on different screens, and nothing on the console previews either. An admin finds out by looking.
+- The cover in the square is whatever it was when the teaching was opened — the same staleness the transport's tile has, one screen further in. A cover replaced from the console mid-listen is not picked up until the teaching is opened again.
+- A grant that expires during a long listen paints a broken square across most of this view, which is far more visible here than the transport's tile because the square is the screen. Scope plan 1.3's third edge case at its worst so far.
+- A teaching in a series that merely has no cover reaches the empty case by a different branch from a teaching in no series — `artworkUrl` is `null` rather than `series` being `null` — and only the second is driven here. The first is covered on the payload in 2.3.1, and both arrive at this component as one `null`.
 
 **Manual steps**
-_Written by the build phase — leave empty here._
+
+- Open the view with a real landscape cover on a phone and on a desktop. The suite proves the square, the crop and the label; it cannot judge whether the centre of a real cover is the part worth keeping when two thirds of its width is discarded.
 
 ### 3.3 — The scripture beneath it
 
 **Delivers:** the playing teaching's published references, with verse text, under the cover.
 **References:** scope prd 3.3.3, 3.3.6; scope tdd 1.7; design-references/pages/player.png
 **Touches:** `packages/web/src/app/(member)/now-playing/now-playing-view.tsx`, `packages/web/src/app/(member)/recordings/[id]/scripture-panel.tsx`, `packages/web/src/app/(member)/recordings/[id]/scripture.module.css`, `packages/web/src/app/api/v1/recordings/[id]/scripture/route.ts` (read — the existing read path, unchanged), `packages/web/tests/integration/now-playing-screen.test.ts`
+_Corrected during the build: `scripture.module.css` was **read and not changed**, and `scripture-panel.tsx` changed only in its docstring. The panel already took a recording id, already read the one route and already stated its empty case, so mounting it on a second screen needed nothing of it — which is the substep's own argument for reusing it rather than writing a second list._
 **Out of scope:** any other tab or panel from the recording page — notes, transcript, summary and mind map stay off this view.
 
 **Acceptance criteria**
 
-- [ ] **3.3.1** The view lists the playing teaching's published scripture references with their full verse text. — verified by `packages/web/tests/integration/now-playing-screen.test.ts`
-- [ ] **3.3.2** The references appear in the order the API answered with, not re-sorted by the view. — verified by `packages/web/tests/integration/now-playing-screen.test.ts`
-- [ ] **3.3.3** A playing teaching with no published references renders the list stated as empty rather than a blank area. — verified by `packages/web/tests/integration/now-playing-screen.test.ts`
-- [ ] **3.3.4** A reference that is drafted and not published does not appear on the view for a member. — verified by `packages/web/tests/integration/now-playing-screen.test.ts`
+- [x] **3.3.1** The view lists the playing teaching's published scripture references with their full verse text. — verified by `packages/web/tests/integration/now-playing-screen.test.ts`
+- [x] **3.3.2** The references appear in the order the API answered with, not re-sorted by the view. — verified by `packages/web/tests/integration/now-playing-screen.test.ts`
+- [x] **3.3.3** A playing teaching with no published references renders the list stated as empty rather than a blank area. — verified by `packages/web/tests/integration/now-playing-screen.test.ts`
+- [x] **3.3.4** A reference that is drafted and not published does not appear on the view for a member. — verified by `packages/web/tests/integration/now-playing-screen.test.ts`
 
 **Assumptions**
-_Written by the build phase — leave empty here._
+
+- **The recording page's `ScripturePanel` is mounted here unchanged, rather than a second list being written.** — major, produces code later steps bind to: it is one component reading one route under one set of rules, so a reference a member sees on this view and one they see on the teaching's page cannot differ — including the empty case, which the panel already stated before this substep existed. Only its docstring changed, to say it is now on two screens.
+- **The panel is imported across route folders, from `recordings/[id]/`.** — minor. It is a component that happens to live beside the page that first needed it, not a route file, and moving it to a shared folder would be a rename touching two screens for no property gained. `series-view.tsx` already imports from `series-listing.tsx` the same way.
+- **The view fetches the scripture rather than reading it off the loaded teaching.** — minor, and the opposite of the cover's decision one substep up, deliberately: the player context carries what the transport needs and nothing else, and putting a passage list on it would mean fetching verses for every teaching a member opens, whether or not this view is ever opened.
+- **3.3.2 is asserted against the API's own answer, asked for from inside the page, rather than against a list written down in the test.** — major, produces code later steps should copy: canon order is the API's decision, taken from the one canon table, and restating the expected order in the suite would prove only that both halves were written by the same hand. The references are seeded out of canon order so the comparison has something to catch.
+- **3.3.4 is driven with a real open draft rather than by deleting rows.** — minor. A drafted citation lives in `review_item` and reaches `scripture_reference` only through an approval, so the honest seed is a draft nobody approved — and the three approved references are asserted still present in the same test, so "it is absent" cannot be true of an empty view.
 
 **Edge cases**
-_Written by the build phase — leave empty here._
+
+- The panel fetches on mount, so opening the view asks for the scripture again even if the member already had the tab open on the recording page. One request per open; nothing is cached between the two screens, and nothing tells the member the two lists are the same list.
+- A scripture fetch that fails leaves its own line inside this view and nothing else — the cover stays, the transport stays, the audio is untouched. That containment is the panel's, inherited rather than re-decided here.
+- A Bible source that is down degrades to citations without their verse text on this view exactly as on the recording page: the citation is the artefact and the passage is the convenience on top of it.
+- This view lists scripture for a teaching whose page might not show a `Scripture` tab at all: the tab is drawn only for a teaching that cites something, while this view always renders the list and states it empty. The two are answering different questions — a strip decides whether to offer a destination, and this view has no strip to leave a gap in.
+- An admin listening to an unpublished teaching sees its references here like anyone else, because the route's one gate is the recording's. Same rule as the cover, one payload along.
 
 **Manual steps**
-_Written by the build phase — leave empty here._
+
+- Open the view on a teaching with several long references and scroll. The suite proves the list, its order and its empty state; it does not judge whether the cards read well under a square cover on a phone, or whether the docked transport crowds the last card.

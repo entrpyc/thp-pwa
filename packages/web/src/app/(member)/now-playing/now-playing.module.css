@@ -1,0 +1,95 @@
+/*
+ * The now-playing view — `pages/player.png`.
+ *
+ * The reference is a column on the page's own background: a large rounded square near the top, then
+ * a panel of scripture cards under it. There is no card around the cover, no chrome over it and no
+ * transport on it — the docked bar of `bottom-navigation/default.png` is what sits at the foot of
+ * this screen, and it is drawn by `transport.module.css` as it is on every other member screen.
+ *
+ * Everything composes from tokens.css, which is the style guide's Quick token block; nothing here
+ * declares a colour, a radius or a spacing value of its own.
+ *
+ * Two extrapolations, each read off a rule in the guide rather than invented:
+ *
+ * 1. **The cover is capped rather than fluid to the column.** The reference draws it at roughly
+ *    two thirds of the reading column and centred, which at the column's 48rem cap is about 26rem —
+ *    a square any wider stops reading as artwork and starts reading as a background.
+ * 2. **The close control is the hero band's back control**, same recipe and same `‹`. It is the
+ *    same gesture on the same surface, and giving it a second appearance would be a second idea of
+ *    what "back" looks like.
+ */
+
+.view {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-5);
+  min-width: 0;
+}
+
+.head {
+  display: flex;
+  align-items: center;
+}
+
+/*
+ * `pages/player.png` prints no page title. The heading is here for a screen reader and painted
+ * nowhere — the same unpainted `h1` `screens.module.css` gives the dashboard, repeated rather than
+ * shared because the two stylesheets have no other rule in common and importing one into the other
+ * would couple two surfaces for four lines.
+ */
+.hiddenTitle {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  margin: 0;
+  padding: 0;
+  overflow: hidden;
+  clip-path: inset(50%);
+  white-space: nowrap;
+}
+
+/* The hero band's back control, unchanged: the guide's outlined circle at a thumb's size. */
+.close {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  min-width: calc(var(--space-8) + var(--space-3));
+  min-height: calc(var(--space-8) + var(--space-3));
+  background: var(--color-surface);
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-pill);
+  color: var(--color-text-muted);
+  font-family: inherit;
+  font-size: var(--fs-card-title);
+  cursor: pointer;
+}
+
+.close:hover {
+  color: var(--color-text);
+  border-color: var(--color-border-strong);
+}
+
+/*
+ * The square of `pages/player.png` (scope prd 3.3.2).
+ *
+ * `aspect-ratio: 1 / 1` rather than a height, so the square scales with the column instead of being
+ * a number that is only right at one width — and `object-fit: cover` with the default centre origin
+ * crops whatever shape was uploaded into it. `fill`, the default, would stretch a landscape cover
+ * into a square, which is what scope prd 3.3.2 rules out in as many words.
+ */
+.cover {
+  display: block;
+  width: 100%;
+  max-width: 26rem;
+  margin: 0 auto;
+  aspect-ratio: 1 / 1;
+  object-fit: cover;
+  border-radius: var(--radius-md);
+}
+
+/* The one line this view says for itself, in the tone every other quiet line in the product takes. */
+.quiet {
+  margin: 0;
+  font-size: var(--fs-body);
+  color: var(--color-text-dim);
+}

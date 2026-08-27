@@ -72,6 +72,10 @@ describe('no component declares what a token already covers', () => {
     // Story 6's one new stylesheet. Named for the same reason every other one is: "no violations"
     // must not be able to mean "this file was never read".
     expect(sheets).toContain('app/admin/series/series.module.css');
+    // The artwork scope's one new stylesheet — the now-playing view of `pages/player.png` (scope
+    // plan 3.1). Named for the same reason every other one is: "no violations" must not be able to
+    // mean "this file was never read".
+    expect(sheets).toContain('app/(member)/now-playing/now-playing.module.css');
 
     // And the token file really is the one exception — scanned like any other when not excluded.
     const seeded = checkStyleTokens(WEB_SRC, resolve(WEB_SRC, 'nothing.css'));

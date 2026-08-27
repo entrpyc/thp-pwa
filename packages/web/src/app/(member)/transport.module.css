@@ -49,6 +49,44 @@
 }
 
 /*
+ * The left slot — the tile and the title together, and **the press that opens the now-playing
+ * view** (scope prd 3.3.1).
+ *
+ * It takes the flex behaviour the title alone used to have, so the bar's layout is unchanged by
+ * having become a link: the slot is what grows and shrinks against the controls, and the tile
+ * inside it stays a fixed square. `min-width: 0` on both is what lets the title's ellipsis still
+ * work inside a flex child of a flex child.
+ *
+ * No underline and no colour change: the reference draws a thumbnail and a title, not a link, and
+ * the whole slot is already the target — the hover lift is the tile and the text brightening
+ * together rather than a rule that only reads on the words.
+ */
+.slot {
+  position: relative;
+  flex: 1 1 12rem;
+  min-width: 0;
+  display: flex;
+  align-items: center;
+  gap: var(--space-3);
+}
+
+/*
+ * The press that opens the now-playing view — a layer over the whole slot rather than a wrapper
+ * around it, for the reason `transport-bar.tsx` gives: the tile and the title keep their own place
+ * in what a screen reader reads, and the link carries a name of its own instead of borrowing
+ * theirs. It draws nothing; the hover below is the only thing that says it is there.
+ */
+.slotPress {
+  position: absolute;
+  inset: 0;
+  border-radius: var(--radius-sm);
+}
+
+.slot:hover .nowPlaying {
+  color: var(--color-text);
+}
+
+/*
  * `bottom-navigation/default.png`'s thumbnail, at the left of the bar (scope prd 3.2.4). Square,
  * because the reference draws it square and the slot is beside a single line of text — the one
  * cover in this scope that is not a landscape frame. `object-fit: cover` crops whatever shape was
@@ -72,7 +110,7 @@
  */
 .nowPlaying {
   margin: 0;
-  flex: 1 1 8rem;
+  flex: 1 1 auto;
   min-width: 0;
   color: var(--color-primary-strong);
   font-size: var(--fs-meta);
