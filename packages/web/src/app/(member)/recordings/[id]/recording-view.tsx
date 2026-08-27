@@ -26,8 +26,10 @@ type OpenTab = 'scripture' | 'notes' | 'transcript' | null;
  *
  * The reference, read against what this epic has:
  *
- * - **The hero artwork becomes a flat `--color-bg-deep` band** carrying the back control. Artwork is
- *   deferred, and the band keeps the slot so a picture drops into it later without moving anything.
+ * - **The hero band is the cover of the series this teaching is in**, full-bleed and 3:1 as
+ *   `pages/chapter.png` draws it, with the back control over it (scope prd 3.2.3, 3.2.7). The
+ *   cover is the *series'* — a recording has none of its own — so every teaching in one study
+ *   shows the same picture, and a teaching in no series keeps the flat band (scope prd 3.2.6).
  * - **A tab strip holding three tabs.** The reference draws five — `Chapter`, `Scripture`, `Notes`,
  *   `Transcript`, `Mindmap` — and only those three have data. `Chapter` and `Mindmap` are dropped
  *   rather than rendered disabled, which is the line the whole member surface draws for a deferred
@@ -95,7 +97,17 @@ export function RecordingScreen({
       if (!live) return;
       setRecording(payload.recording);
       setFailure(null);
-      open({ id: payload.recording.id, title: payload.recording.title }, progress.positionMs);
+      open(
+        {
+          id: payload.recording.id,
+          title: payload.recording.title,
+          // The transport's tile is the series' cover, handed over with the teaching rather than
+          // fetched by the bar — this is the one place that knows both (scope prd 3.2.4).
+          artworkUrl: payload.recording.series?.artworkUrl ?? null,
+          seriesTitle: payload.recording.series?.title ?? null,
+        },
+        progress.positionMs,
+      );
     }
 
     void load().catch((caught: unknown) => {
@@ -128,9 +140,26 @@ export function RecordingScreen({
 
   const isCurrent = player.loaded?.id === recordingId;
 
+  /**
+   * The band holds the back control and is drawn before the teaching arrives, so the cover is read
+   * defensively here rather than inside the branch that renders the loaded page.
+   */
+  const cover = recording?.series?.artworkUrl ?? null;
+
   return (
     <>
-      <div className={styles.hero}>
+      <div className={`${styles.hero}${cover === null ? '' : ` ${styles.heroCovered}`}`}>
+        {/*
+          The cover of the *series* this teaching is in — a recording has none of its own (scope
+          prd 3.2.3). A teaching in no series has no ref to read one from, which is 3.2.6's case
+          here and is ordinary rather than degraded.
+        */}
+        {cover === null ? null : (
+          <>
+            <img className={styles.heroArt} src={cover} alt="" />
+            <span className={styles.heroFade} aria-hidden="true" />
+          </>
+        )}
         <Link className={styles.back} href={MEMBER_LIBRARY_PAGE_PATH} aria-label="Back to recordings">
           <span aria-hidden="true">‹</span>
         </Link>

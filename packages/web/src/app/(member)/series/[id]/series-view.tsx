@@ -20,9 +20,10 @@ import styles from '../../screens.module.css';
  * The reference draws a screen this epic has almost none of, and every absence is a deferral with
  * a named home rather than an omission:
  *
- * - **The hero artwork becomes a flat `--color-bg-deep` band** carrying the back control, exactly
- *   as the recording page's did. [3.3.3](docs/project/prd.md) is deferred and the band keeps the
- *   slot, so a cover drops into it later without moving anything below it.
+ * - **The hero band is the series' cover**, full-bleed and 3:1 as the reference draws it, fading
+ *   into the page at its foot and carrying the back control over it (scope prd 3.2.2, 3.2.7). A
+ *   series with no cover keeps the flat `--color-bg-deep` strip the band was before covers
+ *   arrived — nothing is drawn for artwork that does not exist (scope prd 3.2.6).
  * - **No tab strip.** The reference draws five tabs — `Recordings`, `Scripture`, `Notes`,
  *   `Transcript`, `Mindmap` — and only the first has anything behind it here. A series page has one
  *   thing to show and needs no strip to show it, so the strip is dropped whole rather than rendered
@@ -62,6 +63,13 @@ export function SeriesScreen({ seriesId }: { seriesId: string }) {
 
   useBreadcrumbTrail(payload?.series.title ?? null);
 
+  /**
+   * The band is drawn before the payload arrives — it holds the back control, which has to be
+   * pressable while the series is still loading — so the cover is read defensively here rather
+   * than inside the branch that renders the rest of the screen.
+   */
+  const cover = payload?.series.artworkUrl ?? null;
+
   useEffect(() => {
     let live = true;
 
@@ -88,7 +96,20 @@ export function SeriesScreen({ seriesId }: { seriesId: string }) {
 
   return (
     <>
-      <div className={styles.hero}>
+      <div
+        className={`${styles.hero}${cover === null ? '' : ` ${styles.heroCovered}`}`}
+      >
+        {/*
+          The cover behind the back control, and nothing at all when there is none (scope prd
+          3.2.6). No alternative text: the series title is the `h1` immediately below it, and 4.3
+          rules out saying it twice.
+        */}
+        {cover === null ? null : (
+          <>
+            <img className={styles.heroArt} src={cover} alt="" />
+            <span className={styles.heroFade} aria-hidden="true" />
+          </>
+        )}
         <Link className={styles.back} href={MEMBER_SERIES_PAGE_PATH} aria-label="Back to series">
           <span aria-hidden="true">‹</span>
         </Link>

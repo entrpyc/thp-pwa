@@ -229,12 +229,25 @@ export interface CreateRecordingRequest {
  * The series a recording belongs to, as it travels **on the recording itself** (Story 6).
  *
  * Declared here rather than in `series.ts` because it is a field of {@link RecordingView} and
- * `series.ts` already reads this file for its paths — one direction, no cycle. Two fields and no
+ * `series.ts` already reads this file for its paths — one direction, no cycle. Three fields and no
  * more: everything else about a series is what opening the series page is for.
  */
 export interface RecordingSeriesRef {
   readonly id: string;
   readonly title: string;
+  /**
+   * The cover of the series this recording is in, signed for this response, or `null` when the
+   * series has none (scope prd 3.2.3, scope tdd 1.4).
+   *
+   * **On the ref rather than on the recording**, because that is what it is: a recording has no
+   * artwork of its own and never will in this scope — what its page and the transport show is the
+   * cover of the study it belongs to. A recording in no series has no `series` at all, which is
+   * why there is no separate "no cover" state to represent here.
+   *
+   * A URL and never a key, minted per response by `mintArtworkGrant`, exactly as `SeriesView`
+   * carries it (scope prd 4.2).
+   */
+  readonly artworkUrl: string | null;
 }
 
 /**

@@ -59,12 +59,21 @@ rather than standing on its own. Drawn: `docs/scope/diagram.svg`.
   3.2.15's "a second view of one session rather than a second player" true in the code and not only
   in the sentence. (refines project tdd 2.1, 5.1)
 
-- **1.8 The empty state is the current rendering, kept rather than replaced.** The listing already
-  drops the thumbnail and both hero bands are already the flat `--color-bg-deep` band; the seams are
-  named in `series-listing.tsx`, `series-view.tsx`, `recording-view.tsx` and `transport.module.css`
-  as artwork being deferred. This scope fills those four seams and changes nothing about what
-  happens when there is no cover, so scope prd 3.2.6 needs no new branch anywhere — the branch is
-  what is already there. (refines project tdd 2.1)
+- **1.8 The empty state shows nothing rather than an empty frame — and on the hero bands it is a
+  new rendering, not the current one.** The listing already drops the thumbnail and the transport
+  already carries a title; the seams are named in `series-listing.tsx`, `series-view.tsx`,
+  `recording-view.tsx` and `transport.module.css` as artwork being deferred, and this scope fills
+  all four. On those two surfaces nothing about the coverless case changes.
+
+  **The two hero bands are the exception, decided during the build of scope plan 2.2–2.3.** The
+  band was a bordered, rounded card 96 px tall, and a cover cropped into it came out a ~7:1 slice
+  of its own middle — nothing `pages/series-inner.png` or `pages/chapter.png` draws. The operator
+  chose the references' rendering over the smaller change: **the band is full-bleed, borderless and
+  square-cornered, 3:1 with a cover behind it and fading into the page at its foot.** Coverless, it
+  stays flat `--color-bg-deep` and stays a slim strip at the height it already had — so what
+  changes when there is no cover is the band's frame, not its content. Still no second branch and
+  still no empty frame, which is what scope prd 3.2.6 is actually about; the sentence there saying
+  the bands stay as they are today was rewritten in the same run. (refines project tdd 2.1)
 
 ## 2. Data
 

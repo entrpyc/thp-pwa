@@ -69,6 +69,19 @@ import { shouldWriteProgress, type ProgressEventKind } from '@/client/playback/c
 export interface LoadedRecording {
   readonly id: string;
   readonly title: string;
+  /**
+   * The cover of the series this teaching is in, for the transport's tile (scope prd 3.2.4), or
+   * `null` when there is none to show — no series, or a series with no cover.
+   *
+   * **Carried on the loaded teaching rather than fetched by the bar.** The transport is mounted in
+   * the member layout and never remounts, so a fetch of its own would be a second answer to a
+   * question the recording payload has already answered — and it would have to be re-asked on every
+   * navigation the bar survives. What `open` is handed is what the slot shows until it is opened
+   * again.
+   */
+  readonly artworkUrl: string | null;
+  /** The series' title, which is what labels the tile — it stands alone (scope prd 4.3). */
+  readonly seriesTitle: string | null;
 }
 
 /**

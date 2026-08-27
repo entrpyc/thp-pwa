@@ -49,8 +49,26 @@
 }
 
 /*
- * The reference's left slot is a thumbnail; artwork is deferred, so the slot carries what a member
- * actually needs — which teaching is playing.
+ * `bottom-navigation/default.png`'s thumbnail, at the left of the bar (scope prd 3.2.4). Square,
+ * because the reference draws it square and the slot is beside a single line of text — the one
+ * cover in this scope that is not a landscape frame. `object-fit: cover` crops whatever shape was
+ * uploaded into it from the centre rather than stretching it.
+ *
+ * **Nothing is declared here for the coverless case.** The tile is absent from the markup rather
+ * than emptied by a rule, and the title beside it simply takes the space (scope prd 3.2.6).
+ */
+.tile {
+  flex: none;
+  width: calc(var(--space-8) + var(--space-3));
+  height: calc(var(--space-8) + var(--space-3));
+  object-fit: cover;
+  border-radius: var(--radius-sm);
+}
+
+/*
+ * The title beside the tile — and the whole of the slot when there is no cover to draw. It is what
+ * a member actually needs to know is playing, which is why it survived the thumbnail's arrival
+ * rather than being replaced by it.
  */
 .nowPlaying {
   margin: 0;

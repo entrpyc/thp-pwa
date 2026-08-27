@@ -513,4 +513,22 @@ describe('setting a cover from the console', () => {
       await page.context().close();
     }
   }, 180_000);
+
+  it('renders a series with no cover with no image element on its row at all', async () => {
+    // scope plan 2.5.5, and scope prd 3.2.6 on the one surface that is not a member's. Absent from
+    // the DOM rather than an empty frame — the same line every other surface in this scope draws,
+    // and here it is also what makes "Add cover" rather than "Replace cover" the honest label.
+    const page = await openPanel();
+    try {
+      const title = `Coverless console row ${RUN}`;
+      await createThrough(page, title);
+
+      // The row exists — this is a dropped thumbnail, not a row that failed to render.
+      await expect.poll(() => rowFor(page, title).count(), { timeout: 60_000 }).toBe(1);
+      expect(await rowFor(page, title).locator('img').count()).toBe(0);
+      expect(await rowFor(page, title).textContent()).toContain('Add cover');
+    } finally {
+      await page.context().close();
+    }
+  }, 180_000);
 });

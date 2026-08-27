@@ -14,9 +14,12 @@ import {
 import {
   createDatabase,
   insertRecording,
+  insertSeries,
   publishSummary,
   setRecordingDescription,
   setRecordingPublication,
+  setRecordingSeries,
+  setSeriesArtwork,
   setSummaryPublication,
   type DatabaseHandle,
 } from '@thp/db';
@@ -61,6 +64,13 @@ let olderId: string;
 let newerId: string;
 let hiddenId: string;
 let noSummaryId: string;
+/** A teaching in a series that has a cover, and one in a series that has none (scope plan 2.3.1). */
+let coveredId: string;
+let uncoveredSeriesRecordingId: string;
+
+const COVERED_TITLE = `Library covered ${RUN}`;
+const UNCOVERED_SERIES_TITLE = `Library uncovered series teaching ${RUN}`;
+const COVER_KEY = `artwork/${RUN}-member-library.webp`;
 
 async function newRecording(title: string, recordedAt: string): Promise<string> {
   seeded += 1;
@@ -106,6 +116,20 @@ beforeAll(async () => {
   await setRecordingPublication(olderId, new Date(), handle);
   await setRecordingPublication(newerId, new Date(), handle);
   await setRecordingPublication(noSummaryId, new Date(), handle);
+
+  // One series with a cover and one without, so "carries the URL" and "carries `null`" are two
+  // rows of the same payload rather than two runs of the suite.
+  const coveredSeries = await insertSeries({ title: `Library covered series ${RUN}`, description: null }, handle);
+  await setSeriesArtwork(coveredSeries.id, COVER_KEY, handle);
+  const bareSeries = await insertSeries({ title: `Library bare series ${RUN}`, description: null }, handle);
+
+  coveredId = await newRecording(COVERED_TITLE, '2026-05-05');
+  await setRecordingSeries(coveredId, coveredSeries.id, handle);
+  await setRecordingPublication(coveredId, new Date(), handle);
+
+  uncoveredSeriesRecordingId = await newRecording(UNCOVERED_SERIES_TITLE, '2026-05-06');
+  await setRecordingSeries(uncoveredSeriesRecordingId, bareSeries.id, handle);
+  await setRecordingPublication(uncoveredSeriesRecordingId, new Date(), handle);
 }, 180_000);
 
 afterAll(async () => {
@@ -121,8 +145,16 @@ describe('a member sees every published teaching, newest recorded first', () => 
     expect(status).toBe(200);
 
     // The order is the query's. A client that re-sorted would be a second answer to "what is most
-    // recent", and this asserts there is only one.
-    expect(ours(body)).toEqual([NEWER_TITLE, OLDER_TITLE, NO_SUMMARY_TITLE]);
+    // recent", and this asserts there is only one. Still the exact list rather than a subset —
+    // the two series rows this run seeds for the cover assertions below are in it by date, which
+    // is the whole claim, and a `toContain` here would stop catching a row that went missing.
+    expect(ours(body)).toEqual([
+      NEWER_TITLE, // 2026-07-14
+      UNCOVERED_SERIES_TITLE, // 2026-05-06
+      COVERED_TITLE, // 2026-05-05
+      OLDER_TITLE, // 2026-03-01
+      NO_SUMMARY_TITLE, // 2026-02-02
+    ]);
     expect(titles(body)).not.toContain(HIDDEN_TITLE);
   });
 
@@ -220,6 +252,65 @@ describe('the member surface shows published rows only, whatever the caller`s ro
     );
     expect(seen?.originalMediaKey).toContain('originals/');
     expect(seen?.createdAt).toBeTruthy();
+  });
+});
+
+/**
+ * **The cover rides on the recording's series ref** (scope plan 2.3.1; scope prd 3.2.3, 4.2).
+ *
+ * A recording has no artwork of its own and never will in this scope — what its page and the
+ * transport show is the cover of the study it belongs to, which is why the URL is a field of
+ * `series` rather than of the recording. And it is a URL: the key never leaves the process.
+ */
+describe('a recording carries its series` cover, and never the key', () => {
+  it('answers a signed URL for a teaching whose series has a cover', async () => {
+    const { status, body } = await get<RecordingPayload>(
+      `${baseUrl}${API_PREFIX}${recordingPath(coveredId)}`,
+      memberCookie,
+    );
+    expect(status).toBe(200);
+    expect(body.recording.series).not.toBeNull();
+
+    const url = body.recording.series?.artworkUrl ?? '';
+    expect(url).toContain('X-Amz-Signature');
+    expect(url.startsWith('http://') || url.startsWith('https://')).toBe(true);
+  });
+
+  it('answers null for a teaching whose series has no cover, and for one in no series', async () => {
+    const inBareSeries = await get<RecordingPayload>(
+      `${baseUrl}${API_PREFIX}${recordingPath(uncoveredSeriesRecordingId)}`,
+      memberCookie,
+    );
+    expect(inBareSeries.body.recording.series).not.toBeNull();
+    expect(inBareSeries.body.recording.series?.artworkUrl).toBeNull();
+
+    // A teaching in no series has no ref at all — there is no second "no cover" state to represent.
+    const loose = await get<RecordingPayload>(
+      `${baseUrl}${API_PREFIX}${recordingPath(olderId)}`,
+      memberCookie,
+    );
+    expect(loose.body.recording.series).toBeNull();
+  });
+
+  it('carries the cover on the member list too, and no payload carries the object key', async () => {
+    const { body } = await get<RecordingListPayload>(MEMBER_LIST_URL, memberCookie);
+    const row = body.recordings.find((one) => one.title === COVERED_TITLE);
+    expect(row?.series?.artworkUrl ?? '').toContain('X-Amz-Signature');
+
+    // The signed URL necessarily has the key in its *path*; what must never appear is a payload
+    // field carrying the bare key (scope prd 4.2). Stripping the URLs is what makes that testable.
+    const withoutUrls = JSON.stringify(body).split(/"artworkUrl":"[^"]*"/).join('');
+    expect(withoutUrls).not.toContain(COVER_KEY);
+    expect(withoutUrls).not.toContain('artworkKey');
+    expect(withoutUrls).not.toContain('seriesArtworkKey');
+  });
+
+  it('carries it on the console`s reading of the same teaching', async () => {
+    // `describeForOperator` spreads the member view, so the console gets the cover for free — and
+    // the assertion is here so that stops being an accident nobody would notice breaking.
+    const { body } = await get<AdminRecordingListPayload>(LIST_URL, adminCookie);
+    const row = body.recordings.find((one) => one.title === COVERED_TITLE);
+    expect(row?.series?.artworkUrl ?? '').toContain('X-Amz-Signature');
   });
 });
 

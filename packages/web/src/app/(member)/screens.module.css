@@ -317,18 +317,74 @@
 /* ---------------------------------------------------------------------------- the recording page */
 
 /*
- * `pages/recording.png`'s hero, with the photograph removed. A flat band in the guide's alt page
- * base, holding the back control where the reference holds it — so artwork drops into the same slot
- * when [§3.3](docs/project/prd.md)'s covers arrive.
+ * `pages/series-inner.png`'s and `pages/chapter.png`'s hero — **full-bleed** (scope prd 3.2.7).
+ *
+ * Both references draw the cover running to the edges of the reading column with no border and no
+ * corner, so the band breaks out of the shell's horizontal padding with a negative margin. On a
+ * phone, where the column is narrower than its 48rem cap, that is genuinely edge to edge; on a
+ * desktop it is the column's full width, flush with the cards below it. Spanning the whole viewport
+ * instead would put a 1440px band over a 768px column, which is nothing either reference draws.
+ *
+ * `position: relative` and `overflow: hidden` are what let the cover sit behind the back control
+ * and be clipped by the band rather than sized by its own proportions.
+ *
+ * **Coverless it is the flat band it always was**, at the height it always was — `--color-bg-deep`
+ * holding the back control, a slim strip rather than a tall empty rectangle (scope prd 3.2.6).
  */
 .hero {
+  position: relative;
+  overflow: hidden;
   display: flex;
   align-items: flex-start;
   min-height: calc(var(--space-8) * 3);
   background: var(--color-bg-deep);
-  border: 1px solid var(--color-border);
-  border-radius: var(--radius-lg);
   padding: var(--space-4);
+  margin-left: calc(var(--space-4) * -1);
+  margin-right: calc(var(--space-4) * -1);
+}
+
+/*
+ * With a cover the band takes the references' proportion rather than the strip's height. 3:1 is
+ * what both mockups draw, and it is set as an aspect ratio so the band scales with the column
+ * instead of being a number that is only right at one width.
+ */
+.heroCovered {
+  aspect-ratio: 3 / 1;
+}
+
+/*
+ * The cover itself, behind everything else in the band. `object-fit: cover` with the default centre
+ * origin crops whatever shape was uploaded to the band; `fill` — the default — would stretch it,
+ * which is exactly what scope prd 3.2.1's sibling rule for the hero rules out.
+ */
+.heroArt {
+  position: absolute;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+}
+
+/*
+ * The foot of the band fading into the page, as both references draw it — it is what stops the
+ * title below reading as though it were sitting on a hard photographic edge. Decorative and
+ * `aria-hidden`; it covers the image and is itself covered by the back control's stacking context.
+ */
+.heroFade {
+  position: absolute;
+  right: 0;
+  bottom: 0;
+  left: 0;
+  height: 50%;
+  background: linear-gradient(to bottom, transparent, var(--color-bg));
+}
+
+/*
+ * Above the artwork and the fade, so the press lands on the link rather than on the picture. Both
+ * hero screens assert this by clicking it with a cover behind it.
+ */
+.hero > .back {
+  position: relative;
 }
 
 .back {

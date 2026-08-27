@@ -73,6 +73,9 @@ let seriesId: string;
 let coveredSeriesId: string;
 let firstId: string;
 let looseId: string;
+/** Two teachings in the *same* covered series — 2.3.3 is that they show one cover, not two. */
+let coveredRecordingId: string;
+let siblingRecordingId: string;
 let seeded = 0;
 
 async function newRecording(
@@ -103,6 +106,27 @@ async function signInAs(
   await page.getByRole('button', { name: 'Sign in' }).click();
   await page.waitForURL(`${baseUrl}${DASHBOARD_PAGE_PATH}`, { timeout: 30_000 });
   return page;
+}
+
+/**
+ * The hero band, located as the parent of the back control it holds.
+ *
+ * By its contents rather than by a class, because the class is a CSS-module hash and asserting
+ * against one would be asserting against the bundler. The back control is in the band on both
+ * screens and in both the covered and coverless cases, which is exactly what makes it the handle.
+ */
+function heroBand(page: Page, backLabel: string): Locator {
+  return page.getByLabel(backLabel).locator('..');
+}
+
+/**
+ * The key out of a signed URL — its path, with the query dropped.
+ *
+ * Two responses signing the same object produce two different signatures, so comparing whole URLs
+ * would compare the HMACs. What 2.3.3 is about is that both pages point at **one object**.
+ */
+function signedObject(url: string): string {
+  return new URL(url).pathname;
 }
 
 /** One listing row, by the title it carries. */
@@ -145,7 +169,13 @@ beforeAll(async () => {
   firstId = await newRecording(FIRST_TITLE, '2026-01-12', seriesId, true);
   await newRecording(HIDDEN_TITLE, '2026-03-30', seriesId, false);
   await newRecording(`Screen unpublished only ${RUN}`, '2026-03-31', hiddenSeriesId, false);
-  await newRecording(`Screen covered ${RUN}`, '2026-04-02', coveredSeriesId, true);
+  coveredRecordingId = await newRecording(`Screen covered ${RUN}`, '2026-04-02', coveredSeriesId, true);
+  siblingRecordingId = await newRecording(
+    `Screen covered sibling ${RUN}`,
+    '2026-04-09',
+    coveredSeriesId,
+    true,
+  );
   looseId = await newRecording(LOOSE_TITLE, '2026-07-07', null, true);
 
   await setRecordingDescription(firstId, 'An introduction to the letter.', handle);
@@ -373,6 +403,206 @@ describe('one series at /series/[id]', () => {
       await expect.poll(() => back.count(), { timeout: 30_000 }).toBe(1);
       await back.click();
       await page.waitForURL(`${baseUrl}${MEMBER_SERIES_PAGE_PATH}`, { timeout: 30_000 });
+    } finally {
+      await page.context().close();
+    }
+  }, 120_000);
+});
+
+/**
+ * **The cover on the two hero bands** (scope plan 2.2, 2.3) — `pages/series-inner.png` and
+ * `pages/chapter.png`.
+ *
+ * Every assertion here waits for something that is on the page in **both** the covered and the
+ * coverless case — the title, the back control — and then asserts the artwork synchronously. A
+ * poll on the artwork itself would be a poll whose expected outcome is absence half the time, and
+ * would be paid for in full at its timeout every time it is right.
+ */
+describe('the hero band carries the series` cover', () => {
+  it('renders the cover as the band at the top of a series page', async () => {
+    const page = await signInAs(member);
+    try {
+      await page.goto(`${baseUrl}${seriesPagePath(coveredSeriesId)}`, {
+        waitUntil: 'domcontentloaded',
+      });
+      await expect
+        .poll(() => page.getByRole('heading', { level: 1, name: COVERED_SERIES_TITLE }).count(), {
+          timeout: 30_000,
+        })
+        .toBe(1);
+
+      const art = heroBand(page, 'Back to series').locator('img');
+      expect(await art.count()).toBe(1);
+      expect(await art.getAttribute('src')).toContain(COVER_KEY);
+      // Decorative: the series title is an `h1` on the same screen (scope prd 4.3).
+      expect(await art.getAttribute('alt')).toBe('');
+    } finally {
+      await page.context().close();
+    }
+  }, 120_000);
+
+  it('leaves the back control clickable with the artwork behind it', async () => {
+    const page = await signInAs(member);
+    try {
+      await page.goto(`${baseUrl}${seriesPagePath(coveredSeriesId)}`, {
+        waitUntil: 'domcontentloaded',
+      });
+      // The title, not the back control: the control is in the band before the payload lands, so
+      // waiting on it would be waiting for a state in which the cover is legitimately not there
+      // yet. The heading is what says the series has actually arrived.
+      await expect
+        .poll(() => page.getByRole('heading', { level: 1, name: COVERED_SERIES_TITLE }).count(), {
+          timeout: 30_000,
+        })
+        .toBe(1);
+      const back = page.getByRole('link', { name: 'Back to series' });
+      expect(await back.count()).toBe(1);
+
+      // The artwork is behind it, so this press is the whole assertion: a cover painted over the
+      // control would swallow the click and the URL would never change.
+      expect(await heroBand(page, 'Back to series').locator('img').count()).toBe(1);
+      await back.click();
+      await page.waitForURL(`${baseUrl}${MEMBER_SERIES_PAGE_PATH}`, { timeout: 30_000 });
+    } finally {
+      await page.context().close();
+    }
+  }, 120_000);
+
+  it('crops the artwork to the band from the centre rather than stretching it', async () => {
+    const page = await signInAs(member);
+    try {
+      await page.goto(`${baseUrl}${seriesPagePath(coveredSeriesId)}`, {
+        waitUntil: 'domcontentloaded',
+      });
+      await expect
+        .poll(() => page.getByRole('heading', { level: 1, name: COVERED_SERIES_TITLE }).count(), {
+          timeout: 30_000,
+        })
+        .toBe(1);
+
+      const art = heroBand(page, 'Back to series').locator('img');
+      expect(await art.count()).toBe(1);
+      expect(await art.evaluate((node) => getComputedStyle(node).objectFit)).toBe('cover');
+      expect(await art.evaluate((node) => getComputedStyle(node).objectPosition)).toBe('50% 50%');
+
+      // The band's own proportions, not the image's: wide, and the full width of the band.
+      const box = await art.boundingBox();
+      const band = await heroBand(page, 'Back to series').boundingBox();
+      expect(box).not.toBeNull();
+      expect(band).not.toBeNull();
+      const art_ = box as { width: number; height: number };
+      expect(art_.width).toBeGreaterThan(art_.height);
+      expect(art_.width).toBeCloseTo((band as { width: number }).width, 0);
+    } finally {
+      await page.context().close();
+    }
+  }, 120_000);
+
+  it('carries the series` cover on a recording page in that series', async () => {
+    const page = await signInAs(member);
+    try {
+      await page.goto(`${baseUrl}${recordingPagePath(coveredRecordingId)}`, {
+        waitUntil: 'domcontentloaded',
+      });
+      const back = page.getByRole('link', { name: 'Back to recordings' });
+      await expect.poll(() => back.count(), { timeout: 30_000 }).toBe(1);
+      await expect
+        .poll(() => page.getByRole('heading', { level: 1 }).count(), { timeout: 30_000 })
+        .toBeGreaterThan(0);
+
+      const art = heroBand(page, 'Back to recordings').locator('img');
+      expect(await art.count()).toBe(1);
+      expect(await art.getAttribute('src')).toContain(COVER_KEY);
+    } finally {
+      await page.context().close();
+    }
+  }, 120_000);
+
+  it('shows the same cover on two teachings in the same series, because it is the series`', async () => {
+    const page = await signInAs(member);
+    try {
+      const coverOn = async (recordingId: string): Promise<string> => {
+        await page.goto(`${baseUrl}${recordingPagePath(recordingId)}`, {
+          waitUntil: 'domcontentloaded',
+        });
+        const back = page.getByRole('link', { name: 'Back to recordings' });
+        await expect.poll(() => back.count(), { timeout: 30_000 }).toBe(1);
+        const art = heroBand(page, 'Back to recordings').locator('img');
+        await expect.poll(() => art.count(), { timeout: 30_000 }).toBe(1);
+        return signedObject((await art.getAttribute('src')) ?? '');
+      };
+
+      // Same object, not merely two URLs that both work: the signatures differ per response.
+      expect(await coverOn(coveredRecordingId)).toBe(await coverOn(siblingRecordingId));
+    } finally {
+      await page.context().close();
+    }
+  }, 180_000);
+});
+
+/**
+ * **No cover, and nothing drawn for one** (scope plan 2.5; scope prd 3.2.6).
+ *
+ * The claim is *absence from the DOM*, which is the line the whole member surface draws — an empty
+ * frame reserved for a picture that does not exist is the thing this rules out, and a rule that
+ * merely hides it would still be reserving the box.
+ */
+describe('a series with no cover shows nothing rather than an empty frame', () => {
+  it('drops the thumbnail from its listing row', async () => {
+    const page = await signInAs(member);
+    try {
+      await page.goto(`${baseUrl}${MEMBER_SERIES_PAGE_PATH}`, { waitUntil: 'domcontentloaded' });
+      await expect
+        .poll(() => rowFor(page, SERIES_TITLE).count(), { timeout: 30_000 })
+        .toBe(1);
+
+      expect(await rowFor(page, SERIES_TITLE).locator('img').count()).toBe(0);
+      // And the row is otherwise whole — this is a dropped thumbnail, not a broken row.
+      expect(await rowFor(page, SERIES_TITLE).textContent()).toContain('3 recordings');
+    } finally {
+      await page.context().close();
+    }
+  }, 120_000);
+
+  it('keeps the flat band on its page, holding the back control and no image', async () => {
+    const page = await signInAs(member);
+    try {
+      await page.goto(`${baseUrl}${seriesPagePath(seriesId)}`, { waitUntil: 'domcontentloaded' });
+      await expect
+        .poll(() => page.getByRole('heading', { level: 1, name: SERIES_TITLE }).count(), {
+          timeout: 30_000,
+        })
+        .toBe(1);
+
+      // The band is still there — located by the control it holds — and holds nothing else.
+      const band = heroBand(page, 'Back to series');
+      expect(await band.count()).toBe(1);
+      expect(await band.locator('img').count()).toBe(0);
+      const box = await band.boundingBox();
+      expect((box as { height: number }).height).toBeGreaterThan(0);
+    } finally {
+      await page.context().close();
+    }
+  }, 120_000);
+
+  it('keeps the flat band on a teaching that belongs to no series', async () => {
+    const page = await signInAs(member);
+    try {
+      await page.goto(`${baseUrl}${recordingPagePath(looseId)}`, { waitUntil: 'domcontentloaded' });
+      // The heading rather than the back control: this asserts an *absence*, so it has to wait for
+      // the state in which a cover would have arrived — otherwise it passes on a page that has not
+      // loaded yet and would pass however the band were written.
+      await expect
+        .poll(() => page.getByRole('heading', { level: 1, name: LOOSE_TITLE }).count(), {
+          timeout: 30_000,
+        })
+        .toBe(1);
+
+      // No series at all, so no cover to inherit — the ordinary case, not a degraded one.
+      const band = heroBand(page, 'Back to recordings');
+      expect(await band.locator('img').count()).toBe(0);
+      const box = await band.boundingBox();
+      expect((box as { height: number }).height).toBeGreaterThan(0);
     } finally {
       await page.context().close();
     }

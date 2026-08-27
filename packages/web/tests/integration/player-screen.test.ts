@@ -12,7 +12,10 @@ import {
 import {
   createDatabase,
   insertRecording,
+  insertSeries,
   setRecordingPublication,
+  setRecordingSeries,
+  setSeriesArtwork,
   type DatabaseHandle,
 } from '@thp/db';
 import { closeTestDatabase, createAccount, type TestAccount } from '../support/accounts';
@@ -50,6 +53,12 @@ let secondId: string;
 
 const TITLE = `Player teaching ${RUN}`;
 const SECOND_TITLE = `Player second ${RUN}`;
+
+/** A teaching in a covered series, for the transport's tile (scope plan 2.4). */
+let coveredId: string;
+let coveredSeriesTitle: string;
+const COVERED_TITLE = `Player covered ${RUN}`;
+const COVER_KEY = `artwork/${RUN}-transport.webp`;
 
 interface Snapshot {
   readonly currentTime: number;
@@ -116,6 +125,14 @@ beforeAll(async () => {
 
   recordingId = await publishedRecording(TITLE);
   secondId = await publishedRecording(SECOND_TITLE);
+
+  // A third, in a series that has a cover — `recordingId` above is in no series at all, which is
+  // what makes it 2.5.4's case without any extra seeding.
+  coveredSeriesTitle = `Player series ${RUN}`;
+  const series = await insertSeries({ title: coveredSeriesTitle, description: null }, handle);
+  await setSeriesArtwork(series.id, COVER_KEY, handle);
+  coveredId = await publishedRecording(COVERED_TITLE);
+  await setRecordingSeries(coveredId, series.id, handle);
 }, 300_000);
 
 afterAll(async () => {
@@ -373,6 +390,93 @@ describe('the transport is mounted app-wide', () => {
       await expect
         .poll(async () => (await bar.textContent()) ?? '', { timeout: 30_000 })
         .toContain(SECOND_TITLE);
+    } finally {
+      await page.context().close();
+    }
+  }, 240_000);
+});
+
+/**
+ * **The transport's tile** (scope plan 2.4, 2.5.4) — `bottom-navigation/default.png`.
+ *
+ * The slot at the left of the bar is a thumbnail in the reference, and it carries the cover of the
+ * *series* the playing teaching belongs to — a recording has no artwork of its own. The tile
+ * stands alone rather than beside a title, so unlike every other cover in this scope it is
+ * **labelled** (scope prd 4.3).
+ *
+ * Each assertion waits for the bar — which is on the page in both the covered and the coverless
+ * case — and then reads the tile synchronously, so a run where the tile is correctly absent costs
+ * nothing rather than a poll window.
+ */
+describe('the transport shows the cover of what is playing', () => {
+  it('shows the series` cover in the left slot', async () => {
+    const { page } = await openTeaching(coveredId);
+    try {
+      const bar = page.getByRole('region', { name: 'Player' });
+      await expect
+        .poll(async () => (await bar.textContent()) ?? '', { timeout: 30_000 })
+        .toContain(COVERED_TITLE);
+
+      const tile = bar.locator('img');
+      expect(await tile.count()).toBe(1);
+      expect(await tile.getAttribute('src')).toContain(COVER_KEY);
+    } finally {
+      await page.context().close();
+    }
+  }, 240_000);
+
+  it('labels the tile with the series, because it stands alone', async () => {
+    const { page } = await openTeaching(coveredId);
+    try {
+      const bar = page.getByRole('region', { name: 'Player' });
+      await expect
+        .poll(async () => (await bar.textContent()) ?? '', { timeout: 30_000 })
+        .toContain(COVERED_TITLE);
+
+      // Named, not decorative — the opposite of every other cover in this scope, and the reason is
+      // that there is no series title rendered beside it to say the same thing.
+      const tile = bar.locator('img');
+      expect(await tile.count()).toBe(1);
+      expect(await tile.getAttribute('alt')).toBe(coveredSeriesTitle);
+    } finally {
+      await page.context().close();
+    }
+  }, 240_000);
+
+  it('keeps the cover in the slot when the member walks to the library', async () => {
+    const { page } = await openTeaching(coveredId);
+    try {
+      await page.getByRole('button', { name: 'Play' }).first().click();
+      await expect
+        .poll(async () => (await audioState(page)).currentTime, { timeout: 30_000 })
+        .toBeGreaterThan(1);
+
+      await page.getByRole('link', { name: 'Back to recordings' }).click();
+      await page.waitForURL(`${baseUrl}${MEMBER_LIBRARY_PAGE_PATH}`, { timeout: 30_000 });
+
+      // The bar is in the member layout and never remounts, so the cover it holds is the one it was
+      // opened with — it is not re-fetched by the screen that happens to be under it.
+      const bar = page.getByRole('region', { name: 'Player' });
+      await expect.poll(() => bar.count(), { timeout: 30_000 }).toBe(1);
+      const tile = bar.locator('img');
+      expect(await tile.count()).toBe(1);
+      expect(await tile.getAttribute('src')).toContain(COVER_KEY);
+    } finally {
+      await page.context().close();
+    }
+  }, 240_000);
+
+  it('leaves the title and no image for a teaching that belongs to no series', async () => {
+    // `recordingId` is in no series at all (scope prd 3.2.6) — the ordinary case, not a degraded
+    // one. The slot falls back to what a member actually needs to know is playing.
+    const { page } = await openTeaching(recordingId);
+    try {
+      const bar = page.getByRole('region', { name: 'Player' });
+      await expect
+        .poll(async () => (await bar.textContent()) ?? '', { timeout: 30_000 })
+        .toContain(TITLE);
+
+      expect(await bar.locator('img').count()).toBe(0);
     } finally {
       await page.context().close();
     }

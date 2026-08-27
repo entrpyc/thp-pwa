@@ -25,6 +25,7 @@ import {
 } from '@thp/shared';
 import { ApiError } from '@/server/api/errors';
 import { can, type Actor } from '@/server/auth/policy';
+import { mintArtworkGrant } from '@/server/series/artwork-grant';
 import { queue } from '@/server/jobs/queue';
 import { UPLOAD_GRANT_SECONDS, mediaStore, mintOriginalKey } from '@thp/media';
 import { logger } from '@/server/observability/logger';
@@ -263,7 +264,11 @@ export async function listRecordingsFor(
     asOperator,
   });
 
-  return rows.map((row) => (asOperator ? describeForOperator(row) : describeForMember(row)));
+  // One signature per row, and never a call to the store — presigning is a local HMAC, so a page
+  // of teachings costs no round trips (scope tdd 1.4).
+  return await Promise.all(
+    rows.map((row) => (asOperator ? describeForOperator(row) : describeForMember(row))),
+  );
 }
 
 /**
@@ -303,11 +308,17 @@ export async function readRecordingFor(
     asOperator,
   });
 
-  return asOperator ? describeForOperator(row) : describeForMember(row);
+  return asOperator ? await describeForOperator(row) : await describeForMember(row);
 }
 
-/** Published, and nothing an operator would want that a listener has no business with. */
-function describeForMember(row: VisibleRecordingRow): RecordingView {
+/**
+ * Published, and nothing an operator would want that a listener has no business with.
+ *
+ * Async since the cover arrived, for the reason `describe` in `series/service.ts` is: the `series`
+ * ref carries a signed URL rather than a key, and signing is the store's answer rather than this
+ * function's (scope tdd 1.4).
+ */
+async function describeForMember(row: VisibleRecordingRow): Promise<RecordingView> {
   return {
     id: row.id,
     title: row.title,
@@ -316,11 +327,17 @@ function describeForMember(row: VisibleRecordingRow): RecordingView {
     description: row.description,
     summary: row.summary,
     // Both surfaces get it: the console's row renders its picker from it, and a member's row
-    // renders the library's series label and the recording page's breadcrumb parent from it.
+    // renders the library's series label and the recording page's breadcrumb parent from it. The
+    // cover rides along because the recording page and the transport show the *series'* artwork —
+    // a recording has none of its own (scope prd 3.2.3, 3.2.4).
     series:
       row.seriesId === null || row.seriesTitle === null
         ? null
-        : { id: row.seriesId, title: row.seriesTitle },
+        : {
+            id: row.seriesId,
+            title: row.seriesTitle,
+            artworkUrl: await mintArtworkGrant(row.seriesArtworkKey),
+          },
     // Whether there is a **Scripture** tab to draw at all (3.4.4). Counted by the visibility read
     // rather than fetched here: the page needs to know before it asks for a passage, and asking for
     // the passages to find out is the download the closed tab exists to avoid.
@@ -329,9 +346,9 @@ function describeForMember(row: VisibleRecordingRow): RecordingView {
 }
 
 /** The same, plus the two fields the console needs and a member never receives. */
-function describeForOperator(row: VisibleRecordingRow): RecordingSummary {
+async function describeForOperator(row: VisibleRecordingRow): Promise<RecordingSummary> {
   return {
-    ...describeForMember(row),
+    ...(await describeForMember(row)),
     originalMediaKey: row.originalMediaKey,
     createdAt: row.createdAt.toISOString(),
   };

@@ -21,8 +21,10 @@ import { ACCEPTED_ARTWORK_LABEL, isAcceptedArtworkType } from '@thp/shared';
  * 2000 px on the longest edge.
  *
  * Generous enough that a square upload survives at a resolution project prd 5.3.2 would accept when
- * distribution arrives, small enough that the result is comfortably under the 2 MB ceiling and
- * cheap to send to a phone painting a 56 px thumbnail.
+ * distribution arrives, small enough that the result is usually well under the 4 MB ceiling and
+ * cheap to send to a phone painting a small thumbnail. **Usually, not always** — an image of high
+ * visual entropy can still re-encode past the ceiling at this size and be refused, which is scope
+ * prd 3.1.9 and is why the ceiling was raised from 2 MB rather than this bound being lowered.
  */
 export const ARTWORK_MAX_EDGE = 2000;
 
@@ -31,7 +33,9 @@ export const ARTWORK_OUTPUT_TYPE = 'image/webp';
 
 /**
  * The quality WebP is encoded at. High enough that a photographic cover holds up behind a title at
- * full width; low enough that 2000 px of it is a fraction of the ceiling.
+ * full width; low enough that 2000 px of it is normally a fraction of the 4 MB ceiling. Fixed —
+ * the encoder does not retry at a lower quality to fit, which was the operator's call (scope prd
+ * 3.1.9).
  */
 const ARTWORK_QUALITY = 0.82;
 

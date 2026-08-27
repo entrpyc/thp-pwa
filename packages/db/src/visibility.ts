@@ -44,6 +44,15 @@ export interface VisibleRecordingRow {
   readonly seriesId: string | null;
   readonly seriesTitle: string | null;
   /**
+   * That series' cover key, or `null` — either because the recording is in no series or because
+   * the series has no cover (scope prd 3.2.3).
+   *
+   * **A key, and it stops here.** It comes off the same left join the title does, costing no extra
+   * statement, and the service turns it into a signed URL before anything leaves the process — the
+   * boundary `visibility-boundary` guards and scope prd 4.2 states.
+   */
+  readonly seriesArtworkKey: string | null;
+  /**
    * Whether this teaching has any approved scripture reference at all (Group 4).
    *
    * Counted rather than stored, in the same statement that reads the row — the shape
@@ -109,6 +118,7 @@ export async function listVisibleRecordings(
       createdAt: recording.createdAt,
       seriesId: recording.seriesId,
       seriesTitle: series.title,
+      seriesArtworkKey: series.artworkKey,
       hasScripture,
     })
     .from(recording)
@@ -159,6 +169,7 @@ export async function findVisibleRecording(
       createdAt: recording.createdAt,
       seriesId: recording.seriesId,
       seriesTitle: series.title,
+      seriesArtworkKey: series.artworkKey,
       hasScripture,
     })
     .from(recording)

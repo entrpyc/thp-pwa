@@ -14,10 +14,12 @@ import styles from './transport.module.css';
  * circles, the track is thin with a purple fill and a round thumb, elapsed and total sit either
  * side of it, and the speed pill is at the right.
  *
- * One thing in the reference is not here, and it is the same decision the chrome takes:
- * **the thumbnail in the left slot is artwork**, and artwork is deferred
- * (core-listening scope prd). The slot carries the
- * recording's title instead, which is what a member actually needs to know is playing.
+ * **The thumbnail in the left slot is the cover of the series the playing teaching is in** (scope
+ * prd 3.2.4) — a recording has no artwork of its own. It is handed over by `open` with the teaching
+ * rather than fetched here, because this bar is mounted in the member layout and never remounts:
+ * a fetch of its own would be a second answer to a question the recording payload already gave.
+ * A teaching in no series, or in one with no cover, leaves the slot to the title beside it, which
+ * is what a member actually needs to know is playing (scope prd 3.2.6).
  *
  * **The `···` control** opens the side toolbar of `bottom-navigation/menu-opened.png`. The reference
  * draws seven icons — chapters, mind map, a list, an AI action, text size, notes and CC. Two of them
@@ -182,6 +184,20 @@ export function TransportBar() {
       ) : null}
 
       <section className={styles.bar} aria-label="Player">
+        {/*
+          The reference's thumbnail slot, filled at last (scope prd 3.2.4). **Labelled**, unlike
+          every other cover in this scope: it stands alone rather than beside a title, so 4.3 asks
+          for the series' name on it rather than for silence. Nothing is drawn when there is no
+          cover — the title beside it is then the whole of the slot (scope prd 3.2.6).
+        */}
+        {player.loaded.artworkUrl === null ? null : (
+          <img
+            className={styles.tile}
+            src={player.loaded.artworkUrl}
+            alt={player.loaded.seriesTitle ?? ''}
+          />
+        )}
+
         <p className={styles.nowPlaying} title={player.loaded.title}>
           {player.loaded.title}
         </p>

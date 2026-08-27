@@ -2,7 +2,7 @@
 
 ## Status
 
-34/65 criteria met.
+51/65 criteria met.
 _Maintained by the build phase — see the checkboxes for detail._
 
 ---
@@ -129,9 +129,10 @@ _None._
 
 **Acceptance criteria**
 
-- [ ] **1.4.1** The encoder reduces a 4000×3000 source to a longest edge of 2000 px. — verified by `packages/web/tests/unit/artwork-encode.test.ts`
-- [ ] **1.4.2** The encoder preserves the source aspect ratio: a 4000×3000 source comes out 2000×1500, not squared. — verified by `packages/web/tests/unit/artwork-encode.test.ts`
-- [ ] **1.4.3** The encoder leaves a source already inside the bound at its own dimensions rather than upscaling it. — verified by `packages/web/tests/unit/artwork-encode.test.ts`
+- [x] **1.4.1** The encoder reduces a 4000×3000 source to a longest edge of 2000 px. — verified by `packages/web/tests/unit/artwork-encode.test.ts`
+- [x] **1.4.2** The encoder preserves the source aspect ratio: a 4000×3000 source comes out 2000×1500, not squared. — verified by `packages/web/tests/unit/artwork-encode.test.ts`
+- [x] **1.4.3** The encoder leaves a source already inside the bound at its own dimensions rather than upscaling it. — verified by `packages/web/tests/unit/artwork-encode.test.ts`
+      _Ticked rather than built: `fitWithin` and all five of its tests were written during 1.4's own run and have been green since. What this run added was the check that they were, and a correction to two comments in `encode.ts` that still described the 2 MB ceiling 3.1.9 replaced._
 - [x] **1.4.4** What reaches the bucket is one WebP under the 4 MB ceiling, however large the image the admin chose was. — verified by `packages/web/tests/integration/series-management-screen.test.ts`
       _Re-pointed during the build: a canvas cannot be driven from Node, so the unit suite covers the sizing rule (1.4.1–1.4.3) and the format-and-bytes property is asserted in the browser against the real store, which is the stronger reading of it anyway._
       _Ceiling raised from 2 MB to 4 MB during the build, by the operator, after a worst-case source (pseudo-random pixels) re-encoded to 3 MB at 2000 px and the API refused its own console's upload. See scope prd 3.1.9 — the ceiling is checked against, not forced, and an image that still exceeds it is refused rather than stored._
@@ -211,44 +212,69 @@ _None._
 **Delivers:** the flat band at the top of a series page becomes that series' cover.
 **References:** scope prd 3.2.2; scope tdd 1.4, 1.8; design-references/pages/series-inner.png; design-references/style-guide.md
 **Touches:** `packages/web/src/app/(member)/series/[id]/series-view.tsx` (the `hero` block and the comment that currently says the band is flat), `packages/web/src/app/(member)/screens.module.css`, `packages/web/tests/integration/series-screen.test.ts`
+_Added during the build: `docs/scope/tdd.md` (1.8) and `docs/scope/prd.md` (3.2.6, and 3.2.7 appended) — the full-bleed band the operator chose contradicted both as written, and `conventions` § Reconciling puts the edit in the same run as the decision. `packages/web/src/app/(member)/member.module.css` was read for the shell's padding, which the band's negative margin cancels, but not changed._
 **Out of scope:** the no-cover band — that is 2.5.
 
 **Acceptance criteria**
 
-- [ ] **2.2.1** A series with a cover renders it as the hero band at the top of its page. — verified by `packages/web/tests/integration/series-screen.test.ts`
-- [ ] **2.2.2** The band's back control is still clickable with the artwork behind it, and leaves the page. — verified by `packages/web/tests/integration/series-screen.test.ts`
-- [ ] **2.2.3** The artwork is cropped to the band from the centre rather than stretched to its proportions. — verified by `packages/web/tests/integration/series-screen.test.ts`
+- [x] **2.2.1** A series with a cover renders it as the hero band at the top of its page. — verified by `packages/web/tests/integration/series-screen.test.ts`
+- [x] **2.2.2** The band's back control is still clickable with the artwork behind it, and leaves the page. — verified by `packages/web/tests/integration/series-screen.test.ts`
+- [x] **2.2.3** The artwork is cropped to the band from the centre rather than stretched to its proportions. — verified by `packages/web/tests/integration/series-screen.test.ts`
 
 **Assumptions**
-_Written by the build phase — leave empty here._
+
+- **The band is full-bleed, borderless and square-cornered, 3:1 with a cover and a flat strip without one.** — major, user-facing, and **the operator's choice, taken during this build**. The band was a bordered 96 px card; a cover cropped into it came out a ~7:1 slice of its own middle, which is nothing `pages/series-inner.png` draws. The options put were keeping the card, raising it to 3:1 as a card, or full-bleed; the operator took full-bleed. Because that changes the coverless band's frame too, **scope tdd 1.8 and scope prd 3.2.6 were rewritten in the same run and scope prd 3.2.7 was added** to carry it.
+- **"Full-bleed" means the reading column's full width, not the viewport's.** — major, user-facing: on a phone the column is narrower than its 48 rem cap, so the band genuinely reaches both edges as the reference draws it; on a desktop it is 48 rem, flush with the cards below. Spanning the whole viewport would put a 1440 px band over a 768 px column, which no reference draws. Implemented as a negative margin cancelling the shell's padding.
+- **The band keeps its old height when there is no cover rather than reserving the 3:1 box.** — major, user-facing: a coverless series would otherwise show a tall empty rectangle, which is the reserved empty frame scope prd 3.2.6 exists to forbid.
+- **The cover is an `<img>` layer inside the band, not a `background-image`.** — minor, but it is what makes 2.5.2 and 2.5.3 sayable at all: those criteria assert *no image element*, which presumes the covered case has one.
+- **The back control is lifted above the artwork with `position: relative` rather than a `z-index` ladder.** — minor. One positioned child in a `position: relative` parent is above its unpositioned siblings already; a stacking order nobody needs is a thing to maintain.
+- **The fade is a separate `aria-hidden` span rather than a gradient on the image.** — minor. A gradient over the image needs a second layer whatever holds it, and a span keeps the `<img>` the plain element the crop assertions read.
+- **The tests locate the band as the parent of the back control it holds.** — minor. The class is a CSS-module hash, so asserting against one would be asserting against the bundler; the back control is in the band in every state, which is what makes it the handle.
 
 **Edge cases**
-_Written by the build phase — leave empty here._
+
+- A cover whose signed URL has expired, or whose object is missing, paints a broken-image frame across the whole band rather than showing no band — far more visible here than in the listing's thumbnail, because the band is the top of the page. Scope plan 1.3's third edge case at its worst.
+- The band is 3:1 with a cover and a short strip without one, so two series pages open at visibly different heights and everything below the band sits in a different place on each. Deliberate, and the alternative is the reserved empty box.
+- Nothing is drawn in the band while the cover is in flight: it is the flat `--color-bg-deep` strip until the payload arrives, then it grows to 3:1 and the page below it moves down. On a slow connection that shift is visible.
+- A portrait cover is cropped hard to 3:1 — most of its height is discarded, and nothing on the console previews what the band will keep. An admin finds out by opening the page.
+- The fade is a fixed gradient to `--color-bg` over the band's lower half, so a cover that is bright at its foot fades to the page colour more abruptly than one that is dark there. There is no per-image adjustment.
 
 **Manual steps**
-_Written by the build phase — leave empty here._
+
+- Look at a real series page with a real cover. The suite proves the band carries the artwork, crops it from the centre and still takes the press; it cannot judge whether the 3:1 crop keeps the part of the picture that matters, or whether the fade reads as intended against a light-footed image.
 
 ### 2.3 — The recording page hero
 
 **Delivers:** a recording page carries the cover of the series it belongs to.
 **References:** scope prd 3.2.3; scope tdd 1.4, 1.8; design-references/pages/chapter.png
 **Touches:** `packages/shared/src/recordings.ts` (`RecordingSeriesRef`), `packages/db/src/visibility.ts` (`VisibleRecordingRow`, `listVisibleRecordings`, `findVisibleRecording`), `packages/web/src/server/recordings/service.ts` (`describeRecording`), `packages/web/src/app/(member)/recordings/[id]/recording-view.tsx` (the `hero` block), `packages/web/src/app/(member)/screens.module.css`, `packages/web/tests/integration/member-library.test.ts`, `packages/web/tests/integration/series-screen.test.ts`
+_Added during the build: `packages/web/src/server/series/artwork-grant.ts` — read, not changed; it is `mintArtworkGrant`'s home and the recordings service now imports it, which is the first time anything outside `series/` has._
 **Out of scope:** the recording that belongs to no series — that is 2.5.
 
 **Acceptance criteria**
 
-- [ ] **2.3.1** A recording payload carries its series' `artworkUrl` on the `series` field, and still no object key anywhere. — verified by `packages/web/tests/integration/member-library.test.ts`
-- [ ] **2.3.2** A recording in a series with a cover renders that cover as its hero band. — verified by `packages/web/tests/integration/series-screen.test.ts`
-- [ ] **2.3.3** Two recordings in the same series render the same cover, because the cover is the series' and not the recording's. — verified by `packages/web/tests/integration/series-screen.test.ts`
+- [x] **2.3.1** A recording payload carries its series' `artworkUrl` on the `series` field, and still no object key anywhere. — verified by `packages/web/tests/integration/member-library.test.ts`
+      _Written after its code rather than before it, unlike everything else in this run — the data path went in while the surfaces were still being read, and the test was green the first time it ran. It is capable of failing (it asserts a signature in a field that would otherwise be absent), but it was never seen to._
+- [x] **2.3.2** A recording in a series with a cover renders that cover as its hero band. — verified by `packages/web/tests/integration/series-screen.test.ts`
+- [x] **2.3.3** Two recordings in the same series render the same cover, because the cover is the series' and not the recording's. — verified by `packages/web/tests/integration/series-screen.test.ts`
 
 **Assumptions**
-_Written by the build phase — leave empty here._
+
+- **`artworkUrl` goes on `RecordingSeriesRef`, not on `RecordingView`.** — major, hard to change later: the transport, the recording page and step 3's square all bind to it there. It is what it is — a recording has no artwork of its own in this scope — and it means a teaching in no series has no cover field at all rather than a second `null` state to represent.
+- **`describeForMember` becomes async, and `listRecordingsFor` maps it through `Promise.all`.** — major, produces code later steps bind to: it is the same shape `series/service.ts` already took for `describe`, and every future field that needs the store now has somewhere to be awaited. One signature per row and no round trips, because presigning is a local HMAC.
+- **`describeForOperator` gets the cover for free by spreading the member view, and that is asserted rather than left to chance.** — minor. It was already a spread; what is new is a test naming it, so it stops being an accident nobody would notice breaking.
+- **`VisibleRecordingRow` carries `seriesArtworkKey` off the existing left join.** — minor. No extra statement and no second query — the join that already brings the series title brings its key too.
+- **The same-cover assertion compares the URL's path, not the whole URL.** — minor. Two responses signing one object produce two different signatures, so comparing whole URLs would compare HMACs rather than objects.
 
 **Edge cases**
-_Written by the build phase — leave empty here._
+
+- Moving a recording into a different series changes the cover its page shows, with no cache and no warning — correct, and worth knowing, because the picture at the top of a teaching's page is not a property of that teaching.
+- A recording whose series has a cover the store no longer holds paints a broken band on every teaching in that study at once, not just on one page.
+- The console's recording list now mints a signature per row for a cover no console screen renders. Local and cheap, but it is work done for nothing until a console surface wants it.
+- An admin reading an unpublished recording gets its series' cover in the payload like anyone else. The series' own visibility is not re-checked here — whoever was allowed the recording is allowed the cover of the study it names, which is scope tdd 1.5 held literally.
 
 **Manual steps**
-_Written by the build phase — leave empty here._
+_None._
 
 ### 2.4 — The transport tile
 
@@ -259,18 +285,28 @@ _Written by the build phase — leave empty here._
 
 **Acceptance criteria**
 
-- [ ] **2.4.1** Playing a recording in a series with a cover shows that cover in the transport's left slot. — verified by `packages/web/tests/integration/player-screen.test.ts`
-- [ ] **2.4.2** The tile is labelled with the series it belongs to, because it stands alone rather than beside a title. — verified by `packages/web/tests/integration/player-screen.test.ts`
-- [ ] **2.4.3** Navigating from the recording page to the library leaves the same cover in the slot. — verified by `packages/web/tests/integration/player-screen.test.ts`
+- [x] **2.4.1** Playing a recording in a series with a cover shows that cover in the transport's left slot. — verified by `packages/web/tests/integration/player-screen.test.ts`
+- [x] **2.4.2** The tile is labelled with the series it belongs to, because it stands alone rather than beside a title. — verified by `packages/web/tests/integration/player-screen.test.ts`
+- [x] **2.4.3** Navigating from the recording page to the library leaves the same cover in the slot. — verified by `packages/web/tests/integration/player-screen.test.ts`
+      _Not in the operator's original target for this run — it was pulled in with 2.5, because 2.5.4 asserts the transport shows **no** tile for a teaching in no series, and without 2.4 there is no tile for anything and the criterion would have passed while proving nothing. The operator chose to build it rather than leave 2.5.4 open._
 
 **Assumptions**
-_Written by the build phase — leave empty here._
+
+- **`LoadedRecording` gains `artworkUrl` and `seriesTitle`, and the bar reads them rather than fetching.** — major, hard to change later: the transport is mounted in the member layout and never remounts, so a fetch of its own would be a second answer to a question the recording payload already gave, re-asked on every navigation the bar survives. What `open` is handed is what the slot shows until it is opened again.
+- **The tile is labelled with the series title, alone among the covers in this scope.** — major, user-facing, and it is scope prd 4.3 read literally: a cover beside its own title is decorative, and this one has no title beside it, so it is named.
+- **The tile is square, not the landscape frame the listing and the bands use.** — minor. `bottom-navigation/default.png` draws it square, and it sits beside a single line of text.
+- **`alt` falls back to the empty string if a cover ever arrives with no series title.** — minor. Unreachable — the cover comes off the series ref, which carries the title — but the types allow it separately and an `alt` of `"null"` would be worse than a decorative tile.
 
 **Edge cases**
-_Written by the build phase — leave empty here._
+
+- The cover in the slot is whatever it was when the teaching was opened. A cover replaced from the console mid-listen is not picked up until the teaching is opened again, and nothing tells the member the picture is stale.
+- A grant that expires during a long listen leaves a broken tile in a bar that is still playing correctly — the audio has its own grant and renews it; the cover does not.
+- Playing a teaching, then browsing to a series page with a different cover, shows two different covers on screen at once: the band's is the page's, the tile's is what is playing. Correct, and it will read as a mistake to anyone who assumes they are the same thing.
+- The bar's height is unchanged by the tile, so on a narrow phone the title beside it has meaningfully less room and truncates sooner than it did.
 
 **Manual steps**
-_Written by the build phase — leave empty here._
+
+- Play a teaching from a covered series and look at the docked bar on a phone-width window. The suite proves the tile is there, is labelled and survives navigation; it does not judge whether the square crop of a landscape cover is recognisable at that size.
 
 ### 2.5 — No cover, everywhere
 
@@ -281,20 +317,30 @@ _Written by the build phase — leave empty here._
 
 **Acceptance criteria**
 
-- [ ] **2.5.1** A series with no cover renders its listing row with no image element in the DOM at all. — verified by `packages/web/tests/integration/series-screen.test.ts`
-- [ ] **2.5.2** A series with no cover renders its page with the flat band and no image element in it. — verified by `packages/web/tests/integration/series-screen.test.ts`
-- [ ] **2.5.3** A recording that belongs to no series renders its page with the flat band and no image element in it. — verified by `packages/web/tests/integration/series-screen.test.ts`
-- [ ] **2.5.4** Playing a recording that belongs to no series leaves the transport's left slot carrying the title and no image element. — verified by `packages/web/tests/integration/player-screen.test.ts`
-- [ ] **2.5.5** A series with no cover renders its console row with no image element in it. — verified by `packages/web/tests/integration/series-management-screen.test.ts`
+- [x] **2.5.1** A series with no cover renders its listing row with no image element in the DOM at all. — verified by `packages/web/tests/integration/series-screen.test.ts`
+- [x] **2.5.2** A series with no cover renders its page with the flat band and no image element in it. — verified by `packages/web/tests/integration/series-screen.test.ts`
+- [x] **2.5.3** A recording that belongs to no series renders its page with the flat band and no image element in it. — verified by `packages/web/tests/integration/series-screen.test.ts`
+- [x] **2.5.4** Playing a recording that belongs to no series leaves the transport's left slot carrying the title and no image element. — verified by `packages/web/tests/integration/player-screen.test.ts`
+- [x] **2.5.5** A series with no cover renders its console row with no image element in it. — verified by `packages/web/tests/integration/series-management-screen.test.ts`
 
 **Assumptions**
-_Written by the build phase — leave empty here._
+
+- **2.4 was built alongside this substep, because 2.5.4 could not be proved against a transport that shows no cover to anyone.** — major, and the operator's call: the criterion would have passed the moment it was written and would have gone on passing however 2.4 was later built. The alternative offered was leaving it unchecked with a note.
+- **None of 2.5.1, 2.5.2, 2.5.3 or 2.5.5 needed a line of code.** — major, changes nothing but is worth saying: every one of them was green the first time it ran, because each covered surface was written with `x === null ? null : <img/>` in the same substep that added the cover. That is scope tdd 1.8 doing its job, and this substep is the check that it did rather than the place it happens. **Only 2.5.4 was red**, and only because 2.4 was being built for it.
+- **Each absence assertion waits for the screen's loaded state before it looks.** — major, produces code later steps should copy: an assertion that something is *not* there passes trivially against a page that has not finished loading, so it would go green however the code were written. Waiting for the heading, or for the bar to name the teaching, is what makes the absence mean something.
+- **The listing's old blanket "no image anywhere in this list" assertion is now the coverless row's own claim.** — minor. Narrowed in 2.1 when covers first appeared in the list; this substep is where it became a criterion with a number.
+- **The console's coverless row also asserts it reads "Add cover" rather than "Replace cover".** — minor, and beyond the criterion's letter. It is the same fact said in the other direction, and it is what makes the row honest rather than merely imageless.
 
 **Edge cases**
-_Written by the build phase — leave empty here._
+
+- Every "no cover" case here is indistinguishable from "the cover failed to load and the element was removed" — nothing is: a broken cover shows a broken frame, not nothing. So these assertions cannot tell a series with no cover from one whose cover 404s, and the second case looks worse on screen than either.
+- A series whose cover is set while a member has the listing open keeps showing no thumbnail until that page is re-read. Nothing pushes.
+- 2.5.4 is asserted on a teaching in **no series**. A teaching in a series that merely has no cover reaches the same slot by a different branch (`artworkUrl` is `null` rather than `series` being `null`), and that path is covered on the payload in 2.3.1 rather than on the transport.
+- The now-playing view of step 3 has its own empty case and is not covered here — it does not exist yet, and it is 3.2's.
 
 **Manual steps**
-_Written by the build phase — leave empty here._
+
+- Look at a series with no cover beside one with a cover, on the listing and on their two pages. The suite proves nothing is drawn; it does not judge whether a column mixing covered and coverless rows, and two series pages of visibly different heights, reads as deliberate.
 
 ---
 
