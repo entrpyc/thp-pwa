@@ -16,18 +16,25 @@
  */
 
 /**
- * **2 MB, and it is the browser's job to be under it** (scope prd 3.1.2).
+ * **4 MB, and it is a limit the upload is checked against rather than one the re-encode forces**
+ * (scope prd 3.1.9).
  *
- * Unlike the audio ceiling this is not a limit on what a person may choose — the console re-encodes
- * whatever they picked to a bounded WebP before anything is sent, so a 40 MB camera JPEG becomes a
- * legal upload rather than a refusal. What the ceiling is here for is the two checks either side of
- * an upload nobody watched: the declared size in the grant, and the store's own metadata at
- * finalisation. A request that reaches either of those over the line did not come from the console.
+ * Unlike the audio ceiling this is not mainly a limit on what a person may choose — the console
+ * re-encodes whatever they picked to a bounded WebP before anything is sent, so a 40 MB camera JPEG
+ * becomes a legal upload rather than a refusal. What the ceiling is for is the two checks either
+ * side of an upload nobody watched: the declared size in the grant, and the store's own metadata at
+ * finalisation.
+ *
+ * **It was 2 MB, and the build moved it.** A worst-case image — pseudo-random pixels, which no
+ * lossy codec can compress — re-encoded to 3 MB at 2000 px, and the API refused its own console's
+ * upload. 4 MB clears every ordinary cover by a wide margin. It is still not a *guarantee*: no fixed
+ * ceiling is, because entropy beats any of them, and an image that exceeds it is refused with the
+ * reason on screen rather than stored. That gap is accepted rather than closed.
  */
-export const MAX_ARTWORK_BYTES = 2 * 1024 * 1024;
+export const MAX_ARTWORK_BYTES = 4 * 1024 * 1024;
 
 /** The ceiling as a person reads it. One statement, so the screen and the API say the same words. */
-export const MAX_ARTWORK_LABEL = '2 MB';
+export const MAX_ARTWORK_LABEL = '4 MB';
 
 /** Every accepted image content type, and the extension a key for it ends in. */
 export const ACCEPTED_ARTWORK_FORMATS = {

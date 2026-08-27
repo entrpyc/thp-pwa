@@ -223,20 +223,20 @@ describe('the grant', () => {
     }
   }, 60_000);
 
-  it('accepts exactly 2 MB and refuses one byte more, issuing no URL for the refusal', async () => {
+  it('accepts exactly 4 MB and refuses one byte more, issuing no URL for the refusal', async () => {
     // scope plan 1.2.4. The literal is pinned beside the constant deliberately: an assertion that
     // read its expectation out of the module would agree with whatever that module held.
-    expect(MAX_ARTWORK_BYTES).toBe(2 * 1024 * 1024);
+    expect(MAX_ARTWORK_BYTES).toBe(4 * 1024 * 1024);
     const series = await newSeries('At the ceiling');
 
-    const atCeiling = await grantFor(series.id, 2 * 1024 * 1024);
+    const atCeiling = await grantFor(series.id, 4 * 1024 * 1024);
     expect(atCeiling.status).toBe(200);
     expect(atCeiling.body.url).toContain('X-Amz-Signature');
 
-    const overCeiling = await grantFor(series.id, 2 * 1024 * 1024 + 1);
+    const overCeiling = await grantFor(series.id, 4 * 1024 * 1024 + 1);
     expect(overCeiling.status).toBe(400);
     expect(overCeiling.code).toBe('invalid_input');
-    expect(overCeiling.message).toContain('2 MB');
+    expect(overCeiling.message).toContain('4 MB');
     expect((overCeiling.body as unknown as { url?: unknown }).url).toBeUndefined();
   }, 60_000);
 });
@@ -266,7 +266,7 @@ describe('finalising', () => {
 
     const grant = await grantFor(series.id, 1_024);
     expect(grant.status).toBe(200);
-    const oversized = 2 * 1024 * 1024 + 1;
+    const oversized = 4 * 1024 * 1024 + 1;
     expect((await putBytes(grant.body, webpBytes(oversized))).status).toBe(200);
 
     const answer = await finalise(series.id, grant.body.key);

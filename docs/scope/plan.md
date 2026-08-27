@@ -2,7 +2,7 @@
 
 ## Status
 
-0/65 criteria met.
+31/65 criteria met.
 _Maintained by the build phase — see the checkboxes for detail._
 
 ---
@@ -51,7 +51,8 @@ _Maintained by the build phase — see the checkboxes for detail._
 ### 1.2 — The write path
 
 **Delivers:** two authorised calls that put an image in the bucket and point a series at it, refusing before either happens when they should.
-**References:** scope prd 3.1.3, 3.1.4, 3.1.5, 3.1.8, 4.2; scope tdd 1.1, 1.3, 1.5
+**References:** scope prd 3.1.3, 3.1.4, 3.1.5, 3.1.8, 3.1.9, 4.2; scope tdd 1.1, 1.3, 1.5
+_scope prd 3.1.9 was added during the build, when the operator raised the ceiling; it is covered here because the grant and the finalisation are the two places it is checked, and 1.2.4 and 1.2.6 already test both._
 **Touches:** `packages/web/src/server/auth/policy.ts`, `packages/web/src/server/series/service.ts`, new `packages/web/src/app/api/v1/series/[id]/artwork/uploads/route.ts`, new `packages/web/src/app/api/v1/series/[id]/artwork/route.ts`, `packages/shared/src/series.ts`, `packages/shared/src/index.ts`, `packages/web/src/server/recordings/service.ts` (`grantUpload` is the shape being followed), new `packages/web/tests/integration/series-artwork.test.ts`, new `packages/web/tests/support/artwork.ts`, `packages/web/tests/unit/policy.test.ts`, `packages/web/tests/integration/route-sweep.test.ts`, `tests/guards/route-access-typecheck.test.ts`
 **Out of scope:** no screen calls either route yet; nothing renders the stored image.
 
@@ -72,7 +73,7 @@ _Maintained by the build phase — see the checkboxes for detail._
 
 - **The two calls are `POST /api/v1/series/{id}/artwork/uploads` and `PUT /api/v1/series/{id}/artwork`, both gated by one `series.artwork` action.** — major, hard to change later: the client, the routes and the policy table all bind to both. One action rather than two because a grant nobody may finalise is a grant nobody should have been given.
 - **Finalisation is `PUT`, not `POST`, and there is no `DELETE` beside it.** — major, user-facing: naming the same key twice is a no-op and naming a different one replaces the pointer, which is the whole of scope prd 3.1.5. Nothing on the resource can return a series to having no cover.
-- **The ceiling is 2 MB, checked three times: on the screen, against the declared size in the grant, and against the store's own metadata at finalisation.** — minor. The same three-checks shape the audio upload already has, and the same reasoning about which of them is authoritative.
+- **The ceiling is 4 MB, checked twice: against the declared size in the grant, and against the store's own metadata at finalisation.** — major, user-facing: it was 2 MB until 1.4 hit an image the re-encode could not bring under it, and raising it was the operator's call (scope prd 3.1.9, § 6). Not checked a third time on the screen, because the screen is what produces the bytes — an image the encoder makes too large is refused by the grant, which is where the number lives.
 - **A grant is refused for a series id that does not exist, before any key is minted.** — minor. A key in the bucket for a series nobody can name is an orphan with no owner at all.
 - **The finalisation re-reads the series after writing, so its response carries the same `SeriesView` every read answers with.** — minor. One extra query, and it keeps the console from having two ideas of what a series is.
 
@@ -131,22 +132,39 @@ _None._
 - [ ] **1.4.1** The encoder reduces a 4000×3000 source to a longest edge of 2000 px. — verified by `packages/web/tests/unit/artwork-encode.test.ts`
 - [ ] **1.4.2** The encoder preserves the source aspect ratio: a 4000×3000 source comes out 2000×1500, not squared. — verified by `packages/web/tests/unit/artwork-encode.test.ts`
 - [ ] **1.4.3** The encoder leaves a source already inside the bound at its own dimensions rather than upscaling it. — verified by `packages/web/tests/unit/artwork-encode.test.ts`
-- [ ] **1.4.4** What reaches the bucket is one WebP under 2 MB, however large the image the admin chose was. — verified by `packages/web/tests/integration/series-management-screen.test.ts`
+- [x] **1.4.4** What reaches the bucket is one WebP under the 4 MB ceiling, however large the image the admin chose was. — verified by `packages/web/tests/integration/series-management-screen.test.ts`
       _Re-pointed during the build: a canvas cannot be driven from Node, so the unit suite covers the sizing rule (1.4.1–1.4.3) and the format-and-bytes property is asserted in the browser against the real store, which is the stronger reading of it anyway._
-- [ ] **1.4.5** The console refuses a file that is not JPEG, PNG or WebP, naming the reason on screen, without asking for a grant. — verified by `packages/web/tests/integration/series-management-screen.test.ts`
-- [ ] **1.4.6** An admin choosing an image on a series row sees that row carry the cover afterwards, without reloading the page. — verified by `packages/web/tests/integration/series-management-screen.test.ts`
-- [ ] **1.4.7** Choosing a second image on the same row replaces what that row shows. — verified by `packages/web/tests/integration/series-management-screen.test.ts`
-- [ ] **1.4.8** Choosing an image on one row leaves every other row's cover unchanged. — verified by `packages/web/tests/integration/series-management-screen.test.ts`
-- [ ] **1.4.9** The console row's cover carries no alternative text, because the series title is rendered beside it. — verified by `packages/web/tests/integration/series-management-screen.test.ts`
+      _Ceiling raised from 2 MB to 4 MB during the build, by the operator, after a worst-case source (pseudo-random pixels) re-encoded to 3 MB at 2000 px and the API refused its own console's upload. See scope prd 3.1.9 — the ceiling is checked against, not forced, and an image that still exceeds it is refused rather than stored._
+- [x] **1.4.5** The console refuses a file that is not JPEG, PNG or WebP, naming the reason on screen, without asking for a grant. — verified by `packages/web/tests/integration/series-management-screen.test.ts`
+- [x] **1.4.6** An admin choosing an image on a series row sees that row carry the cover afterwards, without reloading the page. — verified by `packages/web/tests/integration/series-management-screen.test.ts`
+- [x] **1.4.7** Choosing a second image on the same row replaces what that row shows. — verified by `packages/web/tests/integration/series-management-screen.test.ts`
+- [x] **1.4.8** Choosing an image on one row leaves every other row's cover unchanged. — verified by `packages/web/tests/integration/series-management-screen.test.ts`
+- [x] **1.4.9** The console row's cover carries no alternative text, because the series title is rendered beside it. — verified by `packages/web/tests/integration/series-management-screen.test.ts`
 
 **Assumptions**
-_Written by the build phase — leave empty here._
+
+- **Choosing a file is the whole gesture: no staging, no preview, no second press.** — major, user-facing: picking an image encodes it, uploads it and finalises it, and the row then shows what the API says the cover is. A confirm step would be a form with one field in it, and there is nothing to confirm against — the crop each surface applies is not decided here.
+- **The re-encode always produces WebP, at quality 0.82, whatever went in.** — major, hard to change later: it is what is stored, and there is no original to re-derive from. 0.82 holds up behind a title at full width, and it is a *fixed* quality: the encoder does not re-encode at a lower one to fit under the ceiling. That was the choice the operator settled by raising the ceiling instead (scope prd 3.1.9).
+- **`fitWithin` is exported as a pure function separate from the canvas work.** — major, produces code later steps will not anticipate: it is the only part of the encoder a Node test can reach, and it is the part carrying the decision rather than the plumbing.
+- **The visible control is a `<label>` and the real `<input type="file">` is visually hidden rather than `display: none`.** — minor. Hiding it outright takes it out of the accessibility tree and out of reach of a keyboard.
+- **The input's value is cleared after every choice.** — minor. Without it, choosing the same file twice fires no change event and the second upload silently never happens.
+- **The list is re-read after a cover lands rather than the row being patched in place.** — minor. The cover a row shows is a signed URL the API minted; a client inventing one would be a second answer to a question only the API can answer.
+- **`decodeImageBitmap` refusing a file is what catches an image that is not really an image.** — minor. The declared content type is checked first and cannot tell; a `.png` full of text fails the decode and surfaces as the row's refusal line.
 
 **Edge cases**
-_Written by the build phase — leave empty here._
+
+- A browser with no WebP encoder gets "this browser encoded no image" on the row and no cover is set. Every browser this product targets has one; a very old one would simply be unable to set covers.
+- A file that claims an accepted content type but is not decodable surfaces as a generic failure line on the row, not as "that file is not really an image".
+- An animated GIF or a multi-frame WebP is flattened to its first frame without saying so. GIF is refused outright; an animated WebP would upload as a still.
+- Colour profiles and EXIF orientation are whatever the canvas does with them. A photo carrying a rotation flag may be stored rotated, and nothing offers a way to correct it.
+- A very large source — beyond roughly 100 megapixels on some browsers — fails the decode with the generic failure line rather than a message about size, because the ceiling this scope states is in bytes rather than pixels.
+- **An image of unusually high visual entropy can re-encode to over the 4 MB ceiling and be refused, even though the admin chose a legal file and the encoder did its job.** The row reads "That image is N MB; the limit is 4 MB", which is true but reads as the product arguing with itself. The admin's only route is to choose a different image. This is scope prd 3.1.9 as a person experiences it, and it is accepted rather than solved — no fixed ceiling closes it.
+- Navigating away mid-upload leaves the object in the bucket unfinalised, and the series keeps the cover it had. Nothing resumes it and nothing reports it.
+- The row's busy state is per row, so two covers can be uploaded at once on different rows; the list re-read after each one is last-write-wins over what is displayed, not over what is stored.
 
 **Manual steps**
-_Written by the build phase — leave empty here._
+
+- Look at `/admin/series` in a browser and set a cover on a real series. The suite proves what lands in the bucket and what the row renders; it does not judge whether the 4.5 × 3 rem crop reads well against `pages/series-listing.png` at the sizes real covers come in.
 
 ---
 

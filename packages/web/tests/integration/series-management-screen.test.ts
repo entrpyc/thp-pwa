@@ -311,9 +311,13 @@ describe('at every width', () => {
 describe('setting a cover from the console', () => {
   /**
    * A real PNG of `edge × edge`, built **in the browser** rather than in Node, so what the console
-   * is handed is a file a canvas will genuinely decode. Noisy rather than flat: a flat PNG
-   * compresses to almost nothing, and a source that is already tiny would make "what was stored is
-   * under the ceiling" vacuously true.
+   * is handed is a file a canvas will genuinely decode.
+   *
+   * **Pseudo-random pixels, not a pattern.** A flat fill compresses to nothing and so does a
+   * repeating sequence — the first attempt at this used `index * 7 % 256` and a 3000 px source came
+   * out at 206 KB, which would have made "what was stored is under the ceiling" true of the source
+   * as well and the assertion worth nothing. An xorshift defeats PNG's filters, so a large source
+   * really is large. Seeded rather than `Math.random`, so a failure is reproducible.
    */
   async function pngFile(page: Page, edge: number): Promise<Buffer> {
     const dataUrl = await page.evaluate((size: number) => {
@@ -323,10 +327,14 @@ describe('setting a cover from the console', () => {
       const context = canvas.getContext('2d');
       if (context === null) throw new Error('no canvas context');
       const image = context.createImageData(size, size);
+      let state = 0x9e3779b9;
       for (let index = 0; index < image.data.length; index += 4) {
-        image.data[index] = (index * 7) % 256;
-        image.data[index + 1] = (index * 13) % 256;
-        image.data[index + 2] = (index * 29) % 256;
+        state ^= state << 13;
+        state ^= state >>> 17;
+        state ^= state << 5;
+        image.data[index] = state & 0xff;
+        image.data[index + 1] = (state >>> 8) & 0xff;
+        image.data[index + 2] = (state >>> 16) & 0xff;
         image.data[index + 3] = 255;
       }
       context.putImageData(image, 0, 0);
@@ -360,16 +368,25 @@ describe('setting a cover from the console', () => {
       await createThrough(page, title);
       const seriesId = await idOf(title);
 
-      const chosen = await pngFile(page, 3_000);
-      expect(chosen.byteLength).toBeGreaterThan(2 * 1024 * 1024);
+      // 2200 px: over the 2000 bound, and incompressible enough to be well over the ceiling,
+      // without pushing a 36 MB data URL across the CDP bridge to get there.
+      const chosen = await pngFile(page, 2_200);
+      expect(chosen.byteLength).toBeGreaterThan(4 * 1024 * 1024);
       await chooseCover(page, title, chosen);
 
-      await expect.poll(() => coverOf(seriesId), { timeout: 60_000 }).not.toBeNull();
+      // Falls back to whatever the row says when nothing landed, so a failure here reads as the
+      // refusal that caused it rather than as an absence. That is how the 2 MB ceiling was caught:
+      // the row printed "That image is 3 MB; the limit is 2 MB" and named its own cause.
+      await expect
+        .poll(async () => (await coverOf(seriesId)) ?? (await rowFor(page, title).innerText()), {
+          timeout: 120_000,
+        })
+        .toContain('X-Amz-Signature');
 
       const stored = await fetch((await coverOf(seriesId)) as string);
       expect(stored.status).toBe(200);
       expect(stored.headers.get('content-type')).toBe('image/webp');
-      expect((await stored.arrayBuffer()).byteLength).toBeLessThan(2 * 1024 * 1024);
+      expect((await stored.arrayBuffer()).byteLength).toBeLessThan(4 * 1024 * 1024);
     } finally {
       await page.context().close();
     }
