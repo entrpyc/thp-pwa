@@ -2,7 +2,7 @@
 
 ## Status
 
-31/65 criteria met.
+34/65 criteria met.
 _Maintained by the build phase — see the checkboxes for detail._
 
 ---
@@ -183,18 +183,28 @@ _None._
 
 **Acceptance criteria**
 
-- [ ] **2.1.1** A series with a cover renders it as the thumbnail at the left of its listing row. — verified by `packages/web/tests/integration/series-screen.test.ts`
-- [ ] **2.1.2** The thumbnail is cropped to its frame from the centre rather than stretched to fill it. — verified by `packages/web/tests/integration/series-screen.test.ts`
-- [ ] **2.1.3** The thumbnail carries no alternative text, because the series title is rendered beside it. — verified by `packages/web/tests/integration/series-screen.test.ts`
+- [x] **2.1.1** A series with a cover renders it as the thumbnail at the left of its listing row. — verified by `packages/web/tests/integration/series-screen.test.ts`
+- [x] **2.1.2** The thumbnail is cropped to its frame from the centre rather than stretched to fill it. — verified by `packages/web/tests/integration/series-screen.test.ts`
+- [x] **2.1.3** The thumbnail carries no alternative text, because the series title is rendered beside it. — verified by `packages/web/tests/integration/series-screen.test.ts`
 
 **Assumptions**
-_Written by the build phase — leave empty here._
+
+- **The frame is a fixed 7.5 rem × 5 rem landscape tile at `--radius-sm`, not a box the image's own proportions decide.** — major, user-facing: it is what a column of rows lines up on, and it is the size the next three surfaces will be read against. `pages/series-listing.png` draws the thumbnail at roughly three tenths of the row's width in a 3:2 frame, and 7.5 rem × 5 rem is that at the widths this listing is read at. Fixed rather than fluid because a row whose height follows its cover would make the listing ripple as covers load.
+- **The thumbnail is the console's rendering at a different size, not a shared component.** — minor. Two `<img>` tags and two class rules, in two stylesheets that share no other rule; extracting one would couple a member screen to an admin one for four lines of CSS.
+- **The crop is asserted through the computed `object-fit` and `object-position` and the rendered box, not through pixels.** — minor. The seeded cover is a synthesised container rather than a decodable picture, so what the suite can state is that the frame crops from its centre rather than stretching; that the stored bytes are a real image is scope plan 1.2's property, proved against the real store.
+- **The listing's old "no image anywhere in this list" assertion narrows to the row that has no cover rather than being deleted.** — minor. Covers exist now, so the blanket claim is false; the claim worth keeping is that a coverless row still renders no frame, and scope plan 2.5 is where that becomes a claim across every surface at once.
 
 **Edge cases**
-_Written by the build phase — leave empty here._
+
+- A cover whose signed URL has expired, or that points at a missing object, renders as a broken image frame in the tile rather than as no tile — the row has already decided to draw one by the time the browser finds out. This is scope plan 1.3's third edge case reaching a member surface for the first time.
+- Nothing is drawn in the frame while the image is in flight: the tile is the raised surface colour until the bytes arrive, so a slow connection shows a column of empty rectangles rather than a placeholder or a spinner.
+- The thumbnail keeps its full width at every viewport, so on a narrow phone a long series title has proportionally less room and wraps sooner than it did without a cover. No horizontal overflow at 390 px — the suite asserts that — but the balance the reference draws is a desktop balance.
+- An extremely tall or wide cover is centre-cropped hard: a portrait image loses most of its top and bottom in a 3:2 frame, and nothing on the console previews what a row will keep. The admin finds out by looking at the listing.
+- A cover and no cover sit in the same list at different row heights — a coverless row is as tall as its text, a covered one is at least the tile. The listing is deliberately not padded to one height, because reserving the tile's height on a coverless row is the empty box scope prd 3.2.6 rules out.
 
 **Manual steps**
-_Written by the build phase — leave empty here._
+
+- Look at `/series` in a browser with real covers on some series and none on others. The suite proves the frame, the crop and the absence of alternative text; it does not judge whether the 7.5 × 5 rem tile reads against `pages/series-listing.png` at the sizes real covers come in, or whether the mixed-height column looks deliberate.
 
 ### 2.2 — The series page hero
 

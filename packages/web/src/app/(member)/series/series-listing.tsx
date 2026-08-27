@@ -16,10 +16,12 @@ import styles from '../screens.module.css';
  *
  * The reference, read against what this epic has:
  *
- * - **The artwork thumbnail is dropped**, not rendered as an empty box.
- *   [3.3.3](docs/project/prd.md) is deferred, and the row is rebalanced without it — which is the
- *   same move the library made from this same reference. What survives is the layout: a page title,
- *   one sentence under it, then rounded rows with a chevron.
+ * - **The artwork thumbnail is the series' cover**, at the left of the row where the reference
+ *   draws it, cropped to the frame from its centre ([scope prd 3.2.1](docs/scope/prd.md)). It is
+ *   the signed URL the payload carries and never a key — the API mints one per response, and this
+ *   screen only paints it. A series with no cover drops the thumbnail rather than reserving an
+ *   empty box, which is the rendering this row already had and the one it keeps
+ *   ([scope tdd 1.8](docs/scope/tdd.md)).
  * - **The row gains its count and date range**, where the reference has only a title. That is the
  *   half of [3.3.5](docs/project/prd.md) a listing can carry, and it is what tells a member whether
  *   a study is four teachings or forty before they open it.
@@ -104,6 +106,14 @@ export function SeriesListing() {
           {series.map((one) => (
             <li key={one.id} className={styles.rowGroup}>
               <Link className={styles.row} href={seriesPagePath(one.id)}>
+                {/*
+                 * No alternative text: the title is rendered beside it, and a screen reader being
+                 * told it twice is the whole of what scope prd 4.3 rules out. Absent rather than an
+                 * empty frame when there is no cover (scope prd 3.2.6).
+                 */}
+                {one.artworkUrl === null ? null : (
+                  <img className={styles.rowCover} src={one.artworkUrl} alt="" />
+                )}
                 <span className={styles.rowText}>
                   <span className={styles.rowTitle}>{one.title}</span>
                   <span className={styles.rowMeta}>{seriesMeta(one)}</span>

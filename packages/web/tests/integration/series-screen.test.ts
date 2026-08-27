@@ -1,5 +1,5 @@
 import { afterAll, beforeAll, describe, expect, it, inject } from 'vitest';
-import { chromium, type Browser, type Page } from 'playwright';
+import { chromium, type Browser, type Locator, type Page } from 'playwright';
 import {
   DASHBOARD_PAGE_PATH,
   MEMBER_LIBRARY_PAGE_PATH,
@@ -15,6 +15,7 @@ import {
   setRecordingDescription,
   setRecordingPublication,
   setRecordingSeries,
+  setSeriesArtwork,
   upsertPlaybackProgress,
   type DatabaseHandle,
 } from '@thp/db';
@@ -55,11 +56,21 @@ const MIDDLE_TITLE = `Screen middle ${RUN}`;
 const LAST_TITLE = `Screen last ${RUN}`;
 const HIDDEN_TITLE = `Screen hidden in series ${RUN}`;
 const LOOSE_TITLE = `Screen no series ${RUN}`;
+const COVERED_SERIES_TITLE = `Screen covered series ${RUN}`;
+
+/**
+ * The key the covered series is pointed at. Nothing has to be behind it: what this suite asserts is
+ * the *frame* — that the row carries an `<img>`, that its `src` is the signed URL the API minted,
+ * and that the box crops from the centre rather than stretching. Whether the object decodes is
+ * scope plan 1.2's property, proved against the real store in `series-artwork.test.ts`.
+ */
+const COVER_KEY = `artwork/${RUN}-series-listing.webp`;
 
 let browser: Browser;
 let handle: DatabaseHandle;
 let member: TestAccount;
 let seriesId: string;
+let coveredSeriesId: string;
 let firstId: string;
 let looseId: string;
 let seeded = 0;
@@ -94,6 +105,15 @@ async function signInAs(
   return page;
 }
 
+/** One listing row, by the title it carries. */
+function rowFor(page: Page, title: string): Locator {
+  return page
+    .getByRole('list', { name: 'Series' })
+    .getByRole('listitem')
+    .filter({ hasText: title })
+    .first();
+}
+
 /** The menu's entries, in order, with the panel opened. */
 async function menuEntries(page: Page): Promise<string[]> {
   await page.getByRole('button', { name: 'Menu' }).click();
@@ -114,6 +134,10 @@ beforeAll(async () => {
   const hiddenSeriesId = (
     await insertSeries({ title: HIDDEN_SERIES_TITLE, description: null }, handle)
   ).id;
+  coveredSeriesId = (
+    await insertSeries({ title: COVERED_SERIES_TITLE, description: null }, handle)
+  ).id;
+  await setSeriesArtwork(coveredSeriesId, COVER_KEY, handle);
 
   // Out of insertion order on purpose, so "oldest recorded first" cannot pass by accident.
   await newRecording(MIDDLE_TITLE, '2026-02-15', seriesId, true);
@@ -121,6 +145,7 @@ beforeAll(async () => {
   firstId = await newRecording(FIRST_TITLE, '2026-01-12', seriesId, true);
   await newRecording(HIDDEN_TITLE, '2026-03-30', seriesId, false);
   await newRecording(`Screen unpublished only ${RUN}`, '2026-03-31', hiddenSeriesId, false);
+  await newRecording(`Screen covered ${RUN}`, '2026-04-02', coveredSeriesId, true);
   looseId = await newRecording(LOOSE_TITLE, '2026-07-07', null, true);
 
   await setRecordingDescription(firstId, 'An introduction to the letter.', handle);
@@ -170,7 +195,7 @@ describe('the series listing at /series', () => {
     }
   }, 180_000);
 
-  it('renders no artwork, no search box and no download control', async () => {
+  it('renders no search box and no download control', async () => {
     const page = await signInAs(member);
     try {
       await page.goto(`${baseUrl}${MEMBER_SERIES_PAGE_PATH}`, { waitUntil: 'domcontentloaded' });
@@ -179,10 +204,86 @@ describe('the series listing at /series', () => {
         .toBe(1);
 
       // Absent from the DOM, not merely hidden — the rule the whole member surface draws.
-      expect(await page.getByRole('list', { name: 'Series' }).locator('img').count()).toBe(0);
+      // A series with no cover still renders no frame at all; scope plan 2.5 is where that
+      // becomes a claim in its own right, across every surface at once.
+      expect(await rowFor(page, SERIES_TITLE).locator('img').count()).toBe(0);
       expect(await page.getByRole('searchbox').count()).toBe(0);
       expect(await page.getByRole('button', { name: 'Download' }).count()).toBe(0);
       expect(await page.getByRole('list', { name: 'Series' }).locator('[disabled]').count()).toBe(0);
+    } finally {
+      await page.context().close();
+    }
+  }, 120_000);
+
+  /**
+   * **The cover, on the row** (scope plan 2.1) — `pages/series-listing.png`'s thumbnail slot.
+   *
+   * The three claims are the frame rather than the picture: that the row carries one image and it
+   * is the signed URL the API minted, that the box crops from its centre rather than stretching to
+   * whatever shape the admin uploaded, and that it says nothing to a screen reader because the
+   * title is rendered beside it. What the bytes decode to is scope plan 1.2's property.
+   */
+  it('renders the cover as the thumbnail at the left of the row it belongs to', async () => {
+    const page = await signInAs(member);
+    try {
+      await page.goto(`${baseUrl}${MEMBER_SERIES_PAGE_PATH}`, { waitUntil: 'domcontentloaded' });
+      const cover = rowFor(page, COVERED_SERIES_TITLE).locator('img');
+      await expect.poll(() => cover.count(), { timeout: 30_000 }).toBe(1);
+
+      // The API's own signed URL, not a key and not a path this screen assembled.
+      const source = (await cover.getAttribute('src')) ?? '';
+      expect(source).toContain(COVER_KEY);
+      expect(source.startsWith('http://') || source.startsWith('https://')).toBe(true);
+      expect(source).toContain('X-Amz-Signature');
+
+      // At the left: before the title in the row's reading order, as the reference draws it.
+      const box = await cover.boundingBox();
+      const title = await rowFor(page, COVERED_SERIES_TITLE)
+        .getByText(COVERED_SERIES_TITLE)
+        .boundingBox();
+      expect(box).not.toBeNull();
+      expect(title).not.toBeNull();
+      expect((box as { x: number }).x).toBeLessThan((title as { x: number }).x);
+    } finally {
+      await page.context().close();
+    }
+  }, 120_000);
+
+  it('crops the thumbnail to its frame from the centre rather than stretching it', async () => {
+    const page = await signInAs(member);
+    try {
+      await page.goto(`${baseUrl}${MEMBER_SERIES_PAGE_PATH}`, { waitUntil: 'domcontentloaded' });
+      const cover = rowFor(page, COVERED_SERIES_TITLE).locator('img');
+      await expect.poll(() => cover.count(), { timeout: 30_000 }).toBe(1);
+
+      // `fill` is the default and is exactly the stretch scope prd 3.2.1 rules out; `50% 50%` is
+      // what makes the crop a centre crop rather than a corner one.
+      expect(await cover.evaluate((node) => getComputedStyle(node).objectFit)).toBe('cover');
+      expect(await cover.evaluate((node) => getComputedStyle(node).objectPosition)).toBe('50% 50%');
+
+      // The frame is the row's, fixed, whatever shape the uploaded image is.
+      const box = await cover.boundingBox();
+      expect(box).not.toBeNull();
+      const { width, height } = box as { width: number; height: number };
+      expect(width).toBeGreaterThan(0);
+      expect(height).toBeGreaterThan(0);
+      expect(width).toBeGreaterThan(height);
+    } finally {
+      await page.context().close();
+    }
+  }, 120_000);
+
+  it('gives the thumbnail no alternative text, because the title is beside it', async () => {
+    const page = await signInAs(member);
+    try {
+      await page.goto(`${baseUrl}${MEMBER_SERIES_PAGE_PATH}`, { waitUntil: 'domcontentloaded' });
+      const cover = rowFor(page, COVERED_SERIES_TITLE).locator('img');
+      await expect.poll(() => cover.count(), { timeout: 30_000 }).toBe(1);
+
+      // Empty, and present: `alt=""` is what takes it out of the accessibility tree. A missing
+      // attribute would leave a screen reader reading the file name (scope prd 4.3).
+      expect(await cover.getAttribute('alt')).toBe('');
+      expect(await rowFor(page, COVERED_SERIES_TITLE).getByRole('img').count()).toBe(0);
     } finally {
       await page.context().close();
     }

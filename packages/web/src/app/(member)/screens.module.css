@@ -221,6 +221,26 @@
 }
 
 /*
+ * The series cover, in the thumbnail slot `pages/series-listing.png` draws at the left of the row
+ * — roughly three tenths of the row's width there, which is what 7.5rem × 5rem comes to at the
+ * widths this listing is read at. A fixed 3:2 frame rather than one the image's own proportions
+ * decide, so a column of rows lines up whatever shape the admin uploaded; `object-fit: cover`
+ * with the default centre origin is what crops to it instead of stretching (scope prd 3.2.1).
+ * The tile radius rather than the row's, because it sits inside the row.
+ *
+ * There is no rule for the coverless row: the thumbnail is absent from the markup rather than
+ * emptied by a stylesheet, which is scope prd 3.2.6 held where it can be read.
+ */
+.rowCover {
+  flex: none;
+  width: 7.5rem;
+  height: 5rem;
+  object-fit: cover;
+  border-radius: var(--radius-sm);
+  background: var(--color-surface-raised);
+}
+
+/*
  * `flex: 1` so the chevron stays at the right edge whatever else the row carries. The library row
  * has two children and the series row has three — the leading `01.` — and without this the row's
  * `space-between` would push the number away from the title it belongs to.
