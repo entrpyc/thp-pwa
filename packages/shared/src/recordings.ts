@@ -38,6 +38,21 @@ export function recordingPagePath(recordingId: string): string {
   return `${MEMBER_LIBRARY_PAGE_PATH}/${recordingId}`;
 }
 
+/**
+ * Whether a path is one teaching's page — the route that **opens a teaching of its own**.
+ *
+ * Beside the builder above so the two cannot drift: the player asks this before restoring the last
+ * sitting into the transport, because a page that is about to open a teaching does not want one
+ * opened underneath it first.
+ */
+export function isRecordingPagePath(path: string): boolean {
+  const rest = path.startsWith(`${MEMBER_LIBRARY_PAGE_PATH}/`)
+    ? path.slice(MEMBER_LIBRARY_PAGE_PATH.length + 1)
+    : null;
+  // One segment and a non-empty one: `/recordings` is the library and `/recordings/x/y` is nothing.
+  return rest !== null && rest !== '' && !rest.includes('/');
+}
+
 /** One recording, under the API prefix. */
 export function recordingPath(recordingId: string): string {
   return `${RECORDINGS_PATH}/${recordingId}`;

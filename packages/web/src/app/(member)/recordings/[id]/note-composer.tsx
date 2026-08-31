@@ -1,6 +1,6 @@
 'use client';
 
-import { useState } from 'react';
+import { useEffect, useState } from 'react';
 import {
   MAX_NOTE_LENGTH,
   NOTE_RECORDING_GONE_MESSAGE,
@@ -10,6 +10,7 @@ import {
   type NoteVisibility,
 } from '@thp/shared';
 import { ApiClientError, apiFetch } from '@/client/api-client';
+import { clearNoteDraft, readNoteDraft, writeNoteDraft } from '@/client/notes/draft';
 import { usePlayer } from '../../player-context';
 import styles from './notes.module.css';
 
@@ -26,6 +27,11 @@ import styles from './notes.module.css';
  * **The text survives a refusal.** Every failure path below leaves `text` exactly where it was, so a
  * teaching that went away underneath the member costs them a press rather than a paragraph
  * (scope prd 3.1.11).
+ *
+ * **And it survives the composer.** An unsaved note is kept in local storage for as long as there
+ * is one — see `@/client/notes/draft` — so changing tab, walking to another screen or reloading
+ * gives the paragraph back rather than an empty box. The moment it is anchored to travels with it,
+ * because a note restored against the wrong second is worse than one that was lost.
  *
  * Every rule this applies is applied again by the API independently (3.1.7, 3.1.8) — the standing
  * rule the transcript panel's `canCorrect` prop already follows.
@@ -86,16 +92,34 @@ export function NoteComposer({
   const [text, setText] = useState('');
   const [visibility, setVisibility] = useState<NoteVisibility>('private');
   /**
-   * The moment this note will carry: the one the player is holding while nothing has been typed,
-   * and the one it was holding at the first keystroke ever after.
+   * The moment a **restored** draft was anchored to, or `null` when nothing was restored.
+   *
+   * It outranks the player, because a draft that came back from a closed tab carries its own
+   * moment: the player's anchor went with the composer when the composer went away, so deriving one
+   * now would silently re-anchor the paragraph to wherever the teaching has since reached.
+   */
+  const [draftAnchorMs, setDraftAnchorMs] = useState<number | null>(null);
+  /**
+   * The moment this note will carry: the one a restored draft brought with it, or the one the
+   * player is holding while nothing has been typed, or the one it was holding at the first
+   * keystroke ever after.
    *
    * Read from the player rather than taken as a prop, so the inline mount and the transport's sheet
    * cannot be looking at two different moments — which is what 3.1.2's *"both produce the same
    * note"* has to mean once the same composer is on screen twice.
    */
-  const anchorMs = player.composerAnchorMs ?? player.currentMs;
+  const anchorMs = draftAnchorMs ?? player.composerAnchorMs ?? player.currentMs;
   const [saving, setSaving] = useState(false);
   const [failure, setFailure] = useState<string | null>(null);
+  /**
+   * Whether the draft has been read back yet, so the first render never writes over it.
+   *
+   * State rather than a ref, and the difference matters: the read-back and this flag land in one
+   * re-render, so the effect that writes sees them together. Flipped in a ref it would read true
+   * while `text` was still the empty box of the render before it, and the write would delete the
+   * draft it had just restored.
+   */
+  const [hydrated, setHydrated] = useState(false);
 
   // Counted after trimming, so padding cannot push a real note over the ceiling and a composer
   // holding nothing but spaces is a composer holding nothing (3.1.6, 3.1.8).
@@ -103,6 +127,35 @@ export function NoteComposer({
   const overLimit = count > MAX_NOTE_LENGTH;
 
   const { refreshNotes, lockComposerAnchor, releaseComposerAnchor } = player;
+
+  /*
+   * **Read the draft back on mount, never during render.** Local storage does not exist on the
+   * server, so seeding the initial state from it would render one thing there and another here and
+   * fail hydration. An effect runs after the markup has matched, which is the right moment for
+   * anything the server could not have known.
+   */
+  useEffect(() => {
+    const draft = readNoteDraft(recordingId);
+    setHydrated(true);
+    if (draft === null) return;
+    setText(draft.text);
+    setVisibility(draft.visibility);
+    setDraftAnchorMs(draft.anchorMs);
+  }, [recordingId]);
+
+  /*
+   * **Kept in step on every change, not on the way out.** There is no event that reliably fires
+   * when a tab is closed or a phone puts the browser to sleep — `beforeunload` does not run on
+   * mobile — so the only save that is certain to have happened is the one that already has.
+   *
+   * Writing the *anchor* alongside is what makes the restored note the same note: the paragraph and
+   * the second it is about travel together or the pair is worth less than either.
+   */
+  useEffect(() => {
+    // Before the read-back, this would store the empty box over the draft it is about to restore.
+    if (!hydrated) return;
+    writeNoteDraft(recordingId, { text, visibility, anchorMs });
+  }, [anchorMs, hydrated, recordingId, text, visibility]);
 
   return (
     <form
@@ -120,6 +173,10 @@ export function NoteComposer({
         })
           .then(() => {
             setText('');
+            // The draft is the note until the note exists; once it does, it is a second copy of one
+            // the member can see in the list, and it would reopen the composer holding it again.
+            setDraftAnchorMs(null);
+            clearNoteDraft(recordingId);
             // Armed again: the member has finished this note, so the next one starts from wherever
             // the teaching has reached rather than from where this one did (3.1.1).
             releaseComposerAnchor();

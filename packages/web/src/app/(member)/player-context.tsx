@@ -10,10 +10,12 @@ import {
   useState,
   type ReactNode,
 } from 'react';
+import { usePathname } from 'next/navigation';
 import {
   PLAYBACK_SPEED_PATH,
   RESUME_PATH,
   isPlaybackSpeed,
+  isRecordingPagePath,
   nextPlaybackSpeed,
   recordingNotesPath,
   recordingPlaybackPath,
@@ -253,6 +255,8 @@ export function PlayerProvider({
   children: ReactNode;
 }) {
   const audioRef = useRef<HTMLAudioElement>(null);
+  // Which member screen is showing — read only to decide whether the last sitting is restored.
+  const pathname = usePathname();
 
   const [loaded, setLoaded] = useState<LoadedRecording | null>(null);
   const [playing, setPlaying] = useState(false);
@@ -365,6 +369,23 @@ export function PlayerProvider({
       setComposerAnchorMs(null);
       // A note id from the previous teaching names nothing in this one's list.
       setRevealedNoteId(null);
+      /*
+       * **The previous teaching's audio goes now, not when the new grant arrives.**
+       *
+       * `pointAt` replaces the source only if it succeeds, so a grant that fails left the element
+       * holding the *last* teaching — the bar naming one recording while the element held another,
+       * and a press on play producing the wrong sound. It also left that recording's metadata in
+       * place, which silently clamped this one's restored position to the previous one's duration.
+       *
+       * Dropping the source is not a cost on the ordinary path: the grant is on its way, and
+       * `renew` is the case where the source must survive — it keeps the same teaching and does not
+       * come through here.
+       */
+      const element = audioRef.current;
+      if (element !== null) {
+        element.removeAttribute('src');
+        element.load();
+      }
       // Fetched **on open rather than on tab open**, because the markers (3.2.4) are visible on the
       // transport without the Notes tab ever being pressed.
       loadNotes(recording.id);
@@ -501,13 +522,19 @@ export function PlayerProvider({
    * and a browser would refuse the autoplay regardless. `open` sets `wantsPlay` false and arms the
    * seek, which is exactly the state the recording page leaves the bar in.
    *
-   * Twice guarded against clobbering a real choice — before the request and again when it answers.
-   * A member who lands directly on a teaching has opened it while this was in flight, and the row
-   * that comes back is then the *previous* sitting: dropping it there is what stops a slow answer
-   * from replacing what somebody is listening to.
+   * **Not on a teaching's own page.** That route opens a teaching itself, so restoring one here
+   * would be a second grant, a second notes fetch and a stretch of seconds where the bar names the
+   * *previous* sitting before the page replaces it — work nobody asked for and a bar that lies
+   * while it is going on. Every other member screen has no teaching of its own and is exactly where
+   * this belongs.
+   *
+   * Twice guarded against clobbering a real choice even so — before the request and again when it
+   * answers. A member can navigate onto a teaching while this is in flight, and the row that comes
+   * back is then the previous sitting: dropping it there is what stops a slow answer from replacing
+   * what somebody is listening to.
    */
   useEffect(() => {
-    if (loadedRef.current !== null) return;
+    if (loadedRef.current !== null || isRecordingPagePath(pathname)) return;
     let live = true;
 
     void apiFetch<ResumePayload>(RESUME_PATH, { credentials: 'include' })
@@ -532,7 +559,7 @@ export function PlayerProvider({
     return () => {
       live = false;
     };
-  }, [open]);
+  }, [open, pathname]);
 
   // The pre-emptive half of renewal, so the member does not hear the gap the error path costs.
   useEffect(() => {

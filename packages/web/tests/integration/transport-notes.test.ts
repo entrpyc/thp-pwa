@@ -130,9 +130,23 @@ async function waitForAudio(page: Page): Promise<void> {
     .toBeGreaterThan(TEACHING_SECONDS - 5);
 }
 
+/**
+ * The transport bar itself.
+ *
+ * Everything below that looks for a marker looks for it **here**. The notes panel opens with the
+ * recording page now, and each card in it is labelled "The note at 00:30" — which the marker
+ * pattern matches. Unscoped, the ticks and the list would be counted together and every count in
+ * this file would be the sum of two features rather than a fact about either.
+ */
+function bar(page: Page) {
+  return page.getByRole('region', { name: 'Player' });
+}
+
 /** Every marker's accessible label, in the order they sit on the track. */
 async function markerLabels(page: Page): Promise<string[]> {
-  const labels = await page.getByRole('button', { name: /notes? (at|from) /i }).all();
+  const labels = await bar(page)
+    .getByRole('button', { name: /notes? (at|from) /i })
+    .all();
   return Promise.all(labels.map(async (one) => (await one.getAttribute('aria-label')) ?? ''));
 }
 
@@ -158,7 +172,8 @@ async function leaveForTheLibrary(page: Page): Promise<void> {
  * testing a design the component does not have.
  */
 async function pressMarker(page: Page, label: string): Promise<void> {
-  await page.getByRole('button', { name: label }).click({ position: { x: 1, y: 2 } });
+  // The bar's tick, never a card in the list — pressing a marker is a transport action.
+  await bar(page).getByRole('button', { name: label }).click({ position: { x: 1, y: 2 } });
 }
 
 async function audioState(page: Page): Promise<{ currentTime: number; paused: boolean }> {
@@ -234,7 +249,7 @@ describe('the transport shows where the teaching has been annotated', () => {
       // Three visible notes, two of them inside one collapse window — so two ticks (3.2.6).
       await expect.poll(() => markerLabels(page).then((all) => all.length)).toBe(2);
 
-      const drawn = await page
+      const drawn = await bar(page)
         .getByRole('button', { name: /notes? (at|from) /i })
         .first()
         .evaluate((tick) => {
@@ -267,8 +282,10 @@ describe('the transport shows where the teaching has been annotated', () => {
     try {
       await expect.poll(() => markerLabels(page).then((all) => all.length)).toBe(2);
 
+      // Inside the bar, for the reason `bar()` gives — the open notes panel carries cards whose
+      // labels this filter would otherwise match, and they have no `left` of their own.
       const offsets = await page.evaluate(() =>
-        [...document.querySelectorAll('button[aria-label*="ote"]')]
+        [...(document.querySelector('[aria-label="Player"]')?.querySelectorAll('button') ?? [])]
           .filter((one) => /notes? (at|from) /i.test(one.getAttribute('aria-label') ?? ''))
           .map((one) => (one as HTMLElement).style.left),
       );
@@ -460,6 +477,17 @@ describe('a member writes a note from the transport, on any screen', () => {
   it('offers a speech-bubble beside the captions item, opening the composer as a sheet', async () => {
     const page = await openTeaching(bareId);
     try {
+      /*
+       * Shut the Notes tab first. It opens with the recording page now, and its panel holds a
+       * composer of its own — so the count below would be two forms and would say nothing about
+       * where this one came from. What is being shown here is that the transport opens a composer
+       * **over the current screen rather than inside a tab**, and that needs the tab shut.
+       */
+      await page.getByRole('tab', { name: 'Notes' }).click();
+      await expect
+        .poll(() => page.getByRole('form', { name: 'Write a note' }).count())
+        .toBe(0);
+
       const toolbar = page.getByRole('navigation', { name: 'Player tools' });
       expect(await toolbar.count()).toBe(0);
 
@@ -481,6 +509,12 @@ describe('a member writes a note from the transport, on any screen', () => {
   it('names the teaching above the frozen timestamp', async () => {
     const page = await openTeaching(bareId);
     try {
+      // Shut the tab that opens with the page, so the one composer on screen is the sheet's.
+      await page.getByRole('tab', { name: 'Notes' }).click();
+      await expect
+        .poll(() => page.getByRole('form', { name: 'Write a note' }).count())
+        .toBe(0);
+
       await page.getByRole('button', { name: 'More player controls' }).click();
       await page.getByRole('button', { name: 'Write a note' }).click();
       await expect.poll(() => page.getByRole('form', { name: 'Write a note' }).count()).toBe(1);

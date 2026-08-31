@@ -39,10 +39,11 @@ type OpenTab = 'scripture' | 'notes' | 'transcript' | null;
  * - **`Scripture` is drawn only for a teaching that has some** (active-scope prd 3.4.4) — the same
  *   line, one step further: a destination with no data behind it is left out rather than offered
  *   empty. The recording payload carries `hasScripture` so that decision costs no request.
- * - **The tabs start closed.** A member who never opens it downloads no transcript; pressing it is
- *   what asks for one, and pressing it again puts it away. The notes are the exception and are
- *   fetched when the teaching is opened, because their markers show on the transport without the
- *   tab (active-scope prd 3.2.4).
+ * - **`Notes` starts open; everything else starts closed.** A member who never presses `Transcript`
+ *   downloads no transcript — pressing it is what asks for one, and pressing it again puts it away.
+ *   The notes are the exception at both ends: they are fetched when the *teaching* is opened,
+ *   because their markers show on the transport without the tab (active-scope prd 3.2.4), so the
+ *   panel is drawing something the page already holds and there is nothing to save by hiding it.
  * - **No chapter list, no chapter search, no download control.** All deferred; all dropped rather
  *   than disabled.
  *
@@ -67,7 +68,13 @@ export function RecordingScreen({
   const player = usePlayer();
   const [recording, setRecording] = useState<Recording | null>(null);
   const [failure, setFailure] = useState<string | null>(null);
-  const [openTab, setOpenTab] = useState<OpenTab>(null);
+  /*
+   * **Notes is open when the page is.** Every other tab is a download a member asks for, but the
+   * notes are already in hand — the player fetches them on open, because the transport's markers
+   * draw from them without any tab being pressed — so opening the panel costs nothing and is what
+   * a member came to the page for. Pressing it still closes it.
+   */
+  const [openTab, setOpenTab] = useState<OpenTab>('notes');
 
   /**
    * `home › series › recording` when this teaching is in one, and today's two segments when it is

@@ -111,7 +111,11 @@ async function openTeaching(id: string): Promise<{ page: Page; requests: Request
  * the ordering assertion a fact about decoration.
  */
 async function tabNames(page: Page): Promise<string[]> {
-  return page.locator('[role="tab"]').evaluateAll((tabs) =>
+  // Scoped to the teaching's own strip. `Notes` opens with the page now, and the panel it opens has
+  // a filter strip of its own — All, Public, Mine — so every tab on the page is more than this one.
+  return page
+    .locator('[role="tablist"][aria-label="Teaching contents"] [role="tab"]')
+    .evaluateAll((tabs) =>
     tabs.map((tab) => {
       const label = tab.getAttribute('aria-label');
       if (label !== null) return label;

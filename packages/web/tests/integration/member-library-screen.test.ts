@@ -258,12 +258,19 @@ describe('the recording page at /recordings/[id]', () => {
       expect(await page.getByText('What this teaching is about.').count()).toBe(1);
       expect(await page.getByText('Recorded 14 Jul 2026').count()).toBe(1);
 
-      // Two of the reference's five tabs have data. The strip arrived in Story 5 holding
-      // `Transcript` and gained `Notes` beside it; the other three are dropped rather than
-      // rendered disabled.
-      expect(await page.getByRole('tablist').count()).toBe(1);
-      expect(await page.getByRole('tab').count()).toBe(2);
-      expect(await page.getByRole('tab', { name: 'Notes' }).count()).toBe(1);
+      /*
+       * Two of the reference's five tabs have data. The strip arrived in Story 5 holding
+       * `Transcript` and gained `Notes` beside it; the other three are dropped rather than
+       * rendered disabled.
+       *
+       * Counted **inside the teaching's own strip**, because it is no longer the only one on the
+       * page: `Notes` opens with the page, and the notes panel has a filter strip of its own. An
+       * unscoped count would be counting two features at once and would say nothing about either.
+       */
+      const strip = page.getByRole('tablist', { name: 'Teaching contents' });
+      expect(await strip.count()).toBe(1);
+      expect(await strip.getByRole('tab').count()).toBe(2);
+      expect(await strip.getByRole('tab', { name: 'Notes' }).count()).toBe(1);
       for (const absent of ['Chapter', 'Scripture', 'Mindmap', 'Download']) {
         expect(await page.getByRole('tab', { name: absent }).count(), absent).toBe(0);
         expect(await page.getByRole('button', { name: absent }).count(), absent).toBe(0);

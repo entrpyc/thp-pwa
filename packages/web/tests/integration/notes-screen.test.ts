@@ -164,8 +164,15 @@ async function audioState(page: Page): Promise<{ currentTime: number; paused: bo
   });
 }
 
+/**
+ * Make sure the notes panel is showing — **ensure, not toggle**.
+ *
+ * `Notes` is the tab the recording page opens with, and pressing an open tab closes it. Every
+ * caller here means "the panel is on screen", so the press only happens when it is not.
+ */
 async function openNotes(page: Page): Promise<void> {
-  await page.getByRole('tab', { name: 'Notes' }).click();
+  const tab = page.getByRole('tab', { name: 'Notes' });
+  if ((await tab.getAttribute('aria-selected')) !== 'true') await tab.click();
   await expect
     .poll(() => page.getByRole('form', { name: 'Write a note' }).count(), { timeout: 30_000 })
     .toBe(1);
@@ -298,9 +305,20 @@ describe('the recording page carries a Notes tab', () => {
         .poll(() => asked.filter((url) => url === wanted).length, { timeout: 30_000 })
         .toBe(1);
 
-      // The markers (3.2.4) are on the transport without the tab, which is the whole reason this
-      // request does not wait for it.
-      expect(await page.getByRole('form', { name: 'Write a note' }).count()).toBe(0);
+      /*
+       * The markers (3.2.4) are on the transport without the tab, which is the whole reason this
+       * request does not wait for it.
+       *
+       * `Notes` opens with the page now, so "it did not wait for the tab" is shown the other way
+       * round: shutting the tab and opening it again asks for nothing more. The panel draws what
+       * the player already holds, and a fetch of its own would show up here as a second request.
+       */
+      const notesTab = page.getByRole('tab', { name: 'Notes' });
+      await notesTab.click();
+      await expect.poll(() => page.getByRole('form', { name: 'Write a note' }).count()).toBe(0);
+      await notesTab.click();
+      await expect.poll(() => page.getByRole('form', { name: 'Write a note' }).count()).toBe(1);
+      expect(asked.filter((url) => url === wanted).length).toBe(1);
     } finally {
       await context.close();
     }
@@ -448,8 +466,7 @@ describe('the recording page carries a Notes tab', () => {
         waitUntil: 'domcontentloaded',
       });
       await waitForAudio(page);
-      await page.getByRole('tab', { name: 'Notes' }).click();
-
+      // The tab opens with the page, so the failure is already on screen — no press needed.
       await expect
         .poll(() => page.textContent('body'), { timeout: 30_000 })
         .toContain("Couldn't load notes.");
@@ -999,7 +1016,12 @@ describe('a note is reachable from its moment and its moment from the note', () 
     const page = await openTeaching(where, { withAudio: true });
     try {
       await waitForAudio(page);
-      // The tab starts shut — pressing a marker is what opens it.
+      /*
+       * Shut it first. `Notes` is the tab the page opens with, and what this test is *for* is that
+       * a marker opens the tab — which cannot be shown against a tab that was already open. So the
+       * premise is established rather than assumed, and the assertion below still means something.
+       */
+      await page.getByRole('tab', { name: 'Notes' }).click();
       expect(
         await page.getByRole('tab', { name: 'Notes' }).getAttribute('aria-selected'),
       ).toBe('false');
