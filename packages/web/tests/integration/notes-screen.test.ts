@@ -394,7 +394,13 @@ describe('the recording page carries a Notes tab', () => {
       expect(await first.innerText()).toContain(member.displayName);
       // "Test notes-member-…" → the monogram of the first and last words.
       expect(await first.innerText()).toContain(monogramOf(member.displayName));
-      expect(await first.innerText()).toMatch(/\d{1,2} \w{3} \d{4}/);
+      /*
+       * `1 Sept 2026` as readily as `1 Sep 2026`. **`en-GB` abbreviates September to four letters**
+       * and every other month to three, so a pattern demanding exactly three passes for eleven
+       * months of the year and fails for the twelfth — which is a test that reports the calendar
+       * rather than the card.
+       */
+      expect(await first.innerText()).toMatch(/\d{1,2} \w{3,4} \d{4}/);
 
       // The **Private** pill is on the member's own private note and on neither of the others.
       expect(await first.getByText('Private', { exact: true }).count()).toBe(1);
@@ -1184,7 +1190,8 @@ describe('the group reads and writes a conversation under a note', () => {
 
       const text = await replies.first().innerText();
       expect(text).toContain(neighbour.displayName);
-      expect(text).toMatch(/\d{1,2} \w{3} \d{4}/);
+      // Three letters or four — `en-GB`'s September is `Sept`. See the note on the same pattern above.
+      expect(text).toMatch(/\d{1,2} \w{3,4} \d{4}/);
       // A reply has no moment of its own, so it has no link to one — while the parent does.
       expect(await replies.first().getByRole('button', { name: /The note at/ }).count()).toBe(0);
       expect(await one.getByRole('button', { name: 'The note at 00:10' }).count()).toBe(1);
