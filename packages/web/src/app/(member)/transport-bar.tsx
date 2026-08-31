@@ -1,9 +1,10 @@
 'use client';
 
 import Link from 'next/link';
-import { useState } from 'react';
+import { useEffect, useRef, useState, type PointerEvent as ReactPointerEvent } from 'react';
 import {
   NOW_PLAYING_PAGE_PATH,
+  PLAYBACK_SPEEDS,
   formatPlaybackSpeed,
   formatTimecode,
   type NoteView,
@@ -67,6 +68,15 @@ function totalLabel(durationMs: number): string {
  */
 const COLLAPSE_FRACTION = 0.01;
 
+/**
+ * How long the rate pill must be held before it becomes the picker rather than a step.
+ *
+ * Long enough that a tap never opens a strip that flashes and closes, short enough that a member
+ * who meant to hold is not left pressing a control that has not answered. The platform long-press
+ * is around half a second and is a *different* gesture — this one is over before that fires.
+ */
+const SPEED_HOLD_MS = 220;
+
 /** One tick: where it sits, and every note that reads as being there. */
 interface Marker {
   readonly positionMs: number;
@@ -112,6 +122,53 @@ export function TransportBar() {
   const player = usePlayer();
   const [toolbarOpen, setToolbarOpen] = useState(false);
   const [sheetOpen, setSheetOpen] = useState(false);
+  const toolbarRef = useRef<HTMLElement>(null);
+  const moreRef = useRef<HTMLButtonElement>(null);
+
+  /**
+   * The step the thumb is over while the rate picker is held open, or `null` when the picker is
+   * closed. One piece of state for both, because a picker with nothing armed is a picker that is
+   * not open — the gesture always begins armed at the rate that is already playing.
+   */
+  const [armedSpeed, setArmedSpeed] = useState<number | null>(null);
+  const speedPickerRef = useRef<HTMLDivElement>(null);
+  /** Set on the release of a rate gesture, so the click behind it is not read as a second press. */
+  const speedHandledRef = useRef(false);
+
+  // Set by the `···` gesture on release, so the compatibility click it may produce is not read as a
+  // second press. A keyboard press clears it first, which is what keeps Enter and Space working.
+  const pointerHandledRef = useRef(false);
+
+  /*
+   * An open toolbar closes on a press anywhere else — the tap-away a member already expects of a
+   * menu, and the only way out on touch, where there is no Escape. The `···` is excluded because
+   * its own handler is the toggle: closing here first would let the press that shuts the toolbar
+   * re-open it. `pointerdown` rather than `click`, so the toolbar is gone before the press lands
+   * on the control underneath it, and the listeners exist only while it is open.
+   */
+  useEffect(() => {
+    if (!toolbarOpen) return;
+
+    function onPointerDown(event: PointerEvent) {
+      const target = event.target;
+      if (!(target instanceof Node)) return;
+      if (toolbarRef.current?.contains(target)) return;
+      if (moreRef.current?.contains(target)) return;
+      setToolbarOpen(false);
+    }
+
+    function onKeyDown(event: KeyboardEvent) {
+      if (event.key === 'Escape') setToolbarOpen(false);
+    }
+
+    document.addEventListener('pointerdown', onPointerDown);
+    document.addEventListener('keydown', onKeyDown);
+    return () => {
+      document.removeEventListener('pointerdown', onPointerDown);
+      document.removeEventListener('keydown', onKeyDown);
+    };
+  }, [toolbarOpen]);
+
   if (player.loaded === null) return null;
 
   const max = player.durationMs > 0 ? player.durationMs : 0;
@@ -128,36 +185,140 @@ export function TransportBar() {
    */
   const markers = max === 0 ? [] : collapse(player.notes?.notes ?? [], max);
 
+  /*
+   * The `···` opens on **press** rather than on release, which is what makes it two controls in one
+   * gesture: lift without moving and it behaves as the tap it looks like, or keep holding, slide
+   * onto a tool and lift there to fire it — the press-drag-release of a phone's own long-press
+   * menus, and one gesture rather than three where the toolbar sits a thumb's width above the bar.
+   *
+   * The tool is found by hit-testing the release point rather than by the event's target, because
+   * touch retargets every move back to the element the press began on; and it is fired by clicking
+   * it, so the drag and a plain tap run the very same handler. A release anywhere else closes the
+   * toolbar and triggers nothing, which is the escape hatch for a press that was a mistake.
+   */
+  function openToolbarOnPress(event: ReactPointerEvent<HTMLButtonElement>) {
+    // Only the primary button opens it; a right-click belongs to the browser's own menu.
+    if (event.button !== 0) return;
+
+    const wasOpen = toolbarOpen;
+    pointerHandledRef.current = false;
+    setToolbarOpen(true);
+
+    function finish() {
+      document.removeEventListener('pointerup', onPointerUp);
+      document.removeEventListener('pointercancel', onCancel);
+    }
+
+    function onPointerUp(up: PointerEvent) {
+      finish();
+      pointerHandledRef.current = true;
+
+      const under = document.elementFromPoint(up.clientX, up.clientY);
+      const tool = under === null ? null : under.closest('button');
+
+      if (tool !== null && toolbarRef.current?.contains(tool)) {
+        // The tool's own handler is the action, and it is what closes the toolbar behind it.
+        tool.click();
+        return;
+      }
+
+      // Lifted on the `···` itself: the tap, so it toggles what the press found.
+      if (under !== null && moreRef.current?.contains(under)) {
+        setToolbarOpen(!wasOpen);
+        return;
+      }
+
+      setToolbarOpen(false);
+    }
+
+    function onCancel() {
+      finish();
+      pointerHandledRef.current = true;
+      setToolbarOpen(wasOpen);
+    }
+
+    document.addEventListener('pointerup', onPointerUp);
+    document.addEventListener('pointercancel', onCancel);
+  }
+
+  /*
+   * **The rate pill is two controls in one press.** A tap is the step it always was — one press,
+   * one step, which is what `bottom-navigation/default.png` draws and what a member reaching for
+   * "a bit faster" wants. Held, it opens the whole scale and lets the thumb slide to any step on
+   * it, which is the way to 0.5 that does not cost five taps past the one you wanted.
+   *
+   * The hold is a **timer, not a distance**: a tap must not open a strip that flashes and vanishes,
+   * and a member holding still has not moved anywhere to measure. Until it fires the press is a
+   * tap; after it, the release is a choice and never a step.
+   *
+   * The step under the release is found by hit-testing rather than by the event's target, for the
+   * reason the `···` gesture gives: touch retargets every move back to the element the press began
+   * on, so the target is always the pill.
+   */
+  function openSpeedPickerOnPress(event: ReactPointerEvent<HTMLButtonElement>) {
+    if (event.button !== 0) return;
+    speedHandledRef.current = false;
+
+    let picking = false;
+    const hold = window.setTimeout(() => {
+      picking = true;
+      // Armed at what is playing, so a release that never moved changes nothing.
+      setArmedSpeed(player.speed);
+    }, SPEED_HOLD_MS);
+
+    function stepUnder(x: number, y: number): number | null {
+      const under = document.elementFromPoint(x, y);
+      const step = under === null ? null : under.closest('[data-speed]');
+      if (step === null || !speedPickerRef.current?.contains(step)) return null;
+      const value = Number(step.getAttribute('data-speed'));
+      return Number.isNaN(value) ? null : value;
+    }
+
+    function finish() {
+      window.clearTimeout(hold);
+      document.removeEventListener('pointermove', onPointerMove);
+      document.removeEventListener('pointerup', onPointerUp);
+      document.removeEventListener('pointercancel', onCancel);
+    }
+
+    function onPointerMove(move: PointerEvent) {
+      if (!picking) return;
+      // Off the strip the arming holds rather than clearing: a thumb that wanders a few pixels wide
+      // of a row has not asked to cancel, and a release out there closes with no change anyway.
+      const step = stepUnder(move.clientX, move.clientY);
+      if (step !== null) setArmedSpeed(step);
+    }
+
+    function onPointerUp(up: PointerEvent) {
+      finish();
+      speedHandledRef.current = true;
+
+      if (!picking) {
+        // Never held: the tap the pill has always been.
+        player.cycleSpeed();
+        return;
+      }
+
+      const step = stepUnder(up.clientX, up.clientY);
+      setArmedSpeed(null);
+      // Released off the strip — including back on the pill underneath it — is the way out of a
+      // hold nobody meant, so it chooses nothing.
+      if (step !== null) player.chooseSpeed(step);
+    }
+
+    function onCancel() {
+      finish();
+      speedHandledRef.current = true;
+      setArmedSpeed(null);
+    }
+
+    document.addEventListener('pointermove', onPointerMove);
+    document.addEventListener('pointerup', onPointerUp);
+    document.addEventListener('pointercancel', onCancel);
+  }
+
   return (
     <div className={styles.dock}>
-      {toolbarOpen ? (
-        <nav className={styles.toolbar} aria-label="Player tools">
-          <button
-            className={styles.tool}
-            type="button"
-            aria-label="Write a note"
-            onClick={() => {
-              // The sheet opens armed, exactly as the tab does — one player, one moment, so the
-              // two entry points cannot disagree about which one a note carries (3.1.1, 3.1.2).
-              player.releaseComposerAnchor();
-              setSheetOpen(true);
-              setToolbarOpen(false);
-            }}
-          >
-            <span aria-hidden="true">🗨</span>
-          </button>
-          <button
-            className={styles.tool}
-            type="button"
-            aria-pressed={player.captionsOn}
-            aria-label="Captions"
-            onClick={() => player.setCaptions(!player.captionsOn)}
-          >
-            CC
-          </button>
-        </nav>
-      ) : null}
-
       {sheetOpen ? (
         <section className={styles.sheet} aria-label="Note composer">
           <NoteComposer
@@ -178,9 +339,17 @@ export function TransportBar() {
         </section>
       ) : null}
 
-      {player.captionsOn && spoken !== null ? (
+      {/*
+        Captions on means the pill **stays**, silence included. A pill that vanished between lines
+        would take the dismiss control with it and shift every control under it back and forth for
+        the length of a pause — so a gap draws a dash instead, which says the captions are running
+        and this moment has no words rather than leaving a member to wonder which.
+      */}
+      {player.captionsOn ? (
         <section className={styles.caption} aria-label="Caption">
-          <span className={styles.captionText}>{spoken.text}</span>
+          <span className={styles.captionText}>
+            {spoken === null ? <span aria-hidden="true">–</span> : spoken.text}
+          </span>
           <button
             className={styles.captionDismiss}
             type="button"
@@ -311,24 +480,135 @@ export function TransportBar() {
           <span className={styles.time}>{totalLabel(player.durationMs)}</span>
         </div>
 
-        <button
-          className={styles.more}
-          type="button"
-          aria-label="More player controls"
-          aria-expanded={toolbarOpen}
-          onClick={() => setToolbarOpen((open) => !open)}
-        >
-          <span aria-hidden="true">···</span>
-        </button>
+        {/*
+          The `···` and the strip it opens, together. The strip hangs off the button rather than
+          sitting in the dock's column: opening a menu must not push the caption pill or the note
+          composer up the screen, and it must open in the same place every time — which is here,
+          over whatever else the dock is showing.
+        */}
+        <span className={styles.moreSlot}>
+          {toolbarOpen ? (
+            <nav className={styles.toolbar} ref={toolbarRef} aria-label="Player tools">
+              <button
+                className={styles.tool}
+                type="button"
+                aria-label="Write a note"
+                aria-pressed={sheetOpen}
+                onClick={() => {
+                  setToolbarOpen(false);
+                  /*
+                   * **The same press puts it away**, the way `CC` beside it does. A member who
+                   * opened the composer and then reached back for the same control meant to close
+                   * it, and sending them to `Cancel` for that is a second thing to learn for
+                   * something they have already said.
+                   *
+                   * The anchor is released either way — the provider releases it on an open and on
+                   * a close alike, because a composer that is not there is composing nothing and
+                   * the next one starts from wherever the teaching has reached (3.1.1, 3.1.2).
+                   * Opening this way is therefore the same open the Notes tab performs.
+                   */
+                  player.releaseComposerAnchor();
+                  setSheetOpen((open) => !open);
+                }}
+              >
+                <span aria-hidden="true">🗨</span>
+              </button>
+              <button
+                className={styles.tool}
+                type="button"
+                aria-pressed={player.captionsOn}
+                aria-label="Captions"
+                onClick={() => {
+                  player.setCaptions(!player.captionsOn);
+                  setToolbarOpen(false);
+                }}
+              >
+                CC
+              </button>
+            </nav>
+          ) : null}
 
-        <button
-          className={styles.speed}
-          type="button"
-          aria-label={`Playback speed ${formatPlaybackSpeed(player.speed)}`}
-          onClick={() => player.cycleSpeed()}
-        >
-          {formatPlaybackSpeed(player.speed)}
-        </button>
+          <button
+            className={styles.more}
+            type="button"
+            ref={moreRef}
+            aria-label="More player controls"
+            aria-expanded={toolbarOpen}
+            onPointerDown={openToolbarOnPress}
+            // Enter and Space reach the button as a click with no pointer sequence behind it, and
+            // that is the one click that still toggles. Clearing the flag first is what tells the
+            // two apart without reading anything as fragile as the event's detail count.
+            onKeyDown={() => {
+              pointerHandledRef.current = false;
+            }}
+            onClick={() => {
+              if (pointerHandledRef.current) {
+                pointerHandledRef.current = false;
+                return;
+              }
+              setToolbarOpen((open) => !open);
+            }}
+          >
+            <span aria-hidden="true">···</span>
+          </button>
+        </span>
+
+        {/*
+          The rate pill and the scale it opens on a hold, anchored the same way and for the same
+          reasons — over the page, and over the pill the thumb is already on. The whole scale is
+          drawn, fastest at the top, so moving up moves the rate up.
+        */}
+        <span className={styles.speedSlot}>
+          {armedSpeed === null ? null : (
+            <div
+              className={styles.speedPicker}
+              ref={speedPickerRef}
+              role="group"
+              aria-label="Playback speed"
+            >
+              {[...PLAYBACK_SPEEDS].reverse().map((step) => (
+                <button
+                  key={step}
+                  className={`${styles.speedStep}${
+                    step === player.speed ? ` ${styles.speedStepCurrent}` : ''
+                  }${step === armedSpeed ? ` ${styles.speedStepArmed}` : ''}`}
+                  type="button"
+                  data-speed={step}
+                  aria-pressed={step === player.speed}
+                  // The gesture that opened this is what usually chooses; this is for the press
+                  // that did not come through it, so a click on a step still means that step.
+                  onClick={() => {
+                    player.chooseSpeed(step);
+                    setArmedSpeed(null);
+                  }}
+                >
+                  {formatPlaybackSpeed(step)}
+                </button>
+              ))}
+            </div>
+          )}
+
+          <button
+            className={styles.speed}
+            type="button"
+            aria-label={`Playback speed ${formatPlaybackSpeed(player.speed)}`}
+            onPointerDown={openSpeedPickerOnPress}
+            // Enter and Space arrive as a click with no pointer sequence behind them, and that is
+            // the one click that still steps. Clearing the flag first is what tells the two apart.
+            onKeyDown={() => {
+              speedHandledRef.current = false;
+            }}
+            onClick={() => {
+              if (speedHandledRef.current) {
+                speedHandledRef.current = false;
+                return;
+              }
+              player.cycleSpeed();
+            }}
+          >
+            {formatPlaybackSpeed(player.speed)}
+          </button>
+        </span>
       </section>
     </div>
   );

@@ -20,7 +20,7 @@ import styles from '../../screens.module.css';
  * The reference draws a screen this epic has almost none of, and every absence is a deferral with
  * a named home rather than an omission:
  *
- * - **The hero band is the series' cover**, full-bleed and 3:1 as the reference draws it, fading
+ * - **The hero band is the series' cover**, the column's width and 3:1 as the reference draws it, fading
  *   into the page at its foot and carrying the back control over it (scope prd 3.2.2, 3.2.7). A
  *   series with no cover keeps the flat `--color-bg-deep` strip the band was before covers
  *   arrived — nothing is drawn for artwork that does not exist (scope prd 3.2.6).

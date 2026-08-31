@@ -13,6 +13,7 @@ import {
 } from '@thp/shared';
 import { ApiClientError, apiFetch } from '@/client/api-client';
 import { useBreadcrumbTrail, usePlayer } from '../../player-context';
+import { CollapsibleProse } from './collapsible-prose';
 import { NotesPanel } from './notes-panel';
 import { ScripturePanel } from './scripture-panel';
 import { TranscriptPanel } from './transcript-panel';
@@ -26,7 +27,7 @@ type OpenTab = 'scripture' | 'notes' | 'transcript' | null;
  *
  * The reference, read against what this epic has:
  *
- * - **The hero band is the cover of the series this teaching is in**, full-bleed and 3:1 as
+ * - **The hero band is the cover of the series this teaching is in**, the column's width and 3:1 as
  *   `pages/chapter.png` draws it, with the back control over it (scope prd 3.2.3, 3.2.7). The
  *   cover is the *series'* — a recording has none of its own — so every teaching in one study
  *   shows the same picture, and a teaching in no series keeps the flat band (scope prd 3.2.6).
@@ -192,30 +193,44 @@ export function RecordingScreen({
             </div>
           </header>
 
+          {/*
+            Both blocks open rather than run: a summary is as long as the teaching was and a
+            description is as long as an admin typed, so between them they can push the tab strip
+            off the screen on the way to a transcript. Clamped, they cost six lines each and the
+            strip stays where a member left it.
+          */}
           {recording.summary === null ? null : (
-            <section className={styles.card} aria-label="Summary">
-              <h2 className={styles.cardTitle}>Summary</h2>
-              <p className={styles.prose}>{recording.summary}</p>
-            </section>
+            <CollapsibleProse label="Summary" text={recording.summary} />
           )}
 
           {recording.description === null ? null : (
-            <section className={styles.card} aria-label="Description">
-              <h2 className={styles.cardTitle}>Description</h2>
-              <p className={styles.prose}>{recording.description}</p>
-            </section>
+            <CollapsibleProse label="Description" text={recording.description} />
           )}
 
           {/*
-            `pages/recording.png`'s strip, same pill shape and same spacing, in the reference's own
-            order — `Scripture`, then `Notes`, then `Transcript`. When `Chapter` and `Mindmap`
-            arrive they are entries here, not a different control.
+            `pages/recording.png`'s strip, same pill shape and same spacing. The order is `Notes`,
+            then `Scripture`, then `Transcript` — the reference draws `Scripture` first, but `Notes`
+            is the tab a member returns to and the one entry that is always there, so it takes the
+            first slot rather than moving whenever a teaching happens to cite nothing. When
+            `Chapter` and `Mindmap` arrive they are entries here, not a different control.
 
             `Notes` is the one place in the product entitled to the green (style-guide principle 5),
             so its icon and its selected state take `--color-notes` where `Transcript` takes the
             purple every other selected thing takes.
           */}
           <div className={styles.tabs} role="tablist" aria-label="Teaching contents">
+            <button
+              className={`${styles.tab} ${styles.notesTab}`}
+              type="button"
+              role="tab"
+              aria-selected={openTab === 'notes'}
+              onClick={() => setOpenTab((open) => (open === 'notes' ? null : 'notes'))}
+            >
+              <span className={styles.notesIcon} aria-hidden="true">
+                ✎
+              </span>
+              Notes
+            </button>
             {/*
               Absent entirely rather than disabled for a teaching that cites nothing (3.4.4) — the
               same line the strip already draws for `Chapter` and `Mindmap`, decided off the payload
@@ -233,18 +248,6 @@ export function RecordingScreen({
               </button>
             ) : null}
             <button
-              className={`${styles.tab} ${styles.notesTab}`}
-              type="button"
-              role="tab"
-              aria-selected={openTab === 'notes'}
-              onClick={() => setOpenTab((open) => (open === 'notes' ? null : 'notes'))}
-            >
-              <span className={styles.notesIcon} aria-hidden="true">
-                ✎
-              </span>
-              Notes
-            </button>
-            <button
               className={styles.tab}
               type="button"
               role="tab"
@@ -255,11 +258,11 @@ export function RecordingScreen({
             </button>
           </div>
 
-          {openTab === 'scripture' ? <ScripturePanel recordingId={recordingId} /> : null}
-
           {openTab === 'notes' ? (
             <NotesPanel recordingId={recordingId} canModerate={canModerate} />
           ) : null}
+
+          {openTab === 'scripture' ? <ScripturePanel recordingId={recordingId} /> : null}
 
           {openTab === 'transcript' ? (
             <TranscriptPanel recordingId={recordingId} canCorrect={canCorrect} />

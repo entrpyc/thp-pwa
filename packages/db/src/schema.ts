@@ -98,9 +98,9 @@ export const user = pgTable(
      *
      * `real` because it is a rate, not money. `NOT NULL DEFAULT 1` because every account that
      * already exists plays at normal speed and nobody should have to be back-filled by hand. The
-     * check constraint is the six steps, **derived from the shared tuple** rather than restated —
-     * so the column cannot hold a rate no control can produce, and a seventh step is one edit
-     * there plus one migration.
+     * check constraint is the steps themselves, **derived from the shared tuple** rather than
+     * restated — so the column cannot hold a rate no control can produce, and another step is one
+     * edit there plus one migration. `1.75` was exactly that, in `0017`.
      */
     preferredPlaybackSpeed: real('preferred_playback_speed')
       .notNull()

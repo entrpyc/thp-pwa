@@ -317,13 +317,13 @@
 /* ---------------------------------------------------------------------------- the recording page */
 
 /*
- * `pages/series-inner.png`'s and `pages/chapter.png`'s hero — **full-bleed** (scope prd 3.2.7).
+ * `pages/series-inner.png`'s and `pages/chapter.png`'s hero (scope prd 3.2.7).
  *
- * Both references draw the cover running to the edges of the reading column with no border and no
- * corner, so the band breaks out of the shell's horizontal padding with a negative margin. On a
- * phone, where the column is narrower than its 48rem cap, that is genuinely edge to edge; on a
- * desktop it is the column's full width, flush with the cards below it. Spanning the whole viewport
- * instead would put a 1440px band over a 768px column, which is nothing either reference draws.
+ * It is **the reading column's width**, not a breakout of it. The band used to pull itself out past
+ * the shell's horizontal padding with a negative margin, on the reading that both references draw
+ * the cover running edge to edge — but the page's own padding is what every card below the band
+ * lines up on, and a picture that alone ignores it reads as a picture that has escaped rather than
+ * as a full-bleed one. So it stops where the column stops, and the alignment holds down the page.
  *
  * `position: relative` and `overflow: hidden` are what let the cover sit behind the back control
  * and be clipped by the band rather than sized by its own proportions.
@@ -339,8 +339,6 @@
   min-height: calc(var(--space-8) * 3);
   background: var(--color-bg-deep);
   padding: var(--space-4);
-  margin-left: calc(var(--space-4) * -1);
-  margin-right: calc(var(--space-4) * -1);
 }
 
 /*
@@ -517,4 +515,74 @@
 
 .notesIcon {
   color: var(--color-notes);
+}
+
+/* --------------------------------------------------------- the summary and description that open */
+
+/*
+ * The clamped block of `collapsible-prose.tsx`. 200px is roughly six lines of body text — enough to
+ * tell whether the rest is worth opening, which is the whole job of the collapsed state.
+ *
+ * `position: relative` is what the fade and its control hang off, and `overflow: hidden` is what
+ * makes the height a limit rather than a suggestion.
+ */
+.clamp {
+  position: relative;
+  max-height: calc(var(--space-8) * 6 + var(--space-2));
+  overflow: hidden;
+}
+
+/*
+ * Open, the limit is gone rather than raised — a taller number would be a second thing to keep in
+ * step with the content, and the content's height is not a number anybody here knows.
+ */
+.clampOpen {
+  max-height: none;
+  overflow: visible;
+}
+
+/*
+ * The control at the foot of the collapsed block. It spans the block's width because the whole band
+ * is the target — the label is what a member reads, but the band is what they press — and the label
+ * itself sits at the **left**, on the edge every line of the paragraph above it starts on.
+ *
+ * **Only the top edge fades.** One gradient does both halves of that: transparent at the top, the
+ * card's own surface a `--space-6` down, and a gradient holds its last colour past its last stop —
+ * so the band is solid behind the label and fading only where it meets the text. The fade is what
+ * says the paragraph continues; the solid under it is what keeps the label legible instead of
+ * printing it over the half-visible line it is sitting on.
+ */
+.clampMore {
+  position: absolute;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  display: flex;
+  align-items: flex-end;
+  justify-content: flex-start;
+  padding: var(--space-6) 0 0;
+  background: linear-gradient(to bottom, transparent, var(--color-surface) var(--space-6));
+  border: none;
+  color: var(--color-primary-strong);
+  font-family: inherit;
+  font-size: var(--fs-body);
+  font-weight: 600;
+  text-align: left;
+  cursor: pointer;
+}
+
+/*
+ * The way back, under the open block rather than over it: there is nothing left to fade into, and a
+ * band across the last paragraph would cover the words it is there to have revealed.
+ */
+.clampLess {
+  align-self: flex-start;
+  padding: 0;
+  background: transparent;
+  border: none;
+  color: var(--color-primary-strong);
+  font-family: inherit;
+  font-size: var(--fs-body);
+  font-weight: 600;
+  cursor: pointer;
 }

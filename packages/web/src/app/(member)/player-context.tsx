@@ -12,6 +12,8 @@ import {
 } from 'react';
 import {
   PLAYBACK_SPEED_PATH,
+  RESUME_PATH,
+  isPlaybackSpeed,
   nextPlaybackSpeed,
   recordingNotesPath,
   recordingPlaybackPath,
@@ -20,6 +22,7 @@ import {
   type NoteView,
   type NotesPayload,
   type PlaybackGrantPayload,
+  type ResumePayload,
   type TranscriptPayload,
   type TranscriptSegmentView,
 } from '@thp/shared';
@@ -154,7 +157,10 @@ export interface PlayerApi {
   toggle(): void;
   seekToMs(ms: number): void;
   skipMs(deltaMs: number): void;
+  /** The next step, wrapping — what the rate pill does on a tap. */
   cycleSpeed(): void;
+  /** One named step — what the picker the pill opens on a hold does. Anything else is ignored. */
+  chooseSpeed(speed: number): void;
   /** Fetch the transcript if nothing has yet. Safe to call on every mount — it asks once. */
   requestTranscript(): void;
   setCaptions(on: boolean): void;
@@ -485,6 +491,49 @@ export function PlayerProvider({
     return () => document.removeEventListener('visibilitychange', onHide);
   }, [pushProgress]);
 
+  /*
+   * **The sitting survives the app being closed.** On the first load of the member surface, the
+   * teaching this member was last part-way through is opened into the player — so the transport is
+   * already docked, already naming it and already holding the position, and picking it back up is
+   * the play control rather than a walk to the recording page to find it again.
+   *
+   * Opened and **not played**: sound a member did not ask for is the failure this trades against,
+   * and a browser would refuse the autoplay regardless. `open` sets `wantsPlay` false and arms the
+   * seek, which is exactly the state the recording page leaves the bar in.
+   *
+   * Twice guarded against clobbering a real choice — before the request and again when it answers.
+   * A member who lands directly on a teaching has opened it while this was in flight, and the row
+   * that comes back is then the *previous* sitting: dropping it there is what stops a slow answer
+   * from replacing what somebody is listening to.
+   */
+  useEffect(() => {
+    if (loadedRef.current !== null) return;
+    let live = true;
+
+    void apiFetch<ResumePayload>(RESUME_PATH, { credentials: 'include' })
+      .then((payload) => {
+        const row = payload.resume;
+        if (!live || row === null || loadedRef.current !== null) return;
+        open(
+          {
+            id: row.recordingId,
+            title: row.title,
+            artworkUrl: row.artworkUrl,
+            seriesTitle: row.seriesTitle,
+          },
+          row.positionMs,
+        );
+      })
+      .catch(() => {
+        // Nothing to say: no bar is the state the surface was already in, and the member reaches
+        // every teaching through the library exactly as before.
+      });
+
+    return () => {
+      live = false;
+    };
+  }, [open]);
+
   // The pre-emptive half of renewal, so the member does not hear the gap the error path costs.
   useEffect(() => {
     const timer = setInterval(() => {
@@ -523,13 +572,19 @@ export function PlayerProvider({
   }, []);
 
   /**
-   * Next step, applied to the element first and written to the account afterwards.
+   * A step, applied to the element first and written to the account afterwards.
    *
    * Optimistic on purpose: the rate a member hears must change on the press, and the write is what
    * makes the *next* teaching start there. A failed write costs the persistence, not the press.
+   *
+   * Both ways into the rate come through here — the pill's tap, which asks for the next step, and
+   * the picker it opens on a hold, which asks for one by name. One path to the element, one write,
+   * and no chance of the two disagreeing about what "set the speed" involves.
    */
-  const cycleSpeed = useCallback((): void => {
-    const next = nextPlaybackSpeed(speedRef.current);
+  const chooseSpeed = useCallback((next: number): void => {
+    // A rate the tuple does not name is a rate the column would refuse; nothing that reaches here
+    // should carry one, and a silent no-op is better than a request that comes back 400.
+    if (!isPlaybackSpeed(next) || next === speedRef.current) return;
     speedRef.current = next;
     setSpeed(next);
     if (audioRef.current !== null) audioRef.current.playbackRate = next;
@@ -540,6 +595,10 @@ export function PlayerProvider({
       body: JSON.stringify({ speed: next }),
     }).catch(() => undefined);
   }, []);
+
+  const cycleSpeed = useCallback((): void => {
+    chooseSpeed(nextPlaybackSpeed(speedRef.current));
+  }, [chooseSpeed]);
 
   /**
    * Fetch the loaded teaching's transcript, once.
@@ -653,6 +712,7 @@ export function PlayerProvider({
       seekToMs,
       skipMs,
       cycleSpeed,
+      chooseSpeed,
       requestTranscript,
       setCaptions,
       applyCorrection,
@@ -679,6 +739,7 @@ export function PlayerProvider({
       seekToMs,
       skipMs,
       cycleSpeed,
+      chooseSpeed,
       requestTranscript,
       setCaptions,
       applyCorrection,

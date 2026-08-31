@@ -1,0 +1,2 @@
+ALTER TABLE "user" DROP CONSTRAINT "user_preferred_playback_speed_allowed";--> statement-breakpoint
+ALTER TABLE "user" ADD CONSTRAINT "user_preferred_playback_speed_allowed" CHECK ("user"."preferred_playback_speed" in (0.5, 0.75, 1, 1.25, 1.5, 1.75, 2));

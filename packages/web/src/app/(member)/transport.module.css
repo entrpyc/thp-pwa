@@ -9,10 +9,16 @@
  *
  * 1. **Circles take `--radius-pill`**, for the reason `member.module.css` states — the token layer
  *    is the guide's Quick token block and that block has no `--radius-circle`.
- * 2. **The reference is drawn wide.** At phone width the four groups do not fit on one line, so the
- *    bar wraps to two: title and speed on the first row, controls and track on the second. Nothing
- *    is hidden and nothing is scrolled — the responsive standing constraint is that every control
- *    stays reachable, not that the layout is identical.
+ * 2. **The reference is drawn wide, and there are exactly two layouts.** Not "however many rows the
+ *    groups happen to wrap into" — the line breaks are *forced* rather than left to fit, so the bar
+ *    has one shape below 48rem and one above it and no third shape at some width nobody tested:
+ *
+ *    - **small** — title and `···` on the first row, the controls and the rate on the second, the
+ *      track on the third;
+ *    - **bigger** — title, controls, rate and `···` all on the first row, the track on the second.
+ *
+ *    Nothing is hidden and nothing is scrolled in either; the responsive standing constraint is
+ *    that every control stays reachable, not that the layout is identical.
  */
 
 .dock {
@@ -30,12 +36,19 @@
    * It works because the root layout asks for `viewportFit: 'cover'`; without that the document
    * never reaches under the indicator and `env()` resolves to zero.
    */
-  padding-bottom: calc(var(--space-3) + env(safe-area-inset-bottom));
+  padding-bottom: calc(var(--space-2) + env(safe-area-inset-bottom));
   pointer-events: none;
   /*
-   * Three stacked things now, bottom-anchored: the side toolbar of `menu-opened.png`, the caption
-   * pill of `subtitles.png`, and the bar itself. A column rather than absolute positioning, so
-   * turning captions on lifts the pill above the bar without either overlapping it.
+   * Everything the dock carries, bottom-anchored: the note composer's sheet, the caption pill of
+   * `subtitles.png`, the side toolbar of `menu-opened.png`, and the bar itself. A column rather
+   * than absolute positioning, so turning captions on lifts the pill above the bar without either
+   * overlapping it.
+   *
+  * **What a control on the bar opens is not in this column.** The side toolbar and the rate picker
+   * hang off their own buttons, over the page — see `.moreSlot`. In the column they were rows like
+   * any other, so opening one pushed the pill and the sheet up the screen and the menu itself
+   * landed somewhere different depending on what else was open. Out of the flow, nothing moves and
+   * each opens at its own control.
    */
   display: flex;
   flex-direction: column;
@@ -51,11 +64,31 @@
   display: flex;
   flex-wrap: wrap;
   align-items: center;
-  gap: var(--space-3);
+  /*
+   * Rows are spaced by the margins below rather than by `row-gap`, because the break that makes the
+   * small layout is an empty line and a gap would be drawn on both sides of it — twice the space
+   * between the first row and the second, and only there. Each group that starts a row carries its
+   * own top margin instead, so every row is one gap from the last however the rows were formed.
+   */
+  column-gap: var(--space-3);
+  row-gap: 0;
   background: var(--color-surface);
   border: 1px solid var(--color-border);
   border-radius: var(--radius-lg);
   padding: var(--space-3) var(--space-4);
+}
+
+/*
+ * The break between the first row and the controls, and the whole of what makes the small layout a
+ * *layout* rather than whatever the widths happened to allow: an empty flex item a full line wide,
+ * so the controls start a row of their own at every width below the breakpoint instead of riding up
+ * beside the title on a slightly wider phone.
+ */
+.bar::before {
+  content: '';
+  order: 2;
+  flex: 0 0 100%;
+  height: 0;
 }
 
 /*
@@ -73,7 +106,15 @@
  */
 .slot {
   position: relative;
-  flex: 1 1 12rem;
+  /*
+   * **Basis zero, not a width.** A flex container decides where the lines break using each item's
+   * basis, *before* anything shrinks — so a slot asking for 12rem up front pushed `···` onto a line
+   * of its own for the twenty pixels between the breakpoint and the width at which 12rem fit, and
+   * the bigger layout arrived as three rows rather than two. Asking for nothing and growing into
+   * what is left means the line always fits and the title takes the remainder, which is what the
+   * ellipsis below is for.
+   */
+  flex: 1 1 0;
   min-width: 0;
   display: flex;
   align-items: center;
@@ -130,11 +171,14 @@
   text-overflow: ellipsis;
 }
 
+/* Second row in the small layout, first row in the bigger one — hence the margin the media query
+   takes back off once it stops starting a row. */
 .controls {
   display: flex;
   align-items: center;
   gap: var(--space-3);
   order: 3;
+  margin-top: var(--space-3);
 }
 
 /* The guide's outlined icon button. ±10s are transport, not a deferred feature. */
@@ -176,9 +220,11 @@
   background: var(--color-primary-strong);
 }
 
+/* Its own row in both layouts — the one group that never shares a line with anything. */
 .track {
-  order: 4;
-  flex: 1 1 12rem;
+  order: 5;
+  flex: 1 0 100%;
+  margin-top: var(--space-3);
   display: flex;
   align-items: center;
   gap: var(--space-3);
@@ -209,9 +255,28 @@
   cursor: default;
 }
 
-/* The pill at the right of the reference, carrying the one thing it says: the rate. */
+/*
+ * The rate pill's place on the bar, and the box the picker below hangs off. The `order` and the
+ * row margin live here rather than on the button, because the picker's absolute position needs a
+ * relative parent and that parent is what the bar lays out.
+ *
+ * **Above the media query, with everything else the query re-orders.** A media query carries no
+ * specificity of its own, so the same selector written further down the file beats it — which is
+ * exactly what happened when this rule sat with the picker at the end: the pill kept the small
+ * layout's slot and its row margin at every width, so it traded places with `···` and sat a step
+ * below the controls beside it.
+ */
+.speedSlot {
+  order: 4;
+  margin-top: var(--space-3);
+  position: relative;
+  display: inline-flex;
+}
+
+/* The rate pill, carrying the one thing it says: the rate. */
 .speed {
-  order: 2;
+  /* Held, this pill is dragged onto the picker above it — a scroll would cancel that pointer. */
+  touch-action: none;
   display: inline-flex;
   align-items: center;
   justify-content: center;
@@ -233,11 +298,19 @@
 }
 
 /*
- * The `···` at the right of `bottom-navigation/default.png` — an outlined circle, the same recipe
- * as the ±10s controls, because it is the same kind of control.
+ * The `···` of `bottom-navigation/default.png` — an outlined circle, the same recipe as the ±10s
+ * controls, because it is the same kind of control.
+ *
+ * It is **last** on the bar rather than in the reference's slot before the rate pill: the toolbar
+ * it opens is docked to the bar's right edge, and a control should sit under what it opens. The
+ * order holds at both widths, so the icon does not move between the wrapped bar and the wide one.
  */
 .more {
-  order: 1;
+  /*
+   * The press that opens the toolbar can be held and dragged onto a tool, and the browser must not
+   * read that drag as a scroll — a scroll would cancel the pointer and take the gesture with it.
+   */
+  touch-action: none;
   display: inline-flex;
   align-items: center;
   justify-content: center;
@@ -260,12 +333,31 @@
  * The side toolbar of `bottom-navigation/menu-opened.png` — the guide's *Side toolbar*: a floating
  * rounded strip docked to the right edge, holding evenly spaced purple icon buttons.
  *
- * The reference draws seven; this epic has data for one. It sits in the dock's column rather than
- * being absolutely positioned against the viewport, so it stacks above the bar at every width
- * instead of covering the content on a phone.
+ * The reference draws seven; this epic has data for one.
+ *
+ * **It hangs off its own button and over everything else.** In the dock's column it was a row like
+ * any other, so opening it pushed the caption pill and the composer sheet up the screen — a menu
+ * that rearranges the thing a member is reading in order to be read itself. Anchored to the `···`
+ * and lifted out of the flow, nothing moves when it opens: it covers the page instead, which is
+ * what a menu is supposed to do, and it opens where the control that opens it is rather than where
+ * the dock happens to have room.
  */
+.moreSlot {
+  order: 1;
+  position: relative;
+  display: inline-flex;
+}
+
 .toolbar {
-  align-self: flex-end;
+  position: absolute;
+  bottom: 100%;
+  /* Centred on the `···`, the way the rate picker is centred on its pill — one rule for both, so
+     what a control opens is always over the control rather than beside it. */
+  left: 50%;
+  transform: translateX(-50%);
+  /* Clear of the bar rather than resting on it — the strip reads as a thing over the page. */
+  margin-bottom: var(--space-6);
+  z-index: 1;
   pointer-events: auto;
   display: flex;
   flex-direction: column;
@@ -309,7 +401,11 @@
   display: flex;
   align-items: center;
   gap: var(--space-3);
-  background: var(--color-surface);
+  /*
+   * The page's own background rather than the surface the bar takes, so the pill reads as its own
+   * thing over the page instead of a second bar stacked on the first.
+   */
+  background: var(--color-bg);
   border: 1px solid var(--color-border);
   border-radius: var(--radius-pill);
   padding: var(--space-3) var(--space-5);
@@ -341,26 +437,37 @@
   color: var(--color-text);
 }
 
-/* Wide enough for the reference's single row: title, controls, track, `···`, speed, in that order. */
-@media (min-width: 48rem) {
-  .bar {
-    flex-wrap: nowrap;
+/*
+ * **The bigger layout**, from 541px up — the measured width at which the title, the controls, the
+ * rate and `···` fit one row without the title's ellipsis eating the whole of it. The break is
+ * dropped and the four re-order into that line: title at the left, the rest gathered at the right.
+ *
+ * A px condition rather than the file's usual `rem`, because the number is a measurement of this
+ * bar's own contents rather than a reading width — and the guard exempts media conditions for that
+ * reason: a breakpoint is not a spacing value.
+ *
+ * The track keeps the row below it. This is two rows rather than one, because a scrubber squeezed
+ * between the controls and the rate is a target too short to land a thumb on and too short to read
+ * a position from.
+ */
+@media (min-width: 541px) {
+  .bar::before {
+    display: none;
   }
 
+  /* On the first row now, beside the title, so neither starts a row and neither spaces one. */
   .controls {
+    order: 1;
+    margin-top: 0;
+  }
+
+  .speedSlot {
     order: 2;
+    margin-top: 0;
   }
 
-  .track {
+  .moreSlot {
     order: 3;
-  }
-
-  .more {
-    order: 4;
-  }
-
-  .speed {
-    order: 5;
   }
 }
 
@@ -447,4 +554,71 @@
   font-family: inherit;
   font-size: var(--fs-body);
   cursor: pointer;
+}
+
+/*
+ * **The rate picker** — what the pill opens when it is held rather than tapped.
+ *
+ * **Directly over the pill**, anchored to it the way the side toolbar is anchored to `···`: the
+ * thumb that opened it is already on the pill, and a strip that appeared at the far end of the bar
+ * would be a strip that has to be reached for in the middle of the gesture that opened it.
+ * Fastest at the top, so moving the thumb up is moving the rate up.
+ *
+ * The steps are the tuple, drawn one per row. Not a continuous slider, though it is dragged like
+ * one: `PLAYBACK_SPEEDS` is what the API accepts and what the column's check constraint admits, so
+ * a rate between two of them is a rate nothing in the product can store.
+ *
+ * `.speedSlot`, which positions this, is declared **above the breakpoint's media query** with the
+ * pill it wraps — a media query adds no specificity, so a rule for the same selector written below
+ * one wins inside it too, and the layout the query describes never arrives.
+ */
+.speedPicker {
+  position: absolute;
+  bottom: 100%;
+  left: 50%;
+  transform: translateX(-50%);
+  margin-bottom: var(--space-2);
+  z-index: 1;
+  pointer-events: auto;
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-1);
+  background: var(--color-surface);
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-lg);
+  padding: var(--space-2);
+}
+
+.speedStep {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  min-width: calc(var(--space-8) + var(--space-6));
+  min-height: calc(var(--space-8) + var(--space-2));
+  background: transparent;
+  border: 1px solid transparent;
+  border-radius: var(--radius-md);
+  color: var(--color-text-muted);
+  font-family: inherit;
+  font-size: var(--fs-meta);
+  font-weight: 600;
+  font-variant-numeric: tabular-nums;
+  cursor: pointer;
+  /* The drag that reaches these began on the pill; a scroll would cancel the pointer under it. */
+  touch-action: none;
+}
+
+/* The rate that is playing — legible from the top of the strip without reading every row. */
+.speedStepCurrent {
+  color: var(--color-text);
+}
+
+/*
+ * The step the thumb is over, and so the one a release would choose. The accent outline rather than
+ * a hover rule, because there is no hover in the gesture this is drawn for — the finger is down.
+ */
+.speedStepArmed {
+  background: var(--color-primary-soft);
+  border-color: var(--color-primary-strong);
+  color: var(--color-primary-strong);
 }

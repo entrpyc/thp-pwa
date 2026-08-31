@@ -16,6 +16,7 @@ import {
 } from '@thp/shared';
 import { ApiError } from '@/server/api/errors';
 import type { Actor } from '@/server/auth/policy';
+import { mintArtworkGrant } from '@/server/series/artwork-grant';
 import { logger } from '@/server/observability/logger';
 
 /**
@@ -107,6 +108,10 @@ export async function readResume(actor: Actor): Promise<ResumePayload> {
             title: row.title,
             description: row.description,
             positionMs: row.positionMs,
+            // Signed here and nowhere lower: the key is a database fact and the grant is a response
+            // this request minted, which is the same split every other artwork read takes.
+            seriesTitle: row.seriesTitle,
+            artworkUrl: await mintArtworkGrant(row.seriesArtworkKey),
           },
   };
 }

@@ -11,6 +11,7 @@ import {
   type ResumeView,
 } from '@thp/shared';
 import { apiFetch } from '@/client/api-client';
+import { usePlayer } from './player-context';
 import styles from './screens.module.css';
 
 /**
@@ -36,6 +37,7 @@ import styles from './screens.module.css';
  * restores the same position anyway.
  */
 export function Landing() {
+  const player = usePlayer();
   const [resume, setResume] = useState<ResumeView | null>(null);
   const [loaded, setLoaded] = useState(false);
 
@@ -46,6 +48,30 @@ export function Landing() {
       .finally(() => setLoaded(true));
   }, []);
 
+  /*
+   * **What is in the player wins.** The stored row is what this member was last listening to *as of
+   * the last write*, and writes are on a cadence — so a member who plays a teaching and comes back
+   * here would be offered the one before it until the next tick, which is the card naming the wrong
+   * teaching at exactly the moment they can see it is wrong.
+   *
+   * The player is the authority on what is being played, so the card reads it and falls back to the
+   * row. The two agree on a cold load, because the provider is what opened the row into the player.
+   * The description only survives the swap when they are the same teaching: it belongs to the row,
+   * and the transport does not carry one.
+   */
+  const playing = player.loaded;
+  const card: ResumeView | null =
+    playing === null
+      ? resume
+      : {
+          recordingId: playing.id,
+          title: playing.title,
+          description: resume?.recordingId === playing.id ? resume.description : null,
+          positionMs: player.currentMs,
+          seriesTitle: playing.seriesTitle,
+          artworkUrl: playing.artworkUrl,
+        };
+
   return (
     <>
       {/*
@@ -54,20 +80,25 @@ export function Landing() {
       */}
       <h1 className={styles.hiddenTitle}>Dashboard</h1>
 
-      {loaded && resume !== null ? (
+      {/*
+        `loaded` is only the gate on the *fetched* row — it is what stops a card appearing and then
+        being replaced a moment later. A teaching already in the player needs no such wait: it is
+        there before this screen mounts.
+      */}
+      {card !== null && (loaded || playing !== null) ? (
         <section className={styles.card} aria-label="Resume recording">
           <h2 className={styles.cardTitle}>Resume recording</h2>
-          <Link className={styles.resume} href={recordingPagePath(resume.recordingId)}>
+          <Link className={styles.resume} href={recordingPagePath(card.recordingId)}>
             <span className={styles.resumePlay} aria-hidden="true">
               ▶
             </span>
             <span className={styles.resumeText}>
-              <span className={styles.resumeName}>{resume.title}</span>
-              {resume.description === null ? null : (
-                <span className={styles.resumeDescription}>{resume.description}</span>
+              <span className={styles.resumeName}>{card.title}</span>
+              {card.description === null ? null : (
+                <span className={styles.resumeDescription}>{card.description}</span>
               )}
               <span className={styles.resumeAt}>
-                Resume at {formatTimecode(resume.positionMs)}
+                Resume at {formatTimecode(card.positionMs)}
               </span>
             </span>
           </Link>

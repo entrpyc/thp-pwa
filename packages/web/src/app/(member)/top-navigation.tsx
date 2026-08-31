@@ -1,7 +1,7 @@
 'use client';
 
 import Link from 'next/link';
-import { useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import {
   ADMIN_PAGE_PATH,
   DASHBOARD_PAGE_PATH,
@@ -72,9 +72,37 @@ function MenuIcon() {
 export function TopNavigation({ canSeeConsole }: { canSeeConsole: boolean }) {
   const [open, setOpen] = useState(false);
   const { parent, current } = useBreadcrumbTrailValue();
+  const regionRef = useRef<HTMLDivElement>(null);
+
+  /*
+   * An open menu closes on a press anywhere outside it — the tap-away every member already expects
+   * of a menu, and the only way out on touch, where there is no Escape. `pointerdown` rather than
+   * `click`, so the menu is gone before the press lands on whatever was underneath it, and the
+   * listeners exist only while the menu is open.
+   */
+  useEffect(() => {
+    if (!open) return;
+
+    function onPointerDown(event: PointerEvent) {
+      const target = event.target;
+      if (target instanceof Node && regionRef.current?.contains(target)) return;
+      setOpen(false);
+    }
+
+    function onKeyDown(event: KeyboardEvent) {
+      if (event.key === 'Escape') setOpen(false);
+    }
+
+    document.addEventListener('pointerdown', onPointerDown);
+    document.addEventListener('keydown', onKeyDown);
+    return () => {
+      document.removeEventListener('pointerdown', onPointerDown);
+      document.removeEventListener('keydown', onKeyDown);
+    };
+  }, [open]);
 
   return (
-    <div className={styles.navRegion}>
+    <div className={styles.navRegion} ref={regionRef}>
       <nav className={styles.navBar} aria-label="Breadcrumb">
         <ol className={styles.crumbs}>
           <li className={styles.crumb}>

@@ -193,6 +193,14 @@ export interface ResumeProgressRow {
   readonly title: string;
   readonly description: string | null;
   readonly positionMs: number;
+  /**
+   * The series this teaching is in, for the transport the landing restores it into — the bar draws
+   * the *series'* cover and prints its title, and a recording has neither of its own (scope prd
+   * 3.2.3, 3.2.4). A key, never a URL, for the reason {@link VisibleSeriesRow.artworkKey} gives.
+   * All three are `null` for a teaching in no series, which is ordinary.
+   */
+  readonly seriesTitle: string | null;
+  readonly seriesArtworkKey: string | null;
 }
 
 /**
@@ -206,6 +214,9 @@ export interface ResumeProgressRow {
  *
  * Ordered by when the position was written, not by the recording's date: the card answers "what
  * were you last listening to", which is a fact about the listening rather than about the teaching.
+ *
+ * It carries the series too, because the landing does more with this row than draw a card — it
+ * opens the row into the transport, and the bar's tile and its subtitle are the series'.
  */
 export async function findResumeProgress(
   userId: string,
@@ -217,9 +228,13 @@ export async function findResumeProgress(
       title: recording.title,
       description: recording.description,
       positionMs: playbackProgress.positionMs,
+      seriesTitle: series.title,
+      seriesArtworkKey: series.artworkKey,
     })
     .from(playbackProgress)
     .innerJoin(recording, eq(recording.id, playbackProgress.recordingId))
+    // Left, not inner: a teaching in no series is still a teaching to resume (scope prd 3.2.6).
+    .leftJoin(series, eq(series.id, recording.seriesId))
     .where(and(eq(playbackProgress.userId, userId), isNotNull(recording.publishedAt)))
     .orderBy(desc(playbackProgress.updatedAt))
     .limit(1);

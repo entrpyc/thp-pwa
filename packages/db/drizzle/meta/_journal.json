@@ -120,6 +120,13 @@
       "when": 1787787184544,
       "tag": "0016_series_artwork",
       "breakpoints": true
+    },
+    {
+      "idx": 17,
+      "version": "7",
+      "when": 1788199235394,
+      "tag": "0017_playback_speed_step",
+      "breakpoints": true
     }
   ]
 }

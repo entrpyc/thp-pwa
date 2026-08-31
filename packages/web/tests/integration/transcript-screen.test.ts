@@ -392,7 +392,7 @@ describe('captions float above the transport on any member screen', () => {
     }
   }, 240_000);
 
-  it('shows no pill inside a gap, and none once it is dismissed', async () => {
+  it('holds the pill through a gap with a dash in it, and drops it once dismissed', async () => {
     const { page } = await openTeaching(recordingId);
     try {
       await page.getByRole('button', { name: 'More player controls' }).click();
@@ -405,12 +405,21 @@ describe('captions float above the transport on any member screen', () => {
       const pill = page.getByRole('region', { name: 'Caption' });
       await expect.poll(() => pill.count(), { timeout: 30_000 }).toBe(1);
 
-      // The silence: no pill rather than the previous line held over.
+      /*
+       * The silence: the pill stays, and what it holds is a dash rather than the previous line.
+       * Captions being on is a state a member chose, so the control that turns them off has to
+       * still be there inside a pause — and the line under it must not claim words nobody spoke.
+       */
       await page.getByRole('slider', { name: 'Position' }).fill('31000');
-      await expect.poll(() => pill.count(), { timeout: 30_000 }).toBe(0);
+      await expect
+        .poll(async () => (await pill.textContent()) ?? '', { timeout: 30_000 })
+        .not.toContain('Line ');
+      expect(await pill.count()).toBe(1);
 
       await page.getByRole('slider', { name: 'Position' }).fill('45000');
-      await expect.poll(() => pill.count(), { timeout: 30_000 }).toBe(1);
+      await expect
+        .poll(async () => (await pill.textContent()) ?? '', { timeout: 30_000 })
+        .toContain(lineAt(45_000));
       await page.getByRole('button', { name: 'Hide captions' }).click();
       await expect.poll(() => pill.count(), { timeout: 30_000 }).toBe(0);
     } finally {

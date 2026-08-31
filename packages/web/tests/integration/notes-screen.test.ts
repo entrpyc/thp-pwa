@@ -1549,8 +1549,20 @@ describe('a note removed while the member’s screen was open', () => {
         .toBe('This note was removed.');
       // And the list caught up behind it: the tombstone is what stands there now.
       expect(await card(page, note).innerText()).toContain('This note was removed.');
-      // A row of responses to words nobody can read any more is a reaction to nothing (3.4.10).
-      expect(await card(page, note).getByRole('button', { name: /, \d+$/ }).count()).toBe(0);
+      /*
+       * A row of responses to words nobody can read any more is a reaction to nothing (3.4.10).
+       *
+       * Polled, because the refusal and the refresh are two answers rather than one: the status
+       * above is the refused reaction speaking, and the reactions go when the reloaded list lands
+       * behind it. The word-for-word sentence the comment above warns about is exactly why the
+       * text assertion cannot stand in for this one — so this waits for the list rather than
+       * assuming the refusal brought it.
+       */
+      await expect
+        .poll(() => card(page, note).getByRole('button', { name: /, \d+$/ }).count(), {
+          timeout: 30_000,
+        })
+        .toBe(0);
     } finally {
       await page.context().close();
     }

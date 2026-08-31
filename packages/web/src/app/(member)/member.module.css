@@ -21,12 +21,18 @@
   min-height: 100vh;
   background: var(--color-bg);
   /*
-   * Bottom padding leaves the docked transport somewhere to sit without covering the last card —
-   * plus the home-indicator inset the dock now pads itself with, so the clearance is unchanged on
-   * a phone running the installed app.
+   * Both edges are now floating bars, so the page pads itself clear of each — the padding is what
+   * the fixed chrome stands on, and without it the first card and the last are underneath one.
+   *
+   * **Top:** the nav bar is 62px inside an 8px inset, so the page starts at 88px — the first
+   * composition of the spacing scale past that, which leaves the same gap under the bar that the
+   * flow used to draw. **Bottom:** 128px was leaving the recording page's tab strip under the
+   * wrapped transport, which measures 166px; 200px is the clearance plus room to read the last row
+   * rather than merely uncover it. Both add the phone's own inset — the notch above, the home
+   * indicator below — which each bar pads itself with, so the clearance holds in the installed app.
    */
-  padding: var(--space-4) var(--space-4)
-    calc(var(--space-8) * 4 + env(safe-area-inset-bottom));
+  padding: calc(var(--space-8) * 2 + var(--space-6) + env(safe-area-inset-top)) var(--space-4)
+    calc(var(--space-8) * 6 + var(--space-2) + env(safe-area-inset-bottom));
 }
 
 .shell {
@@ -47,15 +53,36 @@
 
 /* ------------------------------------------------------------------ the breadcrumb bar and menu */
 
+/*
+ * The bar **floats**, the mirror of the transport docked at the other edge: a member scrolled deep
+ * into a transcript is as far from the way out as from the play control, and both are one press
+ * away instead of a scroll back to the top. So it leaves the shell's column and takes the dock's
+ * shape — fixed to the edge, gutters clear of pointer events, the bar itself the shell's own width
+ * and centred in them, and the notch inset added the way the dock adds the home indicator's.
+ *
+ * `z-index` is on the region rather than on the panel alone: it lifts the bar and its menu together
+ * over the cards scrolling underneath, which a positioned panel with no raised ancestor does not
+ * reliably get.
+ */
 .navRegion {
-  position: relative;
+  position: fixed;
+  top: 0;
+  left: 0;
+  right: 0;
+  z-index: 2;
+  padding: var(--space-2) var(--space-4) 0;
+  padding-top: calc(var(--space-2) + env(safe-area-inset-top));
+  pointer-events: none;
   display: flex;
   flex-direction: column;
-  gap: var(--space-2);
 }
 
 /* One dark rounded bar, a step below the page, exactly as the reference draws it. */
 .navBar {
+  width: 100%;
+  max-width: 48rem;
+  margin: 0 auto;
+  pointer-events: auto;
   display: flex;
   align-items: center;
   justify-content: space-between;
@@ -161,7 +188,24 @@
  * conditional rows render only where they lead somewhere: the console for an actor the policy
  * allows, and Install app on a device that can actually install.
  */
+/*
+ * It **overlays** the page rather than sitting in the column above it. Opening a menu is a question
+ * about where to go next, not an edit to the page behind it, and a panel in the flow pushed every
+ * card down by its own height — so the answer arrived and the thing being read moved away.
+ *
+ * Hung off `.navRegion` at `top: 100%`, which is the bottom of the bar, plus the gap the flow used
+ * to draw between them. It carries the bar's own column rather than the region's full width, so it
+ * hangs under the bar rather than off the glass. The region carries the `z-index`; the page's own
+ * fixed transport is later in the document and keeps its place above this.
+ */
 .menuPanel {
+  position: absolute;
+  top: 100%;
+  left: var(--space-4);
+  right: var(--space-4);
+  max-width: 48rem;
+  margin: var(--space-2) auto 0;
+  pointer-events: auto;
   background: var(--color-surface);
   border: 1px solid var(--color-border);
   border-radius: var(--radius-lg);

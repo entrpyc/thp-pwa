@@ -8,16 +8,16 @@ import {
 } from '@thp/shared';
 
 /**
- * **The six steps** ([3.2.4](docs/project/prd.md)), asserted where they are declared.
+ * **The steps** ([3.2.4](docs/project/prd.md)), asserted where they are declared.
  *
  * One tuple is read by the control that renders them, the route that refuses anything else and the
  * check constraint on `user.preferred_playback_speed` — so this suite is not about a list, it is
  * about the list all three of those read.
  */
 
-describe('the speed control offers exactly six steps', () => {
+describe('the speed control offers exactly the steps the tuple names', () => {
   it('is the set the requirement names, in the order a control cycles them', () => {
-    expect([...PLAYBACK_SPEEDS]).toEqual([0.5, 0.75, 1, 1.25, 1.5, 2]);
+    expect([...PLAYBACK_SPEEDS]).toEqual([0.5, 0.75, 1, 1.25, 1.5, 1.75, 2]);
   });
 
   it('starts every account at normal speed', () => {
@@ -26,7 +26,7 @@ describe('the speed control offers exactly six steps', () => {
   });
 });
 
-describe('a value outside the six is not a playback speed', () => {
+describe('a value outside the tuple is not a playback speed', () => {
   it.each([0, 0.6, 1.1, 3, -1, Number.NaN, Number.POSITIVE_INFINITY])('refuses %s', (value) => {
     expect(isPlaybackSpeed(value)).toBe(false);
   });
@@ -40,7 +40,7 @@ describe('a value outside the six is not a playback speed', () => {
     expect(isPlaybackSpeed({})).toBe(false);
   });
 
-  it('accepts every one of the six', () => {
+  it('accepts every one of them', () => {
     for (const speed of PLAYBACK_SPEEDS) expect(isPlaybackSpeed(speed)).toBe(true);
   });
 });
@@ -49,10 +49,11 @@ describe('the control is one pill that cycles', () => {
   it('advances a step and wraps at the top', () => {
     expect(nextPlaybackSpeed(0.5)).toBe(0.75);
     expect(nextPlaybackSpeed(1)).toBe(1.25);
+    expect(nextPlaybackSpeed(1.5)).toBe(1.75);
     expect(nextPlaybackSpeed(2)).toBe(0.5);
   });
 
-  it('returns to where it started after six presses, so every step is reachable', () => {
+  it('returns to where it started after one press per step, so every step is reachable', () => {
     let speed: number = DEFAULT_PLAYBACK_SPEED;
     const seen = new Set<number>();
     for (let press = 0; press < PLAYBACK_SPEEDS.length; press += 1) {
@@ -64,7 +65,7 @@ describe('the control is one pill that cycles', () => {
   });
 
   it('recovers to the first step from a value no control could have produced', () => {
-    expect(nextPlaybackSpeed(1.75)).toBe(0.5);
+    expect(nextPlaybackSpeed(1.1)).toBe(0.5);
   });
 });
 

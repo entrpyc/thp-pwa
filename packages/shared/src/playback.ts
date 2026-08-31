@@ -23,13 +23,17 @@
 import { RECORDINGS_PATH } from './recordings';
 
 /**
- * The six steps, in the order the control renders them ([3.2.4](docs/project/prd.md)).
+ * The seven steps, in the order the control renders them ([3.2.4](docs/project/prd.md)).
  *
  * A tuple rather than a range: the reference draws a pill cycling through named values, and a
  * continuous rate is a different control answering a different question. `1` is the default and is
  * deliberately spelled `1` rather than `1.0` — it is the number the column defaults to.
+ *
+ * `1.75` joined the six in a later pass. The gap between `1.5` and `2` was the widest on the scale
+ * and the one a listener working through a long teaching lands in, so the step goes where the
+ * cycling order already puts it rather than at the end.
  */
-export const PLAYBACK_SPEEDS = [0.5, 0.75, 1, 1.25, 1.5, 2] as const;
+export const PLAYBACK_SPEEDS = [0.5, 0.75, 1, 1.25, 1.5, 1.75, 2] as const;
 
 export type PlaybackSpeed = (typeof PLAYBACK_SPEEDS)[number];
 
@@ -154,6 +158,16 @@ export interface ResumeView {
   readonly title: string;
   readonly description: string | null;
   readonly positionMs: number;
+  /**
+   * The series this teaching is in, or `null` for one in none.
+   *
+   * Here because the landing **opens this into the transport** rather than only drawing a card off
+   * it: the bar's tile is the series' cover and the line under the title is the series' name, and a
+   * recording has neither of its own (scope prd 3.2.3, 3.2.4). Without them the bar restored on a
+   * cold load would be a plainer bar than the same teaching opened from its own page.
+   */
+  readonly seriesTitle: string | null;
+  readonly artworkUrl: string | null;
 }
 
 /** Payload of `GET /api/v1/recordings/resume`. `null` when there is nothing to resume. */

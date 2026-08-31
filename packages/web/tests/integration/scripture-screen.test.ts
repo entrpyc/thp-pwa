@@ -151,15 +151,17 @@ afterAll(async () => {
 describe('the Scripture tab on the recording page', () => {
   /**
    * 4.2.1 — the reference draws `Chapter · Scripture · Notes · Transcript · Mindmap`, and two of
-   * those five are deferred and dropped. So Scripture is **first**, and the assertion is the whole
+   * those five are deferred and dropped. Scripture sits **between** the two that remain: `Notes`
+   * leads because it is the only entry always drawn, and a strip whose first tab comes and goes
+   * with the teaching moves under the thumb that is reaching for it. The assertion is the whole
    * strip in order rather than "a Scripture tab exists somewhere".
    */
-  it('draws Scripture in the reference’s position in the strip', async () => {
+  it('draws Scripture in its position in the strip', async () => {
     const { page } = await openTeaching(citingId);
     try {
       expect(await tabNames(page)).toEqual([
-        'Scripture',
         'Notes',
+        'Scripture',
         'Transcript',
       ]);
     } finally {

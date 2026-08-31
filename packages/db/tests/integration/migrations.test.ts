@@ -1095,7 +1095,7 @@ describe('the job payload column, and nothing beside it', () => {
  * Asserted the way every migration in this file is: by **exact column sets, before and after**, so
  * a column added "for later" is a failing test rather than a comment nobody reads. Three properties
  * beyond the columns are asserted here because they are properties of the *database* and cannot be
- * true by convention — the six speeds the check constraint admits, the composite primary key that
+ * true by convention — the speeds the check constraint admits, the composite primary key that
  * makes one row per pairing, and cascades on both sides.
  *
  * `duration` is checked here too, on `recording`, and it is not a stray assertion: this is the
@@ -1223,14 +1223,20 @@ describe('playback state, and nothing beside it', () => {
   });
 
   it('refuses a speed no control could produce', async () => {
-    // The six, at the database. A route that forgot to check still cannot write a seventh value,
-    // which is what makes "the column cannot hold a rate no control can produce" a property.
+    /*
+     * The six, at the database. A route that forgot to check still cannot write a seventh value,
+     * which is what makes "the column cannot hold a rate no control can produce" a property.
+     *
+     * Spelled out rather than read from `PLAYBACK_SPEEDS`, because this database is migrated to
+     * `0010` and no further: the tuple has since grown a `1.75` step that `0017` is what admits.
+     * Asserting the live tuple here would assert a later migration against an earlier schema.
+     */
     for (const rejected of [0, 0.6, 1.75, 3]) {
       await expect(
         sql`update "user" set preferred_playback_speed = ${rejected} where id = ${existingUserId}`,
       ).rejects.toThrow();
     }
-    for (const allowed of PLAYBACK_SPEEDS) {
+    for (const allowed of [0.5, 0.75, 1, 1.25, 1.5, 2]) {
       await expect(
         sql`update "user" set preferred_playback_speed = ${allowed} where id = ${existingUserId}`,
       ).resolves.toBeTruthy();
@@ -1830,5 +1836,86 @@ describe('the series artwork pointer, and nothing beside it', () => {
     expect(rows).toHaveLength(1);
     expect(rows[0]?.artwork_key).toBeNull();
     expect(rows[0]?.title).toBe('A study from before covers');
+  });
+});
+
+// =================================================================================================
+
+/**
+ * **The `1.75` step** — `0017_playback_speed_step`.
+ *
+ * The check constraint on `user.preferred_playback_speed` is derived from `PLAYBACK_SPEEDS`, so a
+ * step added to the tuple is a step the column must admit. That is the whole of this migration, and
+ * the two halves of it are asserted here: the value the column refused before it and takes after,
+ * and the six that were already allowed still being allowed — a widened constraint that quietly
+ * dropped one of the old steps would be a member's saved rate becoming unwritable.
+ *
+ * `PLAYBACK_SPEEDS` is read live here, unlike in the `0010` block above, because this is the
+ * migration that catches the schema up to it: if the two ever disagree again, this is the test that
+ * says so rather than a route failing in production.
+ */
+describe('the 1.75 playback step, and nothing beside it', () => {
+  let target: ThrowawayDatabase;
+  let before: Map<string, string[]>;
+  let after: Map<string, string[]>;
+  let sql: ReturnType<typeof postgres>;
+  let existingUserId: string;
+
+  beforeAll(async () => {
+    target = await createThrowawayDatabase(inject('databaseUrl'), 'playback_step_migration');
+
+    const priorCount = journalCountBefore('0017_playback_speed_step');
+    await runMigrations({ url: target.url, migrationsFolder: migrationsFolderUpTo(priorCount) });
+    before = await readColumnSets(target.url);
+
+    sql = postgres(target.url, { max: 2, onnotice: () => {} });
+    const [account] = await sql<{ id: string }[]>`
+      insert into "user" (email, password_hash, display_name, role)
+      values ('before-the-faster-step@example.test', 'hash', 'A listener', 'member')
+      returning id
+    `;
+    existingUserId = account?.id as string;
+
+    // The step the constraint refused right up until this migration — the before half of the pair.
+    await expect(
+      sql`update "user" set preferred_playback_speed = 1.75 where id = ${existingUserId}`,
+    ).rejects.toThrow();
+
+    await runMigrations({ url: target.url, migrationsFolder: migrationsFolderUpTo(priorCount + 1) });
+    after = await readColumnSets(target.url);
+  }, 120_000);
+
+  afterAll(async () => {
+    await sql?.end({ timeout: 5 });
+    await target?.drop();
+  }, 60_000);
+
+  it('changes no column anywhere — a constraint is not a schema change', () => {
+    for (const [table, columns] of before) {
+      expect(after.get(table), `${table} changed`).toEqual(columns);
+    }
+    expect([...after.keys()].sort()).toEqual([...before.keys()].sort());
+  });
+
+  it('admits every step the tuple names, and nothing outside it', async () => {
+    for (const allowed of PLAYBACK_SPEEDS) {
+      await expect(
+        sql`update "user" set preferred_playback_speed = ${allowed} where id = ${existingUserId}`,
+      ).resolves.toBeTruthy();
+    }
+    for (const rejected of [0, 0.6, 1.1, 1.9, 3]) {
+      await expect(
+        sql`update "user" set preferred_playback_speed = ${rejected} where id = ${existingUserId}`,
+      ).rejects.toThrow();
+    }
+  });
+
+  it('leaves an account written before the step at the rate it already had', async () => {
+    // No backfill and no reset: widening what is allowed must not move anybody who chose.
+    await sql`update "user" set preferred_playback_speed = 1.25 where id = ${existingUserId}`;
+    const rows = await sql<{ preferred_playback_speed: number }[]>`
+      select preferred_playback_speed from "user" where id = ${existingUserId}
+    `;
+    expect(rows[0]?.preferred_playback_speed).toBe(1.25);
   });
 });

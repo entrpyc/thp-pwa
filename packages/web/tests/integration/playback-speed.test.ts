@@ -136,7 +136,7 @@ describe('the speed control takes effect immediately and sticks', () => {
 });
 
 describe('the API is what refuses a speed no control could produce', () => {
-  it('accepts each of the six and refuses anything else', async () => {
+  it('accepts each step and refuses anything else', async () => {
     const signedIn = await signIn(baseUrl, listener.email, listener.password);
     if (signedIn.cookie === null) throw new Error('could not sign in');
     const cookie = signedIn.cookie;
@@ -150,12 +150,12 @@ describe('the API is what refuses a speed no control could produce', () => {
       return response.status;
     };
 
-    for (const speed of [0.5, 0.75, 1, 1.25, 1.5, 2]) {
+    for (const speed of [0.5, 0.75, 1, 1.25, 1.5, 1.75, 2]) {
       expect(await write(speed), `${speed}`).toBe(200);
     }
     // The client holds no decision: a caller that is not the player is refused by the API, and the
     // check constraint on the column refuses it a second time if this route were ever bypassed.
-    for (const speed of [0, 0.6, 1.75, 3, -1, '1.5', null]) {
+    for (const speed of [0, 0.6, 1.1, 3, -1, '1.5', null]) {
       expect(await write(speed), `${String(speed)}`).toBe(400);
     }
 
