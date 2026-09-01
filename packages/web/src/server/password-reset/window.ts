@@ -7,9 +7,11 @@
  * reading my email", and every extra hour is an hour a forwarded or intercepted message stays
  * usable.
  *
- * **Sixty seconds between requests.** Not a rate limiter, and it does not pretend to be — there is
- * still no general rate limiting in this epic (carried from ticket 2's assumption 10 and ticket 3's
- * assumption 12). But reset is a different exposure from accept: it is an unauthenticated route
+ * **Sixty seconds between requests.** Not a rate limiter, and it does not pretend to be. There is
+ * still no *general* rate limiting (carried from ticket 2's assumption 10 and ticket 3's assumption
+ * 12); registration has a real one because it creates accounts and discloses that an address is
+ * taken (docs/project/prd.md, 3.1.18), and nothing else does. Reset is a different exposure again
+ * from both: it is an unauthenticated route
  * that causes **mail to be sent to an arbitrary address**, which is a nuisance vector and a billed
  * one. A database check on the outstanding reset's age removes the cheapest version of that abuse
  * without adding infrastructure, and a person who genuinely pressed the button twice sees the same

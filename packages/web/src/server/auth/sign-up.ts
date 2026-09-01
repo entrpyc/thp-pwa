@@ -36,8 +36,10 @@ import { describeActor, toActor } from './policy';
  *    so the alternatives are telling the person plainly or creating nothing and claiming success,
  *    and the second one strands a real member on a screen that has lied to them. Every enumeration
  *    oracle in the product is closed except the one that has to be open for the product to work,
- *    and it is rate-limited by nothing today — a deliberate gap noted in the PRD rather than
- *    papered over here.
+ *    and that one is bounded rather than sealed: the route in front of this module spends a
+ *    per-caller and a whole-route budget before it is reached (`sign-up-limits.ts`), which is what
+ *    turns the disclosure from something a script works through a list with into something that
+ *    answers one address at a time.
  * 3. **An outstanding invitation to the same address is revoked.** The address it was mailed to has
  *    just become an account, so its link can no longer be accepted (the accept path refuses on
  *    `email_taken`, and the unique index refuses underneath that). Revoking turns a pending

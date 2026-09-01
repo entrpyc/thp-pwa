@@ -7,12 +7,27 @@ import type { ApiErrorCode } from '@thp/shared';
 export class ApiError extends Error {
   readonly code: ApiErrorCode;
   readonly status: number;
+  /**
+   * Response headers this refusal has to carry. Empty for all but one of them.
+   *
+   * On the error rather than at the throw site, because `Retry-After` is not decoration: a `429`
+   * without it makes a client guess, and a client that guesses wrong either gives up on a working
+   * product or hammers a limiter it cannot see. Carrying it here means every path that throws the
+   * refusal answers the question, including the ones written later.
+   */
+  readonly headers: Readonly<Record<string, string>>;
 
-  constructor(code: ApiErrorCode, status: number, message: string, options?: ErrorOptions) {
+  constructor(
+    code: ApiErrorCode,
+    status: number,
+    message: string,
+    options?: ErrorOptions & { readonly headers?: Readonly<Record<string, string>> },
+  ) {
     super(message, options);
     this.name = 'ApiError';
     this.code = code;
     this.status = status;
+    this.headers = options?.headers ?? {};
   }
 
   /**
@@ -174,6 +189,22 @@ export class ApiError extends Error {
    */
   static noteRemoved(message: string): ApiError {
     return new ApiError('note_removed', 409, message);
+  }
+
+  /**
+   * Too many requests from this caller in the window (docs/project/prd.md, 3.1.18).
+   *
+   * `429` and its own code, because neither the caller nor the request was wrong — what refused
+   * is a budget. `retryAfterSeconds` becomes the `Retry-After` header *and* is spelled into the
+   * message, so the wait is legible to a screen and to a person reading a log, and is never a
+   * number a client had to invent. It is rounded **up**: a header that says 59 when the answer is
+   * 59.4 invites a retry that is refused again.
+   */
+  static rateLimited(retryAfterSeconds: number, message: string): ApiError {
+    const seconds = Math.max(1, Math.ceil(retryAfterSeconds));
+    return new ApiError('rate_limited', 429, message, {
+      headers: { 'retry-after': String(seconds) },
+    });
   }
 
   static notFound(message = 'The requested resource does not exist.'): ApiError {

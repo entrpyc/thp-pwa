@@ -88,6 +88,15 @@ export const CORRELATION_ID_HEADER = 'x-correlation-id';
  *   is still there — as a tombstone — and the screen is about to show it. active-scope prd 5.3.4,
  *   5.4.3 and 5.5.4 each need to say something different about it, which is what a code they can
  *   branch on is for.
+ *
+ * Registration adds one, and it is the first refusal in the product that is about **how often**
+ * rather than about who or what:
+ *
+ * - `rate_limited` — too many requests from this caller in the window (project prd 3.1.18). Its
+ *   own code rather than `invalid_input` or `forbidden`, because neither the request nor the
+ *   caller was wrong: the screen has to say "wait and try again" rather than "fix this", and a
+ *   client cannot tell those apart from a status alone. The response carries `Retry-After`, so
+ *   the wait is a number the screen prints rather than a guess it makes.
  */
 export const API_ERROR_CODES = [
   'unauthenticated',
@@ -108,6 +117,7 @@ export const API_ERROR_CODES = [
   'review_closed',
   'generation_in_flight',
   'note_removed',
+  'rate_limited',
   'not_found',
   'internal_error',
   'service_unavailable',

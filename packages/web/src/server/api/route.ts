@@ -88,7 +88,13 @@ export function apiRoute<TAccess extends RouteAccess>(
             code: caught.code,
             reason: caught.message,
           });
-          return errorResponse(caught.code, caught.message, caught.status, correlationId);
+          return errorResponse(
+            caught.code,
+            caught.message,
+            caught.status,
+            correlationId,
+            caught.headers,
+          );
         }
 
         // Unhandled: the detail is logged server-side and never put on the wire.

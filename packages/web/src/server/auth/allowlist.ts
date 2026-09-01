@@ -42,8 +42,10 @@ import {
  * for the caller — but it is the first entry on this list that **writes**, and the first that will
  * tell an anonymous caller that an address is taken. That disclosure is unavoidable rather than
  * accepted lightly: an address that already has an account cannot be given a second one, so the
- * only alternative is to claim a success that did not happen. It is the one entry here that wants a
- * rate limit and does not yet have one.
+ * only alternative is to claim a success that did not happen. It is also, for exactly that reason,
+ * **the one route in the product with a rate limit** (docs/project/prd.md, 3.1.18): a budget per
+ * caller and a ceiling across the route, spent before the request body is read. See
+ * `server/auth/sign-up-limits.ts` for the numbers and the argument for each.
  */
 export interface AllowlistEntry {
   readonly method: string;

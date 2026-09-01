@@ -49,6 +49,44 @@ const FAILING_MAIL = {
   GENERATE_PROVIDER: 'fake',
 } as const;
 
+/**
+ * **The sign-up budget, for every server but one.**
+ *
+ * The suite registers dozens of accounts, all of them from 127.0.0.1 with no proxy in front — so
+ * as far as the limiter can tell, the entire test run is one caller. Left at the shipped defaults
+ * the twenty-first registration in the run would be refused, and which test that landed on would
+ * depend on the order the files happened to run in. That is not a limiter finding a bug; it is a
+ * suite testing its own arithmetic.
+ *
+ * So the limit is lifted out of the way here, the same move {@link TEST_BIBLE} and
+ * {@link FAILING_MAIL} make: the suite's configuration is the suite's. What proves the limiter
+ * works is the server below, which has one, plus the unit tests over the policy itself.
+ */
+const UNLIMITED_SIGN_UP = {
+  SIGNUP_RATE_LIMIT_WINDOW_SECONDS: '600',
+  SIGNUP_RATE_LIMIT_PER_IP: '100000',
+  SIGNUP_RATE_LIMIT_TOTAL: '100000',
+} as const;
+
+/**
+ * **The server that has a budget**, and the only one.
+ *
+ * Three per caller, so a fourth request is a refusal a test can drive in four lines rather than in
+ * twenty. The window is long on purpose — five minutes is far longer than the run — because a short
+ * one would make every assertion here a race against the clock, and a limiter test that passes
+ * because a window expired has proved nothing. Each test uses a client address of its own instead,
+ * which is a fresh budget without a fresh server.
+ *
+ * The whole-route ceiling is set out of reach for the same reason it is set generously in
+ * production: it is a backstop, its logic is exercised exhaustively in the unit tests where a clock
+ * can be held still, and a ceiling low enough to trip here would trip on whichever test ran last.
+ */
+const TIGHT_SIGN_UP = {
+  SIGNUP_RATE_LIMIT_WINDOW_SECONDS: '300',
+  SIGNUP_RATE_LIMIT_PER_IP: '3',
+  SIGNUP_RATE_LIMIT_TOTAL: '1000',
+} as const;
+
 function captureMail(name: string): Record<string, string> {
   return {
     MAIL_TRANSPORT: 'capture',
@@ -101,14 +139,14 @@ export default async function setup(project: TestProject): Promise<() => Promise
       name: 'primary',
       databaseUrl: appDatabase.url,
       port: primaryPort,
-      env: { ...media, ...TEST_BIBLE, ...captureMail('primary') },
+      env: { ...media, ...TEST_BIBLE, ...UNLIMITED_SIGN_UP, ...captureMail('primary') },
     });
     servers.push(primary);
 
     const broken = await startNextServer({
       name: 'broken-db',
       databaseUrl: UNREACHABLE_DATABASE_URL,
-      env: { ...media, ...TEST_BIBLE, ...captureMail('broken-db') },
+      env: { ...media, ...TEST_BIBLE, ...UNLIMITED_SIGN_UP, ...captureMail('broken-db') },
     });
     servers.push(broken);
 
@@ -117,14 +155,28 @@ export default async function setup(project: TestProject): Promise<() => Promise
     const mailDown = await startNextServer({
       name: 'mail-down',
       databaseUrl: appDatabase.url,
-      env: { ...media, ...TEST_BIBLE, ...FAILING_MAIL },
+      env: { ...media, ...TEST_BIBLE, ...UNLIMITED_SIGN_UP, ...FAILING_MAIL },
     });
     servers.push(mailDown);
+
+    // Same database as the primary, so an account registered against it is a real account in the
+    // same member list — the refusal being tested is the limiter's, not a different world's.
+    const rateLimited = await startNextServer({
+      name: 'rate-limited',
+      databaseUrl: appDatabase.url,
+      env: { ...media, ...TEST_BIBLE, ...TIGHT_SIGN_UP, ...captureMail('rate-limited') },
+    });
+    servers.push(rateLimited);
 
     project.provide('apiBaseUrl', primary.baseUrl);
     project.provide('apiLogPath', primary.logPath);
     project.provide('brokenDbBaseUrl', broken.baseUrl);
     project.provide('mailDownBaseUrl', mailDown.baseUrl);
+    project.provide('rateLimitedBaseUrl', rateLimited.baseUrl);
+    project.provide('rateLimitedSignUp', {
+      perAddress: Number(TIGHT_SIGN_UP.SIGNUP_RATE_LIMIT_PER_IP),
+      windowSeconds: Number(TIGHT_SIGN_UP.SIGNUP_RATE_LIMIT_WINDOW_SECONDS),
+    });
     project.provide('mailCapturePath', resolve(MAIL_DIR, 'primary.jsonl'));
     project.provide('databaseUrl', appDatabase.url);
     project.provide('mediaSettings', media);
@@ -143,6 +195,13 @@ declare module 'vitest' {
     brokenDbBaseUrl: string;
     /** A server whose mail transport refuses everything. Shares the primary's database. */
     mailDownBaseUrl: string;
+    /**
+     * A server with a real sign-up budget — three per caller. Every other server has the limit
+     * lifted out of the way, because the suite is one caller as far as a limiter can tell.
+     */
+    rateLimitedBaseUrl: string;
+    /** What that server was configured with, so no test restates a number the harness chose. */
+    rateLimitedSignUp: { readonly perAddress: number; readonly windowSeconds: number };
     /** JSON-lines file the primary server appends every outgoing message to. */
     mailCapturePath: string;
     /** The suite's own database, not the one in `.env`. Dropped when the run ends. */
