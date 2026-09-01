@@ -9,6 +9,7 @@ import {
 } from '@thp/shared';
 import {
   createDatabase,
+  insertNote,
   insertRecording,
   replaceScriptureReferences,
   replaceTranscript,
@@ -150,6 +151,24 @@ beforeAll(async () => {
 
   citingId = await publishedRecording(`Scripture citing ${RUN}`);
   await replaceScriptureReferences(citingId, REFERENCES, handle);
+
+  /*
+   * **Enough notes that the notes panel is the tallest thing on the page**, which is what the
+   * swap-does-not-scroll assertion below needs: the panel Scripture replaces has to be taller than
+   * Scripture is, or the document never loses the height that makes a page jump.
+   */
+  for (let index = 0; index < 14; index += 1) {
+    await insertNote(
+      {
+        recordingId: citingId,
+        authorId: member.id,
+        visibility: 'public',
+        text: `A note left on this teaching, the ${index + 1}th, long enough to take a line of its own on the card that draws it.`,
+        timestampMs: index * 4000,
+      },
+      handle,
+    );
+  }
   bareId = await publishedRecording(`Scripture bare ${RUN}`);
 }, 240_000);
 
@@ -369,4 +388,86 @@ describe('the Scripture tab on the recording page', () => {
       await page.context().close();
     }
   }, 120_000);
+});
+
+/**
+ * **Pressing a tab must not move the page.** The swap is not a navigation, and a member reading
+ * with the strip in front of them should find it exactly where they left it.
+ *
+ * The failure this guards is three layouts deep and about fifty milliseconds long, which is why it
+ * is measured from inside the page rather than looked at: the open panel unmounts, the document
+ * loses its height, a member scrolled past the new bottom is **clamped** to it, and then the
+ * incoming panel's content arrives, the document grows and scroll anchoring puts the position
+ * back. What a member sees is a jump down and back — a hundred and twenty pixels of it on this
+ * page, at the size it is seeded to here.
+ *
+ * The notes seeded in `beforeAll` are not decoration: they are what makes the panel Scripture
+ * replaces **taller** than Scripture, which is the only arrangement in which the clamp can happen.
+ * Without them this would pass on a page that could not fail.
+ *
+ * **The press is dispatched inside the page** rather than through Playwright's click, because the
+ * driver scrolls an element into view before clicking it and that scroll is indistinguishable from
+ * the one this test exists to catch.
+ */
+describe('the tab strip does not move the page', () => {
+  it('holds the scroll position when a tall panel is swapped for a short one', async () => {
+    const { page } = await openTeaching(citingId);
+    try {
+      // Short enough that the seeded notes run well past the bottom, which is what gives the
+      // document a height to lose.
+      await page.setViewportSize({ width: 1100, height: 700 });
+      await expect
+        .poll(() => page.evaluate(() => document.documentElement.scrollHeight), { timeout: 60_000 })
+        .toBeGreaterThan(1600);
+
+      const samples = await page.evaluate(async () => {
+        const strip = document.querySelector('[aria-label="Teaching contents"]');
+        const button = [...(strip?.querySelectorAll('button') ?? [])].find((one) =>
+          (one.textContent ?? '').includes('Scripture'),
+        );
+        if (button === undefined) return null;
+
+        // The strip in the middle of the window, where a member reading the page would have it.
+        window.scrollTo({
+          top: window.scrollY + button.getBoundingClientRect().top - window.innerHeight / 2,
+          behavior: 'instant',
+        });
+        await new Promise((resolve) => setTimeout(resolve, 400));
+
+        const taken: { y: number; strip: number }[] = [];
+        const record = () =>
+          taken.push({
+            y: Math.round(window.scrollY),
+            strip: Math.round(button.getBoundingClientRect().top),
+          });
+
+        record();
+        button.click();
+        await new Promise<void>((resolve) => {
+          const started = performance.now();
+          const tick = () => {
+            record();
+            if (performance.now() - started < 1500) requestAnimationFrame(tick);
+            else resolve();
+          };
+          requestAnimationFrame(tick);
+        });
+        return taken;
+      });
+
+      expect(samples).not.toBeNull();
+      const frames = samples ?? [];
+      const first = frames[0];
+      expect(first).toBeDefined();
+      // Not "ends where it started" — **every frame in between**, because the whole failure is a
+      // position the page takes for three frames and then gives back.
+      expect(frames.every((one) => one.y === first?.y)).toBe(true);
+      expect(frames.every((one) => one.strip === first?.strip)).toBe(true);
+
+      // And the press did what it was for.
+      await expect.poll(() => panelOf(page).count(), { timeout: 30_000 }).toBe(1);
+    } finally {
+      await page.context().close();
+    }
+  }, 180_000);
 });

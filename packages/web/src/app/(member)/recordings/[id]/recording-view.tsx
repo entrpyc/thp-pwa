@@ -1,7 +1,7 @@
 'use client';
 
 import Link from 'next/link';
-import { useEffect, useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import {
   MEMBER_LIBRARY_PAGE_PATH,
   memberRecordingPath,
@@ -95,6 +95,77 @@ export function RecordingScreen({
    * a member came to the page for. Pressing it still closes it.
    */
   const [openTab, setOpenTab] = useState<OpenTab>('notes');
+
+  /**
+   * **The panel area holds its height while a tab is swapped**, so the page cannot jump under the
+   * member who pressed the tab.
+   *
+   * Without this, a press is three layouts rather than one: the open panel unmounts, the document
+   * loses its height, and a member scrolled past what is left is **clamped** to the new bottom —
+   * the page visibly slides down. The new panel then fetches, its content arrives, the document
+   * grows again and the browser's scroll anchoring puts the position back. Measured on the
+   * scripture tab, that round trip is about fifty milliseconds and a hundred and twenty pixels: too
+   * fast to follow and far too big to miss.
+   *
+   * So the region keeps the height it had until giving it up would move nothing. What is held is a
+   * `min-height` on the panels' own wrapper rather than the scroll position, because a scroll
+   * position cannot be restored to somewhere the document no longer reaches — by the time the
+   * clamp has happened, the room to put it back is gone.
+   */
+  const panelRegion = useRef<HTMLDivElement | null>(null);
+  const [floorPx, setFloorPx] = useState(0);
+
+  /**
+   * Read the panel area's height **before** the swap, which is the only moment it can be read: one
+   * render later the outgoing panel is gone and its height with it.
+   */
+  const chooseTab = (next: OpenTab) => {
+    setFloorPx(panelRegion.current?.getBoundingClientRect().height ?? 0);
+    setOpenTab((open) => (open === next ? null : next));
+  };
+
+  /**
+   * Let the held height go the moment letting it go moves nothing.
+   *
+   * "Nothing" is a measurement, not a delay: the region shrinks by whatever the floor is holding
+   * beyond the panel's own content, and that is safe exactly when the document is still tall enough
+   * to reach the bottom of the window afterwards. A panel that arrives taller than the floor
+   * releases on its first paint; a genuinely shorter one waits — for its own content, or for the
+   * member to scroll up far enough that the space is no longer holding the page open — which is
+   * what the observer and the two listeners are for. Until then the page carries some empty space
+   * below the panel, which is invisible where it sits and cannot move anything.
+   */
+  useEffect(() => {
+    if (floorPx === 0) return;
+    const region = panelRegion.current;
+    if (region === null) return;
+
+    const release = () => {
+      const panel = region.firstElementChild;
+      const natural = panel === null ? 0 : panel.getBoundingClientRect().height;
+      const shrinkBy = Math.max(0, floorPx - natural);
+      const room = document.documentElement.scrollHeight - shrinkBy;
+      if (shrinkBy === 0 || room >= window.scrollY + window.innerHeight) setFloorPx(0);
+    };
+
+    release();
+    /*
+     * **The observer watches the panel, not the region.** The region's height is exactly what the
+     * floor is pinning, so it has no news to give — it is the panel inside it that grows when its
+     * fetch lands, and that growth is usually what makes the floor safe to drop.
+     */
+    const observer = new ResizeObserver(release);
+    const panel = region.firstElementChild;
+    if (panel === null) observer.observe(region);
+    else observer.observe(panel);
+    window.addEventListener('scroll', release, { passive: true });
+    window.addEventListener('resize', release);
+    return () => {
+      observer.disconnect();
+      window.removeEventListener('scroll', release);
+      window.removeEventListener('resize', release);
+    };
+  }, [floorPx, openTab]);
 
   /**
    * `home › series › recording` when this teaching is in one, and today's two segments when it is
@@ -260,7 +331,7 @@ export function RecordingScreen({
               type="button"
               role="tab"
               aria-selected={openTab === 'notes'}
-              onClick={() => setOpenTab((open) => (open === 'notes' ? null : 'notes'))}
+              onClick={() => chooseTab('notes')}
             >
               <span className={styles.notesIcon} aria-hidden="true">
                 ✎
@@ -284,7 +355,7 @@ export function RecordingScreen({
                 type="button"
                 role="tab"
                 aria-selected={openTab === 'chapters'}
-                onClick={() => setOpenTab((open) => (open === 'chapters' ? null : 'chapters'))}
+                onClick={() => chooseTab('chapters')}
               >
                 Chapters
               </button>
@@ -295,7 +366,7 @@ export function RecordingScreen({
                 type="button"
                 role="tab"
                 aria-selected={openTab === 'scripture'}
-                onClick={() => setOpenTab((open) => (open === 'scripture' ? null : 'scripture'))}
+                onClick={() => chooseTab('scripture')}
               >
                 Scripture
               </button>
@@ -316,26 +387,39 @@ export function RecordingScreen({
                 type="button"
                 role="tab"
                 aria-selected={openTab === 'transcript'}
-                onClick={() => setOpenTab((open) => (open === 'transcript' ? null : 'transcript'))}
+                onClick={() => chooseTab('transcript')}
               >
                 Transcript
               </button>
             */}
           </div>
 
-          {openTab === 'notes' ? (
-            <NotesPanel recordingId={recordingId} canModerate={canModerate} />
-          ) : null}
+          {/*
+            **One wrapper around whichever panel is open**, and the thing whose height is held
+            across a swap — see `floorPx` above. It is drawn while a tab is open and while a floor
+            is still being held for a tab that has just closed, and not at all otherwise: an empty
+            element left in the column would spend a gap on nothing.
+          */}
+          {openTab === null && floorPx === 0 ? null : (
+            <div
+              ref={panelRegion}
+              style={floorPx === 0 ? undefined : { minHeight: `${floorPx}px` }}
+            >
+              {openTab === 'notes' ? (
+                <NotesPanel recordingId={recordingId} canModerate={canModerate} />
+              ) : null}
 
-          {openTab === 'chapters' ? (
-            <ChaptersPanel recordingId={recordingId} canEdit={canEditChapters} />
-          ) : null}
+              {openTab === 'chapters' ? (
+                <ChaptersPanel recordingId={recordingId} canEdit={canEditChapters} />
+              ) : null}
 
-          {openTab === 'scripture' ? <ScripturePanel recordingId={recordingId} /> : null}
+              {openTab === 'scripture' ? <ScripturePanel recordingId={recordingId} /> : null}
 
-          {openTab === 'transcript' ? (
-            <TranscriptPanel recordingId={recordingId} canCorrect={canCorrect} />
-          ) : null}
+              {openTab === 'transcript' ? (
+                <TranscriptPanel recordingId={recordingId} canCorrect={canCorrect} />
+              ) : null}
+            </div>
+          )}
         </>
       )}
     </>

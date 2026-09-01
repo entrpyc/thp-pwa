@@ -18,6 +18,24 @@ body {
   padding: 0;
 }
 
+/*
+ * **The scrollbar's space is held on every page, whether or not that page is long enough to need
+ * one.**
+ *
+ * Without this, a short screen draws no scrollbar and a long one does, so the content width
+ * changes by the width of the bar the moment a member moves between the two — the whole layout
+ * jumps sideways on a navigation that changed nothing about it. `overflow-y: scroll` keeps the bar
+ * drawn on every page, and `scrollbar-gutter: stable` says the same thing to a browser that reads
+ * the newer property: the room is reserved rather than taken from the content when it is needed.
+ *
+ * Platforms that draw scrollbars *over* the content — a phone, and macOS by default — never had
+ * the shift and are unaffected by either.
+ */
+html {
+  overflow-y: scroll;
+  scrollbar-gutter: stable;
+}
+
 body {
   background: var(--color-bg);
   color: var(--color-text);
