@@ -12,7 +12,7 @@ import {
   miniMaxGenerator,
   type HttpTransport,
 } from '../../src/generate/minimax';
-import { DRAFT_TOOL_NAME } from '../../src/generate/prompt';
+import { DRAFT_TOOL_NAME, renderTranscript } from '../../src/generate/prompt';
 
 /**
  * The generation adapter, against captured responses and a transport that reaches no network.
@@ -38,14 +38,23 @@ const TOOL_CALL = fixture('minimax-tool-call.json');
 const PROSE = fixture('minimax-prose.json');
 
 /** A transcript long enough that "the whole of it" is a visible claim rather than a phrase. */
-const TRANSCRIPT = Array.from(
-  { length: 200 },
-  (_, index) => `Sentence number ${index} of the teaching.`,
-).join(' ');
+const LINES = Array.from({ length: 200 }, (_unused, index) => ({
+  startMs: index * 10_000,
+  text: `Sentence number ${index} of the teaching.`,
+}));
+
+/**
+ * The words as the prompt renders them, which is what the request body has to be checked against now
+ * that the offsets travel with them ([3.7.10](docs/project/prd.md), [3.22.1](docs/project/prd.md)).
+ *
+ * Built by the same function the prompt uses, so "the whole transcript went in one message" stays a
+ * claim about the message rather than about a string this file happened to build the same way.
+ */
+const TRANSCRIPT = renderTranscript(LINES);
 
 const REQUEST: GenerationRequest = {
   title: 'The kindness of God',
-  transcript: TRANSCRIPT,
+  lines: LINES,
   kinds: [...REVIEW_KINDS],
   steeringPrompt: null,
 };
@@ -108,6 +117,9 @@ describe('the request the adapter builds', () => {
     };
     expect(citations.type).toBe('array');
     expect(Object.keys(citations.items.properties).sort()).toEqual([
+      // Where the passage is cited ([3.7.10](docs/project/prd.md)) — optional, and asked for on
+      // the same entry as the passage so a model answers both about one citation or neither.
+      'anchorMs',
       'book',
       'chapter',
       'verseEnd',

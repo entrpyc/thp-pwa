@@ -14,7 +14,12 @@
  * `JOB_STATUSES`.
  */
 
-import type { ProposedCitation, ScriptureCitation, ScriptureReferenceView } from './scripture';
+import type {
+  DraftedCitation,
+  ProposedCitation,
+  ScriptureCitation,
+  ScriptureReferenceView,
+} from './scripture';
 
 /**
  * What kind of artefact is waiting on an admin.
@@ -140,7 +145,7 @@ export const MAX_STEERING_PROMPT_LENGTH = 500;
  * this union when they arrive, and everything reading it already asks the shape rather than the
  * kind.
  */
-export type ReviewFieldValue = string | readonly ScriptureCitation[];
+export type ReviewFieldValue = string | readonly DraftedCitation[];
 
 /** What the machine wrote for one field, and whether a person has changed it since. */
 export interface FieldProvenance {
@@ -175,6 +180,19 @@ export interface FieldProvenance {
 export interface SubmittedReference extends ProposedCitation {
   readonly from: number | null;
 }
+
+/**
+ * The anchor's own three-way rule, stated once because the approve path is the only place it is
+ * decided and a reader of that path should not have to reconstruct it
+ * ([3.7.10](docs/project/prd.md)).
+ *
+ * A submitted row carries an anchor when the admin left the machine's in place or typed one; it
+ * carries none when they cleared it or when the row is one they added themselves. Since
+ * {@link SubmittedReference} inherits `anchorMs` from {@link ProposedCitation}, *absent* and
+ * *null* mean the same thing here — the reference belongs to the recording rather than to any
+ * chapter — and neither is an error.
+ */
+export type SubmittedAnchor = SubmittedReference['anchorMs'];
 
 /**
  * Where this draft came from.

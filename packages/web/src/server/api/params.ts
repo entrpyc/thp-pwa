@@ -1,3 +1,4 @@
+import { CHAPTER_SCOPE_PARAM } from '@thp/shared';
 import { ApiError } from './errors';
 
 /**
@@ -17,4 +18,21 @@ export async function routeParam(
     throw ApiError.invalidInput(`This route needs a ${name} in its path.`);
   }
   return value;
+}
+
+/**
+ * **Which chapter a read is scoped to**, or `null` when it is not scoped
+ * ([3.22.14](docs/project/prd.md); project tdd 5.9).
+ *
+ * Beside `routeParam` because it is the same kind of thing — one value read off a request without
+ * the handler reaching into a shape itself — and it is read by three routes rather than one, so a
+ * fourth surface scoping a read cannot spell the parameter differently.
+ *
+ * A blank value reads as **not scoped** rather than as a chapter that does not exist: `?chapter=`
+ * is what a client building a URL from an empty variable produces, and refusing it would turn a
+ * caller's bug into an error a member sees on a page that could have been answered.
+ */
+export function chapterScopeParam(request: Request): string | null {
+  const value = new URL(request.url).searchParams.get(CHAPTER_SCOPE_PARAM);
+  return value === null || value.trim() === '' ? null : value;
 }

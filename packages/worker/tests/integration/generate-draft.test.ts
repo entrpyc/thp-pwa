@@ -50,6 +50,18 @@ const DRAFT = {
   ],
 };
 
+/**
+ * What a hand-built `Generator` in this file says about chapters.
+ *
+ * This suite drives `generate_draft` and nothing else, so a segmentation reaching one of these stubs
+ * would mean the wrong handler ran — worth failing loudly rather than answering with an empty list,
+ * which would look exactly like a teaching too short to divide ([3.22.4](docs/project/prd.md)).
+ */
+const neverSegments = {
+  segmentChapters: () =>
+    Promise.reject(new Error('this suite is about generate_draft; nothing here segments chapters')),
+} satisfies Pick<Generator, 'segmentChapters'>;
+
 let target: ThrowawayDatabase;
 let sql: postgres.Sql;
 let handle: DatabaseHandle;
@@ -193,8 +205,10 @@ describe('one call, two drafts', () => {
     const scripture = written.find((one) => one.kind === 'scripture');
     expect(scripture?.fields).toEqual({
       citations: [
-        { book: 'john', chapter: 3, verseStart: 16, verseEnd: 16 },
-        { book: 'romans', chapter: 8, verseStart: 1, verseEnd: 4 },
+        // `anchorMs` is null because this script's proposals carry none — 3.7.10's ordinary case,
+        // and the one that says the reference belongs to the recording rather than to a chapter.
+        { book: 'john', chapter: 3, verseStart: 16, verseEnd: 16, anchorMs: null },
+        { book: 'romans', chapter: 8, verseStart: 1, verseEnd: 4, anchorMs: null },
       ],
     });
   });
@@ -230,6 +244,7 @@ describe('one call, two drafts', () => {
   it('fails the job and writes nothing when a list-shaped field comes back as prose', async () => {
     const job = await claimedJob();
     const prose: Generator = {
+      ...neverSegments,
       name: 'prose',
       generate: async () => ({
         drafts: {
@@ -274,7 +289,13 @@ describe('one call, two drafts', () => {
 
     // There is no concatenated copy to read — Story 2 Ticket 03 deliberately did not write one, so
     // the join is what the handler does and the order is the one `listSegments` decided.
-    expect(model.requests[0]?.transcript).toBe('First sentence. Second sentence. Third.');
+    // The offsets travel with the words now ([3.7.10](docs/project/prd.md)), so the handler hands
+    // over the lines and the prompt is what joins them — which is why this asserts the lines.
+    expect(model.requests[0]?.lines.map((one) => one.text)).toEqual([
+      'First sentence.',
+      'Second sentence.',
+      'Third.',
+    ]);
     expect(model.requests[0]?.title).toBe(`Teaching ${recordings}`);
   });
 
@@ -480,6 +501,7 @@ describe('what it refuses to generate from', () => {
   it('fails the job with the provider’s reason when the provider refuses', async () => {
     const job = await claimedJob();
     const refusing: Generator = {
+      ...neverSegments,
       name: 'refusing',
       generate: () => Promise.reject(new GenerationError('the model answered without calling the tool')),
     };
@@ -498,6 +520,7 @@ describe('what it refuses to generate from', () => {
   it('fails the job with the provider’s reason when the provider times out', async () => {
     const job = await claimedJob();
     const silent: Generator = {
+      ...neverSegments,
       name: 'silent',
       generate: () =>
         Promise.reject(new GenerationError('the generation provider did not answer within 10 minutes')),
@@ -595,8 +618,10 @@ describe('the verses of what it drafted', () => {
     const scripture = (await items(job.recordingId)).find((one) => one.kind === 'scripture');
     expect(scripture?.fields).toEqual({
       citations: [
-        { book: 'john', chapter: 3, verseStart: 16, verseEnd: 16 },
-        { book: 'romans', chapter: 8, verseStart: 1, verseEnd: 4 },
+        // `anchorMs` is null because this script's proposals carry none — 3.7.10's ordinary case,
+        // and the one that says the reference belongs to the recording rather than to a chapter.
+        { book: 'john', chapter: 3, verseStart: 16, verseEnd: 16, anchorMs: null },
+        { book: 'romans', chapter: 8, verseStart: 1, verseEnd: 4, anchorMs: null },
       ],
     });
     // The reference is marked as having no text yet by there being none — which is the same state

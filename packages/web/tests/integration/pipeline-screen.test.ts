@@ -17,6 +17,8 @@ import {
   enqueueJob,
   failJob,
   insertRecording,
+  replaceChapters,
+  updateChapter,
   type DatabaseHandle,
 } from '@thp/db';
 
@@ -486,6 +488,140 @@ describe('running a step again from the screen', () => {
     }
   }, 150_000);
 });
+
+/**
+ * **The confirmation before chapters are generated again** ([3.22.8](docs/project/prd.md)).
+ *
+ * The second automated step that destroys human work, confirmed for the reason re-transcribing is
+ * ([3.21.2.7](docs/project/prd.md)) — and one degree worse in a way the sentence has to carry:
+ * chapters have no review gate ([3.22.6](docs/project/prd.md)), so on a published teaching the
+ * replacement is what members see the moment the job commits, with no admin step in between.
+ *
+ * What is under test is the **naming**. A confirmation that says "are you sure?" is a keystroke; the
+ * requirement asks it to name what it discards, and that is only checkable by counting the chapters
+ * an admin has changed and reading the number back off the screen.
+ */
+describe('running chapter generation again (3.22.8)', () => {
+  /** A teaching with three chapters, `edited` of which a human has changed. */
+  async function withChapters(title: string, edited: number): Promise<string> {
+    const recordingId = await newRecording(title);
+    await seedStep(recordingId, 'generate_chapters', 'succeeded');
+
+    const rows = await replaceChapters(
+      recordingId,
+      [
+        { startMs: 0, title: 'The vine', summary: 'Abiding.' },
+        { startMs: 20 * 60_000, title: 'The branches', summary: 'Fruit.' },
+        { startMs: 40 * 60_000, title: 'The gardener', summary: 'Pruning.' },
+      ],
+      { model: 'fake', modelVersion: 'fake-1', promptVersion: 'chapters-1' },
+      handle,
+    );
+
+    for (const row of rows.slice(0, edited)) {
+      await updateChapter(
+        { id: row.id, title: `${row.title}, renamed`, summary: row.summary, startMs: row.startMs },
+        handle,
+      );
+    }
+    return recordingId;
+  }
+
+  it('takes a confirming press that names the teaching and counts what it discards', async () => {
+    const title = unique('Chapters an admin has changed');
+    const recordingId = await withChapters(title, 2);
+
+    const page = await openPanel();
+    try {
+      const row = rowFor(page, title);
+      // The third cell is `generate_chapters`, because the cells come off the ordered step list.
+      await row.getByRole('button', { name: 'Run again' }).nth(2).click();
+
+      await expect
+        .poll(async () => (await row.textContent()) ?? '', { timeout: 30_000 })
+        .toContain(`Generate the chapters of “${title}” again?`);
+
+      const text = (await row.textContent()) ?? '';
+      // The count is the point of the sentence: "some edits" is a warning, "2 chapters" is a
+      // decision.
+      expect(text).toContain('titles, summaries and boundaries of the 2 chapters');
+      // And the thing that makes this worse than a draft: no review step stands between the run and
+      // what a member reads.
+      expect(text).toContain('Chapters have no review step');
+
+      // Nothing has been queued by the asking.
+      const before = await sql<{ count: string }[]>`
+        select count(*)::text as count from job
+        where recording_id = ${recordingId} and step = 'generate_chapters'
+      `;
+      expect(before).toEqual([{ count: '1' }]);
+
+      await row.getByRole('button', { name: 'Yes, replace the chapters' }).click();
+      await waitForRow(page, title, 'Waiting');
+
+      const after = await sql<{ status: string; attempt: number }[]>`
+        select status::text as status, attempt from job
+        where recording_id = ${recordingId} and step = 'generate_chapters' order by attempt
+      `;
+      expect(after.map((one) => [one.status, one.attempt])).toEqual([
+        ['succeeded', 1],
+        ['pending', 2],
+      ]);
+    } finally {
+      await page.context().close();
+    }
+  }, 180_000);
+
+  /**
+   * **Nothing edited says so plainly**, rather than leaving an admin to wonder whether the number
+   * was simply not looked up. The press is still confirmed: what it replaces is still what members
+   * are reading.
+   */
+  it('says nothing is lost when nothing has been changed, and still asks', async () => {
+    const title = unique('Chapters nobody has touched');
+    await withChapters(title, 0);
+
+    const page = await openPanel();
+    try {
+      const row = rowFor(page, title);
+      await row.getByRole('button', { name: 'Run again' }).nth(2).click();
+
+      await expect
+        .poll(async () => (await row.textContent()) ?? '', { timeout: 30_000 })
+        .toContain('nothing an admin has changed is lost');
+      expect(await row.getByRole('button', { name: 'Yes, replace the chapters' }).count()).toBe(1);
+    } finally {
+      await page.context().close();
+    }
+  }, 150_000);
+
+  it('queues nothing when the confirming press is cancelled', async () => {
+    const title = unique('Thought better of the chapters');
+    const recordingId = await withChapters(title, 1);
+
+    const page = await openPanel();
+    try {
+      const row = rowFor(page, title);
+      await row.getByRole('button', { name: 'Run again' }).nth(2).click();
+      await row.getByRole('button', { name: 'Cancel' }).click();
+
+      await expect
+        .poll(async () => row.getByRole('button', { name: 'Yes, replace the chapters' }).count(), {
+          timeout: 30_000,
+        })
+        .toBe(0);
+
+      const rows = await sql<{ count: string }[]>`
+        select count(*)::text as count from job
+        where recording_id = ${recordingId} and step = 'generate_chapters'
+      `;
+      expect(rows).toEqual([{ count: '1' }]);
+    } finally {
+      await page.context().close();
+    }
+  }, 150_000);
+});
+
 
 describe('at every width', () => {
   for (const viewport of VIEWPORTS) {

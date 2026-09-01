@@ -62,7 +62,14 @@ describe('a step that succeeds enqueues the next one', () => {
     `) as unknown as LedgerRow[];
   }
 
-  const succeeds = { transcribe: () => undefined, generate_draft: () => undefined };
+  /**
+   * A handler per step that does nothing and returns nothing — one entry for every step there is,
+   * because a step with no handler is a job that fails naming the step, which would make every test
+   * here fail for a reason that has nothing to do with the chain.
+   */
+  const succeeds = Object.fromEntries(
+    PIPELINE_STEPS.map((step) => [step, () => undefined]),
+  ) as Record<PipelineStep, () => undefined>;
 
   beforeAll(async () => {
     target = await createThrowawayDatabase(inject('databaseUrl'), 'chain');
@@ -129,7 +136,9 @@ describe('a step that succeeds enqueues the next one', () => {
   });
 
   it('stops at the last step without treating that as a failure', async () => {
-    const job = await claimedJob('generate_draft');
+    // The last step of the chain, read from the list rather than named — so a step added after it
+    // moves this test with it rather than leaving it asserting about the middle of the chain.
+    const job = await claimedJob(PIPELINE_STEPS[PIPELINE_STEPS.length - 1] as PipelineStep);
 
     const row = await runJob(job, succeeds, { executor: handle });
 

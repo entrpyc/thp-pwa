@@ -3,6 +3,7 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
 import {
   formatTimecode,
+  isInChapter,
   recordingSummaryRegeneratePath,
   transcriptSegmentPath,
   type CorrectSegmentPayload,
@@ -42,9 +43,24 @@ import styles from './transcript.module.css';
 export function TranscriptPanel({
   recordingId,
   canCorrect,
+  chapterId = null,
 }: {
   recordingId: string;
   canCorrect: boolean;
+  /**
+   * **The chapter this panel is scoped to**, or `null` for the whole teaching
+   * ([3.22.14](docs/project/prd.md)).
+   *
+   * When it is set the lines are narrowed **here rather than by a second fetch**: the provider holds
+   * the whole transcript, because the caption pill needs it wherever the member is, and a scoped
+   * request would download the teaching's words twice. The narrowing rule is `isInChapter` — the
+   * same half-open interval the API scopes its own read by (project tdd 5.9), so the tab and the
+   * route bucket a line identically.
+   *
+   * Because a boundary always sits on a segment's start ([3.22.5](docs/project/prd.md)), the
+   * transcript "stops at its boundaries" exactly: no line is ever cut in half by one.
+   */
+  chapterId?: string | null;
 }) {
   const player = usePlayer();
   const listRef = useRef<HTMLOListElement>(null);
@@ -69,7 +85,27 @@ export function TranscriptPanel({
     requestTranscript();
   }, [requestTranscript]);
 
-  const segments = player.transcript?.segments ?? null;
+  /*
+   * **Narrowed to the chapter's span when the page asked for one**
+   * ([3.22.14](docs/project/prd.md)). `isInChapter` is the rule, and it is the same call the API
+   * makes when it scopes its own read — so the tab and the route bucket a line identically without
+   * either sending the other a boundary (project tdd 5.9).
+   *
+   * `scope` is `null` when the chapter is not in the list yet, and the whole transcript is what is
+   * shown until it arrives. That is the honest fallback: showing nothing would make a slow chapter
+   * fetch look like a chapter with no words in it.
+   */
+  const scope =
+    chapterId === null
+      ? null
+      : (player.chapters?.chapters.find((one) => one.id === chapterId) ?? null);
+
+  const all = player.transcript?.segments ?? null;
+  const segments =
+    all === null || scope === null ? all : all.filter((one) => isInChapter(scope, one.startMs));
+
+  // The highlight follows the player over the *whole* teaching and is simply absent while playback
+  // is outside this chapter — which is right: the line being spoken is not in this chapter's list.
   const current = segments === null ? null : segmentAt(segments, player.currentMs);
   const currentId = current?.id ?? null;
 

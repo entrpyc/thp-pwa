@@ -32,7 +32,26 @@ export interface RecordingPublishedEvent {
   readonly recordingId: string;
 }
 
-export type DomainEvent = DraftGeneratedEvent | RecordingPublishedEvent;
+/**
+ * A teaching's chapters were replaced ([3.22.1](docs/project/prd.md)).
+ *
+ * **Unlike a draft, this one can change what a member is already reading.** Chapters carry no gate
+ * of their own ([3.22.6](docs/project/prd.md)), so a run against a published recording replaces
+ * what members are seeing the moment it commits — which is precisely why the console confirms it
+ * first ([3.22.8](docs/project/prd.md)) and why the event exists to be found afterwards.
+ *
+ * It carries the count rather than the list: a subscriber that wants the chapters reads them, and an
+ * event carrying an artefact is an event that goes stale between being emitted and being read.
+ */
+export interface ChaptersGeneratedEvent {
+  readonly type: 'chapters_generated';
+  readonly recordingId: string;
+}
+
+export type DomainEvent =
+  | DraftGeneratedEvent
+  | RecordingPublishedEvent
+  | ChaptersGeneratedEvent;
 
 /** The message every domain event is logged under, so one search returns all of them. */
 export const DOMAIN_EVENT_MESSAGE = 'domain.event';

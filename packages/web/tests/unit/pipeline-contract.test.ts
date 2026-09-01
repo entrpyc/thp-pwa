@@ -29,6 +29,9 @@ function pipelineOf(...statuses: readonly string[]): RecordingPipeline[] {
       recordingId: 'a-recording',
       title: 'A teaching',
       recordedAt: '2026-05-17',
+      // Nothing in this file is about the chapter count (3.22.8); it is part of the shape, so it is
+      // here — and the confirmation that reads it is asserted on the pipeline screen.
+      editedChapters: 0,
       steps: PIPELINE_STEPS.map((step, index) => ({
         step,
         status: (statuses[index] ?? NOT_STARTED) as RecordingPipeline['steps'][number]['status'],

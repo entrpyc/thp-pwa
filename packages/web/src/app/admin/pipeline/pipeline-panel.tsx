@@ -73,6 +73,7 @@ function formatMoment(iso: string): string {
 const STEP_LABEL: Record<PipelineStep, string> = {
   transcribe: 'Transcribe',
   generate_draft: 'Generate draft',
+  generate_chapters: 'Generate chapters',
 };
 
 /**
@@ -84,6 +85,13 @@ const STEP_LABEL: Record<PipelineStep, string> = {
  * after a service. `generate_draft` costs nothing and destroys nothing, so a confirmation there
  * would be friction with no guardrail behind it.
  *
+ * **`generate_chapters` is the second destructive step** ([3.22.8](docs/project/prd.md)), and it is
+ * confirmed for exactly the reason re-transcribing is
+ * ([3.21.2.7](docs/project/prd.md)) — it replaces every title, summary and boundary a human has
+ * changed. It is worse than the transcript in one respect the confirmation has to carry: chapters
+ * carry no review gate ([3.22.6](docs/project/prd.md)), so on a published teaching the replacement
+ * is what members are seeing the moment the job commits, with no admin step in between.
+ *
  * `Record<PipelineStep, boolean>` rather than a list, so [§3.4](docs/project/prd.md)'s
  * `process_audio` arriving is a compiler error until somebody says whether re-running it destroys
  * something — which is the one question about a new step this screen genuinely cannot guess.
@@ -91,6 +99,47 @@ const STEP_LABEL: Record<PipelineStep, string> = {
 const CONFIRMS_RERUN: Record<PipelineStep, boolean> = {
   transcribe: true,
   generate_draft: false,
+  generate_chapters: true,
+};
+
+/**
+ * **What a re-run of this step destroys, named** ([3.21.2.7](docs/project/prd.md),
+ * [3.22.8](docs/project/prd.md)).
+ *
+ * A confirmation that says "are you sure?" is a keystroke, not a guardrail. Both requirements ask
+ * for the *cost* in the sentence — "naming what it discards" — so this is the sentence, per step,
+ * and it names the teaching as well because a console holds several rows and a dialog that did not
+ * would be asking about whichever one the admin thought they pressed.
+ *
+ * `generate_draft` has an entry it will never show, because {@link CONFIRMS_RERUN} says it takes no
+ * confirming press. It is here because the record is exhaustive over the steps, which is what makes
+ * a step arriving a compiler error rather than a blank dialog.
+ */
+function confirmationFor(step: PipelineStep, title: string, editedChapters: number): string {
+  switch (step) {
+    case 'transcribe':
+      return `Transcribe “${title}” again? It is sent to the provider a second time, and the transcript it has now is replaced.`;
+    case 'generate_chapters':
+      return (
+        `Generate the chapters of “${title}” again? The list it has now is replaced in full` +
+        // The count is the whole point of the sentence: "some edits" is a warning, "three chapter
+        // titles, summaries and boundaries" is a decision. Nothing edited says so plainly rather
+        // than leaving an admin to wonder whether the number was simply not looked up.
+        (editedChapters === 0
+          ? ', and nothing an admin has changed is lost, because nothing has been changed.'
+          : `, discarding the ${editedChapters === 1 ? 'title, summary and boundary of the one chapter' : `titles, summaries and boundaries of the ${editedChapters} chapters`} an admin has changed.`) +
+        ' Chapters have no review step, so if this teaching is published the new list is what members see straight away.'
+      );
+    case 'generate_draft':
+      return `Generate the drafts of “${title}” again?`;
+  }
+}
+
+/** What the confirming button says. Naming the act rather than saying *Yes*, per step. */
+const CONFIRM_ACTION: Record<PipelineStep, string> = {
+  transcribe: 'Yes, transcribe again',
+  generate_draft: 'Yes, generate again',
+  generate_chapters: 'Yes, replace the chapters',
 };
 
 /** What a status is called on screen, in the words an operator would use for it. */
@@ -237,6 +286,7 @@ export function PipelinePanel() {
                       key={step.step}
                       step={step}
                       title={entry.title}
+                      editedChapters={entry.editedChapters}
                       busy={busy === `${entry.recordingId}:${step.step}`}
                       disabled={busy !== null}
                       confirming={confirming === `${entry.recordingId}:${step.step}`}
@@ -260,6 +310,7 @@ export function PipelinePanel() {
 function StepCell({
   step,
   title,
+  editedChapters,
   busy,
   disabled,
   confirming,
@@ -270,6 +321,8 @@ function StepCell({
 }: {
   step: PipelineStepView;
   title: string;
+  /** How many of this teaching's chapters a human has changed ([3.22.8](docs/project/prd.md)). */
+  editedChapters: number;
   busy: boolean;
   disabled: boolean;
   confirming: boolean;
@@ -327,10 +380,7 @@ function StepCell({
       */}
       {confirming ? (
         <div className={styles.confirm}>
-          <p className={styles.confirmText}>
-            Transcribe “{title}” again? It is sent to the provider a second time, and the transcript
-            it has now is replaced.
-          </p>
+          <p className={styles.confirmText}>{confirmationFor(step.step, title, editedChapters)}</p>
           <div className={styles.confirmActions}>
             <button
               className={styles.actionStrong}
@@ -338,7 +388,7 @@ function StepCell({
               disabled={disabled}
               onClick={onRerun}
             >
-              Yes, transcribe again
+              {CONFIRM_ACTION[step.step]}
             </button>
             <button className={styles.action} type="button" onClick={onCancel}>
               Cancel

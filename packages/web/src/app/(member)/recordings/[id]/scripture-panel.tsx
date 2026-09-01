@@ -4,6 +4,7 @@ import { useEffect, useState } from 'react';
 import {
   formatCitation,
   recordingScripturePath,
+  scopedToChapter,
   type RecordingScripturePayload,
   type ScriptureReadingView,
 } from '@thp/shared';
@@ -45,7 +46,21 @@ import styles from './scripture.module.css';
  * changed to allow it: it already took a recording id and already read the one route, and the
  * empty case it already states is what scope prd 3.3.6 asks that view for.
  */
-export function ScripturePanel({ recordingId }: { recordingId: string }) {
+export function ScripturePanel({
+  recordingId,
+  chapterId = null,
+}: {
+  recordingId: string;
+  /**
+   * **The chapter this panel is scoped to**, or `null` for the whole teaching
+   * ([3.22.14](docs/project/prd.md)).
+   *
+   * A chapter *id* rather than a span, because the span is the server's to compute from the same
+   * list the client holds (project tdd 5.9) — so neither side sends the other a boundary, and a
+   * panel cannot ask for a stretch of teaching that is not a chapter.
+   */
+  chapterId?: string | null;
+}) {
   const [references, setReferences] = useState<readonly ScriptureReadingView[] | null>(null);
   const [translation, setTranslation] = useState<string | null>(null);
   const [failure, setFailure] = useState<string | null>(null);
@@ -53,9 +68,11 @@ export function ScripturePanel({ recordingId }: { recordingId: string }) {
   useEffect(() => {
     let live = true;
 
-    void apiFetch<RecordingScripturePayload>(recordingScripturePath(recordingId), {
-      credentials: 'include',
-    })
+    const path = recordingScripturePath(recordingId);
+    void apiFetch<RecordingScripturePayload>(
+      chapterId === null ? path : scopedToChapter(path, chapterId),
+      { credentials: 'include' },
+    )
       .then((payload) => {
         if (!live) return;
         setReferences(payload.references);
@@ -75,7 +92,7 @@ export function ScripturePanel({ recordingId }: { recordingId: string }) {
     return () => {
       live = false;
     };
-  }, [recordingId]);
+  }, [chapterId, recordingId]);
 
   return (
     <section className={styles.panel} aria-label="Scripture">
@@ -84,10 +101,20 @@ export function ScripturePanel({ recordingId }: { recordingId: string }) {
       ) : references === null ? (
         <p className={styles.quiet}>Loading the scripture…</p>
       ) : references.length === 0 ? (
-        // Reachable only if the list emptied between the page load that drew the tab and this
-        // fetch — an admin approving an empty list in the meantime. It says so rather than
-        // showing an empty box.
-        <p className={styles.quiet}>This teaching has no scripture references.</p>
+        <p className={styles.quiet}>
+          {chapterId === null
+            ? // Reachable only if the list emptied between the page load that drew the tab and this
+              // fetch — an admin approving an empty list in the meantime. It says so rather than
+              // showing an empty box.
+              'This teaching has no scripture references.'
+            : /*
+               * A chapter with no citations anchored inside it, which is **ordinary** rather than
+               * exceptional ([3.22.14](docs/project/prd.md), [3.7.10](docs/project/prd.md)): a
+               * reference the transcript gave no position for belongs to the recording rather than
+               * to any chapter, so it is read on the teaching's own tab — and this says where.
+               */
+              'No scripture is cited in this chapter. The teaching’s own page lists every passage it was built on.'}
+        </p>
       ) : (
         <>
           {/*

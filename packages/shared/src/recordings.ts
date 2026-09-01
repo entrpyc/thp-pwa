@@ -39,19 +39,42 @@ export function recordingPagePath(recordingId: string): string {
 }
 
 /**
- * Whether a path is one teaching's page — the route that **opens a teaching of its own**.
+ * Whether a path is a route that **opens a teaching of its own**.
  *
  * Beside the builder above so the two cannot drift: the player asks this before restoring the last
  * sitting into the transport, because a page that is about to open a teaching does not want one
  * opened underneath it first.
+ *
+ * **Two routes answer yes**, and the name is about the *behaviour* rather than about one address: a
+ * teaching's own page, and a chapter's page under it ([3.22.13](docs/project/prd.md)), which opens
+ * the same teaching for the same reason. A chapter page that let the resume effect run first would
+ * spend a grant and a notes fetch on the previous sitting, and would name it on the bar for the
+ * seconds before this page replaced it — the exact cost the exclusion exists to avoid.
+ *
+ * Deliberately **not** a general "starts with `/recordings/`": the library is not one of these, and
+ * a third route under a teaching that does not open it should not silently become one.
  */
 export function isRecordingPagePath(path: string): boolean {
   const rest = path.startsWith(`${MEMBER_LIBRARY_PAGE_PATH}/`)
     ? path.slice(MEMBER_LIBRARY_PAGE_PATH.length + 1)
     : null;
-  // One segment and a non-empty one: `/recordings` is the library and `/recordings/x/y` is nothing.
-  return rest !== null && rest !== '' && !rest.includes('/');
+  if (rest === null || rest === '') return false;
+
+  const segments = rest.split('/');
+  // `/recordings/{id}` — the teaching's own page.
+  if (segments.length === 1) return true;
+  // `/recordings/{id}/chapters/{chapterId}` — a chapter of it, which opens the same teaching.
+  return segments.length === 3 && segments[1] === CHAPTERS_SEGMENT && segments[2] !== '';
 }
+
+/**
+ * The path segment a chapter page sits under.
+ *
+ * Here rather than in `chapters.ts` because {@link isRecordingPagePath} reads it and `chapters.ts`
+ * already reads this file for its paths — one direction, no cycle. It is the one string the two
+ * files have to agree on, so it is written once.
+ */
+export const CHAPTERS_SEGMENT = 'chapters';
 
 /** One recording, under the API prefix. */
 export function recordingPath(recordingId: string): string {

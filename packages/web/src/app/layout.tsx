@@ -1,5 +1,6 @@
 import type { ReactNode } from 'react';
 import type { Viewport } from 'next';
+import { APP_BACKGROUND_COLOUR } from './app-theme';
 import './tokens.css';
 import './globals.css';
 import { ServiceWorkerRegistration } from './service-worker-registration';
@@ -19,7 +20,7 @@ export const metadata = {
  * the bar pads itself with the safe-area inset that this unlocks.
  */
 export const viewport: Viewport = {
-  themeColor: '#01101F',
+  themeColor: APP_BACKGROUND_COLOUR,
   viewportFit: 'cover',
 };
 

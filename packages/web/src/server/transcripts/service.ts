@@ -8,15 +8,17 @@ import {
   withTransaction,
   type SegmentRow,
 } from '@thp/db';
-import type {
-  CorrectSegmentPayload,
-  CorrectSegmentRequest,
-  RegenerateSummaryPayload,
-  TranscriptPayload,
-  TranscriptSegmentView,
+import {
+  isInChapter,
+  type CorrectSegmentPayload,
+  type CorrectSegmentRequest,
+  type RegenerateSummaryPayload,
+  type TranscriptPayload,
+  type TranscriptSegmentView,
 } from '@thp/shared';
 import { ApiError } from '@/server/api/errors';
 import type { Actor } from '@/server/auth/policy';
+import { requireChapterScope } from '@/server/chapters/service';
 import { queue } from '@/server/jobs/queue';
 import { logger } from '@/server/observability/logger';
 
@@ -61,8 +63,21 @@ const MAX_FIELD_LENGTH = 20_000;
 export async function readTranscriptFor(
   actor: Actor,
   recordingId: string,
+  chapterId: string | null = null,
 ): Promise<TranscriptPayload> {
   await requirePublished(actor, recordingId, 'recording.browse');
+
+  /*
+   * **Scoped to one chapter's span, when the caller asked for one**
+   * ([3.22.14](docs/project/prd.md)): the transcript shows that chapter's lines and stops at its
+   * boundaries.
+   *
+   * A segment belongs to the chapter its **start** falls in, which is the rule a note and a citation
+   * follow too — and because a boundary always sits on a segment's start
+   * ([3.22.5](docs/project/prd.md)), no line is ever cut in half by one. That is 3.22.5 paying for
+   * itself here rather than only on screen.
+   */
+  const scope = await requireChapterScope(recordingId, chapterId);
 
   const transcript = await findTranscriptByRecording(recordingId);
   if (transcript === null) {
@@ -75,12 +90,13 @@ export async function readTranscriptFor(
     return { transcript: null };
   }
 
-  const segments = await listSegments(transcript.id);
+  const all = await listSegments(transcript.id);
+  const segments = scope === null ? all : all.filter((one) => isInChapter(scope, one.startMs));
 
   logger.info('transcript.read', {
     actorId: actor.id,
     action: 'recording.browse',
-    target: `transcript:${transcript.id}`,
+    target: scope === null ? `transcript:${transcript.id}` : `chapter:${scope.id}`,
     segments: segments.length,
   });
 

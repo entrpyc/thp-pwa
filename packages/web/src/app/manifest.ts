@@ -1,4 +1,5 @@
 import type { MetadataRoute } from 'next';
+import { APP_BACKGROUND_COLOUR } from './app-theme';
 
 /**
  * **The web app manifest** — what makes the hub installable to a phone's home screen.
@@ -34,8 +35,8 @@ export default function manifest(): MetadataRoute.Manifest {
     scope: '/',
     display: 'standalone',
     orientation: 'portrait',
-    background_color: '#01101F',
-    theme_color: '#01101F',
+    background_color: APP_BACKGROUND_COLOUR,
+    theme_color: APP_BACKGROUND_COLOUR,
     icons: [
       { src: '/icons/icon-192.png', sizes: '192x192', type: 'image/png', purpose: 'any' },
       { src: '/icons/icon-512.png', sizes: '512x512', type: 'image/png', purpose: 'any' },

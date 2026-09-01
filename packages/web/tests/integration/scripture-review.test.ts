@@ -429,10 +429,13 @@ describe('approving an edited list', () => {
     // The list as a whole was changed before it was approved, which is what the field-level flag
     // has always meant.
     expect(field['editedByAdmin']).toBe(true);
+    // `anchorMs` is on every entry and null on all three: this suite's proposals carry no position,
+    // which is [3.7.10](docs/project/prd.md)'s ordinary case. What an anchor does to
+    // `editedByAdmin` when there *is* one is `scripture-anchor.test.ts`.
     expect(field['entries']).toEqual([
-      { book: 'romans', chapter: 8, verseStart: 1, verseEnd: 5, origin: 'machine', editedByAdmin: true },
-      { book: 'john', chapter: 3, verseStart: 16, verseEnd: 16, origin: 'machine', editedByAdmin: false },
-      { book: 'ephesians', chapter: 2, verseStart: 8, verseEnd: 9, origin: 'person', editedByAdmin: false },
+      { book: 'romans', chapter: 8, verseStart: 1, verseEnd: 5, origin: 'machine', editedByAdmin: true, anchorMs: null },
+      { book: 'john', chapter: 3, verseStart: 16, verseEnd: 16, origin: 'machine', editedByAdmin: false, anchorMs: null },
+      { book: 'ephesians', chapter: 2, verseStart: 8, verseEnd: 9, origin: 'person', editedByAdmin: false, anchorMs: null },
     ]);
   });
 

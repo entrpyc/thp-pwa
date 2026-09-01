@@ -126,8 +126,11 @@ const MACHINE = {
   // A list-shaped draft, keyed by the same field name the handler writes it under. The book is the
   // canon identity by the time it reaches a row; the model's words stopped at the worker.
   scripture: [
-    { book: 'romans', chapter: 8, verseStart: 1, verseEnd: 4 },
-    { book: 'john', chapter: 3, verseStart: 16, verseEnd: 16 },
+    // Unanchored, which is [3.7.10](docs/project/prd.md)'s ordinary case and what a draft written
+    // before the anchor existed reads as: the reference belongs to the recording rather than to any
+    // chapter. What the queue does with an anchor it does carry is scripture-anchor.test.ts.
+    { book: 'romans', chapter: 8, verseStart: 1, verseEnd: 4, anchorMs: null },
+    { book: 'john', chapter: 3, verseStart: 16, verseEnd: 16, anchorMs: null },
   ],
 } as const;
 

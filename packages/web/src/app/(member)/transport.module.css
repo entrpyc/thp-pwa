@@ -652,3 +652,56 @@
   border-color: var(--color-primary-strong);
   color: var(--color-primary-strong);
 }
+
+/*
+ * The two lines in the slot — the teaching, and beneath it the chapter playing now (3.22.16), or
+ * the series when there are no chapters. A column so the pair take the width the slot has left,
+ * each ellipsised on its own; `min-width: 0` for the reason the slot itself needs it, one level
+ * further in.
+ */
+.slotText {
+  flex: 1 1 auto;
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+}
+
+/*
+ * The second line. Dimmer and smaller than the title above it, because it names a part of the thing
+ * the line above names — the same relationship the library row draws between a teaching and its
+ * study, and the reason a member reads the pair as one thing rather than as two.
+ */
+.nowPlayingBeneath {
+  margin: 0;
+  min-width: 0;
+  color: var(--color-text-muted);
+  font-size: var(--fs-meta);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+/*
+ * The chapter divisions on the track (3.22.17), in a layer of their own beneath the note ticks.
+ *
+ * **Distinguishable from the note markers by shape as well as by colour**, which is the whole of
+ * what 3.22.17 asks for: a boundary is a full-height rule that crosses the track, and a note is a
+ * green pip standing on it. Colour alone would fail a member who cannot tell the two hues apart,
+ * and this pair differs in height, in weight and in hue at once.
+ */
+.boundaries {
+  position: absolute;
+  inset: 0;
+  z-index: 0;
+  pointer-events: none;
+}
+
+.boundary {
+  position: absolute;
+  top: 0;
+  bottom: 0;
+  width: 1px;
+  /* Centred on its own position by a transform, so no spacing value is spelled in pixels. */
+  transform: translateX(-50%);
+  background: var(--color-border-strong);
+}

@@ -45,10 +45,13 @@ describe('the worker loop', () => {
   /** What a handler returns is evidence, not an outcome — any object will do to prove it lands. */
   const EVIDENCE = { model: 'a-fake-handler' } as const;
 
-  const succeeds: HandlerRegistry = {
-    transcribe: () => EVIDENCE,
-    generate_draft: () => EVIDENCE,
-  };
+  /**
+   * One handler per step there is, built from the shared list rather than typed out — so a step
+   * added to the chain is drained by this loop instead of failing it with "no handler registered".
+   */
+  const succeeds: HandlerRegistry = Object.fromEntries(
+    PIPELINE_STEPS.map((step) => [step, () => EVIDENCE]),
+  );
 
   async function queueJob(step: PipelineStep = 'transcribe'): Promise<JobRow> {
     recordings += 1;
@@ -229,7 +232,7 @@ describe('the worker loop', () => {
         select count(*)::text as count from job
         where recording_id = ${job.recordingId} and status = 'succeeded'
       `;
-      return Number(rows[0]?.count ?? '0') === 2;
+      return Number(rows[0]?.count ?? '0') === PIPELINE_STEPS.length;
     });
     loop.stop();
     await loop.done;
@@ -248,7 +251,7 @@ describe('the worker loop', () => {
     const claims = captured.filter(
       (line) => line.message === 'job.claimed' && line['recordingId'] === job.recordingId,
     );
-    expect(claims).toHaveLength(2);
+    expect(claims).toHaveLength(PIPELINE_STEPS.length);
     expect(claims[0]).toMatchObject({
       jobId: job.id,
       step: 'transcribe',

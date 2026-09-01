@@ -14,24 +14,36 @@ export {
 } from './env';
 export {
   GenerationError,
+  type ChapterRequest,
+  type ChapterResult,
   type GeneratedDrafts,
   type GenerationRequest,
   type GenerationResult,
   type GenerationSpend,
   type Generator,
+  type ProposedChapter,
+  type TranscriptLine,
 } from './generator';
 export {
   fakeGenerator,
+  type FakeChapterText,
   type FakeDraftScript,
   type FakeGenerator,
 } from './fake';
 export {
+  CHAPTER_PROMPT_VERSION,
+  CHAPTER_SYSTEM_PROMPT,
+  CHAPTER_TOOL_NAME,
+  CHAPTER_TOOL_SCHEMA,
   DRAFT_FIELD_INSTRUCTIONS,
   DRAFT_TOOL_NAME,
+  OFFSET_NOTE,
   PROMPT_VERSION,
   SYSTEM_PROMPT,
+  buildChapterUserPrompt,
   buildToolSchema,
   buildUserPrompt,
+  renderTranscript,
 } from './prompt';
 
 /**

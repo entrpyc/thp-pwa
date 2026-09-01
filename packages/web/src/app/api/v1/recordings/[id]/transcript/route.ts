@@ -1,5 +1,5 @@
 import { permits } from '@/server/api/access';
-import { routeParam } from '@/server/api/params';
+import { chapterScopeParam, routeParam } from '@/server/api/params';
 import { apiRoute } from '@/server/api/route';
 import { readTranscriptFor } from '@/server/transcripts/service';
 
@@ -17,6 +17,13 @@ export const dynamic = 'force-dynamic';
  * this epic never renders it for an unpublished recording. Correction happens on this same shape,
  * on the same page, after publication.
  */
-export const GET = apiRoute(permits('recording.browse'), async (_request, context) => {
-  return readTranscriptFor(context.actor, await routeParam(context.params, 'id'));
+export const GET = apiRoute(permits('recording.browse'), async (request, context) => {
+  return readTranscriptFor(
+    context.actor,
+    await routeParam(context.params, 'id'),
+    // `?chapter=` stops the transcript at that chapter's boundaries
+    // ([3.22.14](docs/project/prd.md)). Still one shape, still a member's — what changes is how much
+    // of it is answered, not what it is.
+    chapterScopeParam(request),
+  );
 });

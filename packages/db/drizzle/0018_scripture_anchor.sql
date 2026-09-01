@@ -1,0 +1,2 @@
+ALTER TABLE "scripture_reference" ADD COLUMN "anchor_ms" integer;--> statement-breakpoint
+ALTER TABLE "scripture_reference" ADD CONSTRAINT "scripture_reference_anchor_non_negative" CHECK ("scripture_reference"."anchor_ms" >= 0);

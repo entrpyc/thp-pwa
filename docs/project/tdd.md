@@ -16,8 +16,9 @@ is also packaged, unchanged, into the two app stores; it holds its own copy of d
 of any writes made while offline. The API owns every piece of member state and every access-control
 decision, and is the only thing that writes to the database. The workers own the entire asynchronous
 pipeline: an uploaded recording is cleaned, transcribed, fanned out into summary, tags, scripture
-references and mind map, embedded segment by segment, and cross-referenced against the existing
-library — all as drafts that wait behind an admin review gate.
+references, chapters and mind map, embedded segment by segment, and cross-referenced against the
+existing library — none of it reaching a member before an admin acts: most as drafts behind the
+review gate, and chapters behind the recording's own publication (6.2).
 
 Drawn: `docs/project/diagram.svg`.
 
@@ -119,11 +120,33 @@ Conceptual only — project prd 4 already defines the fields; this is how the en
 - **3.5 Community state.** `SosSignal` with acknowledgements and replies, and `Notification` rows
   fanned out per recipient.
 
-- **3.6 One offset shape, six features.** `Highlight`, `Note`, `CrossReference`, `SearchResult`,
-  `MindMapNode` and `FlowTrackerRecommendation` all ultimately resolve to a recording plus an
-  offset. Modelling that offset consistently — a nullable `(recording_id, timestamp_ms)` pair on
-  each — is what lets "open at the moment" work identically from six different places
-  (project prd 3.9.5, 3.10.7, 3.14.7, 3.15.7, 3.12.12, 3.8.4). **Expensive to reverse.**
+- **3.6 One offset shape, seven features.** `Highlight`, `Note`, `CrossReference`, `SearchResult`,
+  `MindMapNode`, `FlowTrackerRecommendation` and `ScriptureReference` (3.8) all ultimately resolve to
+  a recording plus an offset. Modelling that offset consistently — a nullable
+  `(recording_id, timestamp_ms)` pair on each — is what lets "open at the moment" work identically
+  from seven different places (project prd 3.9.5, 3.10.7, 3.14.7, 3.15.7, 3.12.12, 3.8.4, 3.7.10).
+  **Expensive to reverse.**
+
+- **3.7 A chapter is a start, not a span.** project prd 3.22.2 requires chapters to tile a recording
+  exactly — no gaps, no overlaps — so a chapter row holds `(recording, position, start_ms, title,
+  summary)` and deliberately **no end**: a chapter ends where the next one begins, and the last ends
+  at the transcript's final segment. The invariant is then unrepresentable rather than merely
+  validated. There is no state a bug can write that leaves a minute of a teaching in no chapter or in
+  two, no repair job to own, and nothing to drift. It is also what makes project prd 3.22.7's shared
+  boundary one write to one row instead of two writes that must not half-fail. The costs are small
+  and named: a read derives each end from the next row, over a list a handful of rows long; and a
+  regeneration replaces the whole list inside one transaction, because the tiling *is* the artefact
+  and half of one is not a smaller artefact (project prd 3.22.9).
+
+- **3.8 Chapters own nothing, and nothing points at a chapter.** project prd 3.22.14 scopes a chapter
+  page by where things sit, and project prd 3.7.10 answers the one gap that left — scripture
+  references carried no offset — with a nullable anchor on the reference rather than a foreign key to
+  a chapter. A pointer would be stale the moment an admin moved a boundary (project prd 3.22.7) and
+  would have to be rewritten by every regeneration; an offset survives both, because membership is
+  computed from it rather than stored. That is 3.6 applied to a seventh feature, and it generalises:
+  a note, a citation, a segment and a search hit all belong to a chapter by arithmetic over
+  `start_ms`. Which is what makes project prd 3.22.15 true by construction — regenerating the list
+  cannot orphan a member's note, because nothing was ever attached to the thing that changed.
 
 ## 4. Key technology choices
 
@@ -138,7 +161,7 @@ Conceptual only — project prd 4 already defines the fields; this is how the en
 | 4.7 | **The job ledger *is* the queue — `SKIP LOCKED` polling, no broker** | project prd 3.21.2.4 requires re-running one step of a pipeline, and project prd 3.19.4 requires showing an admin exactly where each recording sits. Both need pipeline state to be queryable data, not queue internals — so the ledger lives in Postgres, and once it does, a separate broker is carrying almost nothing. Polling the ledger directly rather than adopting a queue library keeps one job store instead of two: `pg-boss` and its equivalents bring their own schema, which would leave the dispatcher's state and the state project prd 3.19.4 reads as different tables. At this cadence — roughly fifty jobs a month — `SELECT … FOR UPDATE SKIP LOCKED` has four orders of magnitude of headroom, and enqueue becomes transactional with the ledger write, which removes the dispatched-but-unrecorded failure class outright. Redis returns behind the same queue port when dispatch latency or fan-out concurrency actually demands it, not before. | Low |
 | 4.8 | **FFmpeg for the sound profile** (`afftdn` denoise → clarity EQ/compression → `loudnorm` two-pass to a fixed LUFS target) | project prd 3.4.5 asks for one named profile applied library-wide, and project prd 3.4.6 asks to preview it before saving. A parameterised FFmpeg filter chain stored as a versioned row gives both, and re-processing is just re-running it. Loudness normalisation to a broadcast target also satisfies project prd 3.4.10 — podcast platforms expect it. | Low |
 | 4.9 | **Managed ASR with segment timestamps, behind an adapter** | project prd 3.5.2 is the hinge of the product and project prd 7.2.7 names accuracy on ministry-specific vocabulary as a real risk. An adapter interface means the provider can be swapped, or a custom-vocabulary provider adopted, without touching anything downstream. Deepgram Nova-3 fills it today (project prd 7.3.1), handed a short-lived signed location to fetch from rather than the bytes. | Low — deliberately |
-| 4.10 | **One language model behind an adapter for all text generation** | Summary, description, tags, scripture identification, mind-map extraction and video script segmentation are one capability used six ways (project prd 3.6, 3.7.1, 3.8.1, 3.11.3.1, 4.17.1). Long context matters: a 90-minute transcript is fed whole rather than chunked, which is what keeps a summary faithful to the teaching. Structured output is taken as a forced tool call, and a model that answers in prose instead fails the step visibly rather than writing something nobody asked for. The provider is configuration, not architecture — MiniMax M3 over its Anthropic-compatible endpoint today (project prd 7.3.1), and the deferral in project prd 7.5.1 is cheap for exactly this reason. | Low |
+| 4.10 | **One language model behind an adapter for all text generation** | Summary, description, tags, scripture identification, mind-map extraction, chapter segmentation and video script segmentation are one capability used seven ways (project prd 3.6, 3.7.1, 3.8.1, 3.11.3.1, 3.22.1, 4.17.1). Long context matters: a 90-minute transcript is fed whole rather than chunked, which is what keeps a summary faithful to the teaching. Structured output is taken as a forced tool call, and a model that answers in prose instead fails the step visibly rather than writing something nobody asked for. The provider is configuration, not architecture — MiniMax M3 over its Anthropic-compatible endpoint today (project prd 7.3.1), and the deferral in project prd 7.5.1 is cheap for exactly this reason. | Low |
 | 4.11 | **Template-based video rendering (Remotion-style) + TTS, with a generative backend behind the same interface** | project prd 3.11.2.1 describes presets as detailed descriptions of a visual treatment, and project prd 3.11.2.3 wants consistency across the catalogue — both of which argue for deterministic templates over per-generation model output. project prd 7.2.3 independently flags generative video as the least proven, most expensive capability. Making the renderer an interface means the cheap path ships and the expensive path is an upgrade, not a rewrite. This is the decision with the largest financial swing in the architecture — see 8.4 — and the template path is the default until real output is measured against it. | Low (by design) |
 | 4.12 | **Self-hosted email/password auth with server-side role checks** | No self-signup, no social login, no SSO, ~100–1,000 users, and an invitation flow (project prd 3.1.3) that a third-party identity provider would only complicate. Roles live in our database because every permission check also needs product context. Transactional delivery is SMTP so the provider is configuration rather than code (project prd 7.1.6). | Moderate |
 | 4.13 | **Structured citations + verse text fetched and cached from a free-use Bible text source** | project prd 3.7.3 mandates structured storage regardless. Keeping verse *text* as a cache rather than as data means the licensing answer changes one component instead of the schema — worst case, project prd 3.7.4 degrades to a link out. One free-use translation named in deployment configuration (project prd 3.7.9), which is what closed project prd 7.2.5. | Low — deliberately |
@@ -201,6 +224,16 @@ Conceptual only — project prd 4 already defines the fields; this is how the en
   keeps this correct on a 32 GB phone and on a desktop without the product carrying a number that
   ages.
 
+- **5.9 Chapters travel with the recording, not with the page that lists them.** The transport names
+  the chapter playing on every member screen (project prd 3.22.16) and draws its boundaries on the
+  track (project prd 3.22.17), so the client needs the whole list wherever the member is — which puts
+  it in the recording payload the player already opens with, beside the notes that draw the other
+  markers on that same track. "Which chapter is playing" is then arithmetic over a handful of offsets
+  on each tick rather than a request, and it stays correct offline. The chapter page's own tabs are
+  span-filtered reads, asked for when a tab is opened; the span is the half-open interval
+  `[start, next start)` computed from the same list, so client and server bucket a note identically
+  without either having to send the other a boundary.
+
 ## 6. Cross-cutting concerns
 
 - **6.1 Authorisation.** One policy layer in the API, consulted on every request, expressed as
@@ -214,7 +247,13 @@ Conceptual only — project prd 4 already defines the fields; this is how the en
   action, and every transition is logged. This is the mechanism behind project prd 4.17.3 and
   3.21.2.2, and it is why project prd 3.19.2's Pending Reviews queue is a single query over one
   status column rather than a union of six — the property project prd 4.17.6 states as a
-  requirement.
+  requirement. **Chapters sit outside it deliberately** (project prd 3.22.6). What the state machine
+  covers is artefacts that can be published or withdrawn independently of the teaching they belong
+  to; a chapter cannot be, any more than the AI-suggested description can (project prd 3.6.13), so it
+  carries no status of its own and the recording's publication is the gate it passes. The property
+  the gate exists for — nothing generated reaching a member unreviewed — still holds by that route,
+  and the exception is paid for in one place instead: re-running the step on a live recording is
+  confirmed rather than silent (project prd 3.22.8).
 
 - **6.3 Privacy.** Private member content is enforced at the query layer, not filtered in the UI.
   Search in particular (project prd 3.10.9) issues one query whose visibility predicate is
@@ -314,7 +353,7 @@ the video output. Excludes the one-time back-catalogue run, listed at 8.3.
   | Object storage | ~95 GB after back catalogue, +~1.4 GB/month; zero-egress tier | $2 | $6 |
   | Media egress | ~11 GB/month launch → ~130 GB/month target (streaming + downloads) | $0 | $0 |
   | Transcription | 6.5 hrs of audio/month @ ~$0.26/hr | $2 | $2 |
-  | LLM generation | 4.3 recordings/month × ~80k input tokens across 5 passes; the transcript is cached once per recording and read by the remaining four | $2 | $3 |
+  | LLM generation | 4.3 recordings/month × ~80k input tokens across 6 passes; the transcript is cached once per recording and read by the remaining five | $2 | $3 |
   | Embeddings | 4.3 recordings/month × ~16k tokens, plus query embeddings | <$1 | $1 |
   | **Video generation — template path** | 10 videos/month launch, 40 target; render compute absorbed by the host, TTS billed | **$1** | **$4** |
   | **Video generation — generative path** | 10 videos/month × 45s, ~2 takes each at $0.10–0.50/generated second | **$80–360** | **$320–1,440** |
@@ -336,7 +375,7 @@ the video output. Excludes the one-time back-catalogue run, listed at 8.3.
   | Item | Assumption | Cost |
   | :---- | :---- | :---- |
   | Back-catalogue transcription | ~300 recordings × ~1.5 hrs = 450 hrs @ ~$0.26/hr | ~$120 |
-  | Back-catalogue LLM fan-out | 300 recordings × 5 passes | ~$110 |
+  | Back-catalogue LLM fan-out | 300 recordings × 6 passes | ~$130 |
   | Back-catalogue embedding | ~5 M tokens | <$5 |
   | Back-catalogue audio processing | ~45 worker-hrs of FFmpeg, absorbed by the host — wall-clock, not spend | $0 |
   | Apple Developer Program | Annual, not monthly | $99/yr |

@@ -586,3 +586,17 @@
   font-weight: 600;
   cursor: pointer;
 }
+
+/*
+ * A chapter's summary on its own page (3.22.3, 3.22.13).
+ *
+ * Open rather than clamped, unlike the teaching's summary above the strip: a chapter's is one short
+ * paragraph by definition (4.19), so there is nothing for a collapse control to save.
+ */
+.chapterSummary {
+  margin: 0;
+  color: var(--color-text-muted);
+  font-size: var(--fs-body);
+  line-height: 1.6;
+  white-space: pre-wrap;
+}

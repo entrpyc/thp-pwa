@@ -1,5 +1,5 @@
 import { permits } from '@/server/api/access';
-import { routeParam } from '@/server/api/params';
+import { chapterScopeParam, routeParam } from '@/server/api/params';
 import { apiRoute } from '@/server/api/route';
 import { readScriptureFor } from '@/server/scripture/service';
 
@@ -19,6 +19,13 @@ export const dynamic = 'force-dynamic';
  * **Read-only, like every other scripture route.** What a teaching cites is decided in Pending
  * Reviews and nowhere else.
  */
-export const GET = apiRoute(permits('recording.browse'), async (_request, context) => {
-  return readScriptureFor(context.actor, await routeParam(context.params, 'id'));
+export const GET = apiRoute(permits('recording.browse'), async (request, context) => {
+  return readScriptureFor(
+    context.actor,
+    await routeParam(context.params, 'id'),
+    // `?chapter=` narrows to the references anchored inside that chapter
+    // ([3.22.14](docs/project/prd.md), [3.7.10](docs/project/prd.md)). A reference with no anchor is
+    // in no chapter's answer, which is where 3.7.10 puts it.
+    chapterScopeParam(request),
+  );
 });

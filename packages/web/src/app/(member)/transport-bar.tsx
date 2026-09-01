@@ -5,8 +5,10 @@ import { useEffect, useRef, useState, type PointerEvent as ReactPointerEvent } f
 import {
   NOW_PLAYING_PAGE_PATH,
   PLAYBACK_SPEEDS,
+  chapterAt,
   formatPlaybackSpeed,
   formatTimecode,
+  type ChapterView,
   type NoteView,
 } from '@thp/shared';
 import { segmentAt } from '@/client/transcript/current-segment';
@@ -129,6 +131,24 @@ function markerLabel(marker: Marker): string {
     : `${marker.notes.length} notes from ${at}`;
 }
 
+/**
+ * **What the position label says while the track is being moved along**
+ * ([3.22.18](docs/project/prd.md)).
+ *
+ * The timecode, and the chapter the thumb is passing through when there is one — so a member
+ * dragging toward a part of the teaching sees what they are dragging *into* rather than a number
+ * alone. The chapter is found by the same `chapterAt` the transport's own second line uses, over
+ * the same list, so the two cannot name different chapters for one moment.
+ *
+ * Where a pointer can hover, hovering shows the same thing: the hover and the drag both come through
+ * here, because they are the same question asked of a different position.
+ */
+function positionLabel(chapters: readonly ChapterView[], atMs: number): string {
+  const chapter = chapterAt(chapters, atMs);
+  const at = formatTimecode(atMs);
+  return chapter === null ? at : `${at} · ${chapter.title}`;
+}
+
 export function TransportBar() {
   const player = usePlayer();
   const [toolbarOpen, setToolbarOpen] = useState(false);
@@ -153,6 +173,19 @@ export function TransportBar() {
    */
   const [scrubMs, setScrubMs] = useState<number | null>(null);
   const scrubTimerRef = useRef<number | null>(null);
+
+  /**
+   * The position a pointer is **hovering** over the track, or `null`
+   * ([3.22.18](docs/project/prd.md) — "where a pointer can hover, hovering shows the same thing").
+   *
+   * Separate from {@link scrubMs} because they are different states: a drag has asked to *go*
+   * somewhere and a hover has asked *what is there*. Kept apart, a hover that wanders across a
+   * settled drag cannot cancel the seek it is about to make.
+   *
+   * It is never set on a touch device, where `pointerover` does not fire without a press — which is
+   * exactly the "where a pointer can hover" the requirement scopes itself to.
+   */
+  const [hoverMs, setHoverMs] = useState<number | null>(null);
 
   // Set by the `···` gesture on release, so the compatibility click it may produce is not read as a
   // second press. A keyboard press clears it first, which is what keeps Enter and Space working.
@@ -214,6 +247,31 @@ export function TransportBar() {
    * stay in the other (3.5.4).
    */
   const markers = max === 0 ? [] : collapse(player.notes?.notes ?? [], max);
+
+  /*
+   * **The chapter boundaries drawn on the track** ([3.22.17](docs/project/prd.md)).
+   *
+   * The first chapter's start is dropped: it is the start of the teaching, and a division drawn at
+   * the very left of a track divides it from nothing. What is left is one line per boundary, which
+   * is what "chapters divide the track, notes sit on it" means literally — a full-height rule in the
+   * border colour against the note ticks' green pips.
+   *
+   * No duration means no positions to place them at, exactly as for the note markers, and a teaching
+   * with no chapters has none to place.
+   */
+  const boundaries =
+    max === 0 ? [] : (player.chapters?.chapters ?? []).filter((one, index) => index > 0);
+
+  /*
+   * What the elapsed label reads while the track is being moved along or hovered over
+   * ([3.22.18](docs/project/prd.md)). Neither is happening on the ordinary tick, and then it is the
+   * timecode it has always been.
+   */
+  const pointedAt = scrubMs ?? hoverMs;
+  const elapsedLabel =
+    pointedAt === null
+      ? formatTimecode(shownMs)
+      : positionLabel(player.chapters?.chapters ?? [], pointedAt);
 
   /*
    * The `···` opens on **press** rather than on release, which is what makes it two controls in one
@@ -452,9 +510,27 @@ export function TransportBar() {
             />
           )}
 
-          <p className={styles.nowPlaying} title={player.loaded.title}>
-            {player.loaded.title}
-          </p>
+          <div className={styles.slotText}>
+            <p className={styles.nowPlaying} title={player.loaded.title}>
+              {player.loaded.title}
+            </p>
+            {/*
+              **The second line: the chapter playing now** ([3.22.16](docs/project/prd.md)).
+              A teaching with no chapters shows the series name there, which is what it held before —
+              so the line never empties and the bar never changes height under a member.
+
+              Both fall back to nothing when there is neither, which is the coverless, series-less
+              teaching the slot already draws as a title alone (scope prd 3.2.6).
+            */}
+            {player.currentChapter === null && player.loaded.seriesTitle === null ? null : (
+              <p
+                className={styles.nowPlayingBeneath}
+                title={player.currentChapter?.title ?? player.loaded.seriesTitle ?? ''}
+              >
+                {player.currentChapter?.title ?? player.loaded.seriesTitle}
+              </p>
+            )}
+          </div>
 
           <Link
             className={styles.slotPress}
@@ -491,8 +567,27 @@ export function TransportBar() {
         </div>
 
         <div className={styles.track}>
-          <span className={styles.time}>{formatTimecode(shownMs)}</span>
-          <div className={styles.scrubberWrap}>
+          {/*
+            The elapsed position, and — while the track is being dragged or hovered — the chapter
+            under the thumb beside it ([3.22.18](docs/project/prd.md)). `aria-live="polite"` so a
+            member using a screen reader hears what they are dragging into rather than only being
+            able to read it.
+          */}
+          <span className={styles.time} aria-live="polite">
+            {elapsedLabel}
+          </span>
+          <div
+            className={styles.scrubberWrap}
+            onPointerMove={(event) => {
+              // Hover only — a pointer that is pressed is a drag, and the drag owns the label.
+              if (max === 0 || event.buttons !== 0) return;
+              const box = event.currentTarget.getBoundingClientRect();
+              if (box.width === 0) return;
+              const across = (event.clientX - box.left) / box.width;
+              setHoverMs(Math.round(Math.min(1, Math.max(0, across)) * max));
+            }}
+            onPointerLeave={() => setHoverMs(null)}
+          >
             {/*
               A real range input rather than a styled div: scrubbing has to work with a keyboard and
               be announced as a slider, and the guide's thin track with a purple fill and a round
@@ -516,6 +611,27 @@ export function TransportBar() {
               and the thumb (5.7.1) and scrubbing is untouched (5.7.2); each tick stands a little
               proud of that band, which is the part a pointer can press.
             */}
+            {/*
+              **The chapter divisions** ([3.22.17](docs/project/prd.md)), in their own layer under
+              the note ticks so the two are told apart by more than colour: a boundary is a full-
+              height rule across the track and a note is a pip on it — *chapters divide the track,
+              notes sit on it*.
+
+              `aria-hidden` and not pressable, deliberately. A note marker is a destination a member
+              asked for; a boundary is a division of the thing they are already looking at, and the
+              way to a chapter is the Chapters tab ([3.22.10](docs/project/prd.md)) or the chapter's
+              own page — not a two-pixel target on a phone. Leaving them unpressable is also what
+              keeps every press that lands on the track a scrub.
+            */}
+            <div className={styles.boundaries} aria-hidden="true">
+              {boundaries.map((chapter) => (
+                <span
+                  key={chapter.id}
+                  className={styles.boundary}
+                  style={{ left: `${(chapter.startMs / max) * 100}%` }}
+                />
+              ))}
+            </div>
             <div className={styles.markers} aria-hidden={markers.length === 0}>
               {markers.map((marker) => (
                 <button

@@ -14,13 +14,17 @@ import { usePathname } from 'next/navigation';
 import {
   PLAYBACK_SPEED_PATH,
   RESUME_PATH,
+  chapterAt,
   isPlaybackSpeed,
   isRecordingPagePath,
   nextPlaybackSpeed,
+  recordingChaptersPath,
   recordingNotesPath,
   recordingPlaybackPath,
   recordingProgressPath,
   recordingTranscriptPath,
+  type ChapterView,
+  type ChaptersPayload,
   type NoteView,
   type NotesPayload,
   type PlaybackGrantPayload,
@@ -111,6 +115,24 @@ export interface LoadedNotes {
   readonly notes: readonly NoteView[];
 }
 
+/**
+ * The loaded teaching's chapters ([3.22](docs/project/prd.md)).
+ *
+ * **Fetched when the teaching is opened**, like the notes and unlike the transcript, and for a
+ * stronger version of the same reason (project tdd 5.9): the transport names the chapter playing on
+ * every member screen ([3.22.16](docs/project/prd.md)) and draws its boundaries on the track
+ * ([3.22.17](docs/project/prd.md)), so the client needs the whole list wherever the member is —
+ * not only when a tab is open. "Which chapter is playing" is then arithmetic over a handful of
+ * offsets on each tick rather than a request.
+ *
+ * `chapters` is empty for a teaching too short to hold two ([3.22.4](docs/project/prd.md)), which is
+ * an answer rather than a failure — and the one every surface reads as *draw no chapters here*.
+ */
+export interface LoadedChapters {
+  readonly recordingId: string;
+  readonly chapters: readonly ChapterView[];
+}
+
 export interface PlayerApi {
   readonly loaded: LoadedRecording | null;
   readonly playing: boolean;
@@ -126,6 +148,30 @@ export interface PlayerApi {
   readonly notes: LoadedNotes | null;
   /** Whether the last notes fetch for the loaded teaching failed. Drives 5.2.7's retry. */
   readonly notesFailed: boolean;
+  /**
+   * The loaded teaching's chapters, or `null` while the first fetch is in flight or after it failed
+   * ([3.22](docs/project/prd.md)).
+   *
+   * `null` and an empty list are deliberately different: `null` is *we do not know yet*, and an
+   * empty list is *this teaching has none* ([3.22.4](docs/project/prd.md)). Every surface draws
+   * nothing for either, which is why there is no `chaptersFailed` beside the notes' flag — a
+   * teaching with no chapters and a chapter fetch that failed look identical to a member and
+   * neither is worth a retry control, where a note that did not arrive is a marker the member knows
+   * should be there.
+   */
+  readonly chapters: LoadedChapters | null;
+  /**
+   * **The chapter playing now** ([3.22.16](docs/project/prd.md)), or `null`.
+   *
+   * Derived here rather than by each surface, because three of them read it — the transport's second
+   * line, the now-playing view and the scrubber — and three derivations of one arithmetic is three
+   * chances to disagree about which chapter a boundary belongs to.
+   *
+   * `null` on a teaching with no chapters, and for the seconds before the first chapter's start on a
+   * teaching whose transcript begins after a moment of silence. Both draw nothing rather than
+   * guessing at the first chapter.
+   */
+  readonly currentChapter: ChapterView | null;
   /**
    * The moment a note being written is anchored to — **or `null` while it is still following
    * playback** (active-scope prd 3.1.1).
@@ -158,6 +204,15 @@ export interface PlayerApi {
   open(recording: LoadedRecording, startAtMs: number | null): void;
   toggle(): void;
   seekToMs(ms: number): void;
+  /**
+   * Seek there **and play** — the chapter row's play control
+   * ([3.22.12](docs/project/prd.md)).
+   *
+   * Its own method rather than a seek followed by a toggle, because a toggle on a teaching that is
+   * already playing would pause it: a member pressing play on a chapter has asked for that chapter,
+   * playing, whatever the transport was doing a moment before.
+   */
+  playFromMs(ms: number): void;
   skipMs(deltaMs: number): void;
   /** The next step, wrapping — what the rate pill does on a tap. */
   cycleSpeed(): void;
@@ -168,6 +223,20 @@ export interface PlayerApi {
   setCaptions(on: boolean): void;
   /** Put a corrected line back in the loaded transcript, so the list and the pill agree with it. */
   applyCorrection(segment: TranscriptSegmentView): void;
+  /**
+   * Put a rewritten chapter list back in the store, after an admin edited one
+   * ([3.22.7](docs/project/prd.md)).
+   *
+   * The **whole list**, never one chapter, because a boundary move changes where the chapter before
+   * it ends and a merge removes a row: an update that patched one entry would leave the transport's
+   * divisions describing a tiling that no longer exists. Every chapter write answers with the list
+   * for exactly this reason.
+   *
+   * Ignored when it names a teaching that is not the one loaded — a late answer about a recording
+   * the member has since left must not become this one's chapters, which is the guard every fetch in
+   * this provider already takes.
+   */
+  replaceChapters(recordingId: string, chapters: readonly ChapterView[]): void;
   /** Read the loaded teaching's notes again — after a write, or after a failure the member retried. */
   refreshNotes(): void;
   /** Let the moment follow playback again — a composer opening, closing, or having just saved. */
@@ -268,6 +337,7 @@ export function PlayerProvider({
   const [captionsOn, setCaptionsOn] = useState(false);
   const [notes, setNotes] = useState<LoadedNotes | null>(null);
   const [notesFailed, setNotesFailed] = useState(false);
+  const [chapters, setChapters] = useState<LoadedChapters | null>(null);
   const [composerAnchorMs, setComposerAnchorMs] = useState<number | null>(null);
   const [revealedNoteId, setRevealedNoteId] = useState<string | null>(null);
 
@@ -345,6 +415,33 @@ export function PlayerProvider({
       });
   }, []);
 
+  /**
+   * Read a teaching's chapters into the store ([3.22](docs/project/prd.md)).
+   *
+   * **It cannot reach playback**, exactly as the notes read cannot: a chapter fetch that fails
+   * leaves the transport without a second line and the track without its divisions, and leaves the
+   * audio alone. That is the same trade 3.2.11 and the Availability NFR already take for the note
+   * markers, and it is the whole reason this is a separate request rather than part of the one that
+   * points the element.
+   *
+   * The late-answer guard is the notes fetch's, for the reason it gives: a slow answer about the
+   * previous teaching must not become the current one's list — which here would put the wrong
+   * chapter name on the bar and the wrong boundaries on the track.
+   */
+  const loadChapters = useCallback((recordingId: string): void => {
+    void apiFetch<ChaptersPayload>(recordingChaptersPath(recordingId), { credentials: 'include' })
+      .then((payload) => {
+        if (loadedRef.current?.id !== recordingId) return;
+        setChapters({ recordingId, chapters: payload.chapters });
+      })
+      .catch(() => {
+        if (loadedRef.current?.id !== recordingId) return;
+        // Cleared rather than left stale, for the notes' reason: no divisions over a failure, not
+        // the previous teaching's divisions wearing this one's name.
+        setChapters(null);
+      });
+  }, []);
+
   const open = useCallback(
     (recording: LoadedRecording, startAtMs: number | null): void => {
       // Re-opening what is already loaded is what makes playback survive navigating away and back:
@@ -369,6 +466,9 @@ export function PlayerProvider({
       setComposerAnchorMs(null);
       // A note id from the previous teaching names nothing in this one's list.
       setRevealedNoteId(null);
+      // And the previous teaching's chapters would name the wrong theme on the bar and draw
+      // boundaries at moments this teaching has nothing at.
+      setChapters(null);
       /*
        * **The previous teaching's audio goes now, not when the new grant arrives.**
        *
@@ -389,12 +489,16 @@ export function PlayerProvider({
       // Fetched **on open rather than on tab open**, because the markers (3.2.4) are visible on the
       // transport without the Notes tab ever being pressed.
       loadNotes(recording.id);
+      // The same argument, one step stronger: the chapter playing is named on the bar and its
+      // boundaries drawn on the track on **every** member screen (3.22.16, 3.22.17), so there is no
+      // tab whose opening could be what asks for them.
+      loadChapters(recording.id);
       void pointAt(recording.id).catch(() => {
         // Nothing to say on screen: the bar is a transport, not an error surface. The play control
         // simply does nothing until a grant arrives, and the next renewal tick tries again.
       });
     },
-    [loadNotes, pointAt],
+    [loadChapters, loadNotes, pointAt],
   );
 
   /**
@@ -589,6 +693,25 @@ export function PlayerProvider({
     setCurrentMs(next);
   }, []);
 
+  /**
+   * Seek there and play ([3.22.12](docs/project/prd.md)).
+   *
+   * The seek is written the same way `seekToMs` writes it — the element, the ref and the state
+   * together, so the scrubber does not fall back to where it came from — and `wantsPlay` is set
+   * before the play, because that is the flag a grant renewal restores. A press on a chapter is a
+   * press for sound, and it has to survive the URL under it being replaced mid-listen.
+   */
+  const playFromMs = useCallback((ms: number): void => {
+    const element = audioRef.current;
+    if (element === null) return;
+    const next = Math.max(0, ms);
+    element.currentTime = next / 1000;
+    positionRef.current = next;
+    setCurrentMs(next);
+    wantsPlay.current = true;
+    void element.play().catch(() => undefined);
+  }, []);
+
   const skipMs = useCallback((deltaMs: number): void => {
     const element = audioRef.current;
     if (element === null) return;
@@ -678,6 +801,14 @@ export function PlayerProvider({
     );
   }, []);
 
+  const replaceChapters = useCallback(
+    (recordingId: string, next: readonly ChapterView[]): void => {
+      if (loadedRef.current?.id !== recordingId) return;
+      setChapters({ recordingId, chapters: next });
+    },
+    [],
+  );
+
   const refreshNotes = useCallback((): void => {
     const recording = loadedRef.current;
     if (recording === null) return;
@@ -721,6 +852,19 @@ export function PlayerProvider({
     setRevealedNoteId(null);
   }, []);
 
+  /**
+   * **Which chapter is playing** ([3.22.16](docs/project/prd.md)) — arithmetic over a handful of
+   * offsets, re-run whenever the position moves (project tdd 5.9).
+   *
+   * Memoised on the list and the position rather than computed inside the API object, so the three
+   * surfaces that read it get one answer per tick rather than one each. It stays correct offline for
+   * the same reason it costs nothing: no request is involved.
+   */
+  const currentChapter = useMemo(
+    () => (chapters === null ? null : chapterAt(chapters.chapters, currentMs)),
+    [chapters, currentMs],
+  );
+
   const player = useMemo<PlayerApi>(
     () => ({
       loaded,
@@ -732,17 +876,21 @@ export function PlayerProvider({
       captionsOn,
       notes,
       notesFailed,
+      chapters,
+      currentChapter,
       composerAnchorMs,
       revealedNoteId,
       open,
       toggle,
       seekToMs,
+      playFromMs,
       skipMs,
       cycleSpeed,
       chooseSpeed,
       requestTranscript,
       setCaptions,
       applyCorrection,
+      replaceChapters,
       refreshNotes,
       releaseComposerAnchor,
       lockComposerAnchor,
@@ -759,17 +907,21 @@ export function PlayerProvider({
       captionsOn,
       notes,
       notesFailed,
+      chapters,
+      currentChapter,
       composerAnchorMs,
       revealedNoteId,
       open,
       toggle,
       seekToMs,
+      playFromMs,
       skipMs,
       cycleSpeed,
       chooseSpeed,
       requestTranscript,
       setCaptions,
       applyCorrection,
+      replaceChapters,
       refreshNotes,
       releaseComposerAnchor,
       lockComposerAnchor,

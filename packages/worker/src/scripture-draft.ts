@@ -1,9 +1,10 @@
 import {
+  checkAnchorMs,
   checkCitation,
   citationKey,
   compareCitations,
+  type DraftedCitation,
   type ProposedCitation,
-  type ScriptureCitation,
 } from '@thp/shared';
 
 /**
@@ -27,7 +28,7 @@ import {
 
 export interface ScriptureDraft {
   /** What survived, in canon order, with no passage listed twice. */
-  readonly citations: readonly ScriptureCitation[];
+  readonly citations: readonly DraftedCitation[];
   /** How many proposals were not citations of anything, for the job's record. */
   readonly dropped: number;
   /** How many survivors were repeats of a passage already in the list. */
@@ -44,7 +45,7 @@ export interface ScriptureDraft {
 export function resolveProposedCitations(
   proposed: readonly ProposedCitation[],
 ): ScriptureDraft {
-  const found = new Map<string, ScriptureCitation>();
+  const found = new Map<string, DraftedCitation>();
   let dropped = 0;
   let duplicates = 0;
 
@@ -56,10 +57,25 @@ export function resolveProposedCitations(
     }
     const key = citationKey(checked.citation);
     if (found.has(key)) {
+      /*
+       * **The first anchor wins, and the repeat is still a repeat.**
+       *
+       * A model that proposed the same passage at two moments has proposed one reference
+       * (scope prd 3.2.5 — a teaching cites a passage once), and the honest anchor for it is the
+       * first place it came up rather than the last. Counting it as a duplicate is unchanged: the
+       * number means "how much of the answer was not usable", and a second copy is not usable
+       * however it is anchored.
+       */
       duplicates += 1;
       continue;
     }
-    found.set(key, checked.citation);
+    /*
+     * The anchor is checked here rather than refused: an anchor that is not a whole, non-negative
+     * number is dropped and the citation stands ([3.7.10](docs/project/prd.md) — a reference with
+     * no position is a reference). Losing a passage over the convenience on top of it would be the
+     * wrong trade in exactly the direction 3.7.4 already warns about.
+     */
+    found.set(key, { ...checked.citation, anchorMs: checkAnchorMs(one.anchorMs) });
   }
 
   return {
@@ -85,6 +101,9 @@ export function readProposedCitations(value: unknown): ProposedCitation[] {
       chapter: typeof one['chapter'] === 'number' ? one['chapter'] : Number.NaN,
       verseStart: typeof one['verseStart'] === 'number' ? one['verseStart'] : null,
       verseEnd: typeof one['verseEnd'] === 'number' ? one['verseEnd'] : null,
+      // Read as it came and checked by `checkAnchorMs` above, so "the model wrote nothing" and
+      // "the model wrote something that is not an offset" reach one decision rather than two.
+      anchorMs: typeof one['anchorMs'] === 'number' ? one['anchorMs'] : null,
     };
   });
 }

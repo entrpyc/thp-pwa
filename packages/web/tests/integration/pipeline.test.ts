@@ -447,7 +447,7 @@ describe('running one step again', () => {
         const rows = await ledgerRows(recording.id);
         // Waiting for the successor to *finish*, not merely to appear: stopping the loop the
         // moment the row exists would leave the assertion below racing the worker.
-        return rows.some((row) => row.step === 'generate_draft' && row.status === 'succeeded');
+        return rows.some((row) => row.step === 'generate_chapters' && row.status === 'succeeded');
       });
     } finally {
       loop.stop();
@@ -459,10 +459,14 @@ describe('running one step again', () => {
     // pipeline" is satisfied by being able to start *anywhere*, not by severing the chain — a
     // fresh transcript makes the existing draft wrong.
     const rows = await ledgerRows(recording.id);
+    // Every step behind it, not only the next one: the chain runs forward to its end, so a fresh
+    // transcript regenerates the chapters cut from the old words too
+    // ([3.22.1](docs/project/prd.md)).
     expect(rows.map((row) => [row.step, row.status, row.attempt])).toEqual([
       ['transcribe', 'failed', 1],
       ['transcribe', 'succeeded', 2],
       ['generate_draft', 'succeeded', 1],
+      ['generate_chapters', 'succeeded', 1],
     ]);
   }, 180_000);
 
@@ -473,13 +477,16 @@ describe('running one step again', () => {
     `;
     await failJob(job[0]?.id as string, 'below the confidence threshold', handle);
 
-    await rerun(recording.id, 'generate_draft');
+    // `generate_chapters` is the last step of the chain ([3.22.1](docs/project/prd.md)), which is
+    // why it is the one asked for by name here. Nothing runs it: what is under test is the enqueue.
+    await rerun(recording.id, 'generate_chapters');
 
-    // Re-running the last step runs that step and nothing else — `transcribe` is not re-queued
+    // Re-running the last step queues that step and nothing else — nothing before it is re-queued
     // behind it, because the chain runs forward and never back.
     const rows = await ledgerRows(recording.id);
     expect(rows.filter((row) => row.step === 'transcribe')).toHaveLength(1);
-    expect(rows.filter((row) => row.step === 'generate_draft')).toHaveLength(1);
+    expect(rows.filter((row) => row.step === 'generate_chapters')).toHaveLength(1);
+    expect(rows.filter((row) => row.step === 'generate_draft')).toHaveLength(0);
   }, 120_000);
 
   it('answers not_found for an unknown recording and invalid_input for a value that is not a step', async () => {

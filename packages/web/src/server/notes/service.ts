@@ -24,6 +24,7 @@ import {
   NOTE_REMOVED_MESSAGE,
   NOTE_REMOVED_WHILE_REPLYING_MESSAGE,
   NOTE_VISIBILITIES,
+  isInChapter,
   isReactionEmoji,
   type CreateNotePayload,
   type NotePayload,
@@ -35,6 +36,7 @@ import {
 import { ApiError } from '@/server/api/errors';
 import { authorise } from '@/server/auth/authorise';
 import { can, type Actor } from '@/server/auth/policy';
+import { requireChapterScope } from '@/server/chapters/service';
 import { audit } from '@/server/observability/audit';
 import { logger } from '@/server/observability/logger';
 
@@ -299,10 +301,35 @@ export async function unpinNoteFor(actor: Actor, noteId: string): Promise<NotePa
  * Nothing here re-sorts and nothing here filters: another member's private note is absent because
  * the query never selected it, for every actor including an admin.
  */
-export async function readNotesFor(actor: Actor, recordingId: string): Promise<NotesPayload> {
+export async function readNotesFor(
+  actor: Actor,
+  recordingId: string,
+  chapterId: string | null = null,
+): Promise<NotesPayload> {
   await requirePublished(actor, recordingId, 'note.read');
 
-  const rows = await listNotesForReader(recordingId, actor.id);
+  /*
+   * **Scoped to one chapter's span, when the caller asked for one**
+   * ([3.22.14](docs/project/prd.md)): a note belongs to the chapter its timestamp falls in.
+   *
+   * Filtered here rather than in the query, and that is the point rather than a shortcut. The rule
+   * is `isInChapter` — one half-open interval, declared once in `@thp/shared` and called by the
+   * client on the list it is already holding as well as by this read (project tdd 5.9). Written as
+   * a `where` clause it would be a second statement of the same rule in a different language, and
+   * the day the two disagree is the day a note appears under two chapters on one screen and under
+   * none on another.
+   *
+   * **A reply is never scoped out.** It has no timestamp of its own and belongs to its parent's
+   * moment (scope prd 3.3.2), so it travels with whichever parent survived the filter — which is
+   * what the reply read below already does, keyed by the parents that are left.
+   */
+  const scope = await requireChapterScope(recordingId, chapterId);
+
+  const all = await listNotesForReader(recordingId, actor.id);
+  const rows =
+    scope === null
+      ? all
+      : all.filter((row) => row.timestampMs !== null && isInChapter(scope, row.timestampMs));
   const replies = await listRepliesForNotes(rows.map((row) => row.id));
   const reactions = await listReactionsForNotes(
     [...rows, ...replies].map((row) => row.id),
@@ -322,7 +349,7 @@ export async function readNotesFor(actor: Actor, recordingId: string): Promise<N
   logger.info('note.read', {
     actorId: actor.id,
     action: 'note.read',
-    target: `recording:${recordingId}`,
+    target: scope === null ? `recording:${recordingId}` : `chapter:${scope.id}`,
     notes: rows.length,
   });
 

@@ -61,7 +61,7 @@ describe('a field value is one of the shapes a kind may declare', () => {
     expect(render('summary', 'four')).toBe('4 characters');
     expect(render('recording_metadata', 'four')).toBe('4 characters');
     expect(
-      render('scripture', [{ book: 'john', chapter: 3, verseStart: 16, verseEnd: 16 }]),
+      render('scripture', [{ book: 'john', chapter: 3, verseStart: 16, verseEnd: 16, anchorMs: null }]),
     ).toBe('1 entries');
   });
 
@@ -69,7 +69,7 @@ describe('a field value is one of the shapes a kind may declare', () => {
     // The `fields` map on the wire is keyed by field name and holds whatever shape that field is,
     // which is what keeps one queue and one payload type over kinds that are not alike.
     const view: Pick<ReviewItemView, 'fields'> = {
-      fields: { citations: [{ book: 'romans', chapter: 8, verseStart: 1, verseEnd: 4 }] },
+      fields: { citations: [{ book: 'romans', chapter: 8, verseStart: 1, verseEnd: 4, anchorMs: null }] },
     };
     expect(Array.isArray(view.fields['citations'])).toBe(true);
 

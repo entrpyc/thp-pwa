@@ -19,11 +19,37 @@ import type { ProposedCitation, ReviewKind } from '@thp/shared';
  * which is the cost and consistency decision the architecture's one-call row already took.
  */
 
+/**
+ * **One line of the transcript, as the model is shown it.**
+ *
+ * The offset travels with the words, and that is what makes two later requirements answerable at
+ * all: a scripture reference can carry *where in the recording the passage is cited*
+ * ([3.7.10](docs/project/prd.md)), and a chapter boundary can be proposed as a moment rather than
+ * as a phrase somebody downstream would have to find again ([3.22.1](docs/project/prd.md),
+ * [3.22.5](docs/project/prd.md)).
+ *
+ * It costs about eight characters a line — some seven kilobytes on a ninety-minute teaching — and
+ * that is the whole price of both. The alternative is a second call over the same transcript, which
+ * is the cost this port was shaped to avoid.
+ */
+export interface TranscriptLine {
+  /** Inclusive start offset from the beginning of the recording, in milliseconds. */
+  readonly startMs: number;
+  readonly text: string;
+}
+
 export interface GenerationRequest {
   /** What the teaching is called. Context the transcript alone does not carry. */
   readonly title: string;
-  /** The whole transcript, joined from the segment rows in playback order. */
-  readonly transcript: string;
+  /**
+   * The whole transcript, in playback order, one entry per segment.
+   *
+   * A list rather than the joined string it used to be, so the offsets survive as far as the
+   * prompt — see {@link TranscriptLine}. What the model reads is still one block of text; building
+   * it is the prompt module's business, which is the one place that decides how a transcript is
+   * shown to a model.
+   */
+  readonly lines: readonly TranscriptLine[];
   /** Which artefacts to produce. Both on a chained run, one on a steered regeneration. */
   readonly kinds: readonly ReviewKind[];
   /**
@@ -78,10 +104,81 @@ export interface GenerationResult {
   readonly spend: GenerationSpend;
 }
 
+// =================================================================================================
+// The second thing this port does: cut a teaching into chapters ([3.22.1](docs/project/prd.md)).
+//
+// A second method rather than a fourth `ReviewKind`, and the requirements say why outright: what a
+// chapter generation produces does **not** go through the review gate
+// ([3.22.6](docs/project/prd.md)) and is not one field of one draft — it is a list of boundaries
+// with text hanging off each. `REVIEW_FIELD`'s one-field-per-kind shape cannot carry it, and
+// bending it to would bend the queue and the review form with it.
+//
+// It is still **one adapter and one vendor named in configuration** (project tdd 4.10 — "one
+// language model behind an adapter for all text generation ... chapter segmentation ... is one
+// capability used seven ways"). What differs is the call, not the boundary.
+// =================================================================================================
+
+/** What the model is asked to cut into chapters. */
+export interface ChapterRequest {
+  /** What the teaching is called. */
+  readonly title: string;
+  /** The whole transcript, in playback order — the same lines a draft request carries. */
+  readonly lines: readonly TranscriptLine[];
+  /**
+   * How long the teaching runs, in milliseconds — the end of the last transcript segment
+   * ([4.2](docs/project/prd.md), *Duration: auto-derived*).
+   *
+   * Handed over rather than derived from the lines, because a line carries only its start: the
+   * adapter would have to guess at the last one's length, and the caller already knows.
+   */
+  readonly durationMs: number;
+}
+
+/**
+ * **One chapter as the model proposes it** — a moment and the two pieces of text that name it.
+ *
+ * `startMs` is a proposal and nothing more: [3.22.5](docs/project/prd.md) requires a boundary to
+ * fall on the start of a transcript segment, and the handler snaps it to one. Asking the adapter to
+ * do that would put a product rule inside a vendor file, and asking the *model* to do it would make
+ * a requirement depend on a model getting arithmetic right.
+ *
+ * There is no `endMs`, because a chapter has none (project tdd 3.7): it ends where the next one
+ * begins.
+ */
+export interface ProposedChapter {
+  readonly startMs: number;
+  readonly title: string;
+  readonly summary: string;
+}
+
+/**
+ * What one segmentation answered.
+ *
+ * **In the order the model gave them, unsorted and unchecked.** Whether they ascend, whether they
+ * are far enough apart and whether there are enough of them to be a list at all are all
+ * [3.22.4](docs/project/prd.md)'s questions, and they are answered once, in the handler, where the
+ * refusals are counted — never inside a vendor adapter.
+ */
+export interface ChapterResult {
+  readonly chapters: readonly ProposedChapter[];
+  /** Which prompt produced it. Its own label, because it is its own prompt. */
+  readonly promptVersion: string;
+  readonly spend: GenerationSpend;
+}
+
 export interface Generator {
   /** Which adapter is in use, for the log line. Never a vendor decision made in code. */
   readonly name: string;
   generate(request: GenerationRequest): Promise<GenerationResult>;
+  /**
+   * Cut this teaching into chapters ([3.22.1](docs/project/prd.md)).
+   *
+   * Answers with an **empty list** for a teaching it cannot usefully divide, which is a result
+   * rather than a failure: [3.22.4](docs/project/prd.md) says a recording too short to hold two
+   * chapters gets none, and a port that could not express that would make the ordinary case an
+   * error on the pipeline screen.
+   */
+  segmentChapters(request: ChapterRequest): Promise<ChapterResult>;
 }
 
 /**

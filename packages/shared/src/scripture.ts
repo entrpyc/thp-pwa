@@ -148,6 +148,51 @@ export interface ProposedCitation {
   readonly chapter: number;
   readonly verseStart?: number | null;
   readonly verseEnd?: number | null;
+  /**
+   * **Where in the recording the passage was cited** ([3.7.10](docs/project/prd.md)), in
+   * milliseconds from the start — or absent, which is the ordinary answer.
+   *
+   * Optional at every stage and never inferred. The model proposes one when the transcript it was
+   * given carried offsets and it could place the citation in them; a proposal that carries none is
+   * a reference that belongs to the recording rather than to any chapter, which is exactly what
+   * 3.7.10 says a reference without a position is.
+   */
+  readonly anchorMs?: number | null;
+}
+
+/**
+ * **A citation's anchor, checked** ([3.7.10](docs/project/prd.md)).
+ *
+ * `null` for anything that is not a whole, non-negative number of milliseconds — including a
+ * value the model invented past the end of the teaching, which is checked against the transcript
+ * by the worker rather than here, because this file knows nothing about how long a recording is.
+ *
+ * Declared beside {@link checkCitation} because it is the same kind of question asked of the same
+ * proposal: the worker asks it before writing a draft, and the approve path asks it again before
+ * storing a reference. An anchor that fails it is dropped rather than refused — a citation with no
+ * position is a citation, and losing the passage over a bad number would be losing the artefact
+ * over the convenience on top of it.
+ */
+export function checkAnchorMs(value: unknown): number | null {
+  if (typeof value !== 'number' || !Number.isInteger(value) || value < 0) return null;
+  return value;
+}
+
+/**
+ * **A citation in a draft** — the passage, and where the machine placed it
+ * ([3.7.10](docs/project/prd.md)).
+ *
+ * The shape a `review_item`'s `citations` field holds, and therefore the shape the review form
+ * renders and sends back. The anchor is on the *draft* rather than only on the approved row because
+ * 3.7.10 calls it admin-editable: an admin who cannot see where the machine placed a passage cannot
+ * correct it, and one who cannot correct it is reviewing half the proposal.
+ *
+ * `null` rather than absent, so a draft written by an older worker and a draft whose model could
+ * not place a passage read the same way — as a reference belonging to the recording rather than to
+ * any chapter.
+ */
+export interface DraftedCitation extends ScriptureCitation {
+  readonly anchorMs: number | null;
 }
 
 /** Which part of a citation is wrong, so a refusal can be shown against the input that caused it. */
@@ -333,6 +378,20 @@ export interface ScriptureReferenceView extends ScriptureCitation {
   readonly origin: ScriptureOrigin;
   /** Whether an admin changed this reference before approving the list it was in. */
   readonly editedByAdmin: boolean;
+  /**
+   * **Where in the recording the passage is cited** ([3.7.10](docs/project/prd.md)), or `null`.
+   *
+   * `null` is an ordinary answer for the two reasons the requirement names: a reference an admin
+   * added by hand (3.7.2) was never placed anywhere, and one the transcript gave no position for
+   * has none to carry. Such a reference belongs to the recording rather than to any chapter, which
+   * is why a chapter's scripture tab is a *narrowing* of the teaching's list and never the whole
+   * of it ([3.22.14](docs/project/prd.md)).
+   *
+   * An offset rather than a chapter id, and that is project tdd 3.8 in one field: a pointer would
+   * be stale the moment an admin moved a boundary ([3.22.7](docs/project/prd.md)) and would have to
+   * be rewritten by every regeneration. Membership is computed from this rather than stored.
+   */
+  readonly anchorMs: number | null;
 }
 
 /**
@@ -380,6 +439,16 @@ export interface PassagePayload {
  */
 export interface ScriptureReadingView extends ScriptureCitation {
   readonly passage: string | null;
+  /**
+   * Where in the teaching it was cited, or `null` ([3.7.10](docs/project/prd.md)).
+   *
+   * Unlike `origin` and `editedByAdmin` above, this **is** a reader's business: it is what a
+   * chapter's scripture tab is scoped by ([3.22.14](docs/project/prd.md)), and a surface that could
+   * not tell a placed citation from an unplaced one could not draw that distinction. It says
+   * *where the passage was read out*, which is a fact about the teaching rather than about how the
+   * list was arrived at.
+   */
+  readonly anchorMs: number | null;
 }
 
 /** This teaching's published scripture, under the API prefix (scope prd 3.4.2). */

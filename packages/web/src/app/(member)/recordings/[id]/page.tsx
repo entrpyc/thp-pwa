@@ -11,11 +11,11 @@ export const dynamic = 'force-dynamic';
  * from the API, which is what refuses an unpublished id — an unpublished teaching rendered as an
  * empty page would be the client holding a decision.
  *
- * The two things asked server-side are `transcript.correct` and `note.moderate`, and each decides
- * **whether an affordance is drawn** and nothing else — the same shape the member layout already uses
- * for the console link. Both routes refuse on their own
- * ([3.1.5](docs/project/prd.md), scope prd 3.7); a member who forged either flag
- * would see a control that does not work.
+ * The three things asked server-side are `transcript.correct`, `note.moderate` and `chapter.edit`,
+ * and each decides **whether an affordance is drawn** and nothing else — the same shape the member
+ * layout already uses for the console link. Every one of those routes refuses on its own
+ * ([3.1.5](docs/project/prd.md), scope prd 3.7, [3.22.7](docs/project/prd.md)); a member who forged
+ * any of the three flags would see a control that does not work.
  */
 export default async function RecordingPage({ params }: { params: Promise<{ id: string }> }) {
   const { id } = await params;
@@ -25,6 +25,7 @@ export default async function RecordingPage({ params }: { params: Promise<{ id: 
       recordingId={id}
       canCorrect={can(actor, 'transcript.correct')}
       canModerate={can(actor, 'note.moderate')}
+      canEditChapters={can(actor, 'chapter.edit')}
     />
   );
 }

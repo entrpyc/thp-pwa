@@ -172,6 +172,10 @@ export interface InlineColourViolation {
 /** The only files permitted to spell a colour out, repo-relative and posix. */
 export const COLOUR_LITERAL_FILES: readonly string[] = [
   'packages/web/src/server/mail/theme.ts',
+  // The PWA manifest and the `themeColor` viewport field are read by the operating system rather
+  // than by the document, so neither can resolve a custom property. One module holds the value and
+  // both import it; `packages/web/tests/unit/app-theme.test.ts` asserts it equals `--color-bg`.
+  'packages/web/src/app/app-theme.ts',
 ];
 
 /**

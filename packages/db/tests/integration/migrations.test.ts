@@ -6,6 +6,7 @@ import postgres from 'postgres';
 import { MIGRATIONS_DIR, runMigrations } from '@thp/db';
 import {
   JOB_STATUSES,
+  PIPELINE_STEPS,
   PLAYBACK_SPEEDS,
   REVIEW_KINDS,
   REVIEW_STATUSES,
@@ -157,11 +158,15 @@ describe('migrations apply to an empty database by one command', () => {
       // Story 4 Ticket 04 `playback_progress` and Story 6 Ticket 01 `series` — the last of that
       // epic. The notes scope adds `note` (Task 1.1), then `note_reaction` (Task 4.1) and
       // `note_pin` (Task 6.2). The scripture scope adds `scripture_reference` (Task 1.4) and then
-      // `verse_text` (Task 3.2).
+      // `verse_text` (Task 3.2). The chapters scope adds `chapter`
+      // ([3.22](docs/project/prd.md), [4.19](docs/project/prd.md)) — and, notably, nothing else:
+      // 3.7.10's anchor is a column on a table that already existed, and chapters own no member
+      // content of their own (project tdd 3.8), so there is no join table beside this one.
       const tables = await sql<{ tablename: string }[]>`
         select tablename from pg_tables where schemaname = 'public' order by tablename
       `;
       expect(tables.map((row) => row.tablename)).toEqual([
+        'chapter',
         'invitation',
         'job',
         'note',
@@ -1917,5 +1922,192 @@ describe('the 1.75 playback step, and nothing beside it', () => {
       select preferred_playback_speed from "user" where id = ${existingUserId}
     `;
     expect(rows[0]?.preferred_playback_speed).toBe(1.25);
+  });
+});
+
+/**
+ * **The scripture reference's anchor** ([3.7.10](docs/project/prd.md)) — one nullable column, and
+ * nothing else anywhere.
+ *
+ * The before-and-after is what makes "and nothing else" a comparison rather than a claim, and this
+ * migration is the one that unblocks chapters: a citation with no offset cannot be scoped to a
+ * chapter ([3.22.14](docs/project/prd.md)), which is why 3.7.10 had to land first.
+ */
+describe('the scripture anchor, and nothing beside it', () => {
+  let target: ThrowawayDatabase;
+  let before: Map<string, string[]>;
+  let after: Map<string, string[]>;
+  let sql: ReturnType<typeof postgres>;
+  /** A reference written before the column existed, so the widening is a widening. */
+  let existingRecordingId: string;
+
+  beforeAll(async () => {
+    target = await createThrowawayDatabase(inject('databaseUrl'), 'scripture_anchor_migration');
+
+    const priorCount = journalCountBefore('0018_scripture_anchor');
+    await runMigrations({ url: target.url, migrationsFolder: migrationsFolderUpTo(priorCount) });
+    before = await readColumnSets(target.url);
+
+    sql = postgres(target.url, { max: 2, onnotice: () => {} });
+    const [written] = await sql<{ id: string }[]>`
+      insert into recording (original_media_key, title, recorded_at)
+      values ('originals/before-anchors.mp3', 'A teaching from before anchors', '2026-05-04')
+      returning id
+    `;
+    existingRecordingId = written?.id as string;
+    await sql`
+      insert into scripture_reference (recording_id, book, chapter, verse_start, verse_end, origin)
+      values (${existingRecordingId}, 'romans', 8, 1, 4, 'machine')
+    `;
+
+    await runMigrations({ url: target.url, migrationsFolder: migrationsFolderUpTo(priorCount + 1) });
+    after = await readColumnSets(target.url);
+  }, 120_000);
+
+  afterAll(async () => {
+    await sql?.end({ timeout: 5 });
+    await target?.drop();
+  }, 60_000);
+
+  it('adds one column to one table and changes nothing else', () => {
+    for (const [table, columns] of before) {
+      const expected =
+        table === 'scripture_reference' ? [...columns, 'anchor_ms'].sort() : [...columns];
+      expect([...(after.get(table) ?? [])].sort(), `${table} changed`).toEqual(expected);
+    }
+    expect([...after.keys()].sort()).toEqual([...before.keys()].sort());
+  });
+
+  /**
+   * **Nullable, and nothing back-fills it.** A reference written before the column existed keeps no
+   * anchor, which is exactly what 3.7.10 says such a reference has — it "belongs to the recording
+   * rather than to any chapter". Inventing an offset for it would be inventing a moment.
+   */
+  it('leaves a reference written before it with no anchor at all', async () => {
+    const rows = await sql<{ anchor_ms: number | null }[]>`
+      select anchor_ms from scripture_reference where recording_id = ${existingRecordingId}
+    `;
+    expect(rows[0]?.anchor_ms).toBeNull();
+  });
+
+  it('takes an offset, and refuses one that names no moment of any teaching', async () => {
+    await expect(
+      sql`update scripture_reference set anchor_ms = 90000 where recording_id = ${existingRecordingId}`,
+    ).resolves.toBeTruthy();
+    await expect(
+      sql`update scripture_reference set anchor_ms = -1 where recording_id = ${existingRecordingId}`,
+    ).rejects.toThrow();
+  });
+
+  /**
+   * **The anchor is not part of the passage's identity.** A teaching cites a passage once, so citing
+   * it at two moments is not two references — and putting the anchor in the unique key would make
+   * it so.
+   */
+  it('still refuses the same passage twice on one teaching, whatever their anchors', async () => {
+    await expect(
+      sql`insert into scripture_reference
+            (recording_id, book, chapter, verse_start, verse_end, origin, anchor_ms)
+          values (${existingRecordingId}, 'romans', 8, 1, 4, 'machine', 500000)`,
+    ).rejects.toThrow();
+  });
+});
+
+/**
+ * **The chapter table** ([3.22](docs/project/prd.md), [4.19](docs/project/prd.md)), asserted by its
+ * **exact column set**.
+ *
+ * Exact rather than "contains", because what is absent is the design (project tdd 3.7, 3.8): there
+ * is no `end_ms`, because a chapter ends where the next begins; no `position`, because order is
+ * `start_ms` ascending and storing it would make a split renumber every row after it; and no
+ * `status`, because chapters carry no gate of their own ([3.22.6](docs/project/prd.md)). A
+ * `toContain` assertion would not notice any of the three arriving.
+ */
+describe('the chapter table, and nothing beside it', () => {
+  let target: ThrowawayDatabase;
+  let before: Map<string, string[]>;
+  let after: Map<string, string[]>;
+  let sql: ReturnType<typeof postgres>;
+  let existingRecordingId: string;
+
+  beforeAll(async () => {
+    target = await createThrowawayDatabase(inject('databaseUrl'), 'chapters_migration');
+
+    const priorCount = journalCountBefore('0019_chapters');
+    await runMigrations({ url: target.url, migrationsFolder: migrationsFolderUpTo(priorCount) });
+    before = await readColumnSets(target.url);
+
+    sql = postgres(target.url, { max: 2, onnotice: () => {} });
+    const [written] = await sql<{ id: string }[]>`
+      insert into recording (original_media_key, title, recorded_at)
+      values ('originals/before-chapters.mp3', 'A teaching from before chapters', '2026-05-04')
+      returning id
+    `;
+    existingRecordingId = written?.id as string;
+    // A job using the step enum as it stood, so widening it is a widening rather than a fresh start.
+    await sql`
+      insert into job (recording_id, step, status, attempt, correlation_id)
+      values (${existingRecordingId}, 'transcribe', 'succeeded', 1, 'before-chapters')
+    `;
+
+    await runMigrations({ url: target.url, migrationsFolder: migrationsFolderUpTo(priorCount + 1) });
+    after = await readColumnSets(target.url);
+  }, 120_000);
+
+  afterAll(async () => {
+    await sql?.end({ timeout: 5 });
+    await target?.drop();
+  }, 60_000);
+
+  it('did not exist before this migration and does after — otherwise the comparison is vacuous', () => {
+    expect(before.has('chapter')).toBe(false);
+    expect(after.has('chapter')).toBe(true);
+  });
+
+  it('adds one table and changes no column of any table that already existed', () => {
+    for (const [table, columns] of before) {
+      expect(after.get(table), `${table} must be untouched`).toEqual(columns);
+    }
+    expect([...after.keys()].filter((table) => !before.has(table))).toEqual(['chapter']);
+  });
+
+  it('gives chapter exactly these columns, and none of the four that are the design', () => {
+    expect(after.get('chapter')).toEqual([
+      'created_at',
+      'edited_by_admin',
+      'generated_by',
+      'id',
+      'recording_id',
+      'start_ms',
+      'summary',
+      'title',
+    ]);
+
+    // `end_ms` would make a gap and an overlap representable, which project tdd 3.7 refuses.
+    // `position` would make a split renumber every row after it, which is what makes 3.22.7's
+    // boundary move "one write to one row" untrue. `status` would be a second answer to a question
+    // the recording's own publication already answers (3.22.6). `artwork_key` is 3.22.3's "no
+    // artwork of its own", said as an absence.
+    for (const deferred of ['end_ms', 'position', 'status', 'published_at', 'artwork_key']) {
+      expect(after.get('chapter'), `${deferred} must not exist`).not.toContain(deferred);
+    }
+  });
+
+  it('adds generate_chapters to the pipeline steps an existing database already admits', async () => {
+    const steps = await sql<{ enumlabel: string }[]>`
+      select enumlabel from pg_enum
+      join pg_type on pg_type.oid = pg_enum.enumtypid
+      where pg_type.typname = 'pipeline_step' order by pg_enum.enumsortorder
+    `;
+    // Derived from the one declaration rather than restated beside it, exactly as every other enum
+    // in this file is.
+    expect(steps.map((row) => row.enumlabel)).toEqual([...PIPELINE_STEPS]);
+    expect(steps.map((row) => row.enumlabel)).toContain('generate_chapters');
+
+    // The job written before the widening is still readable and still says what it said.
+    const rows = await sql<{ step: string }[]>`
+      select step::text as step from job where recording_id = ${existingRecordingId}
+    `;
+    expect(rows.map((row) => row.step)).toEqual(['transcribe']);
   });
 });

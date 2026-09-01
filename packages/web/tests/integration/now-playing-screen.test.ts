@@ -78,7 +78,14 @@ const APPROVED = [
   { book: 'romans', chapter: 8, verseStart: 1, verseEnd: 4 },
   { book: 'exodus', chapter: 3, verseStart: 1, verseEnd: 2 },
   { book: 'genesis', chapter: 1, verseStart: 1, verseEnd: 2 },
-].map((one) => ({ ...one, origin: 'machine' as const, editedByAdmin: false }));
+].map((one) => ({
+  ...one,
+  origin: 'machine' as const,
+  editedByAdmin: false,
+  // Unanchored, which is 3.7.10's ordinary case: these fixtures are about what a member reads on a
+  // teaching's own page, where every approved reference is listed whether it was placed or not.
+  anchorMs: null,
+}));
 
 /** Proposed by the draft step and approved by nobody. It must reach no member's screen (3.3.4). */
 const DRAFTED: readonly ScriptureCitation[] = [

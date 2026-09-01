@@ -22,7 +22,7 @@ describe('buildGenerator', () => {
 
     const result = await model.generate({
       title: 'A teaching',
-      transcript: 'Good morning.',
+      lines: [{ startMs: 0, text: 'Good morning.' }],
       kinds: [...REVIEW_KINDS],
       steeringPrompt: null,
     });
@@ -42,7 +42,7 @@ describe('buildGenerator', () => {
     const model = buildGenerator({ GENERATE_PROVIDER: 'fake', GENERATE_FAKE_SCRIPT: SCRIPT });
     const result = await model.generate({
       title: 'A teaching',
-      transcript: 'Good morning.',
+      lines: [{ startMs: 0, text: 'Good morning.' }],
       kinds: ['summary'],
       steeringPrompt: null,
     });
@@ -54,7 +54,7 @@ describe('buildGenerator', () => {
     const model = buildGenerator({ GENERATE_PROVIDER: 'fake', GENERATE_FAKE_SCRIPT: SCRIPT });
     const result = await model.generate({
       title: 'A teaching',
-      transcript: 'Good morning.',
+      lines: [{ startMs: 0, text: 'Good morning.' }],
       kinds: ['summary'],
       steeringPrompt: 'Say more about the second half.',
     });

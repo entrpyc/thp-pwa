@@ -1,5 +1,5 @@
 import { permits } from '@/server/api/access';
-import { routeParam } from '@/server/api/params';
+import { chapterScopeParam, routeParam } from '@/server/api/params';
 import { apiRoute } from '@/server/api/route';
 import { createNote, readNotesFor } from '@/server/notes/service';
 
@@ -18,8 +18,16 @@ export const dynamic = 'force-dynamic';
  * An unpublished id answers `not_found` rather than an empty list (3.2.12) — an empty list is a
  * teaching nobody has annotated, which is a different fact.
  */
-export const GET = apiRoute(permits('note.read'), async (_request, context) => {
-  return readNotesFor(context.actor, await routeParam(context.params, 'id'));
+export const GET = apiRoute(permits('note.read'), async (request, context) => {
+  return readNotesFor(
+    context.actor,
+    await routeParam(context.params, 'id'),
+    // `?chapter=` narrows the answer to one chapter's span ([3.22.14](docs/project/prd.md)) — the
+    // one query parameter this route has, and it is not the filter the paragraph above rules out:
+    // it does not decide what a member may see, it decides which part of the teaching is being
+    // read. What a member may see is still the query's answer.
+    chapterScopeParam(request),
+  );
 });
 
 /**

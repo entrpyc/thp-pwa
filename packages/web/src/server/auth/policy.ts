@@ -186,6 +186,26 @@ export const POLICY_ACTIONS = [
   'note.react',
   'note.pin',
   'note.unpin',
+  /**
+   * **Editing a teaching's chapters in place** ([3.22.7](docs/project/prd.md),
+   * [3.19.14](docs/project/prd.md)) — retitling one, rewriting its summary, moving a boundary,
+   * splitting a chapter in two, merging two adjacent ones.
+   *
+   * **One action for all five**, which is a departure from the split every group above takes, and
+   * the departure is deliberate. Those groups are split because the day two roles answer their
+   * questions differently is foreseeable — a Contributor who may watch the pipeline without
+   * re-running it, who may read the queue without approving it. Here there is no such day:
+   * [3.22.7](docs/project/prd.md) grants all five to Admin *and* Contributor in one sentence, and
+   * nothing in the requirements points at a role that may rename a chapter but not move its
+   * boundary. Splitting it into five would be five rules that widen together forever, which is
+   * decoration rather than a seam.
+   *
+   * There is deliberately **no `chapter.read`**. Chapters ride the recording's publication
+   * ([3.22.6](docs/project/prd.md)), so reading them is `recording.browse` — the same action the
+   * teaching, its transcript and its scripture are behind. A second action would be a second gate,
+   * which is exactly what 3.22.6 refuses.
+   */
+  'chapter.edit',
 ] as const;
 
 export type PolicyAction = (typeof POLICY_ACTIONS)[number];
@@ -326,6 +346,10 @@ const RULES: PolicyRules = {
   // that away — the `recording.publish` / `unpublish` split, for the same reason.
   'note.pin': { roles: { admin: true, member: false } },
   'note.unpin': { roles: { admin: true, member: false } },
+  // Admin alone **in this scope**. [3.22.7](docs/project/prd.md) grants chapter editing to
+  // Contributor as well, and that role does not exist in the enum yet — so this is the only
+  // reachable answer, and widening it is one word the day it does.
+  'chapter.edit': { roles: { admin: true, member: false } },
 };
 
 export function isPolicyAction(value: string): value is PolicyAction {

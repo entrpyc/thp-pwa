@@ -13,6 +13,7 @@ import {
   MAX_STEERING_PROMPT_LENGTH,
   REVIEW_FIELD,
   SCRIPTURE_ORIGINS,
+  checkAnchorMs,
   checkCitation,
   citationKey,
   citationsEqual,
@@ -26,8 +27,8 @@ import {
   type ReviewFieldValue,
   type ReviewItemView,
   type ReviewKind,
+  type DraftedCitation,
   type ReviewProvenance,
-  type ScriptureCitation,
   type ScriptureReferenceView,
   type SubmittedReference,
 } from '@thp/shared';
@@ -238,8 +239,13 @@ async function approveList(
 /** The two things a reference can have come from, spelled once, where the enum declares them. */
 const [MACHINE, PERSON] = SCRIPTURE_ORIGINS;
 
-/** The machine's list, approved as it stands: nobody added anything and nobody changed anything. */
-function asProposed(citations: readonly ScriptureCitation[]): ScriptureReferenceView[] {
+/**
+ * The machine's list, approved as it stands: nobody added anything and nobody changed anything.
+ *
+ * The anchor comes across untouched ([3.7.10](docs/project/prd.md)) — taking the machine's proposal
+ * as it stands means taking where it placed each passage as well as which passage it named.
+ */
+function asProposed(citations: readonly DraftedCitation[]): ScriptureReferenceView[] {
   return citations.map((citation) => ({
     ...citation,
     origin: MACHINE,
@@ -266,7 +272,7 @@ function asProposed(citations: readonly ScriptureCitation[]): ScriptureReference
  */
 function resolveReferences(
   submitted: readonly unknown[],
-  proposed: readonly ScriptureCitation[],
+  proposed: readonly DraftedCitation[],
 ): ScriptureReferenceView[] {
   const seen = new Set<string>();
 
@@ -274,7 +280,8 @@ function resolveReferences(
     if (typeof entry !== 'object' || entry === null) {
       throw ApiError.invalidInput('Every reference has to name a book, a chapter and its verses.');
     }
-    const { book, chapter, verseStart, verseEnd, from } = entry as Partial<SubmittedReference>;
+    const { book, chapter, verseStart, verseEnd, anchorMs, from } =
+      entry as Partial<SubmittedReference>;
 
     const checked = checkCitation({
       book: typeof book === 'string' ? book : '',
@@ -300,13 +307,32 @@ function resolveReferences(
         ? proposed[from]
         : undefined;
 
+    /*
+     * **The anchor is checked, never trusted** ([3.7.10](docs/project/prd.md)).
+     *
+     * The same function the worker checks a model's proposal with, asked again here, because what
+     * one screen allowed is not what the product allows. Anything that is not a whole, non-negative
+     * offset reads as no anchor — which is a legal state for a reference rather than a refusal, so
+     * a form that sent a blank field is answered rather than rejected.
+     */
+    const anchor = checkAnchorMs(anchorMs);
+
     if (source === undefined) {
-      return { ...checked.citation, origin: PERSON, editedByAdmin: false };
+      /*
+       * A reference an admin added by hand. 3.7.10 says it "carries none" — but that is the
+       * *ordinary* case rather than a prohibition: an admin who typed a moment has said where the
+       * passage is cited, and discarding it would make the field unfillable on exactly the rows
+       * 3.7.2 exists for. What is guaranteed is that nothing invents one.
+       */
+      return { ...checked.citation, origin: PERSON, editedByAdmin: false, anchorMs: anchor };
     }
     return {
       ...checked.citation,
       origin: MACHINE,
-      editedByAdmin: !citationsEqual(checked.citation, source),
+      // The passage, or where it was placed. Moving an anchor is editing the reference as much as
+      // changing a verse number is — both are the admin correcting what the machine proposed.
+      editedByAdmin: !citationsEqual(checked.citation, source) || anchor !== source.anchorMs,
+      anchorMs: anchor,
     };
   });
 }
@@ -416,7 +442,19 @@ function readFields(value: unknown): Record<string, ReviewFieldValue> {
   const found: Record<string, ReviewFieldValue> = {};
   for (const [key, entry] of Object.entries(value as Record<string, unknown>)) {
     if (typeof entry === 'string') found[key] = entry;
-    else if (Array.isArray(entry)) found[key] = entry.filter(isScriptureCitation);
+    else if (Array.isArray(entry)) {
+      /*
+       * The citation's shape is checked, and the anchor is **normalised on the way out**
+       * ([3.7.10](docs/project/prd.md)): a draft written before anchors existed carries none at
+       * all, and one written by a model that answered with rubbish carries something that is not an
+       * offset. Both read as `null` here, so the review form gets one shape to render and a draft
+       * from last week still opens.
+       */
+      found[key] = entry.filter(isScriptureCitation).map((one) => ({
+        ...one,
+        anchorMs: checkAnchorMs((one as { anchorMs?: unknown }).anchorMs),
+      }));
+    }
   }
   return found;
 }
@@ -426,8 +464,16 @@ function readField(fields: unknown, name: string): string {
   return typeof value === 'string' ? value : '';
 }
 
-/** The citations a list-shaped field holds. Anything that is not one is not there. */
-function readCitations(fields: unknown, name: string): readonly ScriptureCitation[] {
+/**
+ * The citations a list-shaped field holds. Anything that is not one is not there.
+ *
+ * A draft written before anchors existed has entries with no `anchorMs` on them at all, and they
+ * read here as `null` — the same as a passage the model could not place
+ * ([3.7.10](docs/project/prd.md)). That is what makes the widening cost nothing: an open draft from
+ * last week still approves, and the references it writes simply belong to the recording rather than
+ * to any chapter.
+ */
+function readCitations(fields: unknown, name: string): readonly DraftedCitation[] {
   const value = readFields(fields)[name];
   return Array.isArray(value) ? value : [];
 }

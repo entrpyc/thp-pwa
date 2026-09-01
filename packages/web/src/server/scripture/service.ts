@@ -2,13 +2,16 @@ import { readBibleTranslation, resolvePassages } from '@thp/bible';
 import { findScriptureReferences, findVisibleRecording } from '@thp/db';
 import {
   checkCitation,
+  citationKey,
   compareCitations,
   formatCitation,
+  isInChapter,
   type PassagePayload,
   type RecordingScripturePayload,
 } from '@thp/shared';
 import { ApiError } from '@/server/api/errors';
 import type { Actor } from '@/server/auth/policy';
+import { requireChapterScope } from '@/server/chapters/service';
 import { logger } from '@/server/observability/logger';
 
 /**
@@ -91,6 +94,7 @@ function numberOrNull(value: string | null): number | null {
 export async function readScriptureFor(
   actor: Actor,
   recordingId: string,
+  chapterId: string | null = null,
 ): Promise<RecordingScripturePayload> {
   const visible = await findVisibleRecording(recordingId, { includeUnpublished: false });
   if (visible === null) {
@@ -104,12 +108,28 @@ export async function readScriptureFor(
     throw ApiError.notFound('There is no such teaching.');
   }
 
-  const citations = (await findScriptureReferences(recordingId))
+  /*
+   * **Scoped to one chapter's span, when the caller asked for one**
+   * ([3.22.14](docs/project/prd.md)): a reference belongs to the chapter its anchor falls in
+   * ([3.7.10](docs/project/prd.md)).
+   *
+   * **A reference with no anchor belongs to no chapter**, and is therefore absent from every
+   * chapter's list rather than present in all of them. That is 3.7.10 said exactly: one an admin
+   * added by hand, or one the transcript gave no position for, "belongs to the recording rather
+   * than to any chapter" — so the teaching's own scripture tab is where it is read, and it is the
+   * only place it is.
+   */
+  const scope = await requireChapterScope(recordingId, chapterId);
+
+  const rows = await findScriptureReferences(recordingId);
+  const citations = rows
+    .filter((row) => scope === null || (row.anchorMs !== null && isInChapter(scope, row.anchorMs)))
     .map((row) => ({
       book: row.book,
       chapter: row.chapter,
       verseStart: row.verseStart,
       verseEnd: row.verseEnd,
+      anchorMs: row.anchorMs,
     }))
     .sort(compareCitations);
 
@@ -118,16 +138,25 @@ export async function readScriptureFor(
   logger.info('scripture.read', {
     actorId: actor.id,
     action: 'recording.browse',
-    target: `recording:${recordingId}`,
+    target: scope === null ? `recording:${recordingId}` : `chapter:${scope.id}`,
     references: citations.length,
     fetched: resolved.fetched,
     held: resolved.held,
   });
 
+  /*
+   * The anchors are re-joined to the resolved passages by citation key rather than by index. The
+   * verse port answers per citation in the order it was given, but "in the order it was given" is a
+   * property of that port rather than of this read, and an off-by-one here would put one passage's
+   * moment on another's row.
+   */
+  const anchorOf = new Map(citations.map((one) => [citationKey(one), one.anchorMs]));
+
   return {
     references: resolved.passages.map((one) => ({
       ...one.citation,
       passage: one.verses.length === 0 ? null : one.verses.map((verse) => verse.text).join(' '),
+      anchorMs: anchorOf.get(citationKey(one.citation)) ?? null,
     })),
     // Which translation the words are ([3.7.9](docs/project/prd.md#L164)). Read from the same
     // configuration the cache keys itself by, so the name on screen and the rows behind it can

@@ -13,6 +13,7 @@ import {
 } from '@thp/shared';
 import { ApiClientError, apiFetch } from '@/client/api-client';
 import { useBreadcrumbTrail, usePlayer } from '../../player-context';
+import { ChaptersPanel } from './chapters-panel';
 import { CollapsibleProse } from './collapsible-prose';
 import { NotesPanel } from './notes-panel';
 import { ScripturePanel } from './scripture-panel';
@@ -20,7 +21,7 @@ import { TranscriptPanel } from './transcript-panel';
 import styles from '../../screens.module.css';
 
 /** The strip is single-select: opening one tab closes the others, and `null` is all closed. */
-type OpenTab = 'scripture' | 'notes' | 'transcript' | null;
+type OpenTab = 'chapters' | 'scripture' | 'notes' | 'transcript' | null;
 
 /**
  * **The recording page** — `pages/recording.png`.
@@ -31,11 +32,12 @@ type OpenTab = 'scripture' | 'notes' | 'transcript' | null;
  *   `pages/chapter.png` draws it, with the back control over it (scope prd 3.2.3, 3.2.7). The
  *   cover is the *series'* — a recording has none of its own — so every teaching in one study
  *   shows the same picture, and a teaching in no series keeps the flat band (scope prd 3.2.6).
- * - **A tab strip holding three tabs.** The reference draws five — `Chapter`, `Scripture`, `Notes`,
- *   `Transcript`, `Mindmap` — and only those three have data. `Chapter` and `Mindmap` are dropped
- *   rather than rendered disabled, which is the line the whole member surface draws for a deferred
- *   destination. Summary and description render directly in the page body, above the strip. The
- *   strip is **single-select**, the way the reference reads it: opening `Notes` closes `Transcript`.
+ * - **A tab strip holding four tabs.** The reference draws five — `Chapter`, `Scripture`, `Notes`,
+ *   `Transcript`, `Mindmap` — and four of them now have data: `Chapters` arrived with
+ *   [3.22.10](docs/project/prd.md) and `Mindmap` is still dropped rather than rendered disabled,
+ *   which is the line the whole member surface draws for a deferred destination. Summary and
+ *   description render directly in the page body, above the strip. The strip is **single-select**,
+ *   the way the reference reads it: opening `Notes` closes `Transcript`.
  * - **`Scripture` is drawn only for a teaching that has some** (active-scope prd 3.4.4) — the same
  *   line, one step further: a destination with no data behind it is left out rather than offered
  *   empty. The recording payload carries `hasScripture` so that decision costs no request.
@@ -44,8 +46,14 @@ type OpenTab = 'scripture' | 'notes' | 'transcript' | null;
  *   The notes are the exception at both ends: they are fetched when the *teaching* is opened,
  *   because their markers show on the transport without the tab (active-scope prd 3.2.4), so the
  *   panel is drawing something the page already holds and there is nothing to save by hiding it.
- * - **No chapter list, no chapter search, no download control.** All deferred; all dropped rather
- *   than disabled.
+ * - **`Chapters` is drawn only for a teaching that has some** ([3.22.10](docs/project/prd.md)) —
+ *   the same line 3.4.4 draws for `Scripture`, and the requirement says so outright: a recording
+ *   with no chapters ([3.22.4](docs/project/prd.md)) does not show the tab at all. It costs no
+ *   request either, but for a different reason: the chapters were fetched when the *teaching* was
+ *   opened, because the transport names the chapter playing on every screen
+ *   ([3.22.16](docs/project/prd.md)) — so, like the notes, the panel draws something the page
+ *   already holds.
+ * - **No download control.** Deferred; dropped rather than disabled.
  *
  * **Opening the page loads the teaching and does not play it.** The stored position is restored
  * once the element has metadata — seeking before that is silently clamped to zero — and the member
@@ -58,12 +66,15 @@ export function RecordingScreen({
   recordingId,
   canCorrect,
   canModerate,
+  canEditChapters,
 }: {
   recordingId: string;
   /** Whether to render the correction affordance. It grants nothing — the API refuses a member. */
   canCorrect: boolean;
   /** Whether to render the admin entries in a note's overflow. It grants nothing either. */
   canModerate: boolean;
+  /** Whether to render the chapter edit, split and merge controls. It grants nothing either. */
+  canEditChapters: boolean;
 }) {
   const player = usePlayer();
   const [recording, setRecording] = useState<Recording | null>(null);
@@ -243,6 +254,23 @@ export function RecordingScreen({
               same line the strip already draws for `Chapter` and `Mindmap`, decided off the payload
               the page already has rather than off a passage nobody asked for.
             */}
+            {/*
+              Absent entirely for a teaching with no chapters (3.22.10) — the same line, decided off
+              the list the player already holds rather than off a flag on the recording payload,
+              because that list is fetched when the teaching is opened regardless (3.22.16) and a
+              second answer to "does this teaching have chapters" could disagree with the first.
+            */}
+            {(player.chapters?.chapters.length ?? 0) > 0 ? (
+              <button
+                className={styles.tab}
+                type="button"
+                role="tab"
+                aria-selected={openTab === 'chapters'}
+                onClick={() => setOpenTab((open) => (open === 'chapters' ? null : 'chapters'))}
+              >
+                Chapters
+              </button>
+            ) : null}
             {recording.hasScripture ? (
               <button
                 className={styles.tab}
@@ -267,6 +295,10 @@ export function RecordingScreen({
 
           {openTab === 'notes' ? (
             <NotesPanel recordingId={recordingId} canModerate={canModerate} />
+          ) : null}
+
+          {openTab === 'chapters' ? (
+            <ChaptersPanel recordingId={recordingId} canEdit={canEditChapters} />
           ) : null}
 
           {openTab === 'scripture' ? <ScripturePanel recordingId={recordingId} /> : null}

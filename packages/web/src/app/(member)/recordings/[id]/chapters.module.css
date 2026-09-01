@@ -1,0 +1,268 @@
+/*
+ * The `Chapters` tab (3.22.10–3.22.12), and the admin controls on it (3.22.7).
+ *
+ * Composed from `tokens.css` like every other panel in the member surface — the card, the muted
+ * meta line and the pill-shaped control are the guide's recipes rather than new ones, so a chapter
+ * row reads as a sibling of a note and a scripture reference rather than as a third idea of what a
+ * list looks like.
+ */
+
+.panel {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-4);
+}
+
+.quiet {
+  margin: 0;
+  color: var(--color-text-muted);
+  font-size: var(--fs-body);
+}
+
+.failure {
+  margin: 0;
+  color: var(--color-text);
+  background: var(--color-surface-raised);
+  border: 1px solid var(--color-border-strong);
+  border-radius: var(--radius-md);
+  padding: var(--space-3) var(--space-4);
+  font-size: var(--fs-body);
+}
+
+/* ------------------------------------------------------------------ the search over this teaching */
+
+.search {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-2);
+}
+
+.searchLabel {
+  color: var(--color-text-muted);
+  font-size: var(--fs-meta);
+}
+
+.searchField {
+  background: var(--color-surface);
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-md);
+  padding: var(--space-3) var(--space-4);
+  color: var(--color-text);
+  font-family: inherit;
+  font-size: var(--fs-body);
+}
+
+.searchField:focus {
+  outline: none;
+  border-color: var(--color-primary-strong);
+}
+
+/* -------------------------------------------------------------------------------------- the list */
+
+.list {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-3);
+}
+
+.row {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-3);
+  background: var(--color-surface);
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-lg);
+  padding: var(--space-4);
+}
+
+.rowMain {
+  display: flex;
+  align-items: center;
+  gap: var(--space-3);
+}
+
+/*
+ * The whole row is the link to the chapter's page (3.22.12), and the play control sits outside it —
+ * a button inside a link is a press with two meanings.
+ */
+.rowLink {
+  flex: 1 1 auto;
+  min-width: 0;
+  display: flex;
+  align-items: center;
+  gap: var(--space-3);
+  color: inherit;
+  text-decoration: none;
+}
+
+.rowLink:hover .title {
+  color: var(--color-primary-icon);
+}
+
+/* The number the list shows (3.22.10) — its position, derived from the order it is read in. */
+.position {
+  flex: none;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: var(--space-6);
+  height: var(--space-6);
+  border-radius: var(--radius-pill);
+  border: 1px solid var(--color-border-strong);
+  color: var(--color-text-muted);
+  font-size: var(--fs-meta);
+}
+
+.rowText {
+  flex: 1 1 auto;
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-1);
+}
+
+.title {
+  color: var(--color-text);
+  font-size: var(--fs-body);
+  font-weight: 500;
+}
+
+/*
+ * The summary, clamped to two lines. A chapter summary is a short paragraph (4.19) and a list of
+ * five of them in full is a page a member scrolls past rather than reads — the chapter's own page is
+ * where it is read whole.
+ */
+.summary {
+  color: var(--color-text-muted);
+  font-size: var(--fs-meta);
+  display: -webkit-box;
+  -webkit-line-clamp: 2;
+  -webkit-box-orient: vertical;
+  overflow: hidden;
+}
+
+/* The time it starts (3.22.10). Tabular so a column of them lines up. */
+.start {
+  flex: none;
+  color: var(--color-text-dim);
+  font-size: var(--fs-meta);
+  font-variant-numeric: tabular-nums;
+}
+
+/* The guide's outlined icon button — the one control on the row that asks for sound (3.22.12). */
+.play {
+  flex: none;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: var(--space-8);
+  height: var(--space-8);
+  border-radius: var(--radius-pill);
+  border: 1px solid var(--color-border-strong);
+  background: transparent;
+  color: var(--color-primary-icon);
+  font-family: inherit;
+  cursor: pointer;
+}
+
+.play:hover {
+  border-color: var(--color-primary-strong);
+}
+
+/* ---------------------------------------------------------------- the admin controls (3.22.7) */
+
+.tools {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--space-2);
+}
+
+.tool {
+  background: transparent;
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-pill);
+  padding: var(--space-2) var(--space-4);
+  color: var(--color-text-muted);
+  font-family: inherit;
+  font-size: var(--fs-meta);
+  cursor: pointer;
+}
+
+.tool:hover {
+  border-color: var(--color-border-strong);
+  color: var(--color-text);
+}
+
+.form {
+  margin: 0;
+}
+
+.fields {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-3);
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-md);
+  padding: var(--space-4);
+  margin: 0;
+}
+
+.legend {
+  color: var(--color-text-muted);
+  font-size: var(--fs-meta);
+  padding: 0 var(--space-2);
+}
+
+.field {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-2);
+}
+
+.fieldLabel {
+  color: var(--color-text-muted);
+  font-size: var(--fs-meta);
+}
+
+.input,
+.textarea {
+  background: var(--color-bg-deep);
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-sm);
+  padding: var(--space-2) var(--space-3);
+  color: var(--color-text);
+  font-family: inherit;
+  font-size: var(--fs-body);
+}
+
+.textarea {
+  resize: vertical;
+}
+
+.input:focus,
+.textarea:focus {
+  outline: none;
+  border-color: var(--color-primary-strong);
+}
+
+.formActions {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: var(--space-3);
+}
+
+/* The guide's filled primary control, at the size the tools beside it take. */
+.submit {
+  background: var(--color-primary);
+  border: 1px solid var(--color-primary-strong);
+  border-radius: var(--radius-pill);
+  padding: var(--space-2) var(--space-5);
+  color: var(--color-text);
+  font-family: inherit;
+  font-size: var(--fs-meta);
+  cursor: pointer;
+}

@@ -2,13 +2,28 @@ import { REVIEW_FIELD, type ProposedCitation, type ReviewKind } from '@thp/share
 import { readGenerateApiKey, type EnvSource } from './env';
 import {
   GenerationError,
+  type ChapterRequest,
+  type ChapterResult,
   type GeneratedDraft,
   type GeneratedDrafts,
   type GenerationRequest,
   type GenerationResult,
+  type GenerationSpend,
   type Generator,
+  type ProposedChapter,
 } from './generator';
-import { DRAFT_TOOL_NAME, PROMPT_VERSION, SYSTEM_PROMPT, buildToolSchema, buildUserPrompt } from './prompt';
+import {
+  CHAPTER_PROMPT_VERSION,
+  CHAPTER_SYSTEM_PROMPT,
+  CHAPTER_TOOL_NAME,
+  CHAPTER_TOOL_SCHEMA,
+  DRAFT_TOOL_NAME,
+  PROMPT_VERSION,
+  SYSTEM_PROMPT,
+  buildChapterUserPrompt,
+  buildToolSchema,
+  buildUserPrompt,
+} from './prompt';
 
 /**
  * **The one file in the repository permitted to name the generation provider** —
@@ -58,6 +73,13 @@ export const MINIMAX_USD_PER_MILLION_OUTPUT = 1.2;
 export const MINIMAX_MAX_OUTPUT_TOKENS = 4096;
 
 /**
+ * Enough room for the chapters of a ninety-minute teaching — five titles and five short paragraphs
+ * — and no more. Its own ceiling rather than the draft's, because a ceiling sized for a
+ * six-paragraph summary says nothing about a list of boundaries.
+ */
+export const MINIMAX_MAX_CHAPTER_TOKENS = 2048;
+
+/**
  * Ten minutes. Well past the seconds a single completion takes, and a ceiling rather than an
  * expectation: what it stops is a worker blocked forever on a provider that never answers, which
  * would sit `running` until somebody restarted the process.
@@ -91,52 +113,66 @@ export function miniMaxGenerator(options: MiniMaxOptions = {}): Generator {
   const apiKey = options.apiKey ?? readGenerateApiKey(env);
   const transport = options.transport ?? (globalThis.fetch as unknown as HttpTransport);
 
+  /**
+   * **The one call**, shared by both methods of the port.
+   *
+   * Drafting and chapter segmentation are two instructions over one transcript against one
+   * endpoint, and everything between the request body and the response text — the headers, the
+   * timeout, the abort, the three ways a refusal is phrased — is identical for both. Written twice
+   * it would be two places for a timeout to drift, so it is written once and the two methods differ
+   * only in what they send and in how they read the answer back.
+   */
+  async function call(body: Record<string, unknown>): Promise<string> {
+    const controller = new AbortController();
+    const timer = setTimeout(() => controller.abort(), timeoutMs);
+
+    try {
+      const response = await transport(MINIMAX_ENDPOINT, {
+        method: 'POST',
+        headers: {
+          'x-api-key': apiKey,
+          'anthropic-version': MINIMAX_API_VERSION,
+          'content-type': 'application/json',
+        },
+        body: JSON.stringify(body),
+        signal: controller.signal,
+      });
+
+      if (!response.ok) {
+        // The status, and the provider's own words, truncated — an operator reads this off the
+        // failed job row and it has to say which end refused.
+        const detail = (await response.text().catch(() => '')).slice(0, 400);
+        throw new GenerationError(
+          `The generation provider refused the request with HTTP ${response.status}${detail ? `: ${detail}` : ''}`,
+        );
+      }
+      return await response.text();
+    } catch (cause) {
+      if (cause instanceof GenerationError) throw cause;
+      if (controller.signal.aborted) {
+        throw new GenerationError(
+          `The generation provider did not answer within ${Math.round(timeoutMs / 60_000)} minutes`,
+          { cause },
+        );
+      }
+      throw new GenerationError(
+        `The generation provider could not be reached: ${cause instanceof Error ? cause.message : String(cause)}`,
+        { cause },
+      );
+    } finally {
+      clearTimeout(timer);
+    }
+  }
+
   return {
     name: 'minimax',
 
     async generate(request: GenerationRequest): Promise<GenerationResult> {
-      const controller = new AbortController();
-      const timer = setTimeout(() => controller.abort(), timeoutMs);
+      return mapResponse(await call(buildRequestBody(request)), request.kinds);
+    },
 
-      let body: string;
-      try {
-        const response = await transport(MINIMAX_ENDPOINT, {
-          method: 'POST',
-          headers: {
-            'x-api-key': apiKey,
-            'anthropic-version': MINIMAX_API_VERSION,
-            'content-type': 'application/json',
-          },
-          body: JSON.stringify(buildRequestBody(request)),
-          signal: controller.signal,
-        });
-
-        if (!response.ok) {
-          // The status, and the provider's own words, truncated — an operator reads this off the
-          // failed job row and it has to say which end refused.
-          const detail = (await response.text().catch(() => '')).slice(0, 400);
-          throw new GenerationError(
-            `The generation provider refused the request with HTTP ${response.status}${detail ? `: ${detail}` : ''}`,
-          );
-        }
-        body = await response.text();
-      } catch (cause) {
-        clearTimeout(timer);
-        if (cause instanceof GenerationError) throw cause;
-        if (controller.signal.aborted) {
-          throw new GenerationError(
-            `The generation provider did not answer within ${Math.round(timeoutMs / 60_000)} minutes`,
-            { cause },
-          );
-        }
-        throw new GenerationError(
-          `The generation provider could not be reached: ${cause instanceof Error ? cause.message : String(cause)}`,
-          { cause },
-        );
-      }
-      clearTimeout(timer);
-
-      return mapResponse(body, request.kinds);
+    async segmentChapters(request: ChapterRequest): Promise<ChapterResult> {
+      return mapChapterResponse(await call(buildChapterRequestBody(request)));
     },
   };
 }
@@ -238,22 +274,123 @@ export function mapResponse(body: string, kinds: readonly ReviewKind[]): Generat
     drafts[kind] = value.trim();
   }
 
+  return { drafts: drafts as GeneratedDrafts, promptVersion: PROMPT_VERSION, spend: spendOf(response) };
+}
+
+/**
+ * The body of a chapter segmentation.
+ *
+ * The same endpoint and the same forced-tool-call shape, a different instruction and a different
+ * tool — which is the whole of what "one adapter, one vendor named in configuration" costs to serve
+ * a second capability (project tdd 4.10).
+ *
+ * Exported so a unit test can assert what one segmentation asks for without a transport in the way.
+ */
+export function buildChapterRequestBody(request: ChapterRequest): Record<string, unknown> {
+  return {
+    model: MINIMAX_MODEL,
+    max_tokens: MINIMAX_MAX_CHAPTER_TOKENS,
+    system: CHAPTER_SYSTEM_PROMPT,
+    messages: [{ role: 'user', content: buildChapterUserPrompt(request) }],
+    tools: [
+      {
+        name: CHAPTER_TOOL_NAME,
+        description: 'Record the chapters of this teaching.',
+        input_schema: CHAPTER_TOOL_SCHEMA,
+      },
+    ],
+    tool_choice: { type: 'tool', name: CHAPTER_TOOL_NAME },
+  };
+}
+
+/**
+ * A segmentation's response, turned into the port's answer.
+ *
+ * **A prose answer fails**, for the reason a prose draft does: a model that ignored `tool_choice`
+ * produced no tool-use block, and salvaging boundaries out of free text would mean writing
+ * timestamps nobody actually gave. The step fails, the pipeline halts and flags
+ * ([3.21.2.3](docs/project/prd.md)), and — because a failed step writes nothing — the chapters a
+ * teaching already has stay exactly as they were ([3.22.9](docs/project/prd.md)).
+ *
+ * **An empty list passes.** It is what a teaching too short to divide comes back as
+ * ([3.22.4](docs/project/prd.md)), and treating it as a refusal would put a red row on the pipeline
+ * screen for every short teaching in the back catalogue.
+ *
+ * **Nothing here checks the boundaries.** Whether they ascend, whether they land on a transcript
+ * line and whether there are enough of them are the handler's questions — a vendor adapter is not
+ * where a product rule is decided, and the handler is where the repairs are counted.
+ */
+export function mapChapterResponse(body: string): ChapterResult {
+  let parsed: unknown;
+  try {
+    parsed = JSON.parse(body);
+  } catch (cause) {
+    throw new GenerationError('The generation provider answered with something that is not JSON', {
+      cause,
+    });
+  }
+
+  const response = parsed as MiniMaxResponse;
+  const call = (response.content ?? []).find(
+    (block) => block.type === 'tool_use' && block.name === CHAPTER_TOOL_NAME,
+  );
+
+  if (!call || typeof call.input !== 'object' || call.input === null) {
+    throw new GenerationError(
+      `The generation provider answered without calling ${CHAPTER_TOOL_NAME}, so there are no ` +
+        'chapters to record. Run this step again.',
+    );
+  }
+
+  const proposed = (call.input as Record<string, unknown>)['chapters'];
+  if (!Array.isArray(proposed)) {
+    throw new GenerationError(
+      'The generation provider answered the chapters as something other than a list, so there is ' +
+        'nothing structured to record. Run this step again.',
+    );
+  }
+
+  const chapters: ProposedChapter[] = [];
+  for (const entry of proposed) {
+    if (typeof entry !== 'object' || entry === null) {
+      throw new GenerationError(
+        'The generation provider answered with a chapter that is not an object. Run this step again.',
+      );
+    }
+    const { startMs, title, summary } = entry as Record<string, unknown>;
+    if (typeof startMs !== 'number' || typeof title !== 'string' || typeof summary !== 'string') {
+      throw new GenerationError(
+        'The generation provider answered with a chapter missing its start, title or summary. ' +
+          'Run this step again.',
+      );
+    }
+    // Trimmed here and refused nowhere: a title with a stray newline on it is the model being
+    // untidy, not the model failing to answer in the structure that was required.
+    chapters.push({ startMs, title: title.trim(), summary: summary.trim() });
+  }
+
+  return { chapters, promptVersion: CHAPTER_PROMPT_VERSION, spend: spendOf(response) };
+}
+
+/**
+ * The five numbers a call cost, read off whichever response carried them.
+ *
+ * Lifted out of {@link mapResponse} when the second method arrived: both answers are billed the
+ * same way by the same endpoint, and two copies of the arithmetic would be two places for a rate
+ * change to be applied once.
+ */
+function spendOf(response: MiniMaxResponse): GenerationSpend {
   const inputTokens = response.usage?.input_tokens ?? 0;
   const outputTokens = response.usage?.output_tokens ?? 0;
-
   return {
-    drafts: drafts as GeneratedDrafts,
-    promptVersion: PROMPT_VERSION,
-    spend: {
-      model: response.model ?? MINIMAX_MODEL,
-      // The model id the provider echoes *is* the version it served, and it is the only version
-      // statement in the response. Recorded as it came rather than parsed into parts.
-      modelVersion: response.model ?? MINIMAX_MODEL,
-      inputTokens,
-      outputTokens,
-      costUsd: costOf(inputTokens, outputTokens),
-      requestId: response.id ?? '',
-    },
+    model: response.model ?? MINIMAX_MODEL,
+    // The model id the provider echoes *is* the version it served, and it is the only version
+    // statement in the response. Recorded as it came rather than parsed into parts.
+    modelVersion: response.model ?? MINIMAX_MODEL,
+    inputTokens,
+    outputTokens,
+    costUsd: costOf(inputTokens, outputTokens),
+    requestId: response.id ?? '',
   };
 }
 

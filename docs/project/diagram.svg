@@ -110,7 +110,7 @@
     <text class="n"   x="705" y="99">Speech-to-text</text>
     <text class="sub" x="705" y="114">segment timestamps</text>
     <text class="n"   x="705" y="153">Language model</text>
-    <text class="sub" x="705" y="168">summary, tags, scripture, mind map, scripts</text>
+    <text class="sub" x="705" y="168">summary, tags, scripture, chapters, mind map, scripts</text>
     <text class="n"   x="705" y="207">Embedding model</text>
     <text class="sub" x="705" y="222">cross-reference and search, one index</text>
     <text class="n"   x="705" y="261">Video render + TTS</text>

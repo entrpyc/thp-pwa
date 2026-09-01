@@ -1,5 +1,9 @@
 import type { JobRow, ProviderMeta } from '@thp/db';
 import type { PipelineStep } from '@thp/shared';
+import {
+  createGenerateChaptersHandler,
+  type GenerateChaptersDependencies,
+} from './generate-chapters';
 import { createGenerateDraftHandler, type GenerateDraftDependencies } from './generate-draft';
 import { createTranscribeHandler, type TranscribeDependencies } from './transcribe';
 
@@ -37,7 +41,10 @@ export type HandlerRegistry = Readonly<Partial<Record<PipelineStep, JobHandler>>
  * What this worker is built with. Two steps, two sets of dependencies, kept apart so a test can
  * hand in a fake provider for one without having to satisfy the other.
  */
-export interface WorkerDependencies extends TranscribeDependencies, GenerateDraftDependencies {}
+export interface WorkerDependencies
+  extends TranscribeDependencies,
+    GenerateDraftDependencies,
+    GenerateChaptersDependencies {}
 
 /**
  * The steps this worker runs — **both of them for real.**
@@ -61,5 +68,6 @@ export function createHandlers(deps: WorkerDependencies = {}): HandlerRegistry {
   return {
     transcribe: createTranscribeHandler(deps),
     generate_draft: createGenerateDraftHandler(deps),
+    generate_chapters: createGenerateChaptersHandler(deps),
   };
 }

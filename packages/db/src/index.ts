@@ -28,6 +28,21 @@ export {
   type Sql,
   type Transaction,
 } from './client';
+export {
+  countEditedChapters,
+  countEditedChaptersByRecording,
+  deleteChapter,
+  findChapterById,
+  findTranscriptEndMs,
+  insertChapter,
+  listChapters,
+  replaceChapters,
+  updateChapter,
+  type ChapterEdit,
+  type ChapterInsert,
+  type ChapterRow,
+  type NewChapter,
+} from './chapters';
 export { requireDatabaseUrl, type EnvSource } from './env';
 export {
   acceptInvitation,

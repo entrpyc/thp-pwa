@@ -8,6 +8,7 @@ import {
   NOTE_REMOVED_WHILE_REPLYING_MESSAGE,
   REACTIONS,
   formatTimecode,
+  isInChapter,
   noteReactionPath,
   notePath,
   notePinPath,
@@ -67,10 +68,27 @@ const HIGHLIGHT_MS = 2_000;
 export function NotesPanel({
   recordingId,
   canModerate,
+  chapterId = null,
 }: {
   recordingId: string;
   /** Whether to draw the admin entries in the overflow. It grants nothing — the API refuses. */
   canModerate: boolean;
+  /**
+   * **The chapter this panel is scoped to**, or `null` for the whole teaching
+   * ([3.22.14](docs/project/prd.md)).
+   *
+   * Narrowed **here rather than by a second fetch**, because the notes the provider holds are the
+   * same notes the transport draws its markers from — a scoped request would download the teaching's
+   * notes twice and leave the two lists able to disagree after a write. The rule is `isInChapter`,
+   * the same call the API scopes its own read by (project tdd 5.9).
+   *
+   * **A note written from a chapter page is anchored to the playback position**, exactly as
+   * everywhere else ([3.22.15](docs/project/prd.md), [3.12.1](docs/project/prd.md)) — nothing here
+   * touches the composer, because a chapter is a lens over member content and never its owner. A
+   * member who writes a note while playback has moved past this chapter's end will not see it in
+   * this list, and that is correct: it belongs to the chapter it was written in.
+   */
+  chapterId?: string | null;
 }) {
   const player = usePlayer();
   const [filter, setFilter] = useState<Filter>('all');
@@ -114,7 +132,26 @@ export function NotesPanel({
    * guard here would hide a broken one there from every screen except the transport, which has no
    * panel to filter it.
    */
-  const notes = player.notes?.notes ?? null;
+  const held = player.notes?.notes ?? null;
+
+  /*
+   * The chapter's span, when the page asked for one ([3.22.14](docs/project/prd.md)). `null` while
+   * the chapter list has not arrived, and the whole teaching's notes are what show until it does —
+   * the honest fallback, because an empty list would make a slow fetch look like a chapter nobody
+   * has annotated.
+   *
+   * **A reply is never filtered out.** It has no timestamp of its own (3.3.2) and travels inside the
+   * parent that survived, which is why this filters the top-level list and nothing below it.
+   */
+  const scope =
+    chapterId === null
+      ? null
+      : (player.chapters?.chapters.find((one) => one.id === chapterId) ?? null);
+
+  const notes =
+    held === null || scope === null
+      ? held
+      : held.filter((one) => one.timestampMs !== null && isInChapter(scope, one.timestampMs));
 
   if (player.notesFailed) {
     return (

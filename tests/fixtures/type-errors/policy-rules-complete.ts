@@ -58,4 +58,5 @@ export const rules: PolicyRules = {
   'note.react': { roles: { admin: true, member: true } },
   'note.pin': { roles: { admin: true, member: false } },
   'note.unpin': { roles: { admin: true, member: false } },
+  'chapter.edit': { roles: { admin: true, member: false } },
 };

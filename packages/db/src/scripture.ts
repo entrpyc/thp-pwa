@@ -21,6 +21,12 @@ export interface ScriptureReferenceRow {
   readonly verseEnd: number;
   readonly origin: ScriptureOrigin;
   readonly editedByAdmin: boolean;
+  /**
+   * Where in the recording the passage is cited, or `null`
+   * ([3.7.10](docs/project/prd.md)) — the offset a chapter's scripture tab is scoped by
+   * ([3.22.14](docs/project/prd.md)).
+   */
+  readonly anchorMs: number | null;
   readonly createdAt: Date;
 }
 
@@ -32,6 +38,14 @@ export interface NewScriptureReference {
   readonly verseEnd: number;
   readonly origin: ScriptureOrigin;
   readonly editedByAdmin: boolean;
+  /**
+   * Where the passage is cited, or `null` ([3.7.10](docs/project/prd.md)).
+   *
+   * Supplied on every reference the approve path writes, and `null` is a value it supplies rather
+   * than a field it omits: a reference an admin added by hand has no position, and saying so
+   * explicitly is what stops a caller that forgot the field from looking like one that had none.
+   */
+  readonly anchorMs: number | null;
 }
 
 /**

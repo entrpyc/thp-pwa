@@ -57,7 +57,19 @@ export function NowPlayingScreen() {
           `pages/player.png` prints no title, and a screen with no heading at all is a screen a
           screen reader cannot summarise — so the teaching names the view without being drawn.
         */}
-        <h1 className={styles.hiddenTitle}>{loaded === null ? 'Now playing' : loaded.title}</h1>
+        {/*
+          The chapter playing is named **on the same footing as the recording**
+          ([3.22.19](docs/project/prd.md)), which here means in the same heading: the teaching and
+          the part of it that is playing, read as one name by anybody who cannot see the screen.
+          A teaching with no chapters keeps exactly the heading it had.
+        */}
+        <h1 className={styles.hiddenTitle}>
+          {loaded === null
+            ? 'Now playing'
+            : player.currentChapter === null
+              ? loaded.title
+              : `${loaded.title} — ${player.currentChapter.title}`}
+        </h1>
       </div>
 
       {loaded === null ? (
@@ -79,6 +91,20 @@ export function NowPlayingScreen() {
               src={loaded.artworkUrl}
               alt={loaded.seriesTitle ?? ''}
             />
+          )}
+
+          {/*
+            **The chapter playing, named where a member can see it**
+            ([3.22.19](docs/project/prd.md)).
+
+            The heading above carries both names for a screen reader; this is the visible half, and
+            it is the chapter alone because the teaching is already named on the transport that is
+            still on screen underneath this view. A teaching with no chapters draws nothing here
+            rather than an empty line — the same line every surface in this scope draws for a
+            teaching too short to divide (3.22.4).
+          */}
+          {player.currentChapter === null ? null : (
+            <p className={styles.chapter}>{player.currentChapter.title}</p>
           )}
 
           {/*

@@ -93,3 +93,18 @@
   font-size: var(--fs-body);
   color: var(--color-text-dim);
 }
+
+/*
+ * The chapter playing, under the cover (3.22.19).
+ *
+ * Centred under the square and in the body size rather than a heading's, because it is a caption on
+ * the picture above it rather than a title of the screen — the screen's title is the teaching, and
+ * the transport underneath is what carries that.
+ */
+.chapter {
+  margin: 0;
+  text-align: center;
+  color: var(--color-text);
+  font-size: var(--fs-body);
+  font-weight: 500;
+}

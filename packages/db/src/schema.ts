@@ -916,6 +916,25 @@ export const scriptureReference = pgTable(
     verseEnd: integer('verse_end').notNull(),
     origin: scriptureOrigin('origin').notNull(),
     editedByAdmin: boolean('edited_by_admin').notNull().default(false),
+    /**
+     * **Where in the recording the passage is cited** ([3.7.10](docs/project/prd.md)), in
+     * milliseconds from the start.
+     *
+     * Nullable, and the null is the design rather than a gap: a reference an admin added by hand
+     * (3.7.2) was never placed anywhere, and one the transcript gave no position for has none —
+     * both belong to the recording rather than to any chapter, and 3.7.10 says so outright.
+     *
+     * **Not part of the passage's identity.** The unique index below is over the citation and does
+     * not carry this column, because a teaching cites a passage once
+     * (scope prd 3.2.5) — citing it at two moments is not two references, and
+     * putting the anchor in the key would make it so.
+     *
+     * **No foreign key to `chapter`, deliberately** (project tdd 3.8). Which chapter a citation
+     * falls in is computed from this offset, not stored: a pointer would be stale the moment an
+     * admin moved a boundary ([3.22.7](docs/project/prd.md)) and would have to be rewritten by
+     * every regeneration, while an offset survives both.
+     */
+    anchorMs: integer('anchor_ms'),
     createdAt: timestamp('created_at', { withTimezone: true }).notNull().defaultNow(),
   },
   (table) => [
@@ -928,6 +947,8 @@ export const scriptureReference = pgTable(
     ),
     /** Every read is "the references on this teaching". */
     index('scripture_reference_recording_idx').on(table.recordingId),
+    /** An offset into a recording, or nothing. A negative one names no moment of any teaching. */
+    check('scripture_reference_anchor_non_negative', sql`${table.anchorMs} >= 0`),
   ],
 );
 
@@ -969,5 +990,80 @@ export const verseText = pgTable(
       columns: [table.translation, table.book, table.chapter, table.verse],
       name: 'verse_text_passage_pk',
     }),
+  ],
+);
+/**
+ * **A chapter — a named span of one teaching** ([3.22](docs/project/prd.md),
+ * [4.19](docs/project/prd.md)).
+ *
+ * Two absences are the whole design, and both come straight from project tdd 3.7 and 3.8.
+ *
+ * **There is no `end_ms`.** A chapter is a start, not a span: it ends where the next one begins,
+ * and the last ends at the end of the transcript. [3.22.2](docs/project/prd.md)'s tiling — no gaps,
+ * no overlaps — is therefore *unrepresentable-broken* rather than merely validated. There is no
+ * state a bug can write that leaves a minute of a teaching in no chapter or in two, no repair job
+ * to own, and nothing to drift. A read derives each end from the next row, over a list a handful of
+ * rows long.
+ *
+ * **There is no `position` either**, and that is this schema's one departure from
+ * [4.19](docs/project/prd.md)'s field table — taken in order to keep the *claim* 4.19 and project
+ * tdd 3.7 both make. Position is "order within the recording", and order is `start_ms` ascending,
+ * which is total and stable because the unique index below makes the starts distinct per recording.
+ * Storing it as well would mean every split and every merge renumbering every row after the one
+ * that changed — turning [3.22.7](docs/project/prd.md)'s shared boundary from "one write to one
+ * row" (project tdd 3.7's own words) into a rewrite that must not half-fail. So position is derived
+ * on the way out, in `packages/db/src/chapters.ts`, and moving a boundary stays one `UPDATE`.
+ *
+ * **And there is no `status`.** Chapters sit outside the review gate deliberately
+ * ([3.22.6](docs/project/prd.md), project tdd 6.2): a chapter cannot be published or withdrawn
+ * independently of the teaching it divides, so the recording's own `published_at` is the gate it
+ * passes and a column here would be a second answer to a question 4.2 already answers.
+ *
+ * `generated_by` is [4.17.5](docs/project/prd.md)'s record — which model, which model version and
+ * which prompt version produced the list — as `jsonb`, the same shape `review_item.provenance`
+ * takes and for the same reason: it is provenance to read back, never anything to query by.
+ *
+ * `edited_by_admin` is per row rather than per list, because it is what
+ * [3.22.8](docs/project/prd.md)'s confirmation counts: re-running the step discards every title,
+ * summary and boundary a human has changed, and naming *how many* means being able to count them.
+ */
+export const chapter = pgTable(
+  'chapter',
+  {
+    id: uuid('id').primaryKey().defaultRandom(),
+    /** Cascades: chapters of a teaching that is gone divide nothing. */
+    recordingId: uuid('recording_id')
+      .notNull()
+      .references(() => recording.id, { onDelete: 'cascade' }),
+    /**
+     * Inclusive start offset from the beginning of the recording, in milliseconds, and **always the
+     * start of a transcript segment** ([3.22.5](docs/project/prd.md)).
+     *
+     * That last part is the worker's and the edit path's to enforce — a column cannot check it
+     * without a join to a table it has no business reaching into. What the column does hold is that
+     * two chapters of one teaching cannot start at the same moment, which is what makes the derived
+     * order total.
+     */
+    startMs: integer('start_ms').notNull(),
+    title: text('title').notNull(),
+    /** One short paragraph, plain text with line breaks ([4.19](docs/project/prd.md)). */
+    summary: text('summary').notNull(),
+    /** Which model, which model version and which prompt version produced the list. */
+    generatedBy: jsonb('generated_by').notNull(),
+    /** Whether a human has changed this chapter's title, summary or start. */
+    editedByAdmin: boolean('edited_by_admin').notNull().default(false),
+    createdAt: timestamp('created_at', { withTimezone: true }).notNull().defaultNow(),
+  },
+  (table) => [
+    /**
+     * **One chapter may start at one moment.** This is what makes the derived order — and therefore
+     * the derived position — total rather than arbitrary, and it is what refuses a boundary move or
+     * a split that would land on a boundary that already exists.
+     */
+    uniqueIndex('chapter_recording_start_unique').on(table.recordingId, table.startMs),
+    /** Every read is "this teaching's chapters, in order", and this index is that read. */
+    index('chapter_recording_start_idx').on(table.recordingId, table.startMs),
+    /** An offset into a recording. A negative one names no moment of any teaching. */
+    check('chapter_start_non_negative', sql`${table.startMs} >= 0`),
   ],
 );

@@ -5,8 +5,19 @@ import { RECORDINGS_PATH } from './recordings';
  * The pipeline step enum. This epic runs two steps in order; the worker that executes them arrives
  * in a later ticket, but the vocabulary is fixed here so the API, the worker and the job ledger
  * never drift apart.
+ *
+ * `generate_chapters` is the chapters scope's addition ([3.22.1](docs/project/prd.md)) and it is
+ * **its own step** rather than more of `generate_draft`, for two reasons the requirement gives
+ * outright: what it produces reaches members with the recording rather than through the review
+ * gate ([3.22.6](docs/project/prd.md)), and re-running it destroys human work where re-running a
+ * draft does not ([3.22.8](docs/project/prd.md)). A step is the unit an admin re-runs
+ * ([3.21.2.4](docs/project/prd.md)) and the unit a confirmation attaches to, so two facts that
+ * differ per step have to sit on two steps.
+ *
+ * It runs **after** drafting rather than beside it because the chain is a list: the successor of a
+ * step is read from this array and nowhere else, so ordering it here is the whole of ordering it.
  */
-export const PIPELINE_STEPS = ['transcribe', 'generate_draft'] as const;
+export const PIPELINE_STEPS = ['transcribe', 'generate_draft', 'generate_chapters'] as const;
 
 export type PipelineStep = (typeof PIPELINE_STEPS)[number];
 
@@ -138,6 +149,19 @@ export interface RecordingPipeline {
   /** `YYYY-MM-DD`. The list's sort key, descending, as the recordings list is. */
   readonly recordedAt: string;
   readonly steps: readonly PipelineStepView[];
+  /**
+   * **How many of this teaching's chapters a human has changed**
+   * ([3.22.8](docs/project/prd.md)).
+   *
+   * On the pipeline payload rather than fetched by the panel, because it is read at exactly one
+   * moment: the confirmation before `generate_chapters` runs again, which has to *name* what the
+   * re-run discards rather than warning about it in the abstract. A second request to find that
+   * out would be a request made for a sentence.
+   *
+   * `0` for a teaching with no chapters and for one nobody has edited — which are the two cases
+   * where the re-run destroys nothing, and the sentence says so.
+   */
+  readonly editedChapters: number;
 }
 
 /** Payload of `GET /api/v1/pipeline`. */

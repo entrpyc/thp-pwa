@@ -16,6 +16,7 @@ import {
   type FieldProvenance,
   type ReviewKind,
   type ReviewProvenance,
+  type DraftedCitation,
   type ScriptureCitation,
 } from '@thp/shared';
 import { resolvePassages, type BibleSource } from '@thp/bible';
@@ -121,14 +122,19 @@ export function createGenerateDraftHandler(deps: GenerateDraftDependencies = {})
       throw fail(fields, `the transcript for recording ${job.recordingId} has no segments in it`);
     }
 
-    // Playback order, which is the order `listSegments` already decided. One string, one call.
-    const text = segments.map((one) => one.text).join(' ');
+    /*
+     * Playback order, which is the order `listSegments` already decided — and **with the offsets
+     * still on**, so a citation can come back saying where in the teaching it was read out
+     * ([3.7.10](docs/project/prd.md)). Joining them into one string is the prompt module's job;
+     * doing it here would throw away the numbers before the prompt could show them.
+     */
+    const lines = segments.map((one) => ({ startMs: one.startMs, text: one.text }));
 
     let result;
     try {
       result = await model.generate({
         title: recording.title,
-        transcript: text,
+        lines,
         kinds,
         steeringPrompt: prompt,
       });
@@ -152,7 +158,7 @@ export function createGenerateDraftHandler(deps: GenerateDraftDependencies = {})
     let dropped = 0;
     let duplicates = 0;
 
-    const draftOf = (kind: ReviewKind): string | readonly ScriptureCitation[] => {
+    const draftOf = (kind: ReviewKind): string | readonly DraftedCitation[] => {
       const field = REVIEW_FIELD[kind];
       const value = result.drafts[kind];
 

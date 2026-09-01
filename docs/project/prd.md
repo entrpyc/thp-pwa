@@ -69,13 +69,13 @@ It is built as a Progressive Web App on a single codebase, reachable from any br
 - 📝 **3.2.6** Audio continues playing when the app is backgrounded or the device is locked, with transport controls available from the device lock screen and notification area.
 - 📝 **3.2.7** Each user has a listening history recording which teachings they played, when, and how far through they got.
 - 📝 **3.2.8** A recording is marked completed for a user once they reach the end, and completed teachings are visually distinguishable when browsing.
-- ✅ **3.2.9** Members can scrub to any position in a recording, and can jump ten seconds backwards or forwards from the transport controls.
+- ✅ **3.2.9** Members can scrub to any position in a recording, and can jump ten seconds backwards or forwards from the transport controls. The track carries two kinds of mark — the note markers of 3.12.12 and the chapter boundaries of 3.22.17 — and scrubbing names the chapter it is passing through (3.22.18).
 - 📝 **3.2.10** Admins and Contributors can replace the audio file on an existing recording. This re-runs processing (3.4) and transcription (3.5) while preserving the recording's notes, metadata and member progress.
 - ✅ **3.2.11** An admin can unpublish a recording, removing it from member view without deleting it or its associated content.
 - ✅ **3.2.12** A member's landing offers the teaching they were most recently listening to, showing how far they had got. Opening it restores that position and deliberately does not start playing — a member who tapped a card has not asked for sound.
 - ✅ **3.2.13** Audio is streamed through a signed URL minted per request after an authorisation check and valid for an hour, never from a publicly addressable location. The player renews the grant before it expires, so a teaching longer than an hour plays through without interruption and without the client ever learning where the file lives.
-- ✅ **3.2.14** The transport travels with the member: it is docked to every member screen, so playback continues while they move between the library, a series and a recording rather than stopping when they navigate. It is one of two playback surfaces rather than the only one — the expanded view at 3.2.15 is the other — and it is the one a member uses everywhere else.
-- 📝 **3.2.15** An expanded now-playing view, opened from the docked transport (3.2.14) and closed back to it, showing the cover artwork of what is playing (3.3.3) and the published scripture references of that teaching (3.7.5). It is a second view of one playback session rather than a second player: opening it and leaving it never interrupt the audio, and it holds no transport state of its own. A recording that belongs to no series (3.3.9) has no artwork to show and the view renders without it rather than substituting a placeholder.
+- ✅ **3.2.14** The transport travels with the member: it is docked to every member screen, so playback continues while they move between the library, a series and a recording rather than stopping when they navigate. It is one of two playback surfaces rather than the only one — the expanded view at 3.2.15 is the other — and it is the one a member uses everywhere else. It names the recording playing and, beneath it, the chapter within that recording that is playing now (3.22.16).
+- ✅ **3.2.15** An expanded now-playing view, opened from the docked transport (3.2.14) and closed back to it, showing the cover artwork of what is playing (3.3.3) and the published scripture references of that teaching (3.7.5). It is a second view of one playback session rather than a second player: opening it and leaving it never interrupt the audio, and it holds no transport state of its own. A recording that belongs to no series (3.3.9) has no artwork to show and the view renders without it rather than substituting a placeholder. It names the chapter playing on the same footing as the recording (3.22.19).
 
 ### 🔨 3.3 Content organisation & series
 
@@ -121,7 +121,7 @@ It is built as a Progressive Web App on a single codebase, reachable from any br
 - ✅ **3.5.3** Members can read the transcript on the recording page, and the transcript view follows along with playback, highlighting the currently spoken segment. The view scrolls itself to keep the highlight in sight, and stops following the moment a member scrolls it themselves — offering a control to jump back to the current line rather than fighting them for the scroll position.
 - ✅ **3.5.4** Selecting any point in the transcript seeks the audio to that position. Seeking from the transcript does not start playback: a member reading a paused teaching has not asked for sound.
 - 🔨 **3.5.5** Admins and Contributors can correct transcript text, which is necessary for names, scripture citations and terminology specific to the ministry. A correction restates what the line says and where it starts and ends; the speaker index (3.5.9) is not something a correction can change. Every correction records who made it and when.
-- 🔨 **3.5.6** Correcting a transcript offers to regenerate the artefacts derived from it — summary (3.6), mind map (3.8.1), scripture references (3.7.1), tags (4.17.1) and cross-references (3.9.1). The regeneration is offered and never performed unasked: declining it leaves the recording exactly as it was, and the offer covers only those artefacts that exist at the time.
+- 🔨 **3.5.6** Correcting a transcript offers to regenerate the artefacts derived from it — summary (3.6), mind map (3.8.1), scripture references (3.7.1), tags (4.17.1), chapters (3.22.1) and cross-references (3.9.1). The regeneration is offered and never performed unasked: declining it leaves the recording exactly as it was, and the offer covers only those artefacts that exist at the time.
 - ✅ **3.5.7** The transcript records the language it was transcribed in. That language is currently pinned to English rather than detected, because the monolingual model is the more accurate one for a library that is entirely English. Detection returns as a requirement when non-English teachings do, and the field is already there to hold the answer.
 - ✅ **3.5.8** If transcription fails, the recording is flagged for admin attention (3.19.4) rather than proceeding to downstream generation on bad input. If it succeeds but comes back below the accepted confidence threshold, the transcript is still written and still readable — so an admin can judge it and correct it (3.5.5) — but the pipeline halts there and is flagged, and nothing downstream is generated until an admin re-runs the step on words a human has accepted.
 - ✅ **3.5.9** Each segment carries the transcription provider's anonymous speaker index where one was returned. It is an index and never a name: nothing in the product resolves it to a person, and the same voice is not the same index across two recordings. It is not editable, and a segment the provider attributes to nobody carries none.
@@ -163,6 +163,7 @@ It is built as a Progressive Web App on a single codebase, reachable from any br
 - 📝 **3.7.7** Members can find teachings by scripture citation through search (3.10.5).
 - ✅ **3.7.8** A teaching in which no scripture is found still reaches the review queue holding an empty list, so an admin confirms that it cites none rather than the item never arriving. "Reviewed and found none" is a different fact from "nobody has looked yet", and the empty item is what makes 3.7.2's manual addition reachable for a teaching the automatic suggestion missed entirely.
 - ✅ **3.7.9** Verse text is drawn from one free-to-use translation, named in deployment configuration rather than in code. The product holds one translation at a time and offers a member no choice between translations; the translation in use is named wherever its verse text is read, so nobody has to guess which words they are looking at.
+- ✅ **3.7.10** A reference carries the position in the recording where the passage is cited, which is what scopes a citation to the chapter it falls in (3.22.14) and what will later let a member reach the moment it was spoken. It is optional: a reference an admin added by hand (3.7.2), or one the transcript gave no position for, carries none and belongs to the recording rather than to any chapter.
 
 ### 📝 3.8 Mind maps
 
@@ -213,10 +214,10 @@ It is built as a Progressive Web App on a single codebase, reachable from any br
 - 📝 **3.10.1** A single search entry point queries the entire library from anywhere in the app.
 - 📝 **3.10.2** Search matches on meaning, not only literal keywords: a member searching for a concept finds teachings that discuss it without using their exact words.
 - 📝 **3.10.3** Results return specific segments with timestamps, not only whole recordings, so a member lands on the moment rather than the hour.
-- 📝 **3.10.4** Search covers recording titles and descriptions, transcripts (3.5), published summaries (3.6.7), topics and tags (4.7), scripture references (3.7) and series (3.3).
+- 📝 **3.10.4** Search covers recording titles and descriptions, transcripts (3.5), published summaries (3.6.7), topics and tags (4.7), scripture references (3.7), chapter titles and summaries (3.22) and series (3.3).
 - 📝 **3.10.5** Members can search by scripture citation and find every teaching covering that passage.
 - 📝 **3.10.6** Each result shows the matching passage in context, with its source recording, series and timestamp.
-- 📝 **3.10.7** Selecting a result opens the recording at the matched timestamp.
+- 📝 **3.10.7** Selecting a result opens the recording at the matched timestamp. A result that matched a chapter's title or summary opens that chapter's page instead (3.22.13).
 - 📝 **3.10.8** Results can be filtered by series, date range, topic and scripture book.
 - 📝 **3.10.9** Search respects visibility: a member's results include all published content plus their own private notes (3.12.3) and personal mind maps (3.8.5), and never include another member's private content or any unpublished draft.
 - 📝 **3.10.10** Members can restrict a search to their own notes and mind maps, to find something they know they wrote.
@@ -412,7 +413,7 @@ It is built as a Progressive Web App on a single codebase, reachable from any br
 
 - 📝 **3.18.1** Downloaded recordings play offline with full speed control (3.2.4) and resume position (3.2.5).
 - 📝 **3.18.2** Mind maps are viewable offline (3.8).
-- 📝 **3.18.3** Published summaries (3.6) and scripture references (3.7) attached to downloaded recordings are available offline.
+- 📝 **3.18.3** Published summaries (3.6), scripture references (3.7) and chapters (3.22) attached to downloaded recordings are available offline. A downloaded recording carries every chapter of it: a chapter is a span of the same audio rather than a file of its own, so there is nothing to download separately and nothing to download twice.
 - 📝 **3.18.4** Timestamp notes on downloaded recordings are readable offline.
 
 **Downloading**
@@ -456,6 +457,7 @@ It is built as a Progressive Web App on a single codebase, reachable from any br
 - 📝 **3.19.11** External publishing status and queues (3.20.6).
 - 📝 **3.19.12** SOS oversight: view open signals, close them, remove them (3.16.9, 3.16.11).
 - ✅ **3.19.13** Every automated step records what it cost to run — provider, model, billed quantity, spend and the provider's own request id — against the recording that caused it, so the running cost of the library is measured rather than estimated.
+- ✅ **3.19.14** Chapter editing on a recording — retitling, rewriting a summary, moving a boundary, splitting and merging (3.22.7). It is not an entry in the Pending Reviews queue, because chapters carry no gate of their own (3.22.6).
 
 ### 📝 3.20 External distribution
 
@@ -486,7 +488,7 @@ It is built as a Progressive Web App on a single codebase, reachable from any br
 | 2    | Upload recording                                                    | Admin / Contributor | 3.2.1            |
 | 3    | Audio processing: noise reduction, voice enhancement, normalisation | Automated           | 3.4              |
 | 4    | Transcription                                                       | Automated           | 3.5              |
-| 5    | Summary, scripture references and tags generated as drafts          | Automated           | 3.6, 3.7, 4.17.1 |
+| 5    | Summary, scripture references and tags drafted; chapters generated  | Automated           | 3.6, 3.7, 3.22, 4.17.1 |
 | 6    | Mind map generated                                                  | Automated           | 3.8.1            |
 | 7    | Cross-references computed against the existing library              | Automated           | 3.9.6            |
 | 8    | Metadata, summary and references reviewed and approved              | Admin               | 4.17.2           |
@@ -509,11 +511,46 @@ It is built as a Progressive Web App on a single codebase, reachable from any br
 #### 📝 3.21.3 Back-catalogue processing
 
 - 📝 **3.21.3.1** Historical teachings can be uploaded in bulk rather than one at a time.
-- 📝 **3.21.3.2** Bulk-uploaded recordings run through the same pipeline: processing, transcription, summary, scripture references, tags, mind map and cross-referencing.
+- 📝 **3.21.3.2** Bulk-uploaded recordings run through the same pipeline: processing, transcription, summary, scripture references, tags, chapters, mind map and cross-referencing.
 - 📝 **3.21.3.3** Batch processing is rate-limited and runs in the background so it does not delay the current week's upload.
 - 📝 **3.21.3.4** AI populates all metadata fields in bulk, and an admin reviews them through the Pending Reviews queue (3.19.2) rather than opening each recording individually.
 - 📝 **3.21.3.5** An admin can approve a batch of reviewed recordings in one action.
 - 📝 **3.21.3.6** Back-catalogue recordings can be assigned to series in bulk.
+
+### ✅ 3.22 Chapters
+
+*A ninety-minute teaching moves through several themes. Chapters name them, so a member can find the part they came back for — and see everything the product holds about that part in one place.*
+
+**Functional requirements**
+
+- ✅ **3.22.1** Every recording is divided into chapters — named spans of the teaching — generated automatically from the transcript (3.5) as its own step in the pipeline (3.21.1).
+- ✅ **3.22.2** Chapters tile the recording exactly: the first begins at the start of the audio, each one ends where the next begins, and the last ends at the end. There are no gaps and no overlaps. That is what makes "the chapter playing now" always answerable, and what puts every note, every citation and every transcript line in exactly one chapter rather than in none or in two.
+- ✅ **3.22.3** A chapter carries a title and one short summary, both AI-generated and both editable by an Admin or Contributor. It carries no artwork of its own: a chapter is shown under the cover of the recording it belongs to (3.3.3), because a chapter is part of a teaching rather than a second thing to brand.
+- ✅ **3.22.4** Chapters are cut where the teaching turns, at a length in the range of fifteen to twenty-five minutes. A recording too short to hold two of them gets none, and every surface that would show chapters leaves them out rather than offering a single row that is the whole teaching.
+- ✅ **3.22.5** A chapter boundary falls on the start of a transcript segment (3.5.2), never inside one. No chapter opens half a sentence in, and the lines a chapter contains are exact rather than rounded.
+- ✅ **3.22.6** Chapters have no review gate of their own. They become visible with the recording that carries them, exactly as the AI-suggested description does (3.6.13) — nothing reaches a member early, because the recording's own publication (3.2.2) is the gate they pass. This is not an exception to 4.17.3: a chapter cannot be published or withdrawn independently of the teaching it divides, so a second gate would be a second answer to a question 3.2.2 already answers.
+- ✅ **3.22.7** Admins and Contributors edit chapters in place on the recording: retitle one, rewrite its summary, move a boundary, split a chapter in two, or merge two adjacent ones. A boundary is one thing shared by the pair either side of it — moving it ends one chapter and starts the next in a single action — so the tiling at 3.22.2 cannot be broken by editing.
+- ✅ **3.22.8** Re-running chapter generation on a published recording asks for confirmation first, naming what it discards — every title, summary and boundary a human has changed — and then replaces what members are seeing. It is the second automated step that destroys human work, and it is confirmed for the same reason re-transcribing is (3.21.2.7).
+- ✅ **3.22.9** A run either replaces the whole list or leaves the previous one standing. The tiling is the artefact, and half of one is not a smaller artefact — so a failed or interrupted generation flags the recording (3.21.2.3, 3.21.2.6) and changes nothing a member can see.
+
+*On the recording page*
+
+- ✅ **3.22.10** The recording page carries a Chapters tab alongside Scripture, Notes and Transcript, listing every chapter in order — its number, its title and the time it starts. A recording with no chapters (3.22.4) does not show the tab at all, which is the line the page already draws for a teaching that cites no scripture.
+- ✅ **3.22.11** The list carries a search field that filters it by chapter title and summary as the member types. It searches the chapters of the teaching in front of them and nothing else; searching the library is 3.10.
+- ✅ **3.22.12** Selecting a chapter's row opens that chapter's page and does not start playback — a member who tapped a chapter has not asked for sound (3.2.12, 3.5.4). Each row also carries a play control, which seeks to the chapter's start and plays.
+
+*The chapter page*
+
+- ✅ **3.22.13** Each chapter has a page of its own, showing its title and summary under the recording's cover, with the recording's tabs beside them — Scripture, Notes and Transcript — each scoped to that chapter's span. It is the recording page read through one theme, and it offers a route back to the recording it came from.
+- ✅ **3.22.14** Scoped means: a note (3.12) belongs to the chapter its timestamp falls in; a scripture reference belongs to the chapter its anchor falls in (3.7.10); the transcript shows that chapter's lines and stops at its boundaries. Nothing appears under two chapters, and nothing scoped falls outside every one — which is 3.22.2 doing its work.
+- ✅ **3.22.15** A member writing a note from a chapter page anchors it to the playback position, exactly as everywhere else (3.12.1). A chapter is a lens over member content, never its owner — which is why moving a boundary or regenerating the list can never orphan a note.
+
+*While listening*
+
+- ✅ **3.22.16** The docked transport (3.2.14) names the recording playing and, beneath it, the chapter currently playing, beside the cover. A recording with no chapters shows the series name on that second line, which is what it held before.
+- ✅ **3.22.17** The progress track marks every chapter boundary, distinguishable from the note markers already on it (3.12.12): chapters divide the track, notes sit on it.
+- ✅ **3.22.18** Scrubbing the track (3.2.9) names the chapter under the thumb alongside the position, so a member dragging toward a part of the teaching sees what they are dragging into rather than a timecode alone. Where a pointer can hover, hovering shows the same thing.
+- ✅ **3.22.19** The expanded now-playing view (3.2.15) names the chapter playing on the same footing as the recording.
 
 ## 4. Data & metadata definitions
 
@@ -543,7 +580,7 @@ It is built as a Progressive Web App on a single codebase, reachable from any br
 | Scripture references | AI-suggested, admin-editable | Structured citations (3.7.3)                                                                                                                                          |
 | Date recorded        | Admin-set                    | Primary sort key (3.3.1)                                                                                                                                              |
 | Series               | Admin-set                    | Optional (3.3.9)                                                                                                                                                      |
-| Duration             | Not stored                   | Read from the media by the player at playback time. Nothing inspects the file on upload, so no list shows a running time and no progress is expressed as a percentage |
+| Duration             | Auto-derived                 | The end of the last transcript segment (3.5.2), which is also where the last chapter ends (3.22.2). Nothing inspects the audio file on upload, so an untranscribed recording has no length the product knows, no list shows a running time, and no progress is expressed as a percentage |
 | Publication status   | Admin-set                    | Draft or published (3.2.2, 3.2.11)                                                                                                                                    |
 | Original audio       | Auto-retained                | Unmodified upload, held in object storage that is never publicly addressable and reachable only through a signed URL (3.4.9, 3.2.13)                                  |
 | Processed audio      | Auto-generated               | Output of 3.4. Until that step exists, the original is what is streamed                                                                                               |
@@ -588,6 +625,7 @@ It is built as a Progressive Web App on a single codebase, reachable from any br
 | :------------------------- | :--------------------------- | :------------------------------------------------------------------------ |
 | Book, chapter, verse range | AI-suggested, admin-editable | Structured, not free text (3.7.3)                                         |
 | Source recording           | Auto-set                     | Which teaching cites it                                                   |
+| Anchor                     | AI-suggested, admin-editable | Where in the recording the passage is cited; optional (3.7.10). What scopes a citation to a chapter (3.22.14) |
 | Origin                     | Auto-set                     | Whether the machine proposed this reference or an admin added it (4.17.5) |
 | Edited by admin            | Auto-set                     | Whether an admin changed it before approving (4.17.5)                     |
 
@@ -728,6 +766,21 @@ Mind maps carry no title: the source recording or video title labels them in the
 | Provider metadata             | Auto-set | Model, billed quantity, spend and the provider's request id (3.19.13)                                           |
 | Correlation id                | Auto-set | Ties the job back to the request that caused it (§6, Auditability)                                             |
 
+### 4.19 Chapter
+
+| Field            | Set by                       | Notes                                                                                                        |
+| :--------------- | :--------------------------- | :----------------------------------------------------------------------------------------------------------- |
+| Source recording | Auto-set                     | Which teaching this chapter divides                                                                          |
+| Position         | Auto-set                     | Order within the recording, and the number the list shows (3.22.10)                                          |
+| Start            | AI-generated, admin-editable | Offset from the beginning of the recording, always on a transcript segment boundary (3.22.5)                 |
+| End              | Not stored                   | The next chapter's start, and for the last chapter the end of the transcript. A gap or an overlap is not representable (3.22.2) |
+| Title            | AI-generated, admin-editable | 3.22.3                                                                                                       |
+| Summary          | AI-generated, admin-editable | One short paragraph, plain text with line breaks                                                             |
+| Generated by     | Auto-set                     | Which model, which model version and which prompt version produced the list (4.17.5)                         |
+| Edited by admin  | Auto-set                     | Whether a human changed this chapter's title, summary or start (4.17.5)                                      |
+
+A chapter carries no publication status of its own, for the reason 3.22.6 gives: it becomes visible with the recording that carries it, so a status here would be a second answer to a question the recording's own publication status (4.2) already answers. Nor does a chapter own any member content — a note or a citation belongs to it by where it sits, never by a pointer (3.22.15).
+
 ## 5. Platform & distribution
 
 ### 🔨 5.1 Progressive Web App
@@ -826,3 +879,4 @@ Mind maps carry no title: the source recording or video title labels them in the
 ### 7.5 Deliberately deferred, with a home
 
 - **7.5.1** Which embedding, video and text-to-speech providers are used is decided in the scope that first needs one, against measured output rather than in advance — project tdd 4.10 and 4.11 say why that deferral is cheap, and each provider sits behind an adapter narrow enough that choosing wrongly costs one file.
+- **7.5.2** Whether the podcast feed carries chapter markers (5.3.1) is decided in the scope that next touches external distribution. The feed format supports them and the product now holds the data (3.22), so it is a change to the feed generator and to nothing else — which is exactly why it can wait.

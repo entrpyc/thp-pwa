@@ -1,4 +1,9 @@
-import { findRecordingById, readPipeline, type PipelineStepRow } from '@thp/db';
+import {
+  countEditedChaptersByRecording,
+  findRecordingById,
+  readPipeline,
+  type PipelineStepRow,
+} from '@thp/db';
 import {
   NOT_STARTED,
   isPipelineStep,
@@ -39,7 +44,14 @@ import { logger } from '@/server/observability/logger';
  * re-sorted here or on the client.
  */
 export async function readPipelineStatus(actor: Actor): Promise<PipelineListPayload> {
-  const rows = await readPipeline();
+  /*
+   * Two reads, in parallel, because the second answers a different question about the same rows:
+   * how much human work re-running `generate_chapters` would discard
+   * ([3.22.8](docs/project/prd.md)). One grouped count for the whole library rather than one per
+   * teaching — the confirmation needs a number per row, and asking per row would be a query per
+   * teaching for a sentence nobody has pressed towards yet.
+   */
+  const [rows, edited] = await Promise.all([readPipeline(), countEditedChaptersByRecording()]);
 
   logger.info('pipeline.read', {
     actorId: actor.id,
@@ -54,6 +66,9 @@ export async function readPipelineStatus(actor: Actor): Promise<PipelineListPayl
       title: row.title,
       recordedAt: row.recordedAt,
       steps: row.steps.map(describeStep),
+      // A teaching with no edited chapters is absent from the map, and a missing key reads as none
+      // — which is what it is.
+      editedChapters: edited.get(row.recordingId) ?? 0,
     })),
   };
 }
