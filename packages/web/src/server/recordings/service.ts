@@ -231,7 +231,7 @@ export async function finaliseUpload(actor: Actor, body: unknown): Promise<Recor
  *    gate would ask.
  * 3. **Moving the date moves the recording in the library**, because the date recorded *is* the
  *    sort key ([3.3.1](docs/project/prd.md), [4.2](docs/project/prd.md)) — for the member library,
- *    for this console list, and for the oldest-first ordering inside a series
+ *    for this console list, and for the ordering inside a series
  *    ([3.3.4](docs/project/prd.md)). That is the point of being able to fix it, and it is why the
  *    correction is one write rather than a second date stored beside the first.
  *

@@ -165,7 +165,7 @@ beforeAll(async () => {
   ).id;
   await setSeriesArtwork(coveredSeriesId, COVER_KEY, handle);
 
-  // Out of insertion order on purpose, so "oldest recorded first" cannot pass by accident.
+  // Out of insertion order on purpose, so "newest recorded first" cannot pass by accident.
   await newRecording(MIDDLE_TITLE, '2026-02-15', seriesId, true);
   await newRecording(LAST_TITLE, '2026-06-04', seriesId, true);
   firstId = await newRecording(FIRST_TITLE, '2026-01-12', seriesId, true);
@@ -442,13 +442,14 @@ describe('one series at /series/[id]', () => {
       await expect.poll(() => rows.count(), { timeout: 30_000 }).toBe(3);
 
       const texts = await rows.allTextContents();
-      // Oldest recorded first, numbered from 01 — the reverse of the library, and deliberate.
-      expect(texts[0]).toContain('01.');
-      expect(texts[0]).toContain(FIRST_TITLE);
+      // Newest recorded first, as the library reads. The numbering still counts the study
+      // forwards, so it runs down the list: the oldest teaching is `01` wherever it is drawn.
+      expect(texts[0]).toContain('03.');
+      expect(texts[0]).toContain(LAST_TITLE);
       expect(texts[1]).toContain('02.');
       expect(texts[1]).toContain(MIDDLE_TITLE);
-      expect(texts[2]).toContain('03.');
-      expect(texts[2]).toContain(LAST_TITLE);
+      expect(texts[2]).toContain('01.');
+      expect(texts[2]).toContain(FIRST_TITLE);
 
       // The unpublished teaching in the same series is not a row at all.
       expect(texts.some((text) => text.includes(HIDDEN_TITLE))).toBe(false);
@@ -465,9 +466,10 @@ describe('one series at /series/[id]', () => {
       await expect.poll(() => rows.count(), { timeout: 30_000 }).toBe(3);
 
       const texts = await rows.allTextContents();
-      expect(texts[0]).toContain('Resume at 12:34');
+      // The started teaching is the oldest of the three, and therefore the last row now.
+      expect(texts[2]).toContain('Resume at 12:34');
       // No percentage and no bar: a percentage needs a total this epic does not store.
-      expect(texts[0]).not.toContain('%');
+      expect(texts[2]).not.toContain('%');
       expect(await page.getByRole('progressbar').count()).toBe(0);
       // An unstarted row prints the date recorded instead.
       expect(texts[1]).toContain('15 Feb 2026');

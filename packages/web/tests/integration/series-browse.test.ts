@@ -32,7 +32,7 @@ import { closeTestDatabase, signedInAccount, type TestAccount } from '../support
  * 1. A member sees series holding at least one published recording, and no other.
  * 2. Count and date range are over published recordings only, and they move when a recording is
  *    published or taken back down.
- * 3. A series opens oldest-recorded first, and an unpublished recording in it is simply absent.
+ * 3. A series opens newest-recorded first, and an unpublished recording in it is simply absent.
  * 4. The progress on a row is the requesting member's and never anybody else's.
  */
 
@@ -120,7 +120,7 @@ beforeAll(async () => {
   await setRecordingDescription(sharedId, 'What the live teaching is about.', handle);
   await newRecording(`Hidden only ${RUN}`, '2026-04-11', hiddenSeriesId, false);
 
-  // Deliberately out of insertion order, so "oldest recorded first" cannot pass by accident.
+  // Deliberately out of insertion order, so "newest recorded first" cannot pass by accident.
   middleId = await newRecording(`Ordered middle ${RUN}`, '2026-02-15', orderedSeriesId, true);
   lastId = await newRecording(`Ordered last ${RUN}`, '2026-06-04', orderedSeriesId, true);
   firstId = await newRecording(`Ordered first ${RUN}`, '2026-01-12', orderedSeriesId, true);
@@ -218,21 +218,21 @@ describe('a series carries its count and date range, over published recordings o
 });
 
 describe('one series, opened', () => {
-  it('lists its published recordings oldest recorded first', async () => {
+  it('lists its published recordings newest recorded first', async () => {
     const { status, body } = await get<SeriesPayload>(
       memberSeriesPath(orderedSeriesId),
       memberCookie,
     );
     expect(status).toBe(200);
 
-    expect(body.recordings.map((one) => one.id)).toEqual([firstId, middleId, lastId]);
+    expect(body.recordings.map((one) => one.id)).toEqual([lastId, middleId, firstId]);
     expect(body.recordings.map((one) => one.recordedAt)).toEqual([
-      '2026-01-12',
-      '2026-02-15',
       '2026-06-04',
+      '2026-02-15',
+      '2026-01-12',
     ]);
-    // Forwards, and therefore the opposite of the library — which orders the same rows the other
-    // way. Both are correct: a library is newest-first, a study is read forwards.
+    // The same order the library gives these rows: newest recorded first, so the product has one
+    // answer to "what is most recent" wherever a member meets a list of teachings.
     expect(body.recordings.map((one) => one.title)).not.toContain(`Ordered unpublished ${RUN}`);
 
     expect(body.series.title).toBe(`Ordered series ${RUN}`);

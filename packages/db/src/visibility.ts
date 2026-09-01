@@ -345,11 +345,12 @@ export async function listVisibleSeries(
  * which is the whole of "and only their own" — two members reading the same series row get two
  * different positions out of one query and neither can see the other's.
  *
- * **Oldest recorded first**, the reverse of the library. Both orders are correct and they are
- * opposite: [3.3.1](docs/project/prd.md) makes newest-first the product's default reading and
- * [3.3.4](docs/project/prd.md) asks for chronological inside a series, because a study is read
- * forwards. There is no ordering column and no numbering here — the `01.`–`08.` the reference
- * draws is the row's position in this order, computed for display by whatever renders it.
+ * **Newest recorded first, the same order as the library** — [3.3.1](docs/project/prd.md) is the
+ * product's one answer to "what is most recent", and a series is no longer an exception to it: a
+ * member opening a study meets its latest teaching rather than scrolling to the foot for it.
+ * There is no ordering column and no numbering here — the `01.`–`08.` the reference draws is a
+ * recording's place in the study, which whatever renders it counts back from the length rather
+ * than off the top of this list.
  *
  * `null` covers "no such series" and "nothing in it you may see" alike, so the API does not report
  * which ids exist.
@@ -389,7 +390,7 @@ export async function findVisibleSeries(
         ? eq(recording.seriesId, id)
         : and(eq(recording.seriesId, id), isNotNull(recording.publishedAt)),
     )
-    .orderBy(asc(recording.recordedAt), asc(recording.createdAt));
+    .orderBy(desc(recording.recordedAt), desc(recording.createdAt));
 
   const recordings = rows as unknown as VisibleSeriesRecordingRow[];
 
@@ -405,8 +406,11 @@ export async function findVisibleSeries(
       description: row.description,
       artworkKey: row.artworkKey,
       recordingCount: recordings.length,
-      firstRecordedAt: recordings[0]?.recordedAt ?? null,
-      lastRecordedAt: recordings[recordings.length - 1]?.recordedAt ?? null,
+      // The rows are newest first, so the range reads off the ends the other way round: `first`
+      // and `last` mean the *study's* ends rather than the list's, and stay what the series
+      // listing's `min`/`max` answer for the same series.
+      firstRecordedAt: recordings[recordings.length - 1]?.recordedAt ?? null,
+      lastRecordedAt: recordings[0]?.recordedAt ?? null,
     },
     recordings,
   };

@@ -135,7 +135,7 @@ export interface SeriesRecordingView {
   readonly id: string;
   readonly title: string;
   readonly description: string | null;
-  /** `YYYY-MM-DD`. What the series orders by — oldest first, the reverse of the library. */
+  /** `YYYY-MM-DD`. What the series orders by — newest first, as the library does. */
   readonly recordedAt: string;
   readonly positionMs: number | null;
 }
@@ -148,12 +148,12 @@ export interface SeriesListPayload {
 /**
  * Payload of `GET /api/v1/series/{id}`.
  *
- * Recordings come back **oldest recorded first**, which is the opposite of the library's order and
- * is deliberate: [3.3.1](docs/project/prd.md) makes newest-first the product's default reading,
- * and [3.3.4](docs/project/prd.md) asks for chronological inside a series, because a study is read
- * forwards. The `01.`–`08.` numbering the reference draws is the row's position in this order,
- * computed for display and stored nowhere — there is no ordering column, because reordering is
- * deferred.
+ * Recordings come back **newest recorded first**, the same order as the library:
+ * [3.3.1](docs/project/prd.md) is the product's one answer to "what is most recent" and a series
+ * is no exception to it. The `01.`–`08.` numbering the reference draws is a recording's place in
+ * the *study*, so it counts down this list rather than up — a teaching's number is a fact about
+ * the study and does not move because the list is read from the other end. It is computed for
+ * display and stored nowhere: there is no ordering column, because reordering is deferred.
  */
 export interface SeriesPayload {
   readonly series: SeriesView;

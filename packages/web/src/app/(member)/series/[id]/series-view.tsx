@@ -33,11 +33,12 @@ import styles from '../../screens.module.css';
  * - **`2h 14m total` is the date range**, which is what [3.3.5](docs/project/prd.md) actually asks
  *   for. See {@link seriesMeta}.
  *
- * **The rows read forwards.** Oldest recorded first, numbered `01`…`NN` — the opposite of the
- * library's newest-first, and both are correct: [3.3.1](docs/project/prd.md) makes newest-first the
- * product's default reading and [3.3.4](docs/project/prd.md) asks for chronological inside a
- * series, because a study is read forwards. The number is the row's position in the order the API
- * sent and is stored nowhere.
+ * **The rows read newest recorded first**, as the library's do — [3.3.1](docs/project/prd.md) is
+ * the product's one answer to "what is most recent" and a series is no exception to it. **The
+ * numbering still counts the study forwards**, so the list runs `NN`…`01` downwards: a teaching's
+ * number is its place in the study, and it would mean nothing if it moved because the list is read
+ * from the other end. The number is computed from the row's position in the order the API sent and
+ * is stored nowhere.
  *
  * **Progress is read here and never written.** A started row prints *Resume at 12:34* where the
  * reference prints a duration; an unstarted one prints the date it was recorded. There is no
@@ -52,9 +53,15 @@ function formatDay(iso: string): string {
   return Number.isNaN(parsed.getTime()) ? iso : DAY.format(parsed);
 }
 
-/** `01`, `02` … `12`. Two digits, as the reference numbers them. */
-function position(index: number): string {
-  return String(index + 1).padStart(2, '0');
+/**
+ * `01`, `02` … `12`. Two digits, as the reference numbers them.
+ *
+ * Counted from the foot of the list rather than the top, because the API sends the rows newest
+ * first and the number is the recording's place in the study: the oldest is `01` wherever it is
+ * drawn.
+ */
+function position(index: number, total: number): string {
+  return String(total - index).padStart(2, '0');
 }
 
 export function SeriesScreen({ seriesId }: { seriesId: string }) {
@@ -136,7 +143,7 @@ export function SeriesScreen({ seriesId }: { seriesId: string }) {
               <li key={recording.id} className={styles.rowGroup}>
                 <Link className={styles.row} href={recordingPagePath(recording.id)}>
                   <span className={styles.rowNumber} aria-hidden="true">
-                    {position(index)}.
+                    {position(index, payload.recordings.length)}.
                   </span>
                   <span className={styles.rowText}>
                     <span className={styles.rowTitle}>{recording.title}</span>

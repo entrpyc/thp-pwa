@@ -11,7 +11,7 @@ export const dynamic = 'force-dynamic';
 /**
  * `/api/v1/series/{id}` — one series (Story 6).
  *
- * `GET` answers the series and the recordings in it, oldest recorded first, each carrying the
+ * `GET` answers the series and the recordings in it, newest recorded first, each carrying the
  * requesting member's own position and nobody else's. **A series holding nothing this caller may
  * see answers exactly as one that never existed**, so the API does not report which ids exist.
  *
