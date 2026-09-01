@@ -1,9 +1,12 @@
 import {
+  findRecordingById,
   findVisibleRecording,
   insertRecording,
   isUniqueViolation,
   listVisibleRecordings,
+  updateRecordingDetails,
   withTransaction,
+  type RecordingDetails,
   type RecordingRow,
   type VisibleRecordingRow,
 } from '@thp/db';
@@ -20,11 +23,13 @@ import {
   type CreateRecordingRequest,
   type RecordingSummary,
   type RecordingView,
+  type UpdateRecordingRequest,
   type UploadGrantPayload,
   type UploadGrantRequest,
 } from '@thp/shared';
 import { ApiError } from '@/server/api/errors';
 import { can, type Actor } from '@/server/auth/policy';
+import { audit } from '@/server/observability/audit';
 import { mintArtworkGrant } from '@/server/series/artwork-grant';
 import { queue } from '@/server/jobs/queue';
 import { UPLOAD_GRANT_SECONDS, mediaStore, mintOriginalKey } from '@thp/media';
@@ -206,6 +211,65 @@ export async function finaliseUpload(actor: Actor, body: unknown): Promise<Recor
   });
 
   return describeRecording(row);
+}
+
+/**
+ * **Correct what a teaching is called and when it was given** ([3.2.16](docs/project/prd.md)).
+ *
+ * The two fields the admin typed at the upload are the two fields they can fix afterwards, and the
+ * reasoning is entirely about what this does *not* touch:
+ *
+ * 1. **Two columns are written and no others.** The write itself is `updateRecordingDetails`, which
+ *    names `title` and `recorded_at` and nothing else — so the transcript, the summary and its own
+ *    gate, the chapters, the scripture references, the series, the jobs and every member's
+ *    `playback_progress` survive a correction as a property of the statement rather than of a
+ *    convention. Nothing is re-processed: a misheard title is not new audio (that is
+ *    [3.2.10](docs/project/prd.md), and it is a different control).
+ * 2. **Publication is untouched, in both directions.** Renaming a live teaching leaves it live and
+ *    members see the new title at once; renaming an unpublished one does not publish it. There is
+ *    no gate here to pass because [3.2.2](docs/project/prd.md) already answers the only question a
+ *    gate would ask.
+ * 3. **Moving the date moves the recording in the library**, because the date recorded *is* the
+ *    sort key ([3.3.1](docs/project/prd.md), [4.2](docs/project/prd.md)) — for the member library,
+ *    for this console list, and for the oldest-first ordering inside a series
+ *    ([3.3.4](docs/project/prd.md)). That is the point of being able to fix it, and it is why the
+ *    correction is one write rather than a second date stored beside the first.
+ *
+ * The row is read back through the visibility query rather than described from what was written, so
+ * the console gets the same shape its list carries — series, summary and scripture included — and a
+ * saved row is not a second, thinner idea of what a recording is.
+ */
+export async function editRecording(
+  actor: Actor,
+  id: string,
+  body: unknown,
+): Promise<RecordingSummary> {
+  const requested = parseUpdateRequest(body);
+
+  // Looked up before the write so an id that does not exist is a refusal rather than an update of
+  // no rows silently reported as success. `updateRecordingDetails` answers `null` for the same
+  // case, and both are checked: the lookup gives the honest refusal, the `null` closes the race.
+  if ((await findRecordingById(id)) === null) throw notFound();
+
+  const row = await updateRecordingDetails(id, requested);
+  if (row === null) throw notFound();
+
+  logger.info('recording.edit', {
+    ...audit(actor, 'recording.edit', `recording:${id}`),
+    title: row.title,
+    recordedAt: row.recordedAt,
+  });
+
+  // Unpublished rows included: an admin correcting a draft is reading their own console, and the
+  // row they just saved has to come back whether or not it is live.
+  const saved = await findVisibleRecording(id, { includeUnpublished: true });
+  if (saved === null) throw notFound();
+
+  return await describeForOperator(saved);
+}
+
+function notFound(): ApiError {
+  return ApiError.notFound('There is no recording with that id.');
 }
 
 /**
@@ -417,6 +481,20 @@ function parseCreateRequest(body: unknown): ParsedCreateRequest {
   if (typeof key !== 'string' || key.trim() === '' || key.length > MAX_FIELD_LENGTH) {
     throw ApiError.invalidInput('Name the upload this recording is for.');
   }
+
+  return { key: key.trim(), ...parseDetails({ title, recordedAt }) };
+}
+
+/**
+ * The title and the date recorded, checked once for the two requests that carry them.
+ *
+ * **One reading of the two fields, so the upload form and the edit form are refused in the same
+ * words.** A second copy of these rules beside the edit route is how "give the recording a title"
+ * quietly becomes two different sentences depending on which form you were looking at.
+ */
+function parseDetails(fields: { title: unknown; recordedAt: unknown }): RecordingDetails {
+  const { title, recordedAt } = fields;
+
   // Non-empty, and short enough that we are willing to read it. There is deliberately **no
   // title-length rule** beyond the generic field cap every route applies: the acceptance criteria
   // name the empty and absent cases and nothing else, and a maximum nobody asked for is a rule
@@ -430,5 +508,20 @@ function parseCreateRequest(body: unknown): ParsedCreateRequest {
     throw ApiError.invalidInput('Give the date it was recorded, as YYYY-MM-DD.');
   }
 
-  return { key: key.trim(), title: title.trim(), recordedAt };
+  return { title: title.trim(), recordedAt };
+}
+
+/**
+ * The edit body: the same two fields, and **nothing else is read**.
+ *
+ * A request that also carries a key, a `publishedAt` or a `seriesId` is not refused for carrying
+ * them — it simply does not get them written, because this parser never looks. Refusing would
+ * invent a rule nobody asked for; reading them would give a second way to publish a teaching.
+ */
+function parseUpdateRequest(body: unknown): RecordingDetails {
+  if (typeof body !== 'object' || body === null) {
+    throw ApiError.invalidInput('Send a JSON object with a title and the date recorded.');
+  }
+  const { title, recordedAt } = body as Partial<UpdateRecordingRequest>;
+  return parseDetails({ title, recordedAt });
 }

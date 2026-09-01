@@ -15,6 +15,7 @@ import {
   describeBytes,
   extensionOf,
   isAcceptedAudioExtension,
+  recordingPath,
   recordingPublishPath,
   recordingSeriesPath,
   recordingSummaryPath,
@@ -369,7 +370,7 @@ export function RecordingsPanel() {
 }
 
 /** What a row is doing, so the buttons can say it and two presses cannot overlap. */
-type RowBusy = 'publish' | 'unpublish' | 'summary' | 'summaryDown' | 'series' | null;
+type RowBusy = 'publish' | 'unpublish' | 'summary' | 'summaryDown' | 'series' | 'details' | null;
 
 /**
  * One recording, and everything an admin does to it after the pipeline has finished.
@@ -405,6 +406,17 @@ function RecordingRow({
   const [confirming, setConfirming] = useState(false);
   const [editing, setEditing] = useState(false);
   const [draft, setDraft] = useState(entry.summary ?? '');
+  /**
+   * The title-and-date form, and the two fields it holds ([3.2.16](docs/project/prd.md)).
+   *
+   * Closed until asked for, and seeded from the row **at the moment it is opened** rather than held
+   * in step with `entry`: a reload that arrives while somebody is typing must not overwrite what
+   * they typed. Cancelling discards the drafts and leaves the row exactly as the API last said it
+   * is, which is why there is no third state for "edited but not saved".
+   */
+  const [editingDetails, setEditingDetails] = useState(false);
+  const [titleDraft, setTitleDraft] = useState(entry.title);
+  const [dateDraft, setDateDraft] = useState(entry.recordedAt);
 
   const live = entry.publishedAt !== null;
   // The payload only ever carries a summary that is published *and* on a published recording, so
@@ -419,6 +431,10 @@ function RecordingRow({
     try {
       await apiFetch(path, { credentials: 'include', ...init });
       setEditing(false);
+      // Only the form that was saved closes. A press on *Publish* while the details form is open
+      // leaves it open with what was typed still in it — the press was about the gate, not about
+      // the title.
+      if (what === 'details') setEditingDetails(false);
       await onChanged();
     } catch (caught) {
       // Refused: the press cost nothing else, and what was typed stays where it is.
@@ -480,6 +496,27 @@ function RecordingRow({
         </label>
 
         {/*
+          **Correcting the title and the date recorded** (3.2.16). Offered on every row rather than
+          only on unpublished ones: a title misheard from a service is discovered *after* people
+          start listening as often as before, and taking the teaching down to fix a spelling would
+          be an outage in exchange for a typo.
+        */}
+        <button
+          className={styles.action}
+          type="button"
+          disabled={busy !== null}
+          onClick={() => {
+            // Seeded from the row at the moment of opening, so a reload mid-typing cannot
+            // overwrite what is in the fields.
+            setTitleDraft(entry.title);
+            setDateDraft(entry.recordedAt);
+            setEditingDetails(!editingDetails);
+          }}
+        >
+          {editingDetails ? 'Cancel edit' : 'Edit details'}
+        </button>
+
+        {/*
           Into the queue, filtered to this recording — 3.6.4's second entry point, and the reason no
           per-recording admin page had to exist for it.
         */}
@@ -536,6 +573,66 @@ function RecordingRow({
           </>
         ) : null}
       </div>
+
+      {/*
+        The two fields the upload form asked for, asked again in the same order and with the same
+        labels — a console that calls it *Date recorded* when uploading and *Recorded on* when
+        correcting has two names for one column.
+
+        One save for both, because the API takes both together: "which of these did you mean to
+        change" is a question a two-field form does not raise. What is **not** here is as
+        deliberate: no key, no publish state, no series — each of those has its own control on this
+        row, and a form that quietly carried them would be a second way to press them.
+      */}
+      {editingDetails ? (
+        <div className={styles.detailsEditor}>
+          <div className={styles.field}>
+            <label className={styles.label} htmlFor={`title-${entry.id}`}>
+              Title
+            </label>
+            <input
+              className={styles.input}
+              id={`title-${entry.id}`}
+              name="title"
+              type="text"
+              autoComplete="off"
+              disabled={busy !== null}
+              value={titleDraft}
+              onChange={(event) => setTitleDraft(event.target.value)}
+            />
+          </div>
+
+          <div className={styles.fieldTight}>
+            <label className={styles.label} htmlFor={`recorded-at-${entry.id}`}>
+              Date recorded
+            </label>
+            <input
+              className={styles.input}
+              id={`recorded-at-${entry.id}`}
+              name="recordedAt"
+              type="date"
+              disabled={busy !== null}
+              value={dateDraft}
+              onChange={(event) => setDateDraft(event.target.value)}
+            />
+          </div>
+
+          <button
+            className={styles.submit}
+            type="button"
+            disabled={busy !== null}
+            onClick={() =>
+              void send('details', recordingPath(entry.id), {
+                method: 'PATCH',
+                headers: { 'content-type': 'application/json' },
+                body: JSON.stringify({ title: titleDraft, recordedAt: dateDraft }),
+              })
+            }
+          >
+            {busy === 'details' ? 'Saving…' : 'Save details'}
+          </button>
+        </div>
+      ) : null}
 
       {editing ? (
         <div className={styles.summaryEditor}>

@@ -236,6 +236,24 @@
 }
 
 /*
+ * The title-and-date form on a row (3.2.16).
+ *
+ * The same full-width break-out `.summaryEditor` takes — `flex: 1 1 100%` drops it onto its own
+ * line under the controls — but laid out as a row rather than a column, because it is the *upload*
+ * form's two fields again and they read the same way there: a wide title, a tight date beside it,
+ * the save at the end. `align-items: flex-end` is what keeps the button's baseline on the inputs'
+ * rather than on their labels'.
+ */
+.detailsEditor {
+  flex: 1 1 100%;
+  display: flex;
+  flex-wrap: wrap;
+  align-items: flex-end;
+  gap: var(--space-3);
+  min-width: 0;
+}
+
+/*
  * The series picker on each row (Story 6). A native `<select>` for the same reason the file
  * control is native: it is the version a phone's own picker understands, and this screen is used
  * standing up after a service. It takes the field recipe — the raised surface, the hairline and
@@ -285,8 +303,15 @@
 
   .field,
   .fieldTight,
-  .summaryEditor {
+  .summaryEditor,
+  .detailsEditor {
     flex: 0 0 auto;
+  }
+
+  /* The row-level form collapses with everything else: two fields and a save, stacked. */
+  .detailsEditor {
+    flex-direction: column;
+    align-items: stretch;
   }
 
   .submit {

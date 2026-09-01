@@ -264,6 +264,31 @@ export interface CreateRecordingRequest {
 }
 
 /**
+ * Body of `PATCH /api/v1/recordings/{id}` — correcting what a teaching is called and when it was
+ * given ([3.2.16](docs/project/prd.md)).
+ *
+ * **Both fields together rather than a partial patch of one**, exactly as `UpdateSeriesRequest`
+ * takes both of its: the console edits a recording in one form with two inputs, and "which of
+ * these did you mean to change" is a question a two-field form does not raise. Sending the same
+ * body twice leaves the same two columns saying the same thing.
+ *
+ * The same two fields the upload form asked for, under the same rules — a title that is not blank,
+ * and a date the calendar actually has. What the request may **not** carry is anything else about
+ * the recording: the key is minted at upload and never re-pointed, and publication, series,
+ * description and summary each have a control of their own.
+ */
+export interface UpdateRecordingRequest {
+  readonly title: string;
+  /** `YYYY-MM-DD`. The date recorded, not a timestamp — it is the list's sort key. */
+  readonly recordedAt: string;
+}
+
+/** Payload of `PATCH /api/v1/recordings/{id}`, as the console reads the row back. */
+export interface UpdateRecordingPayload {
+  readonly recording: RecordingSummary;
+}
+
+/**
  * The series a recording belongs to, as it travels **on the recording itself** (Story 6).
  *
  * Declared here rather than in `series.ts` because it is a field of {@link RecordingView} and

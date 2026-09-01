@@ -32,6 +32,7 @@ export const rules: PolicyRules = {
   'profile.update': { roles: { admin: true, member: true }, requiresOwnership: true },
   'recording.upload': { roles: { admin: true, member: false } },
   'recording.list': { roles: { admin: true, member: false } },
+  'recording.edit': { roles: { admin: true, member: false } },
   'pipeline.read': { roles: { admin: true, member: false } },
   'pipeline.rerun': { roles: { admin: true, member: false } },
   'review.list': { roles: { admin: true, member: false } },

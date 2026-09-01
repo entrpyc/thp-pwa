@@ -115,7 +115,9 @@ export {
   insertRecording,
   setRecordingDescription,
   setRecordingPublication,
+  updateRecordingDetails,
   type NewRecording,
+  type RecordingDetails,
   type RecordingRow,
 } from './recordings';
 export {

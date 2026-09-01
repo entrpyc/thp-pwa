@@ -74,6 +74,20 @@ export const POLICY_ACTIONS = [
   'recording.upload',
   'recording.list',
   /**
+   * **Correcting the two things an admin typed at the upload** ([3.2.16](docs/project/prd.md)) —
+   * the title and the date recorded.
+   *
+   * Its own action rather than a widening of `recording.upload`, and the split is the one every
+   * pair above takes: putting a teaching into the product and correcting what an existing one is
+   * called are the same question only while there are two roles. The day a Contributor may fix a
+   * misheard title without being able to add a teaching — or the reverse — is the day it stops
+   * being decoration.
+   *
+   * Deliberately **not** `recording.publish`: renaming a live teaching leaves it live, and moving
+   * its date changes where it sits in the library rather than whether anybody may see it.
+   */
+  'recording.edit',
+  /**
    * The two pipeline actions (Story 2 Ticket 04–05), split for the reason every pair above is:
    * "who may see what the pipeline is doing" and "who may make it do it again" are the same
    * question only while there are two roles. Reading is a console panel; re-running spends money
@@ -286,6 +300,9 @@ const RULES: PolicyRules = {
   // epic; nothing here is member-visible until Story 3 publishes it.
   'recording.upload': { roles: { admin: true, member: false } },
   'recording.list': { roles: { admin: true, member: false } },
+  // Correcting the title and the date recorded. Operator work: a member reads both fields and
+  // writes neither, and a display name is the only text in this product its subject may change.
+  'recording.edit': { roles: { admin: true, member: false } },
   // Reading what the pipeline is doing, and running one step of it again. Operator work in this
   // epic; a member has nothing to see here and nothing to press.
   'pipeline.read': { roles: { admin: true, member: false } },

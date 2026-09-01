@@ -132,3 +132,39 @@ export async function setRecordingDescription(
     .returning();
   return (rows[0] as RecordingRow | undefined) ?? null;
 }
+
+/**
+ * Correct what a recording is called and when it was recorded
+ * ([3.2.16](docs/project/prd.md)).
+ *
+ * **Two columns are written and no others.** Not the description, not the summary, not the
+ * transcript, not the series, not the publication state — and not `playback_progress`, which is
+ * keyed on `(user_id, recording_id)` and appears in no statement here. "Correcting a title loses
+ * nothing" is therefore a property of this one `set`, exactly as it is for
+ * {@link setRecordingSeries}.
+ *
+ * The date is a SQL `date` and travels as the `YYYY-MM-DD` string it was written as, so moving a
+ * recording in the library's ordering ([3.3.1](docs/project/prd.md)) is this write and nothing
+ * else.
+ *
+ * `null` back means there is no such recording, which the caller turns into `not_found`.
+ */
+export async function updateRecordingDetails(
+  id: string,
+  input: RecordingDetails,
+  executor: Executor = getDatabase(),
+): Promise<RecordingRow | null> {
+  const rows = await queryable(executor)
+    .update(recording)
+    .set({ title: input.title, recordedAt: input.recordedAt })
+    .where(eq(recording.id, id))
+    .returning();
+  return (rows[0] as RecordingRow | undefined) ?? null;
+}
+
+/** What an admin may correct after the upload: the two fields they typed at it. */
+export interface RecordingDetails {
+  readonly title: string;
+  /** `YYYY-MM-DD`. */
+  readonly recordedAt: string;
+}

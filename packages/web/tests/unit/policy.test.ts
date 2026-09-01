@@ -377,3 +377,51 @@ describe('setting a series cover is its own action, not more of series.update', 
     expect(can(null, 'series.artwork')).toBe(false);
   });
 });
+
+/**
+ * 3.2.16 — **correcting a title is its own action, and deliberately not one of the three it sits
+ * between.**
+ *
+ * The assertion worth having is the separation rather than the permission: `recording.edit` passes
+ * every check below identically to `recording.upload`, `recording.publish` and `recording.list`,
+ * because all four are admin-only today. What a test can pin is that there are *four* entries — the
+ * day a Contributor may fix a misheard title without being able to add a teaching or take one live,
+ * a widened `recording.upload` would have quietly given all three away together.
+ */
+describe('correcting a recording’s title and date is its own action', () => {
+  it('permits recording.edit for an admin and refuses it for a member', () => {
+    expect(can(actorWith(ROLE.admin), 'recording.edit')).toBe(true);
+    expect(can(actorWith(ROLE.member), 'recording.edit')).toBe(false);
+    expect(can(null, 'recording.edit')).toBe(false);
+  });
+
+  it('is a real entry in the table, distinct from upload, publish and list', () => {
+    expect(isPolicyAction('recording.edit')).toBe(true);
+    expect(POLICY_ACTIONS.filter((action) => action === 'recording.edit')).toHaveLength(1);
+    for (const other of ['recording.upload', 'recording.list', 'recording.publish'] as const) {
+      expect(other).not.toBe('recording.edit');
+      expect(isPolicyAction(other)).toBe(true);
+    }
+  });
+
+  it('is not owned — an admin edits any recording, not only ones they uploaded', () => {
+    // Every other "may I write this" in the product that is owned says so with `requiresOwnership`.
+    // A recording has no owner column at all, and an admin correcting a colleague's typo is the
+    // ordinary case rather than an exception.
+    expect(
+      can(actorWith(ROLE.admin), 'recording.edit', {
+        kind: 'recording',
+        id: 'r1',
+        ownerId: 'somebody-else',
+      }),
+    ).toBe(true);
+  });
+
+  it('grants nothing to the nearby names nobody wrote a rule for', () => {
+    for (const role of ROLES) {
+      expect(can(actorWith(role), 'recording.rename'), role).toBe(false);
+      expect(can(actorWith(role), 'recording.update'), role).toBe(false);
+      expect(can(actorWith(role), 'recording.delete'), role).toBe(false);
+    }
+  });
+});
