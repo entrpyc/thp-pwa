@@ -58,6 +58,21 @@ const SECOND_TITLE = `Player second ${RUN}`;
 let coveredId: string;
 let coveredSeriesTitle: string;
 const COVERED_TITLE = `Player covered ${RUN}`;
+
+/**
+ * **A teaching of its own for the grant-recovery block.**
+ *
+ * Every other block here shares `recordingId`, which is fine because none of them cares where the
+ * teaching resumes. That one does: it seeks to a known second, notes the position, kills the URL and
+ * asserts the player came back to the *same* second — so what it must not inherit is a stored
+ * position from the scrubbing block above, which leaves `recordingId` at 100 s.
+ *
+ * `openTeaching` now waits for that restore rather than racing it, so this is belt as well as
+ * braces. It is worth having anyway: it makes the block's starting second its own rather than a
+ * consequence of what ran before it, and it keeps "exactly one grant so far" true by construction.
+ */
+let recoveryId: string;
+const RECOVERY_TITLE = `Player recovery ${RUN}`;
 const COVER_KEY = `artwork/${RUN}-transport.webp`;
 
 interface Snapshot {
@@ -110,6 +125,29 @@ async function openTeaching(id: string): Promise<{ page: Page; requests: Request
   await expect
     .poll(async () => (await audioState(page)).duration, { timeout: 60_000 })
     .toBeGreaterThan(TEACHING_SECONDS - 5);
+
+  /*
+   * **And then wait for the player to have finished with it**, which is a different moment.
+   *
+   * `element.duration` is the browser's own property: it is readable the instant metadata lands,
+   * which can be *before* the player's `loadedmetadata` handler has run. That handler is where the
+   * member's stored position is applied — a seek deliberately deferred until metadata exists,
+   * because seeking before it is silently clamped to zero. So a test that only waits for the
+   * property can seek the element and then have the restore land on top of it a moment later, and
+   * go on measuring a position it did not choose.
+   *
+   * The slider's `max` is the signal, because it comes from player state the same handler sets: it
+   * can only be non-zero once that handler has run to completion, restore included.
+   */
+  await expect
+    .poll(
+      async () =>
+        Number(
+          (await page.getByRole('slider', { name: 'Position' }).getAttribute('max')) ?? '0',
+        ),
+      { timeout: 60_000 },
+    )
+    .toBeGreaterThan(0);
   return { page, requests };
 }
 
@@ -133,6 +171,8 @@ beforeAll(async () => {
   await setSeriesArtwork(series.id, COVER_KEY, handle);
   coveredId = await publishedRecording(COVERED_TITLE);
   await setRecordingSeries(coveredId, series.id, handle);
+
+  recoveryId = await publishedRecording(RECOVERY_TITLE);
 }, 300_000);
 
 afterAll(async () => {
@@ -303,19 +343,33 @@ describe('scrubbing, and where the bytes come from', () => {
 
 describe('a grant that dies mid-listen is replaced without the member noticing', () => {
   it('recovers the position and the play state after the element errors', async () => {
-    const { page, requests } = await openTeaching(recordingId);
+    const { page, requests } = await openTeaching(recoveryId);
     const grants = () =>
       requests.filter((request) =>
-        request.url().startsWith(`${baseUrl}${API_PREFIX}/recordings/${recordingId}/playback`),
+        request.url().startsWith(`${baseUrl}${API_PREFIX}/recordings/${recoveryId}/playback`),
       ).length;
     try {
       await page.getByRole('slider', { name: 'Position' }).fill('30000');
-      await page.getByRole('button', { name: 'Play' }).first().click();
+
+      /*
+       * **The seek landed, and landed here.** Bounded above as well as below, because the failure
+       * this guards against is not "it never got past 30" but "it is somewhere else entirely" — a
+       * restored position arriving after the seek, which is what a stored position on a shared
+       * teaching used to do. Unbounded, the block would sail past that and go on to measure a second
+       * it had not chosen.
+       */
       await expect
         .poll(async () => (await audioState(page)).currentTime, { timeout: 30_000 })
-        .toBeGreaterThan(30);
+        .toBeGreaterThan(29);
+      expect((await audioState(page)).currentTime).toBeLessThan(45);
+
+      await page.getByRole('button', { name: 'Play' }).first().click();
+      await expect
+        .poll(async () => (await audioState(page)).paused, { timeout: 30_000 })
+        .toBe(false);
 
       const before = await audioState(page);
+      expect(before.currentTime).toBeLessThan(45);
       const grantsBefore = grants();
       expect(before.paused).toBe(false);
       expect(grantsBefore).toBe(1);
