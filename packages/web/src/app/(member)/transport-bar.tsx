@@ -77,6 +77,17 @@ const COLLAPSE_FRACTION = 0.01;
  */
 const SPEED_HOLD_MS = 220;
 
+/**
+ * How long the scrubber must sit still before the position it is showing is actually seeked to.
+ *
+ * A drag across the track is one gesture, not the hundred positions it passes through, and every
+ * one of those would be a `currentTime` write — each of which re-seeks the element and, on a phone
+ * over the network, re-buffers. So the thumb and the timecode follow the finger at once and the
+ * element is told once the finger settles; short enough that a release feels immediate, long enough
+ * that the positions swept on the way are never asked for.
+ */
+const SCRUB_SETTLE_MS = 100;
+
 /** One tick: where it sits, and every note that reads as being there. */
 interface Marker {
   readonly positionMs: number;
@@ -135,9 +146,26 @@ export function TransportBar() {
   /** Set on the release of a rate gesture, so the click behind it is not read as a second press. */
   const speedHandledRef = useRef(false);
 
+  /**
+   * The position the scrubber is showing while it is being dragged, or `null` when the player's own
+   * position is what it shows. It exists because the seek is deferred: between the move and the
+   * seek that settles it, this is the only place the asked-for position is written down.
+   */
+  const [scrubMs, setScrubMs] = useState<number | null>(null);
+  const scrubTimerRef = useRef<number | null>(null);
+
   // Set by the `···` gesture on release, so the compatibility click it may produce is not read as a
   // second press. A keyboard press clears it first, which is what keeps Enter and Space working.
   const pointerHandledRef = useRef(false);
+
+  // A pending seek belongs to a scrubber that is on screen; unmounting with one armed would seek a
+  // player the member has already left.
+  useEffect(
+    () => () => {
+      if (scrubTimerRef.current !== null) window.clearTimeout(scrubTimerRef.current);
+    },
+    [],
+  );
 
   /*
    * An open toolbar closes on a press anywhere else — the tap-away a member already expects of a
@@ -172,6 +200,8 @@ export function TransportBar() {
   if (player.loaded === null) return null;
 
   const max = player.durationMs > 0 ? player.durationMs : 0;
+  // Mid-drag the scrubber answers to the finger, not to the element that has not been seeked yet.
+  const shownMs = scrubMs ?? player.currentMs;
   // A gap between segments answers nothing, and nothing is what the pill shows — a sentence held
   // over a silence is a caption that is wrong rather than late.
   const spoken =
@@ -274,11 +304,20 @@ export function TransportBar() {
       return Number.isNaN(value) ? null : value;
     }
 
+    // A hold is also the browser's own cue to start selecting text and to raise a callout over it,
+    // and the strip is drawn over a page full of both. CSS can only say that of the pill and the
+    // steps; the drag travels past them, so the press owns these for as long as it lasts.
+    function suppressSelection(selection: Event) {
+      selection.preventDefault();
+    }
+
     function finish() {
       window.clearTimeout(hold);
       document.removeEventListener('pointermove', onPointerMove);
       document.removeEventListener('pointerup', onPointerUp);
       document.removeEventListener('pointercancel', onCancel);
+      document.removeEventListener('selectstart', suppressSelection);
+      document.removeEventListener('contextmenu', suppressSelection);
     }
 
     function onPointerMove(move: PointerEvent) {
@@ -315,6 +354,25 @@ export function TransportBar() {
     document.addEventListener('pointermove', onPointerMove);
     document.addEventListener('pointerup', onPointerUp);
     document.addEventListener('pointercancel', onCancel);
+    document.addEventListener('selectstart', suppressSelection);
+    document.addEventListener('contextmenu', suppressSelection);
+  }
+
+  /**
+   * Take a position from the scrubber: show it now, seek to it once the drag settles.
+   *
+   * Each move restarts the timer, so a drag seeks once — at the end — rather than at every pixel it
+   * crossed. The shown position is cleared in the same turn the seek is made, and `seekToMs` writes
+   * the player's position synchronously, so the thumb never falls back to where it came from.
+   */
+  function scrubTo(ms: number) {
+    setScrubMs(ms);
+    if (scrubTimerRef.current !== null) window.clearTimeout(scrubTimerRef.current);
+    scrubTimerRef.current = window.setTimeout(() => {
+      scrubTimerRef.current = null;
+      player.seekToMs(ms);
+      setScrubMs(null);
+    }, SCRUB_SETTLE_MS);
   }
 
   return (
@@ -433,7 +491,7 @@ export function TransportBar() {
         </div>
 
         <div className={styles.track}>
-          <span className={styles.time}>{formatTimecode(player.currentMs)}</span>
+          <span className={styles.time}>{formatTimecode(shownMs)}</span>
           <div className={styles.scrubberWrap}>
             {/*
               A real range input rather than a styled div: scrubbing has to work with a keyboard and
@@ -446,10 +504,10 @@ export function TransportBar() {
               min={0}
               max={max}
               step={1000}
-              value={Math.min(player.currentMs, max)}
+              value={Math.min(shownMs, max)}
               aria-label="Position"
               disabled={max === 0}
-              onChange={(event) => player.seekToMs(Number(event.target.value))}
+              onChange={(event) => scrubTo(Number(event.target.value))}
             />
             {/*
               A **sibling** layer rather than children of the slider — a range input has no children,
