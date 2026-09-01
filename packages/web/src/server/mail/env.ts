@@ -115,3 +115,22 @@ export function readAppOrigin(env: EnvSource = process.env): string {
   }
   return normaliseOrigin(configured);
 }
+
+/**
+ * Where a bug report or a piece of feedback is sent.
+ *
+ * **The only recipient in this file that has a default**, and the difference is what it is for.
+ * Every value above addresses the *provider* — get one wrong and nothing sends at all, so failing
+ * loudly at the first send is the kindest thing they can do. This one addresses a *maintainer*, is
+ * the same address in every environment that has not deliberately chosen another, and a deployment
+ * that forgot to set it should still deliver reports rather than refuse them.
+ *
+ * It is a variable rather than a constant so a staging environment can point reports at a mailbox
+ * somebody is actually watching — or at a throwaway one — without a code change and a deploy.
+ */
+export const DEFAULT_FEEDBACK_RECIPIENT = 'indepthwebsolutions@gmail.com';
+
+export function readFeedbackRecipient(env: EnvSource = process.env): string {
+  const value = env['FEEDBACK_MAIL_TO'];
+  return value === undefined || value.trim() === '' ? DEFAULT_FEEDBACK_RECIPIENT : value.trim();
+}

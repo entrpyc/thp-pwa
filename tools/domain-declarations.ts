@@ -2,6 +2,7 @@ import { readFileSync } from 'node:fs';
 import { relative, resolve, sep } from 'node:path';
 import {
   BIBLE_BOOKS,
+  FEEDBACK_KINDS,
   JOB_STATUSES,
   NOTE_VISIBILITIES,
   REACTIONS,
@@ -89,6 +90,12 @@ export const DOMAIN_DECLARATIONS: readonly DomainDeclaration[] = [
     members: SCRIPTURE_ORIGINS,
   },
   { name: 'ScriptureOrigin', canonicalFile: 'packages/shared/src/scripture.ts' },
+  {
+    name: 'FEEDBACK_KINDS',
+    canonicalFile: 'packages/shared/src/feedback.ts',
+    members: FEEDBACK_KINDS,
+  },
+  { name: 'FeedbackKind', canonicalFile: 'packages/shared/src/feedback.ts' },
 ];
 
 export interface DeclarationViolation {

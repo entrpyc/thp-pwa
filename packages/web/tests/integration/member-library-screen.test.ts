@@ -351,13 +351,16 @@ describe('the top navigation', () => {
     }
   }, 120_000);
 
-  it('offers a member exactly Dashboard, All recordings and Sign out', async () => {
+  it('offers a member exactly Dashboard, All recordings, Report a bug and Sign out', async () => {
     const page = await signInAs(member);
     try {
       expect(await menuEntries(page)).toEqual([
         'Dashboard',
         'All series',
         'All recordings',
+        // Below the destinations and above the way out: it is not a place in the product, and it is
+        // offered to every role on the same terms.
+        'Report a bug',
         'Sign out',
       ]);
     } finally {
@@ -375,6 +378,7 @@ describe('the top navigation', () => {
         'All series',
         'All recordings',
         'Admin console',
+        'Report a bug',
         'Sign out',
       ]);
     } finally {

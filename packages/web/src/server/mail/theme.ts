@@ -32,8 +32,14 @@ export const MAIL_THEME = {
   radiusMd: '12px',
   /** `--radius-sm` */
   radiusSm: '8px',
+  /** `--space-1` */
+  space1: '4px',
+  /** `--space-2` */
+  space2: '8px',
   /** `--space-4` */
   space4: '16px',
+  /** `--space-5` */
+  space5: '20px',
   /** `--space-6` */
   space6: '24px',
   /** `--space-8` */
@@ -56,7 +62,10 @@ export const MAIL_THEME_TOKENS: Readonly<Record<keyof typeof MAIL_THEME, string>
   textDim: '--color-text-dim',
   radiusMd: '--radius-md',
   radiusSm: '--radius-sm',
+  space1: '--space-1',
+  space2: '--space-2',
   space4: '--space-4',
+  space5: '--space-5',
   space6: '--space-6',
   space8: '--space-8',
   fontSans: '--font-sans',

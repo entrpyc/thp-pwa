@@ -1,0 +1,191 @@
+/*
+ * The report screen.
+ *
+ * There is no reference image for it, and it invents as little as it can get away with. The page
+ * furniture is the member surface's own — `screens.module.css` already owns the page head, the card
+ * and the failure block, and composing them is what keeps this screen from becoming a fourth
+ * opinion about what a card is. The text field, its label, the error and the quiet link are
+ * `sign-in.module.css`'s, which is where the product's form recipe is written down along with the
+ * five extrapolations it was read from; stating them again here is how the two would drift.
+ *
+ * Three things are declared rather than composed, and each is a control the two stylesheets above
+ * do not have:
+ *
+ * 1. **The multi-line field.** `sign-in.module.css` has no textarea because no auth screen has a
+ *    paragraph in it. This is the same recipe as its `.input` — raised fill, one hairline,
+ *    `--radius-sm` for "small tiles, inputs" — with `resize: vertical`, because a description is
+ *    the one field on this screen whose right height only the person typing knows.
+ * 2. **The two-state pill.** The guide's segmented control, which is what a labelled either/or
+ *    reads as everywhere else in this product. The selected state is the accent's soft wash and its
+ *    border rather than a fill: principle 3 reserves the solid fill for the one primary action, and
+ *    on this screen that is the send button.
+ * 3. **The character count.** `--fs-meta` on `--color-text-dim`, tabular so the number does not
+ *    jitter as it changes, going to full-weight `--color-text` when the ceiling is passed — the
+ *    same emphasis-not-hue rule the error block is built on.
+ *
+ * Everything composes from tokens.css. Nothing here spells a colour, a radius or a spacing value.
+ */
+
+/* ------------------------------------------------------------------------- the member furniture */
+
+.pageHead {
+  composes: pageHead from '../screens.module.css';
+}
+
+.pageTitle {
+  composes: pageTitle from '../screens.module.css';
+}
+
+.pageLead {
+  composes: pageLead from '../screens.module.css';
+}
+
+.card {
+  composes: card from '../screens.module.css';
+}
+
+.prose {
+  composes: prose from '../screens.module.css';
+}
+
+.failure {
+  composes: failure from '../screens.module.css';
+}
+
+/* ----------------------------------------------------------------------------- the form recipe */
+
+.field {
+  composes: field from '../../sign-in/sign-in.module.css';
+}
+
+.fieldLabel {
+  composes: label from '../../sign-in/sign-in.module.css';
+}
+
+.input {
+  composes: input from '../../sign-in/sign-in.module.css';
+}
+
+.link {
+  composes: link from '../../sign-in/sign-in.module.css';
+}
+
+/* --------------------------------------------------------------------------- what is new here */
+
+/* The `.input` recipe, given a paragraph's worth of room and the height of its own choosing. */
+.textArea {
+  width: 100%;
+  background: var(--color-surface-raised);
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-sm);
+  padding: var(--space-3) var(--space-4);
+  color: var(--color-text);
+  font-family: inherit;
+  font-size: var(--fs-body);
+  line-height: 1.5;
+  resize: vertical;
+}
+
+.textArea::placeholder {
+  color: var(--color-text-dim);
+}
+
+.textArea:hover {
+  border-color: var(--color-border-strong);
+}
+
+/* Two states, side by side — the guide's segmented pill. */
+.kinds {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--space-2);
+}
+
+.kindOption {
+  background: transparent;
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-pill);
+  padding: var(--space-2) var(--space-5);
+  color: var(--color-text-muted);
+  font-family: inherit;
+  font-size: var(--fs-body);
+  cursor: pointer;
+}
+
+.kindOption[aria-pressed='true'] {
+  border-color: var(--color-primary-strong);
+  background: var(--color-primary-soft);
+  color: var(--color-text);
+}
+
+/* What the chosen state means, in words, immediately under the thing that was chosen. */
+.kindHint {
+  margin: calc(-1 * var(--space-2)) 0 0;
+  font-size: var(--fs-meta);
+  color: var(--color-text-dim);
+}
+
+.count {
+  margin: 0;
+  font-size: var(--fs-meta);
+  color: var(--color-text-dim);
+  font-variant-numeric: tabular-nums;
+}
+
+/* The error treatment: the same line, at the weight that reads as a stop. */
+.countOver {
+  margin: 0;
+  font-size: var(--fs-meta);
+  color: var(--color-text);
+  font-weight: 600;
+}
+
+.actions {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: var(--space-4);
+}
+
+/* The one solid fill on the screen. Not full width — this screen sits in the member shell rather
+ * than in a narrow auth card, and a button the width of the page reads as a banner. */
+.primary {
+  background: var(--color-primary);
+  border: 1px solid var(--color-primary);
+  border-radius: var(--radius-pill);
+  padding: var(--space-3) var(--space-6);
+  color: var(--color-text);
+  font-family: inherit;
+  font-size: var(--fs-body);
+  font-weight: 600;
+  cursor: pointer;
+}
+
+.primary:hover {
+  background: var(--color-primary-strong);
+  border-color: var(--color-primary-strong);
+}
+
+.primary:disabled {
+  cursor: not-allowed;
+  background: var(--color-primary-strong);
+  border-color: var(--color-primary-strong);
+  color: var(--color-text-muted);
+}
+
+/* The same shape, outlined — a real action, but not the one this screen is for. */
+.secondary {
+  background: transparent;
+  border: 1px solid var(--color-border-strong);
+  border-radius: var(--radius-pill);
+  padding: var(--space-3) var(--space-6);
+  color: var(--color-text);
+  font-family: inherit;
+  font-size: var(--fs-body);
+  font-weight: 600;
+  cursor: pointer;
+}
+
+.secondary:hover {
+  border-color: var(--color-primary-strong);
+}

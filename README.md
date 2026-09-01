@@ -220,6 +220,22 @@ A **send failure does not destroy the invitation**: the row is written first, a 
 returns `service_unavailable`, and the invitation stays pending and resendable. Rolling back would
 throw away an intent the admin already expressed, and resend exists precisely for this.
 
+### Bug reports and feedback
+
+*Report a bug* in the member navigation menu opens [`/feedback`](packages/web/src/app/(member)/feedback):
+a title, a description, and a bug/feedback toggle. Submitting mails it through the same adapter as
+everything else, to `FEEDBACK_MAIL_TO` — the only recipient in `.env.example` with a **default**,
+because a deployment that never set one should still deliver reports rather than refuse them. Point
+it somewhere else to redirect them, which is what staging wants.
+
+**Nothing is stored.** There is no table, no id and no screen listing past reports — the message is
+the record. That is the one place the paragraph above does not apply: with no row to retry from, a
+transport failure is reported to the member as `service_unavailable` rather than swallowed, and the
+form keeps their text so trying again costs a press. The reporter is taken from the session and never
+from the body, so the route cannot be used to send mail as somebody else; the message carries their
+display name and address, and **not their role**, because nothing outside the policy module reads
+`actor.role`.
+
 ### Passwords
 
 One statement of the rules, in [packages/shared/src/passwords.ts](packages/shared/src/passwords.ts),

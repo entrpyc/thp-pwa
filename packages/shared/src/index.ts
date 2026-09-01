@@ -3,6 +3,7 @@ export * from './api';
 export * from './artwork';
 export * from './auth';
 export * from './chapters';
+export * from './feedback';
 export * from './health';
 export * from './invitations';
 export * from './jobs';

@@ -5,6 +5,7 @@ import { useEffect, useRef, useState } from 'react';
 import {
   ADMIN_PAGE_PATH,
   DASHBOARD_PAGE_PATH,
+  FEEDBACK_PAGE_PATH,
   MEMBER_LIBRARY_PAGE_PATH,
   MEMBER_SERIES_PAGE_PATH,
 } from '@thp/shared';
@@ -34,6 +35,12 @@ import styles from './member.module.css';
  * The *Admin console* entry is rendered from the policy module's answer and **grants nothing**:
  * `/admin` gates itself server-side and every route behind it refuses independently
  * ([3.1.5](docs/project/prd.md)).
+ *
+ * *Report a bug* is the one entry here that is not a destination in the product and not a
+ * consequence of the reference images. It is in the menu rather than on a screen because a member
+ * who has just hit something broken is, by definition, somewhere unexpected — and the menu is the
+ * only control that is on every screen. It is offered unconditionally, for the same reason the
+ * report route authorises nothing beyond *who*.
  *
  * The breadcrumb is home → an optional parent → the current page's title. The parent is the series
  * segment `top-navigation/default.png` draws, inserted in Story 6, and it is a **link** rather than
@@ -177,6 +184,21 @@ export function TopNavigation({ canSeeConsole }: { canSeeConsole: boolean }) {
                 </Link>
               </li>
             ) : null}
+            {/*
+              Below the destinations and above the utilities, because it is neither: it is not a
+              place in the product, and it is not something the browser or the session does. It is
+              offered to everybody, on the same terms — a rule about who may say something is broken
+              would be a rule about whose bugs count.
+            */}
+            <li>
+              <Link
+                className={styles.menuLink}
+                href={FEEDBACK_PAGE_PATH}
+                onClick={() => setOpen(false)}
+              >
+                Report a bug
+              </Link>
+            </li>
             <InstallApp className={styles.menuLink} hintClassName={styles.menuHint} />
             <li className={styles.menuSignOut}>
               <SignOutButton className={styles.menuLink} />
