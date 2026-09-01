@@ -22,6 +22,7 @@ import {
   type SessionUser,
 } from '@thp/shared';
 import { ApiError } from '@/server/api/errors';
+import { displayNameFor } from '@/server/auth/display-name';
 import { hashPassword } from '@/server/auth/password';
 import { generateToken, hashToken } from '@/server/auth/tokens';
 import { issueSession, type IssuedSession } from '@/server/auth/session';
@@ -98,19 +99,12 @@ export function acceptUrlFor(token: string): string {
 }
 
 /**
- * A display name for an account created by accepting. The accept screen asks for a password and
- * nothing else — one field is the whole point — so the local part of the invited address stands in
- * until ticket 4 ships profile editing.
+ * A display name for an account created by accepting.
+ *
+ * Re-exported rather than defined here: sign-up creates accounts the same way and derives a name
+ * the same way, and two copies of that rule would be two answers to "what is a new account called".
  */
-export function displayNameFor(email: string): string {
-  const local = email.split('@')[0] ?? email;
-  const words = local
-    .split(/[._+-]+/)
-    .map((word) => word.trim())
-    .filter((word) => word !== '')
-    .map((word) => word.charAt(0).toUpperCase() + word.slice(1));
-  return words.length === 0 ? email : words.join(' ');
-}
+export { displayNameFor };
 
 // ---------------------------------------------------------------------------------------------
 // Issuing

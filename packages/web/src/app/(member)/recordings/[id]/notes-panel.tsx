@@ -62,9 +62,6 @@ const FILTERS: readonly { readonly key: Filter; readonly label: string }[] = [
   { key: 'mine', label: 'Mine' },
 ];
 
-/** How long a revealed note stays marked — long enough to find, short enough not to be a state. */
-const HIGHLIGHT_MS = 2_000;
-
 export function NotesPanel({
   recordingId,
   canModerate,
@@ -92,7 +89,6 @@ export function NotesPanel({
 }) {
   const player = usePlayer();
   const [filter, setFilter] = useState<Filter>('all');
-  const [highlighted, setHighlighted] = useState<string | null>(null);
 
   /**
    * Opening the tab opens a composer **armed**, not frozen: the moment it shows follows the
@@ -105,23 +101,6 @@ export function NotesPanel({
     releaseComposerAnchor();
     return () => releaseComposerAnchor();
   }, [releaseComposerAnchor]);
-
-  /**
-   * Take the member to the note a transport marker named (scope prd 3.2.5).
-   *
-   * The request is cleared as soon as it is acted on, so pressing the same marker twice scrolls
-   * twice — a marker press is an instruction, not a selection that could go stale.
-   */
-  const { revealedNoteId, clearRevealedNote } = player;
-  useEffect(() => {
-    if (revealedNoteId === null) return;
-    const target = document.getElementById(cardId(revealedNoteId));
-    target?.scrollIntoView({ block: 'center' });
-    setHighlighted(revealedNoteId);
-    clearRevealedNote();
-    const timer = setTimeout(() => setHighlighted(null), HIGHLIGHT_MS);
-    return () => clearTimeout(timer);
-  }, [revealedNoteId, clearRevealedNote]);
 
   /**
    * Whatever the player is holding, rendered as-is.
@@ -171,7 +150,7 @@ export function NotesPanel({
   const pinned = listed === null ? [] : listed.filter((one) => one.pinned);
   const chronological = listed === null ? null : listed.filter((one) => !one.pinned);
 
-  const shared = { canModerate, highlighted };
+  const shared = { canModerate };
 
   return (
     <div className={styles.panel}>
@@ -231,7 +210,7 @@ export function NotesPanel({
   );
 }
 
-/** The element a marker press scrolls to. */
+/** The card's own id, so a note is addressable in the document it is rendered into. */
 function cardId(noteId: string): string {
   return `note-${noteId}`;
 }
@@ -252,7 +231,6 @@ function matches(note: NoteView, filter: Filter): boolean {
 interface CardProps {
   readonly note: NoteView;
   readonly canModerate: boolean;
-  readonly highlighted: string | null;
 }
 
 /**
@@ -267,7 +245,7 @@ interface CardProps {
  * control and nothing at all about who removed it (scope prd 5.3.3). The author of
  * an admin-removed note sees exactly this, like everyone else.
  */
-function NoteCard({ note, canModerate, highlighted }: CardProps) {
+function NoteCard({ note, canModerate }: CardProps) {
   const player = usePlayer();
   const [editing, setEditing] = useState(false);
   const [replying, setReplying] = useState(false);
@@ -277,7 +255,6 @@ function NoteCard({ note, canModerate, highlighted }: CardProps) {
   const className = [
     isReply ? styles.reply : styles.note,
     note.pinned ? styles.pinnedNote : '',
-    highlighted === note.id ? styles.highlighted : '',
   ]
     .filter(Boolean)
     .join(' ');
@@ -358,7 +335,7 @@ function NoteCard({ note, canModerate, highlighted }: CardProps) {
         </button>
       )}
 
-      <Thread note={note} canModerate={canModerate} highlighted={highlighted} />
+      <Thread note={note} canModerate={canModerate} />
     </li>
   );
 }
@@ -370,12 +347,12 @@ function NoteCard({ note, canModerate, highlighted }: CardProps) {
  * (scope prd 3.3.7) — which is why this returns `null` rather than an `<ol>` with
  * no children.
  */
-function Thread({ note, canModerate, highlighted }: CardProps) {
+function Thread({ note, canModerate }: CardProps) {
   if (note.replies.length === 0) return null;
   return (
     <ol className={styles.thread} aria-label="Replies">
       {note.replies.map((reply) => (
-        <NoteCard key={reply.id} note={reply} canModerate={canModerate} highlighted={highlighted} />
+        <NoteCard key={reply.id} note={reply} canModerate={canModerate} />
       ))}
     </ol>
   );

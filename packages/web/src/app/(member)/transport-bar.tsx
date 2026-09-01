@@ -100,9 +100,8 @@ interface Marker {
  *
  * The notes arrive in the list's own order — timestamp ascending — so one pass is enough: a note
  * within the window of the tick being built joins it, and anything further along starts the next.
- * A heavily annotated passage therefore renders as one pressable tick rather than an unpressable
- * smear, and the tick sits at the **earliest** note in it, which is where pressing it seeks to
- * (2.2.3).
+ * A heavily annotated passage therefore renders as one tick rather than a smear, and the tick sits
+ * at the **earliest** note in it (2.2.3).
  *
  * **Replies never reach here.** A reply has no position of its own (3.3.2), and the payload says so
  * with a null rather than with a separate shape — so dropping them is one filter and cannot be
@@ -120,14 +119,6 @@ function collapse(notes: readonly NoteView[], durationMs: number): Marker[] {
   }
 
   return markers;
-}
-
-/** What a screen reader says for a tick (scope prd 5.7.2). */
-function markerLabel(marker: Marker): string {
-  const at = formatTimecode(marker.positionMs);
-  return marker.notes.length === 1
-    ? `Note at ${at}`
-    : `${marker.notes.length} notes from ${at}`;
 }
 
 export function TransportBar() {
@@ -555,11 +546,15 @@ export function TransportBar() {
               onChange={(event) => scrubTo(Number(event.target.value))}
             />
             {/*
-              A **sibling** layer rather than children of the slider — a range input has no children,
-              and a marker inside one would be neither focusable nor announced. The layer takes no
+              A **sibling** layer rather than children of the slider — a range input has no
+              children, and a tick inside one would be neither drawn nor placed. The layer takes no
               pointer events and sits under the input's own band, so the ticks read behind the fill
-              and the thumb (5.7.1) and scrubbing is untouched (5.7.2); each tick stands a little
-              proud of that band, which is the part a pointer can press.
+              and the thumb (5.7.1) and scrubbing is untouched (5.7.2).
+
+              `aria-hidden` and not pressable, like the divisions beneath it: a tick says *where*
+              the group has annotated the teaching, and the way to a note is the Notes tab — not a
+              two-pixel target on a phone. Leaving them unpressable is also what keeps every press
+              that lands on the track a scrub.
             */}
             {/*
               **The chapter divisions** ([3.22.17](docs/project/prd.md)), in their own layer under
@@ -567,11 +562,9 @@ export function TransportBar() {
               height rule across the track and a note is a pip on it — *chapters divide the track,
               notes sit on it*.
 
-              `aria-hidden` and not pressable, deliberately. A note marker is a destination a member
-              asked for; a boundary is a division of the thing they are already looking at, and the
-              way to a chapter is the Chapters tab ([3.22.10](docs/project/prd.md)) or the chapter's
-              own page — not a two-pixel target on a phone. Leaving them unpressable is also what
-              keeps every press that lands on the track a scrub.
+              `aria-hidden` and not pressable, on the same rule the note ticks follow: the way to a
+              chapter is the Chapters tab ([3.22.10](docs/project/prd.md)) or the chapter's own
+              page, not a two-pixel target on a phone.
             */}
             <div className={styles.boundaries} aria-hidden="true">
               {boundaries.map((chapter) => (
@@ -582,21 +575,12 @@ export function TransportBar() {
                 />
               ))}
             </div>
-            <div className={styles.markers} aria-hidden={markers.length === 0}>
+            <div className={styles.markers} aria-hidden="true">
               {markers.map((marker) => (
-                <button
+                <span
                   key={marker.notes[0]?.id}
                   className={styles.marker}
-                  type="button"
                   style={{ left: `${(marker.positionMs / max) * 100}%` }}
-                  aria-label={markerLabel(marker)}
-                  onClick={() => {
-                    // Seeks and does not play — the same rule selecting a transcript line follows
-                    // (3.2.5). The earliest note in a collapsed tick is where both go (3.2.6).
-                    player.seekToMs(marker.positionMs);
-                    const first = marker.notes[0];
-                    if (first !== undefined) player.revealNote(first.id);
-                  }}
                 />
               ))}
             </div>

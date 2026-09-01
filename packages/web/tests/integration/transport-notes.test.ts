@@ -133,21 +133,38 @@ async function waitForAudio(page: Page): Promise<void> {
 /**
  * The transport bar itself.
  *
- * Everything below that looks for a marker looks for it **here**. The notes panel opens with the
- * recording page now, and each card in it is labelled "The note at 00:30" — which the marker
- * pattern matches. Unscoped, the ticks and the list would be counted together and every count in
- * this file would be the sum of two features rather than a fact about either.
+ * Everything below that looks for a tick looks for it **here**. The notes panel opens with the
+ * recording page now and draws marks of its own; unscoped, the two would be counted together and
+ * every count in this file would be the sum of two features rather than a fact about either.
  */
 function bar(page: Page) {
   return page.getByRole('region', { name: 'Player' });
 }
 
-/** Every marker's accessible label, in the order they sit on the track. */
-async function markerLabels(page: Page): Promise<string[]> {
-  const labels = await bar(page)
-    .getByRole('button', { name: /notes? (at|from) /i })
-    .all();
-  return Promise.all(labels.map(async (one) => (await one.getAttribute('aria-label')) ?? ''));
+/**
+ * Every tick on the track, in the order they sit on it.
+ *
+ * The `span` matters: the layer that holds them is a `div` whose class also contains "marker", so
+ * an element-less selector would count the layer as a tick and every count here would be one too
+ * many.
+ */
+function ticks(page: Page) {
+  return bar(page).locator('span[class*="marker"]');
+}
+
+/**
+ * Which second of the teaching each tick stands on.
+ *
+ * A tick carries no text and no label — it is a mark on the track rather than a control — so the
+ * moment it names is read off the offset it is drawn at, which is also the only thing about it a
+ * member can see. Rounded to the second, because the offset is a percentage of a duration the
+ * browser reports as a float.
+ */
+async function tickSeconds(page: Page): Promise<number[]> {
+  const percents = await ticks(page).evaluateAll((all) =>
+    all.map((one) => Number.parseFloat((one as HTMLElement).style.left)),
+  );
+  return percents.map((percent) => Math.round((percent / 100) * TEACHING_SECONDS));
 }
 
 /**
@@ -161,19 +178,6 @@ async function markerLabels(page: Page): Promise<string[]> {
 async function leaveForTheLibrary(page: Page): Promise<void> {
   await page.getByRole('link', { name: 'Back to recordings' }).click();
   await page.waitForURL(`${baseUrl}${MEMBER_LIBRARY_PAGE_PATH}`, { timeout: 30_000 });
-}
-
-/**
- * Press a tick where a member presses one — on the few pixels of it that stand clear of the
- * slider's band.
- *
- * The centre of a tick is deliberately the slider's: every pointer event on that band is a scrub,
- * which is what keeps 5.7.2's "scrubbing is untouched" true. Pressing the centre here would be
- * testing a design the component does not have.
- */
-async function pressMarker(page: Page, label: string): Promise<void> {
-  // The bar's tick, never a card in the list — pressing a marker is a transport action.
-  await bar(page).getByRole('button', { name: label }).click({ position: { x: 1, y: 2 } });
 }
 
 async function audioState(page: Page): Promise<{ currentTime: number; paused: boolean }> {
@@ -247,14 +251,13 @@ describe('the transport shows where the teaching has been annotated', () => {
     const page = await openTeaching(markedId);
     try {
       // Three visible notes, two of them inside one collapse window — so two dots (3.2.6).
-      await expect.poll(() => markerLabels(page).then((all) => all.length)).toBe(2);
+      await expect.poll(() => ticks(page).count()).toBe(2);
 
-      const drawn = await bar(page)
-        .getByRole('button', { name: /notes? (at|from) /i })
+      const drawn = await ticks(page)
         .first()
         .evaluate((tick) => {
-          // The dot is the button's `::before`; the button itself is the transparent finger target
-          // around it, so the green and the roundness are read off the mark rather than the target.
+          // The dot is the tick's `::before`; the tick itself is the transparent box around it, so
+          // the green and the roundness are read off the mark rather than off the box.
           const dot = getComputedStyle(tick, '::before');
           const layer = tick.parentElement as HTMLElement;
           const slider = layer.parentElement?.querySelector('input[type="range"]') as HTMLElement;
@@ -288,19 +291,14 @@ describe('the transport shows where the teaching has been annotated', () => {
   it('places each tick at its own note’s position along the track', async () => {
     const page = await openTeaching(markedId);
     try {
-      await expect.poll(() => markerLabels(page).then((all) => all.length)).toBe(2);
+      await expect.poll(() => ticks(page).count()).toBe(2);
 
-      // Inside the bar, for the reason `bar()` gives — the open notes panel carries cards whose
-      // labels this filter would otherwise match, and they have no `left` of their own.
-      const offsets = await page.evaluate(() =>
-        [...(document.querySelector('[aria-label="Player"]')?.querySelectorAll('button') ?? [])]
-          .filter((one) => /notes? (at|from) /i.test(one.getAttribute('aria-label') ?? ''))
-          .map((one) => (one as HTMLElement).style.left),
+      // Read straight off the ticks, as percentages of the real duration: 20s and 80s of 120s. A
+      // layer that placed every tick at zero, or spaced them evenly, would render the same number
+      // of ticks and fail here.
+      const percents = await ticks(page).evaluateAll((all) =>
+        all.map((one) => Number.parseFloat((one as HTMLElement).style.left)),
       );
-
-      // Read as percentages of the real duration: 20s and 80s of 120s. A layer that placed every
-      // tick at zero, or spaced them evenly, would render the same number of ticks and fail here.
-      const percents = offsets.map((one) => Number.parseFloat(one));
       expect(percents[0]).toBeCloseTo((FIRST_MS / (TEACHING_SECONDS * 1000)) * 100, 0);
       expect(percents[1]).toBeCloseTo((THIRD_MS / (TEACHING_SECONDS * 1000)) * 100, 0);
     } finally {
@@ -311,7 +309,7 @@ describe('the transport shows where the teaching has been annotated', () => {
   it('leaves the scrubber a slider that still scrubs by pointer and by keyboard', async () => {
     const page = await openTeaching(markedId);
     try {
-      await expect.poll(() => markerLabels(page).then((all) => all.length)).toBe(2);
+      await expect.poll(() => ticks(page).count()).toBe(2);
       const slider = page.getByRole('slider', { name: 'Position' });
       // Still announced as a slider, and still a real range input — not a div wearing a role.
       expect(await slider.count()).toBe(1);
@@ -340,13 +338,13 @@ describe('the transport shows where the teaching has been annotated', () => {
   it('keeps the ticks on the docked bar away from the recording page, and swaps the set', async () => {
     const page = await openTeaching(markedId);
     try {
-      await expect.poll(() => markerLabels(page).then((all) => all.length)).toBe(2);
+      await expect.poll(() => ticks(page).count()).toBe(2);
 
       // The transport travels with the member (3.2.7), so the ticks do. Walked to through the
       // page's own control rather than by a fresh load, because a reload would remount the player
       // and this is about the bar *surviving* the move.
       await leaveForTheLibrary(page);
-      await expect.poll(() => markerLabels(page).then((all) => all.length)).toBe(2);
+      await expect.poll(() => ticks(page).count()).toBe(2);
       expect(await page.getByRole('tab', { name: 'Notes' }).count()).toBe(0);
 
       /*
@@ -366,27 +364,26 @@ describe('the transport shows where the teaching has been annotated', () => {
       await page.waitForURL(`${baseUrl}${recordingPagePath(otherId)}`, { timeout: 30_000 });
 
       // The previous teaching's ticks are gone before the new teaching's have arrived.
-      await expect.poll(() => markerLabels(page).then((all) => all.length)).toBe(0);
+      await expect.poll(() => ticks(page).count()).toBe(0);
 
       await waitForAudio(page);
-      await expect
-        .poll(() => markerLabels(page).then((all) => all.length), { timeout: 30_000 })
-        .toBe(1);
-      expect((await markerLabels(page))[0]).toBe('Note at 00:30');
+      await expect.poll(() => ticks(page).count(), { timeout: 30_000 }).toBe(1);
+      // The other teaching's own note, at its own moment — the set was replaced, not added to.
+      expect(await tickSeconds(page)).toEqual([30]);
     } finally {
       await page.context().close();
     }
   }, 240_000);
 
-  it('collapses notes closer than 1% of the duration, and labels each tick with what it is', async () => {
+  it('collapses notes closer than 1% of the duration into one tick', async () => {
     const page = await openTeaching(markedId);
     try {
-      await expect.poll(() => markerLabels(page).then((all) => all.length)).toBe(2);
+      await expect.poll(() => ticks(page).count()).toBe(2);
 
       // The two inside the window read as one tick at the *earlier* of them; the third is its own.
       // Three notes and two ticks is the assertion — a layer that did not collapse would show
       // three, and one that collapsed everything would show one.
-      expect(await markerLabels(page)).toEqual(['2 notes from 00:20', 'Note at 01:20']);
+      expect(await tickSeconds(page)).toEqual([FIRST_MS / 1000, THIRD_MS / 1000]);
     } finally {
       await page.context().close();
     }
@@ -396,7 +393,7 @@ describe('the transport shows where the teaching has been annotated', () => {
     const page = await openTeaching(bareId);
     try {
       expect(await page.getByRole('slider', { name: 'Position' }).count()).toBe(1);
-      expect(await markerLabels(page)).toEqual([]);
+      expect(await ticks(page).count()).toBe(0);
     } finally {
       await page.context().close();
     }
@@ -419,7 +416,7 @@ describe('the transport shows where the teaching has been annotated', () => {
       await waitForAudio(page);
 
       // A failure leaves the track marker-less and the teaching playable — the Availability NFR.
-      expect(await markerLabels(page)).toEqual([]);
+      expect(await ticks(page).count()).toBe(0);
       expect(await page.getByRole('slider', { name: 'Position' }).count()).toBe(1);
       await page
         .getByRole('region', { name: 'Player' })
@@ -428,51 +425,6 @@ describe('the transport shows where the teaching has been annotated', () => {
       await expect.poll(() => audioState(page).then((one) => one.paused)).toBe(false);
     } finally {
       await context.close();
-    }
-  }, 180_000);
-});
-
-// =================================================================================================
-// Task 2.2 — reaching a noted moment (the transport's half)
-// =================================================================================================
-
-describe('pressing a marker takes the member to that moment', () => {
-  it('seeks the audio there and does not start playback', async () => {
-    const page = await openTeaching(markedId);
-    try {
-      await expect.poll(() => markerLabels(page).then((all) => all.length)).toBe(2);
-      expect((await audioState(page)).paused).toBe(true);
-
-      await pressMarker(page, 'Note at 01:20');
-
-      await expect
-        .poll(() => audioState(page).then((one) => Math.round(one.currentTime)), {
-          timeout: 15_000,
-        })
-        .toBe(THIRD_MS / 1000);
-      // A member finding their place has not asked for sound — the rule the transcript already
-      // follows for selecting a line.
-      expect((await audioState(page)).paused).toBe(true);
-    } finally {
-      await page.context().close();
-    }
-  }, 180_000);
-
-  it('seeks a collapsed tick to the earliest note in it', async () => {
-    const page = await openTeaching(markedId);
-    try {
-      await expect.poll(() => markerLabels(page).then((all) => all.length)).toBe(2);
-
-      await pressMarker(page, '2 notes from 00:20');
-
-      // The earlier of the two, not the later and not their midpoint.
-      await expect
-        .poll(() => audioState(page).then((one) => Math.round(one.currentTime)), {
-          timeout: 15_000,
-        })
-        .toBe(FIRST_MS / 1000);
-    } finally {
-      await page.context().close();
     }
   }, 180_000);
 });
@@ -607,8 +559,8 @@ describe('what the marker set follows', () => {
     try {
       // One note and one reply on this teaching, and one tick: a reply belongs to its parent's
       // moment and has none of its own (3.3.2).
-      await expect.poll(() => markerLabels(page).then((all) => all.length)).toBe(1);
-      expect(await markerLabels(page)).toEqual(['Note at 00:40']);
+      await expect.poll(() => ticks(page).count()).toBe(1);
+      expect(await tickSeconds(page)).toEqual([40]);
     } finally {
       await page.context().close();
     }
@@ -617,7 +569,7 @@ describe('what the marker set follows', () => {
   it('drops a deleted note’s marker, and keeps one whose replies survive it', async () => {
     const before = await openTeaching(deletingId);
     try {
-      expect(await markerLabels(before)).toEqual(['Note at 00:15', 'Note at 01:00']);
+      expect(await tickSeconds(before)).toEqual([15, 60]);
     } finally {
       await before.context().close();
     }
@@ -630,7 +582,7 @@ describe('what the marker set follows', () => {
     try {
       // The tombstone keeps its moment so the surviving replies stay reachable from it (3.5.4);
       // the note with nothing under it takes its tick with it.
-      await expect.poll(() => markerLabels(after)).toEqual(['Note at 01:00']);
+      await expect.poll(() => tickSeconds(after)).toEqual([60]);
     } finally {
       await after.context().close();
     }

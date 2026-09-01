@@ -152,19 +152,6 @@ export function RecordingScreen({
     };
   }, [open, recordingId]);
 
-  /**
-   * A transport marker asking for a note **opens the tab it lives in** (active-scope prd 3.2.5).
-   *
-   * The panel does the scrolling and clears the request; this only has to make sure there is a
-   * panel to scroll. Watching the request rather than being called by the transport is what lets
-   * the marker work from any screen: on this one it opens the tab, and everywhere else it is a
-   * request nothing is listening for, which is exactly right — there is no list there to open.
-   */
-  const revealed = player.revealedNoteId;
-  useEffect(() => {
-    if (revealed !== null) setOpenTab('notes');
-  }, [revealed]);
-
   const isCurrent = player.loaded?.id === recordingId;
 
   /**

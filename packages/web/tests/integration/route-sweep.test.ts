@@ -1,6 +1,6 @@
 import { resolve } from 'node:path';
 import { afterAll, beforeAll, describe, expect, it, inject } from 'vitest';
-import { API_PREFIX, isApiErrorBody } from '@thp/shared';
+import { API_PREFIX, SIGN_UP_PATH, isApiErrorBody } from '@thp/shared';
 import { UNAUTHENTICATED_ROUTES, isAllowlisted } from '@/server/auth/allowlist';
 import {
   UNGUARDED_FIXTURE_HEADER,
@@ -56,6 +56,7 @@ describe('every /api/v1 route not on the allowlist refuses an anonymous request'
 
     expect(paths).toContain(`${API_PREFIX}/health`);
     expect(paths).toContain(`${API_PREFIX}/auth/session`);
+    expect(paths).toContain(`${API_PREFIX}${SIGN_UP_PATH}`);
     expect(paths).toContain(`${API_PREFIX}/diagnostics/admin-only`);
     expect(paths).toContain(`${API_PREFIX}/invitations`);
     expect(paths).toContain(`${API_PREFIX}/invitations/accept`);
@@ -120,7 +121,11 @@ describe('every /api/v1 route not on the allowlist refuses an anonymous request'
   }, 60_000);
 
   it('subtracts exactly one named list, and it is the one the API reads', () => {
-    expect(UNAUTHENTICATED_ROUTES).toHaveLength(7);
+    // Pinned, so growing the unauthenticated surface is an edit somebody had to make on purpose.
+    // Eight since sign-up (docs/project/prd.md, 3.1.15): registering is how an account comes to
+    // exist, which is circular in exactly the way sign-in is, and `allowlist.ts` argues it against
+    // the seven that were already here rather than beside them.
+    expect(UNAUTHENTICATED_ROUTES).toHaveLength(8);
     for (const entry of UNAUTHENTICATED_ROUTES) {
       expect(isAllowlisted(entry.method, entry.path), `${entry.method} ${entry.path}`).toBe(true);
       expect(entry.because.length).toBeGreaterThan(20);
@@ -131,6 +136,11 @@ describe('every /api/v1 route not on the allowlist refuses an anonymous request'
     expect(isAllowlisted('GET', `${API_PREFIX}/users`)).toBe(false);
     expect(isAllowlisted('PATCH', `${API_PREFIX}/users/anything`)).toBe(false);
     expect(isAllowlisted('POST', `${API_PREFIX}/health`)).toBe(false);
+    // Sign-up is one method on one path. Nothing else under `/auth` came with it, and no read of
+    // an account did: the route that creates an account is open, and every route that describes
+    // one stays closed.
+    expect(isAllowlisted('POST', `${API_PREFIX}${SIGN_UP_PATH}`)).toBe(true);
+    expect(isAllowlisted('GET', `${API_PREFIX}${SIGN_UP_PATH}`)).toBe(false);
   });
 
   it('reaches every allowlisted route anonymously', async () => {

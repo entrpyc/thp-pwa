@@ -984,7 +984,7 @@ async function plantId(
 // -------------------------------------------------------------------------------------------
 // Task 2.2 — reaching a noted moment, from the list's side
 
-describe('a note is reachable from its moment and its moment from the note', () => {
+describe('a note’s own moment is reachable from its card', () => {
   it('seeks from a card’s timestamp without starting playback', async () => {
     const where = await publishedRecording(`Screen seek ${RUN}`);
     await plant(where, member, 'Ninety seconds in.', 'public', 90_000);
@@ -1005,85 +1005,6 @@ describe('a note is reachable from its moment and its moment from the note', () 
       // The same rule selecting a transcript line follows: finding your place is not asking for
       // sound.
       expect((await audioState(page)).paused).toBe(true);
-    } finally {
-      await page.context().close();
-    }
-  }, 180_000);
-
-  it('opens the Notes tab at the note a marker names, and marks it', async () => {
-    const where = await publishedRecording(`Screen reveal ${RUN}`);
-    await plant(where, member, 'The first moment.', 'public', 20_000);
-    const target = await plantId(where, member, 'The moment being reached.', 'public', 90_000);
-
-    const page = await openTeaching(where, { withAudio: true });
-    try {
-      await waitForAudio(page);
-      /*
-       * Shut it first. `Notes` is the tab the page opens with, and what this test is *for* is that
-       * a marker opens the tab — which cannot be shown against a tab that was already open. So the
-       * premise is established rather than assumed, and the assertion below still means something.
-       */
-      await page.getByRole('tab', { name: 'Notes' }).click();
-      expect(
-        await page.getByRole('tab', { name: 'Notes' }).getAttribute('aria-selected'),
-      ).toBe('false');
-
-      await page
-        .getByRole('button', { name: 'Note at 01:30' })
-        .click({ position: { x: 1, y: 2 } });
-
-      await expect
-        .poll(() => page.getByRole('form', { name: 'Write a note' }).count(), { timeout: 30_000 })
-        .toBe(1);
-      expect(await page.getByRole('tab', { name: 'Notes' }).getAttribute('aria-selected')).toBe(
-        'true',
-      );
-      // Briefly marked, so it is findable in a long list — the notes green, and on that card only.
-      await expect
-        .poll(
-          () =>
-            card(page, target).evaluate((one) => getComputedStyle(one).borderTopColor),
-          { timeout: 10_000 },
-        )
-        .toBe(hexToRgb('#22C55E'));
-    } finally {
-      await page.context().close();
-    }
-  }, 180_000);
-
-  it('opens a collapsed marker at its earliest note, with the rest as the next rows', async () => {
-    const where = await publishedRecording(`Screen collapsed ${RUN}`);
-    // Two inside one 1.2s window on a two-minute teaching, and one far away.
-    const first = await plantId(where, member, 'Earliest of the pair.', 'public', 60_000);
-    await plant(where, member, 'The other of the pair.', 'public', 60_400);
-    await plant(where, member, 'Somewhere else entirely.', 'public', 10_000);
-
-    const page = await openTeaching(where, { withAudio: true });
-    try {
-      await waitForAudio(page);
-      await page
-        .getByRole('button', { name: '2 notes from 01:00' })
-        .click({ position: { x: 1, y: 2 } });
-
-      await expect
-        .poll(() => page.getByRole('form', { name: 'Write a note' }).count(), { timeout: 30_000 })
-        .toBe(1);
-      // Seeks to the *earliest* of the pair, and marks that one.
-      await expect
-        .poll(() => audioState(page).then((one) => Math.round(one.currentTime)), {
-          timeout: 15_000,
-        })
-        .toBe(60);
-      await expect
-        .poll(() => card(page, first).evaluate((one) => getComputedStyle(one).borderTopColor), {
-          timeout: 10_000,
-        })
-        .toBe(hexToRgb('#22C55E'));
-
-      // And the rest of the collapsed group are the next rows — the list's own order, unchanged.
-      const rows = await listed(page);
-      const at = rows.findIndex((one) => one.includes('Earliest of the pair.'));
-      expect(rows[at + 1]).toContain('The other of the pair.');
     } finally {
       await page.context().close();
     }
@@ -1705,14 +1626,15 @@ describe('the group reads the raised notes first', () => {
       expect(await page.getByRole('list', { name: 'Pinned' }).getByRole('listitem').count()).toBe(1);
       expect(await page.getByRole('list', { name: 'Notes' }).count()).toBe(0);
 
-      // Its tick is at its own moment, unmoved by being raised. Asked of the transport rather than
-      // of the page, because the card's own timestamp link reads almost the same.
-      expect(
-        await page
-          .getByRole('region', { name: 'Player' })
-          .getByRole('button', { name: 'Note at 01:30' })
-          .count(),
-      ).toBe(1);
+      // Its tick is still on the track at its own moment, unmoved by being raised — 90s of the
+      // two-minute fixture. Asked of the transport rather than of the page, because the card's own
+      // timestamp reads almost the same.
+      const percents = await page
+        .getByRole('region', { name: 'Player' })
+        .locator('span[class*="marker"]')
+        .evaluateAll((all) => all.map((one) => Number.parseFloat((one as HTMLElement).style.left)));
+      expect(percents.length).toBe(1);
+      expect(percents[0]).toBeCloseTo((90 / TEACHING_SECONDS) * 100, 0);
     } finally {
       await page.context().close();
     }

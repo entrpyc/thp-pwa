@@ -1,6 +1,7 @@
 import {
   API_PREFIX,
   AUTH_SESSION_PATH,
+  SIGN_UP_PATH,
   INVITATIONS_ACCEPT_PATH,
   PASSWORD_RESET_COMPLETE_PATH,
   PASSWORD_RESET_PATH,
@@ -33,6 +34,16 @@ import {
  * holds the property the row protects, but the list is no longer short: **ticket 5 should add none**,
  * and any later ticket proposing an entry should have to argue against these seven rather than beside
  * them.
+ *
+ * **Sign-up is the eighth** (docs/project/prd.md, 3.1.15), and it is the entry that had to argue
+ * against the seven. It wins on the same ground the second one does: registering is how an account
+ * comes to exist, so requiring a session to reach it is circular in exactly the way requiring one to
+ * sign in would be. It carries no account content — a refusal, or the account it has just created
+ * for the caller — but it is the first entry on this list that **writes**, and the first that will
+ * tell an anonymous caller that an address is taken. That disclosure is unavoidable rather than
+ * accepted lightly: an address that already has an account cannot be given a second one, so the
+ * only alternative is to claim a success that did not happen. It is the one entry here that wants a
+ * rate limit and does not yet have one.
  */
 export interface AllowlistEntry {
   readonly method: string;
@@ -54,6 +65,14 @@ export const UNAUTHENTICATED_ROUTES: readonly AllowlistEntry[] = [
     method: 'POST',
     path: `${API_PREFIX}${AUTH_SESSION_PATH}`,
     because: 'Signing in is how a session comes to exist; requiring one would be circular.',
+  },
+  {
+    method: 'POST',
+    path: `${API_PREFIX}${SIGN_UP_PATH}`,
+    because:
+      'Registering is how the account comes to exist; requiring a session would be circular in ' +
+      'exactly the way sign-in is. It answers with a refusal or with the account it has just ' +
+      'created for the caller, and with nothing about anybody else.',
   },
   {
     method: 'GET',

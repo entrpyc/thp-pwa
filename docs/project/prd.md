@@ -21,7 +21,7 @@ It is built as a Progressive Web App on a single codebase, reachable from any br
 | :-------------------- | :-------------------------------------------------------------------------------------------------------------------------------------------------------- |
 | Product type          | Progressive Web App, distributed via web and app stores                                                                                                   |
 | Target audience       | Private ministry group members — 100 at launch, scaling to 1,000+                                                                                        |
-| Access model          | Invite-only, login required, all content member-exclusive                                                                                                 |
+| Access model          | Open registration or admin invitation, login required, all content member-exclusive; every role above Member is admin-assigned                             |
 | Content cadence       | Weekly teaching upload, plus back-catalogue processing                                                                                                    |
 | External distribution | Spotify (teaching series as podcasts); Instagram, TikTok and LinkedIn (video reels)                                                                       |
 | Core purpose          | A single hub where every teaching becomes durable, searchable and interconnected — and where members engage with it all week rather than hearing it once |
@@ -30,7 +30,7 @@ It is built as a Progressive Web App on a single codebase, reachable from any br
 
 ### 🔨 3.1 Accounts & access
 
-*Everything in the product sits behind this. The group is private by design: there is no public surface and no self-signup.*
+*Everything in the product sits behind this. The group is private by design: there is no public surface, and nothing is readable without an account. Getting an account is the one thing that is open — a person can register themselves, or be invited — but what an account is **allowed to do** is not: everyone starts as a Member, and every role above that is assigned by an admin.*
 
 | Role        | Description                                                 | Permissions                                                                                                                                                                                                                                                                                                                                   |
 | :---------- | :---------------------------------------------------------- | :-------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
@@ -42,7 +42,7 @@ It is built as a Progressive Web App on a single codebase, reachable from any br
 
 - ✅ **3.1.1** Every user has an individual account identified by email address, with password authentication.
 - ✅ **3.1.2** All content in the product requires an authenticated session. There is no anonymous or public view of any recording, video, summary, note or mind map — with the single exception of an explicitly shared mind map link (3.8.13).
-- ✅ **3.1.3** New members join by admin invitation only. An admin enters an email address and assigns a role; the invitee receives an invitation and sets their own password to activate the account.
+- ✅ **3.1.3** An admin can invite a new member directly. The admin enters an email address and assigns a role; the invitee receives an invitation and sets their own password to activate the account. This is how somebody arrives already holding a role above Member, and how an admin brings in a person who would not otherwise find the product — it is one of the two routes to an account, alongside 3.1.15.
 - ✅ **3.1.4** Invitations expire seven days after they are issued, and can be revoked or re-sent by an admin before they are accepted. Re-sending issues a fresh link and restarts the seven days rather than extending the original, so a forgotten invitation cannot be quietly kept alive.
 - ✅ **3.1.5** An admin can change any user's role at any time. Permissions are enforced server-side on every request, never only in the interface.
 - ✅ **3.1.6** A user can reset a forgotten password through an email-based flow without admin involvement. A reset link is valid for one hour and can be used once, and a second request inside a minute sends no second message. The response to a reset request is identical whether or not the address has an account, so the flow never discloses who is a member.
@@ -53,7 +53,10 @@ It is built as a Progressive Web App on a single codebase, reachable from any br
 - ✅ **3.1.11** At least one Admin account must exist at all times. The system prevents removal or demotion of the last remaining admin.
 - 🔨 **3.1.12** A user has a profile carrying their display name and optional avatar, shown as the author of their public notes (3.12) and SOS signals (3.16). A display name is up to 80 characters and is edited by its owner alone — an admin can end an account or change its role, and cannot rename the person behind it.
 - ✅ **3.1.13** Signing in creates a server-side session, held by the client as an opaque token in an HTTP-only cookie that carries nothing about the user. A session lasts 30 days and is extended each time it is used; signing out revokes it, as does deactivation (3.1.7). Passwords are held only as hashes and are never recoverable, only reset (3.1.6).
-- ✅ **3.1.14** The first Admin account is created by an operator command at deployment, from credentials held on the host rather than in the product. Re-running that command against an existing account never resets its password. Every account after the first arrives by invitation (3.1.3), which is what makes 3.1.11's guarantee true from the first minute the product runs.
+- ✅ **3.1.14** The first Admin account is created by an operator command at deployment, from credentials held on the host rather than in the product. Re-running that command against an existing account never resets its password. Every account after the first arrives either by invitation (3.1.3) or by registration (3.1.15), and neither can produce an admin: an invitation's role is chosen by an admin, and a registration's role is not chosen at all. That is what makes 3.1.11's guarantee true from the first minute the product runs — the set of admins only ever changes because an existing admin changed it.
+- ✅ **3.1.15** A person can register an account themselves, from a sign-up screen reachable without a session, by giving an email address and choosing a password. The address is not verified: the real gate on this product is not who holds an inbox but what an account is permitted to do, and an unverified address costs its owner a password-reset link they cannot receive (3.1.6) rather than costing the product anything. Registering signs the new account in immediately, in the same response, so there is no moment where the account exists and its owner is looking at a sign-in form.
+- ✅ **3.1.16** **A registration always produces a Member**, and the request carries no role at all. Every role above Member is reached only by an admin assigning it (3.1.5) — on an account that registered exactly as on an account that was invited, through the same control in the same member list (3.19.9). A person who registers while holding an unaccepted invitation to the same address becomes a Member like anybody else; the outstanding invitation is closed, and the role it carried is the admin's to re-apply rather than something the product grants on their behalf.
+- ✅ **3.1.17** Registration is the one place the product tells an anonymous caller that an address already has an account. Everywhere else that would be an enumeration oracle and is refused as one — sign-in answers identically for a wrong password and an unknown address (3.1.1), and a reset request answers identically whether or not the address is a member (3.1.6). Here it is unavoidable: an address that already has an account cannot be given a second one, and the alternative is a screen that reports a success that did not happen. The disclosure is bounded to that single fact and is the reason this route, alone among the unauthenticated ones, warrants a request rate limit.
 
 ### 🔨 3.2 Audio recordings & playback
 
@@ -452,7 +455,7 @@ It is built as a Progressive Web App on a single codebase, reachable from any br
 - 📝 **3.19.6** Video creation entry point and generation status (3.11.4.1).
 - 📝 **3.19.7** Questionnaire authoring (3.13.2) and Flow Tracker question bank curation (3.14.11).
 - 📝 **3.19.8** Announcement composition and broadcast (3.17.15).
-- ✅ **3.19.9** User management: invitations, role assignment, deactivation and the member list (3.1.3–3.1.7).
+- ✅ **3.19.9** User management: invitations, role assignment, deactivation and the member list (3.1.3–3.1.7). The list is every account, however it arrived — registered (3.1.15) and invited accounts are one list with one set of controls, because an admin managing roles is not interested in which door somebody came through.
 - 📝 **3.19.10** Audio processing settings and sound profile configuration (3.4.6).
 - 📝 **3.19.11** External publishing status and queues (3.20.6).
 - 📝 **3.19.12** SOS oversight: view open signals, close them, remove them (3.16.9, 3.16.11).
@@ -560,15 +563,15 @@ It is built as a Progressive Web App on a single codebase, reachable from any br
 
 | Field                    | Set by                 | Notes                                                                     |
 | :----------------------- | :--------------------- | :------------------------------------------------------------------------ |
-| Email address            | User-set at invitation | Identity and login (3.1.1)                                                |
+| Email address            | User-set               | Given at registration, or at invitation; identity and login (3.1.1)       |
 | Display name             | User-set               | Shown on public notes and SOS signals (3.1.12)                            |
 | Avatar                   | User-set               | Optional                                                                  |
-| Role                     | Admin-set              | Admin, Contributor or Member (3.1)                                        |
-| Status                   | Admin-set              | Invited, active or deactivated; deactivation is reversible (3.1.7)        |
+| Role                     | Admin-set              | Admin, Contributor or Member (3.1); Member on registration (3.1.16)       |
+| Status                   | Admin-set              | Invited, active or deactivated; deactivation is reversible (3.1.7). A registered account is active from the moment it is created |
 | Notification preferences | User-set               | Per event category (3.17.13)                                              |
 | Preferred playback speed | User-set               | One of the six steps at 3.2.4, applied to every recording on every device |
 | Password                 | User-set               | Held only as a hash; reset, never recovered (3.1.6, 3.1.13)               |
-| Date joined              | Auto-set               | On invitation acceptance                                                  |
+| Date joined              | Auto-set               | On registration, or on invitation acceptance                              |
 
 ### 4.2 Recording
 

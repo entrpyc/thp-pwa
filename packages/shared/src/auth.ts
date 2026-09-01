@@ -48,3 +48,28 @@ export interface SessionPayload {
 export interface SignOutPayload {
   readonly signedOut: true;
 }
+
+/**
+ * Path of `POST /api/v1/auth/sign-up` — registering an account without an invitation.
+ *
+ * Its own path rather than a second method on {@link AUTH_SESSION_PATH}: signing up creates an
+ * *account* and a session, where signing in creates only a session, and one path answering two
+ * different creations is a path whose `201` means two things.
+ */
+export const SIGN_UP_PATH = '/auth/sign-up';
+
+/** The screen that registration happens on, on the web origin rather than under the API prefix. */
+export const SIGN_UP_PAGE_PATH = '/sign-up';
+
+/**
+ * Body of `POST /api/v1/auth/sign-up`.
+ *
+ * **No `role` field, deliberately.** A registrant is a Member and says nothing about it
+ * (docs/project/prd.md, 3.1.15); a request shape with a role in it is a request shape somebody
+ * will one day trust. Changing a role is an admin action on an account that already exists
+ * (3.1.5), and it travels on `PATCH /api/v1/users/:id` where it can be authorised.
+ */
+export interface SignUpRequest {
+  readonly email: string;
+  readonly password: string;
+}

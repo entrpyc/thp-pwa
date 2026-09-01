@@ -76,7 +76,7 @@ function DeadEnd({ code }: { code: ApiErrorCode | null }) {
       <div className={styles.card}>
         <div>
           <h1 className={styles.title}>{heading}</h1>
-          <p className={styles.subtitle}>Teaching Hub is invitation only.</p>
+          <p className={styles.subtitle}>Teaching Hub — the private teaching library.</p>
         </div>
         <p className={styles.prose}>{explanation}</p>
         {deactivated ? (

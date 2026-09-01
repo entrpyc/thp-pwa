@@ -61,6 +61,11 @@
   composes: error from '../sign-in/sign-in.module.css';
 }
 
+/* The way on from a dead end. Sign-in's secondary link, unchanged. */
+.link {
+  composes: link from '../sign-in/sign-in.module.css';
+}
+
 /* The address the invitation was sent to. Present so it is obvious whose account this becomes —
  * and a real input, so a password manager has a username field to attach the new credential to. */
 .readonlyValue {

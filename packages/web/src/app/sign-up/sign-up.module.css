@@ -1,0 +1,68 @@
+/*
+ * The sign-up screen.
+ *
+ * There is no `pages/sign-up.png`; by operator decision the carve-out that covers the other auth
+ * screens covers this one, since it is an auth screen and every component it needs already exists.
+ * **It invents nothing.** Everything is composed from `sign-in.module.css` — it is sign-in's card
+ * with a second rule under the password field — so the five extrapolations documented there are
+ * stated once and this screen cannot drift from them.
+ *
+ * `.rule` is the one declaration that is not a `composes`, and it is the same recipe
+ * `accept-invitation.module.css` states for the same job: the password rule, printed before anybody
+ * can fail it, at the weight the guide gives supporting metadata.
+ */
+
+.screen {
+  composes: screen from '../sign-in/sign-in.module.css';
+}
+
+.card {
+  composes: card from '../sign-in/sign-in.module.css';
+}
+
+.cardErrored {
+  composes: cardErrored from '../sign-in/sign-in.module.css';
+}
+
+.title {
+  composes: title from '../sign-in/sign-in.module.css';
+}
+
+.subtitle {
+  composes: subtitle from '../sign-in/sign-in.module.css';
+}
+
+.form {
+  composes: form from '../sign-in/sign-in.module.css';
+}
+
+.field {
+  composes: field from '../sign-in/sign-in.module.css';
+}
+
+.label {
+  composes: label from '../sign-in/sign-in.module.css';
+}
+
+.input {
+  composes: input from '../sign-in/sign-in.module.css';
+}
+
+.submit {
+  composes: submit from '../sign-in/sign-in.module.css';
+}
+
+.error {
+  composes: error from '../sign-in/sign-in.module.css';
+}
+
+.link {
+  composes: link from '../sign-in/sign-in.module.css';
+}
+
+/* The rule, before the failure. Visible from the moment the screen loads. */
+.rule {
+  margin: 0;
+  font-size: var(--fs-meta);
+  color: var(--color-text-dim);
+}

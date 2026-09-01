@@ -598,11 +598,10 @@ describe('what the transport says and draws (3.22.16, 3.22.17)', () => {
    * it, so this cannot pass by restating the arithmetic the stylesheet uses — if the tick and the
    * thumb ever part company again, the press lands on a different second and this fails.
    *
-   * **Against a teaching nobody has annotated**, and that is not incidental. Note markers *are*
-   * pressable where boundaries are not, so a note written at a chapter's start puts a button over
-   * the very pixel this test presses and the press seeks to the note instead of scrubbing — which is
-   * the product behaving correctly and this test measuring the wrong thing. `chapteredId` collects
-   * notes from the blocks above it, so the alignment is asked of one that collects none.
+   * **Against a teaching nobody has annotated**, which keeps the track free of note ticks over the
+   * pixels this test presses. Neither layer takes a pointer now, so a tick could not swallow the
+   * press — but a bare track is the plainest thing to measure the alignment against, and
+   * `chapteredId` collects notes from the blocks above it.
    */
   it('draws each division at the pixel the playhead occupies for that moment', async () => {
     const page = await openTeaching(inSeriesId);

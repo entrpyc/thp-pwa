@@ -3,7 +3,7 @@
 import Link from 'next/link';
 import { useRouter } from 'next/navigation';
 import { useId, useState, type FormEvent } from 'react';
-import { AUTH_SESSION_PATH, FORGOT_PASSWORD_PAGE_PATH } from '@thp/shared';
+import { AUTH_SESSION_PATH, FORGOT_PASSWORD_PAGE_PATH, SIGN_UP_PAGE_PATH } from '@thp/shared';
 import { ApiClientError, apiFetch } from '@/client/api-client';
 import styles from './sign-in.module.css';
 
@@ -58,7 +58,7 @@ export function SignInForm() {
     <div className={`${styles.card} ${error === null ? '' : styles.cardErrored}`}>
       <div>
         <h1 className={styles.title}>Sign in</h1>
-        <p className={styles.subtitle}>Teaching Hub is invitation only.</p>
+        <p className={styles.subtitle}>Welcome back to Teaching Hub.</p>
       </div>
 
       {/*
@@ -122,12 +122,18 @@ export function SignInForm() {
         </button>
 
         {/*
-          Inside the form and after the button, so it is the next thing a keyboard reaches after
+          Inside the form and after the button, so they are the next things a keyboard reaches after
           failing — and always present, not revealed by a refusal. A reset flow nobody can get to
-          from where they failed is a flow that does not exist.
+          from where they failed is a flow that does not exist, and the same is true of registering:
+          the two reasons a sign-in fails are a password you have forgotten and an account you never
+          made, so both ways out are here (docs/project/prd.md, 3.1.15).
         */}
         <Link className={styles.link} href={FORGOT_PASSWORD_PAGE_PATH}>
           Forgotten your password?
+        </Link>
+
+        <Link className={styles.link} href={SIGN_UP_PAGE_PATH}>
+          New here? Create an account
         </Link>
       </form>
     </div>

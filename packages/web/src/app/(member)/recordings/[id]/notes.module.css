@@ -569,8 +569,3 @@
   color: var(--color-primary-strong);
   font-size: var(--fs-meta);
 }
-
-/* Briefly marked so a note reached from a marker is findable in a long list (3.2.5). */
-.highlighted {
-  border-color: var(--color-notes);
-}

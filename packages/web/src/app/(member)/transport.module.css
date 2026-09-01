@@ -556,12 +556,9 @@
 /*
  * The note markers — `bottom-navigation/default.png`'s track, and 5.7.1's ticks on it.
  *
- * The wrapper is taller than the input's own band on purpose. The layer sits **behind** the input,
- * so the purple fill and the round thumb are never obscured and the slider keeps every pointer
- * event that lands on it — scrubbing is untouched. Each tick stands a little proud of that band
- * above and below, and those few pixels are what a pointer presses; a keyboard reaches the ticks
- * regardless, because they are real buttons in a sibling layer rather than children of a range
- * input, which can have none.
+ * The wrapper is taller than the input's own band on purpose, so a tick stands a little proud of
+ * it above and below and reads as a mark on the track rather than as part of the fill. The layer
+ * takes no pointer events, so the slider keeps every one that lands on it — scrubbing is untouched.
  */
 .scrubberWrap {
   position: relative;
@@ -569,18 +566,14 @@
   min-width: 0;
   display: flex;
   align-items: center;
-  /*
-   * Taller than the slider's own 4px band on purpose. The band belongs to the input — every
-   * pointer event that lands on it is a scrub — and the clear space above and below it is the
-   * part of a tick a pointer can press.
-   */
+  /* Taller than the slider's own 4px band, which is what leaves each tick standing clear of it. */
   height: var(--space-6);
 }
 
 /*
  * Above the input, unlike the boundaries beneath it. A dot sits *on* the line, and the line is
  * drawn by the input itself — a layer below it would put every dot behind the track it belongs to.
- * Only each dot's own button takes a pointer; the rest of the band is still a scrub.
+ * The layer takes no pointer events at all, so every press on the band is a scrub.
  */
 .markers {
   position: absolute;
@@ -600,8 +593,8 @@
 
 /*
  * A note is a **dot on the line**, and a chapter boundary is a rule across it — which is how the
- * two are told apart at a glance. The button itself is the transparent target, sized for a finger
- * and centred on its own position, and the dot it draws is the small mark in the middle of it.
+ * two are told apart at a glance. The tick is a transparent box centred on its own position, and
+ * the dot it draws is the small mark in the middle of it.
  */
 .marker {
   position: absolute;
@@ -613,11 +606,6 @@
   display: flex;
   align-items: center;
   justify-content: center;
-  padding: 0;
-  background: transparent;
-  border: none;
-  pointer-events: auto;
-  cursor: pointer;
 }
 
 .marker::before {
