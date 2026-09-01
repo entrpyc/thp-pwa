@@ -1,7 +1,8 @@
 import { readFileSync } from 'node:fs';
 import { resolve } from 'node:path';
 import { describe, expect, it } from 'vitest';
-import { APP_BACKGROUND_COLOUR } from '@/app/app-theme';
+import { APP_BACKGROUND_COLOUR, APP_ICON } from '@/app/app-theme';
+import manifest from '@/app/manifest';
 import { parseCustomProperties } from '../../../../tools/style-tokens';
 
 /**
@@ -25,5 +26,43 @@ describe('the theme colour the launcher paints', () => {
     );
 
     expect(tokens.get('--color-bg')).toBe(APP_BACKGROUND_COLOUR);
+  });
+});
+
+/**
+ * **The tab and the home screen draw one mark.**
+ *
+ * They are the same file rather than two copies — {@link APP_ICON} — so this is not a comparison of
+ * pixels but of who points where: the manifest's `any` entry at 192, the document's `icons`
+ * metadata, and a file actually sitting in `public` behind both. Getting any one of the three
+ * wrong is silent: a browser that cannot fetch an icon draws its own placeholder and says nothing,
+ * which is exactly how a tab ends up generic while the installed app looks right.
+ *
+ * The layout is read as text rather than imported, because importing it would pull the document's
+ * stylesheets into a node test to learn one string.
+ */
+describe('the icon the browser tab draws', () => {
+  it('is the file the manifest installs', () => {
+    const listed = manifest().icons ?? [];
+    const any = listed.filter((icon) => icon.purpose === 'any');
+
+    expect(any.map((icon) => icon.src)).toContain(APP_ICON);
+  });
+
+  it('is what the document actually points the tab at', () => {
+    const layout = readFileSync(
+      resolve(import.meta.dirname, '..', '..', 'src', 'app', 'layout.tsx'),
+      'utf8',
+    );
+
+    // The metadata names the constant rather than spelling a path, which is the whole of how the
+    // two surfaces are kept from drifting.
+    expect(layout).toContain('icon: APP_ICON');
+  });
+
+  it('is a file that is actually served', () => {
+    const file = resolve(import.meta.dirname, '..', '..', 'public', ...APP_ICON.split('/'));
+
+    expect(readFileSync(file).length).toBeGreaterThan(0);
   });
 });

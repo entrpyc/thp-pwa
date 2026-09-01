@@ -1,12 +1,19 @@
 import type { ReactNode } from 'react';
 import type { Viewport } from 'next';
-import { APP_BACKGROUND_COLOUR } from './app-theme';
+import { APP_BACKGROUND_COLOUR, APP_ICON } from './app-theme';
 import './tokens.css';
 import './globals.css';
 import { ServiceWorkerRegistration } from './service-worker-registration';
 
+/**
+ * **The tab draws the installed app's own icon**, because it is the same file: {@link APP_ICON} is
+ * the manifest's 192px entry, named here rather than copied, so a tab and a home screen cannot show
+ * two different marks. Without this the browser falls back to `/favicon.ico` — which this app does
+ * not serve — and the tab is left with whatever the browser draws for a site that has no icon.
+ */
 export const metadata = {
   title: 'Teaching Hub',
+  icons: { icon: APP_ICON, apple: '/apple-icon.png' },
 };
 
 /**
