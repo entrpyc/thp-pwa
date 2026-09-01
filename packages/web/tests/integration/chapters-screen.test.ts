@@ -585,6 +585,71 @@ describe('what the transport says and draws (3.22.16, 3.22.17)', () => {
   }, 180_000);
 
   /**
+   * **A division is drawn where the playhead actually stands at that moment**, which is a stronger
+   * claim than the one above and the one a member checks by pressing a chapter's play control.
+   *
+   * A range thumb's *centre* travels from half a thumb in to half a thumb short of the end — it has
+   * to stay inside the control — so a tick placed across the full width sits where the thumb never
+   * quite is: furthest out at the ends, exact only at the midpoint. The tick layers are inset by
+   * half a thumb to correct for it.
+   *
+   * Asserted by **pressing the track at the pixel the division is drawn at** and reading the value
+   * that produces. That is the mapping from screen position to moment as the browser itself computes
+   * it, so this cannot pass by restating the arithmetic the stylesheet uses — if the tick and the
+   * thumb ever part company again, the press lands on a different second and this fails.
+   *
+   * **Against a teaching nobody has annotated**, and that is not incidental. Note markers *are*
+   * pressable where boundaries are not, so a note written at a chapter's start puts a button over
+   * the very pixel this test presses and the press seeks to the note instead of scrubbing — which is
+   * the product behaving correctly and this test measuring the wrong thing. `chapteredId` collects
+   * notes from the blocks above it, so the alignment is asked of one that collects none.
+   */
+  it('draws each division at the pixel the playhead occupies for that moment', async () => {
+    const page = await openTeaching(inSeriesId);
+    try {
+      const track = bar(page).getByRole('slider', { name: 'Position' });
+      const divisions = bar(page).locator('[class*="boundary"]');
+      await expect.poll(() => divisions.count(), { timeout: 30_000 }).toBe(2);
+
+      const trackBox = await track.boundingBox();
+      expect(trackBox).not.toBeNull();
+      const midY = (trackBox as { y: number; height: number }).y +
+        (trackBox as { height: number }).height / 2;
+
+      // The two divisions are the starts of chapters two and three.
+      const expected = [CHAPTER_MS, 2 * CHAPTER_MS];
+
+      for (const [index, startMs] of expected.entries()) {
+        const box = await divisions.nth(index).boundingBox();
+        expect(box, `division ${index}`).not.toBeNull();
+        const centreX =
+          (box as { x: number; width: number }).x + (box as { width: number }).width / 2;
+
+        await page.mouse.click(centreX, midY);
+
+        /*
+         * Polled, because the slider is controlled: the press seeks the element and the value comes
+         * back through the player's state, so reading once races the render and reads the value the
+         * *previous* press left behind.
+         *
+         * Within a second — the slider's own step, so this is "the nearest moment the control can
+         * represent". The teaching is two minutes across roughly six hundred pixels, so a second is
+         * about five pixels: the misalignment this guards against was more than one, and a tick that
+         * drifts back to the full-width span never settles inside this and fails.
+         */
+        await expect
+          .poll(async () => Math.abs(Number(await track.inputValue()) - startMs), {
+            timeout: 30_000,
+            message: `division ${index} should land on ${startMs}ms`,
+          })
+          .toBeLessThan(1_000);
+      }
+    } finally {
+      await page.context().close();
+    }
+  }, 180_000);
+
+  /**
    * **The chapter is named on the second line and nowhere else on the bar.**
    *
    * The operator dropped [3.22.18](docs/project/prd.md) — the chapter beside the scrubber's

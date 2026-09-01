@@ -285,6 +285,47 @@
   height: 4px;
   accent-color: var(--color-primary);
   cursor: pointer;
+  /*
+   * Chrome's UA sheet gives a range input a 2px margin of its own, which puts the input's box 2px
+   * inside the wrap the tick layers are measured against. Two coordinate systems 2px apart is two
+   * coordinate systems: zeroed here so the input and those layers share one origin.
+   */
+  margin: 0;
+}
+
+/*
+ * **The thumb is sized here rather than by the platform, and that is what makes the ticks line up.**
+ *
+ * A range thumb does not travel the full width of its track: its *centre* runs from half a thumb in
+ * to half a thumb short of the end, because the thumb has to stay inside the control at both ends.
+ * A tick placed at `left: p%` of the full width therefore sits where the thumb never quite is —
+ * furthest out at the ends, exact only at the midpoint. That is a real misalignment a member sees
+ * as the playhead missing a chapter boundary it is supposed to be standing on.
+ *
+ * The layers below correct for it by insetting themselves half a thumb at each end, which they can
+ * only do if the thumb's width is a number this stylesheet knows. So it is stated here — 14px, the
+ * size the platform default already draws — and the two halves are spelled `7px` there. They are
+ * one number in two places, which is why this comment exists: change one and change the other.
+ *
+ * `appearance: none` is what allows a size at all. It costs nothing else — the filled portion of the
+ * track is still drawn by `accent-color` above, which is untouched.
+ */
+.scrubber::-webkit-slider-thumb {
+  -webkit-appearance: none;
+  appearance: none;
+  width: 14px;
+  height: 14px;
+  border-radius: var(--radius-pill);
+  background: var(--color-primary);
+  border: none;
+}
+
+.scrubber::-moz-range-thumb {
+  width: 14px;
+  height: 14px;
+  border-radius: var(--radius-pill);
+  background: var(--color-primary);
+  border: none;
 }
 
 .scrubber:disabled {
@@ -543,7 +584,16 @@
  */
 .markers {
   position: absolute;
-  inset: 0;
+  top: 0;
+  bottom: 0;
+  /*
+   * **Half a thumb in at each end** — see the thumb rule above. This is the span the thumb's *centre*
+   * actually travels, so `left: p%` inside it puts a tick exactly where the playhead stands at `p`.
+   * Measured against the full width instead, every tick but the midpoint one is wrong, and wrongest
+   * at the two ends where a member is most likely to be looking at the first or last note.
+   */
+  left: 7px;
+  right: 7px;
   z-index: 2;
   pointer-events: none;
 }
@@ -720,9 +770,17 @@
  * green pip standing on it. Colour alone would fail a member who cannot tell the two hues apart,
  * and this pair differs in height, in weight and in hue at once.
  */
+/*
+ * The same span the note ticks use, and it has to be the same one: a boundary and the playhead
+ * standing on it is the alignment [3.22.17](docs/project/prd.md) is actually about, and pressing a
+ * chapter's play control is the moment a member checks it.
+ */
 .boundaries {
   position: absolute;
-  inset: 0;
+  top: 0;
+  bottom: 0;
+  left: 7px;
+  right: 7px;
   z-index: 0;
   pointer-events: none;
 }
