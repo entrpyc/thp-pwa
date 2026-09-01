@@ -9,6 +9,7 @@ import {
   formatTimecode,
   type NoteView,
 } from '@thp/shared';
+import { captionAt } from '@/client/transcript/caption-line';
 import { segmentAt } from '@/client/transcript/current-segment';
 import { NoteComposer } from './recordings/[id]/note-composer';
 import { usePlayer } from './player-context';
@@ -206,6 +207,12 @@ export function TransportBar() {
   // over a silence is a caption that is wrong rather than late.
   const spoken =
     player.transcript === null ? null : segmentAt(player.transcript.segments, player.currentMs);
+  /*
+   * The pill shows a caption, not a whole segment. The ASR hands back sentences, and a long one
+   * would grow the pill up over the controls under it — so a segment past the character limit is
+   * paced through the pill piece by piece across the seconds it is being said.
+   */
+  const caption = spoken === null ? null : captionAt(spoken, player.currentMs);
 
   /*
    * No duration means no positions to place ticks at, and a failed or empty notes fetch means no
@@ -420,7 +427,7 @@ export function TransportBar() {
       {player.captionsOn ? (
         <section className={styles.caption} aria-label="Caption">
           <span className={styles.captionText}>
-            {spoken === null ? <span aria-hidden="true">–</span> : spoken.text}
+            {caption === null ? <span aria-hidden="true">–</span> : caption}
           </span>
           <button
             className={styles.captionDismiss}

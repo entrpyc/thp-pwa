@@ -444,7 +444,11 @@
    */
   background: var(--color-bg);
   border: 1px solid var(--color-border);
-  border-radius: var(--radius-pill);
+  /*
+   * A rounded rectangle rather than a pill: a caption runs to two lines at its 130-character cap,
+   * and a pill radius on a two-line box bows its ends in over the text.
+   */
+  border-radius: var(--radius-md);
   padding: var(--space-3) var(--space-5);
 }
 
