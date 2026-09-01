@@ -5,10 +5,8 @@ import { useEffect, useRef, useState, type PointerEvent as ReactPointerEvent } f
 import {
   NOW_PLAYING_PAGE_PATH,
   PLAYBACK_SPEEDS,
-  chapterAt,
   formatPlaybackSpeed,
   formatTimecode,
-  type ChapterView,
   type NoteView,
 } from '@thp/shared';
 import { segmentAt } from '@/client/transcript/current-segment';
@@ -131,24 +129,6 @@ function markerLabel(marker: Marker): string {
     : `${marker.notes.length} notes from ${at}`;
 }
 
-/**
- * **What the position label says while the track is being moved along**
- * ([3.22.18](docs/project/prd.md)).
- *
- * The timecode, and the chapter the thumb is passing through when there is one — so a member
- * dragging toward a part of the teaching sees what they are dragging *into* rather than a number
- * alone. The chapter is found by the same `chapterAt` the transport's own second line uses, over
- * the same list, so the two cannot name different chapters for one moment.
- *
- * Where a pointer can hover, hovering shows the same thing: the hover and the drag both come through
- * here, because they are the same question asked of a different position.
- */
-function positionLabel(chapters: readonly ChapterView[], atMs: number): string {
-  const chapter = chapterAt(chapters, atMs);
-  const at = formatTimecode(atMs);
-  return chapter === null ? at : `${at} · ${chapter.title}`;
-}
-
 export function TransportBar() {
   const player = usePlayer();
   const [toolbarOpen, setToolbarOpen] = useState(false);
@@ -173,19 +153,6 @@ export function TransportBar() {
    */
   const [scrubMs, setScrubMs] = useState<number | null>(null);
   const scrubTimerRef = useRef<number | null>(null);
-
-  /**
-   * The position a pointer is **hovering** over the track, or `null`
-   * ([3.22.18](docs/project/prd.md) — "where a pointer can hover, hovering shows the same thing").
-   *
-   * Separate from {@link scrubMs} because they are different states: a drag has asked to *go*
-   * somewhere and a hover has asked *what is there*. Kept apart, a hover that wanders across a
-   * settled drag cannot cancel the seek it is about to make.
-   *
-   * It is never set on a touch device, where `pointerover` does not fire without a press — which is
-   * exactly the "where a pointer can hover" the requirement scopes itself to.
-   */
-  const [hoverMs, setHoverMs] = useState<number | null>(null);
 
   // Set by the `···` gesture on release, so the compatibility click it may produce is not read as a
   // second press. A keyboard press clears it first, which is what keeps Enter and Space working.
@@ -261,17 +228,6 @@ export function TransportBar() {
    */
   const boundaries =
     max === 0 ? [] : (player.chapters?.chapters ?? []).filter((one, index) => index > 0);
-
-  /*
-   * What the elapsed label reads while the track is being moved along or hovered over
-   * ([3.22.18](docs/project/prd.md)). Neither is happening on the ordinary tick, and then it is the
-   * timecode it has always been.
-   */
-  const pointedAt = scrubMs ?? hoverMs;
-  const elapsedLabel =
-    pointedAt === null
-      ? formatTimecode(shownMs)
-      : positionLabel(player.chapters?.chapters ?? [], pointedAt);
 
   /*
    * The `···` opens on **press** rather than on release, which is what makes it two controls in one
@@ -568,26 +524,13 @@ export function TransportBar() {
 
         <div className={styles.track}>
           {/*
-            The elapsed position, and — while the track is being dragged or hovered — the chapter
-            under the thumb beside it ([3.22.18](docs/project/prd.md)). `aria-live="polite"` so a
-            member using a screen reader hears what they are dragging into rather than only being
-            able to read it.
+            The elapsed position, and **only** that. The chapter playing is named on the second line
+            of the slot above (3.22.16) and in that one place — naming it here too would put the same
+            fact in two places on one bar, and would grow and shrink the label as the teaching moved
+            between chapters of different name lengths.
           */}
-          <span className={styles.time} aria-live="polite">
-            {elapsedLabel}
-          </span>
-          <div
-            className={styles.scrubberWrap}
-            onPointerMove={(event) => {
-              // Hover only — a pointer that is pressed is a drag, and the drag owns the label.
-              if (max === 0 || event.buttons !== 0) return;
-              const box = event.currentTarget.getBoundingClientRect();
-              if (box.width === 0) return;
-              const across = (event.clientX - box.left) / box.width;
-              setHoverMs(Math.round(Math.min(1, Math.max(0, across)) * max));
-            }}
-            onPointerLeave={() => setHoverMs(null)}
-          >
+          <span className={styles.time}>{formatTimecode(shownMs)}</span>
+          <div className={styles.scrubberWrap}>
             {/*
               A real range input rather than a styled div: scrubbing has to work with a keyboard and
               be announced as a slider, and the guide's thin track with a purple fill and a round

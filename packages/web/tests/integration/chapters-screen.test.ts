@@ -23,11 +23,16 @@ import { uploadTestAudio } from '../support/audio';
  * **The chapter surfaces, driven in a real browser** ([3.22.10](docs/project/prd.md)–
  * [3.22.19](docs/project/prd.md)).
  *
- * Real for the reason every player suite here is real: four of these requirements are claims about a
- * *live media element* — that selecting a chapter does not start it (3.22.12), that the play control
- * does, that the transport names the chapter it has reached (3.22.16), and that the track names the
- * chapter under a thumb being dragged (3.22.18). None of those is a claim a component test can make,
- * because none of them is true of anything but an element that is actually decoding audio.
+ * Real for the reason every player suite here is real: three of these requirements are claims about
+ * a *live media element* — that selecting a chapter does not start it (3.22.12), that the play
+ * control does, and that the transport names the chapter it has reached as the teaching moves
+ * (3.22.16). None of those is a claim a component test can make, because none of them is true of
+ * anything but an element that is actually decoding audio.
+ *
+ * **3.22.18 is withdrawn** — the operator asked for the chapter to be named on the transport's
+ * second line and in that one place, so the position label beside the scrubber is a bare timecode.
+ * The test that used to assert the chapter there now asserts that it is *not* there, which is what
+ * stops it coming back by accident.
  *
  * **The teaching is two minutes long and its chapters are forty seconds each.** The length range of
  * [3.22.4](docs/project/prd.md) is a rule about what the *worker* proposes, and it is asserted
@@ -426,7 +431,7 @@ describe('the chapter page (3.22.13, 3.22.14, 3.22.15)', () => {
   }, 300_000);
 });
 
-describe('what the transport says and draws (3.22.16, 3.22.17, 3.22.18)', () => {
+describe('what the transport says and draws (3.22.16, 3.22.17)', () => {
   /**
    * **The docked transport names the recording playing and, beneath it, the chapter playing now.**
    * Driven by playing into the teaching rather than by seeding a position, because the requirement
@@ -487,56 +492,32 @@ describe('what the transport says and draws (3.22.16, 3.22.17, 3.22.18)', () => 
   }, 180_000);
 
   /**
-   * **Scrubbing the track names the chapter under the thumb alongside the position**
-   * ([3.22.18](docs/project/prd.md)) — so a member dragging toward a part of the teaching sees what
-   * they are dragging into rather than a timecode alone.
+   * **The chapter is named on the second line and nowhere else on the bar.**
+   *
+   * The operator dropped [3.22.18](docs/project/prd.md) — the chapter beside the scrubber's
+   * position — so the elapsed label is a bare timecode again, and this is what stops it coming back
+   * by accident. The second line above is where a member reads which chapter is playing.
    */
-  it('names the chapter under the thumb while the track is being moved', async () => {
+  it('leaves the position label a bare timecode', async () => {
     const page = await openTeaching(chapteredId);
     try {
       const elapsed = bar(page).locator('[class*="time"]').first();
-      // Before any gesture it is the timecode it has always been.
       await expect
         .poll(async () => (await elapsed.textContent()) ?? '', { timeout: 30_000 })
         .toBe('00:00');
 
-      // Hovering over the last third of the track: the same answer the drag gives (3.22.18).
+      // Walk the thumb into the second chapter: the label follows the position and names nothing.
       const track = bar(page).getByRole('slider', { name: 'Position' });
-      const box = await track.boundingBox();
-      expect(box).not.toBeNull();
-      await page.mouse.move(box!.x + box!.width * 0.9, box!.y + box!.height / 2);
-
-      await expect
-        .poll(async () => (await elapsed.textContent()) ?? '', { timeout: 30_000 })
-        .toContain('The gardener');
-    } finally {
-      await page.context().close();
-    }
-  }, 240_000);
-
-  /**
-   * The other half of 3.22.18 — the **drag**, which is the case the requirement is written about.
-   * The hover above is what "where a pointer can hover" adds to it, and both come through one
-   * function precisely so a member on a phone and a member on a desktop are told the same thing.
-   *
-   * Driven from the keyboard, because that is a drag of the slider that needs no pointer: the
-   * scrubber is a real range input, so an arrow key is a move of the thumb.
-   */
-  it('names the chapter under the thumb while the track is being dragged', async () => {
-    const page = await openTeaching(chapteredId);
-    try {
-      const elapsed = bar(page).locator('[class*="time"]').first();
-      const track = bar(page).getByRole('slider', { name: 'Position' });
-
       await track.focus();
-      // The scrubber steps in seconds, so this walks the thumb into the second chapter.
       for (let press = 0; press < CHAPTER_MS / 1000 + 2; press += 1) {
         await track.press('ArrowRight');
       }
 
-      await expect
-        .poll(async () => (await elapsed.textContent()) ?? '', { timeout: 30_000 })
-        .toContain('The branches');
+      const shown = (await elapsed.textContent()) ?? '';
+      expect(shown).toMatch(/^\d{2}:\d{2}$/);
+      expect(shown).not.toContain('The branches');
+      // And the second line is still naming it, which is where it belongs (3.22.16).
+      expect(await bar(page).textContent()).toContain('The vine');
     } finally {
       await page.context().close();
     }

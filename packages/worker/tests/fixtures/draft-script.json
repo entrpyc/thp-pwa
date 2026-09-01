@@ -18,5 +18,23 @@
       "book": "Psalm",
       "chapter": 23
     }
+  ],
+  "chapters": [
+    {
+      "title": "Where we left off",
+      "summary": "The teaching opens by naming last week’s ground and reading the passage again, noticing how short it is."
+    },
+    {
+      "title": "The first phrase, repeated",
+      "summary": "What the writer does with the opening phrase — repeating rather than explaining it — and why the repetition is the argument."
+    },
+    {
+      "title": "The turn, and the one word it turns on",
+      "summary": "The second half of the chapter read slowly, and what it asks for: attention rather than agreement."
+    },
+    {
+      "title": "Back to where we started",
+      "summary": "The passage read once more, unchanged, and the week’s reading set before the closing prayer."
+    }
   ]
 }

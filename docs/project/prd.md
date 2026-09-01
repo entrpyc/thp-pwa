@@ -69,7 +69,7 @@ It is built as a Progressive Web App on a single codebase, reachable from any br
 - 📝 **3.2.6** Audio continues playing when the app is backgrounded or the device is locked, with transport controls available from the device lock screen and notification area.
 - 📝 **3.2.7** Each user has a listening history recording which teachings they played, when, and how far through they got.
 - 📝 **3.2.8** A recording is marked completed for a user once they reach the end, and completed teachings are visually distinguishable when browsing.
-- ✅ **3.2.9** Members can scrub to any position in a recording, and can jump ten seconds backwards or forwards from the transport controls. The track carries two kinds of mark — the note markers of 3.12.12 and the chapter boundaries of 3.22.17 — and scrubbing names the chapter it is passing through (3.22.18).
+- ✅ **3.2.9** Members can scrub to any position in a recording, and can jump ten seconds backwards or forwards from the transport controls. The track carries two kinds of mark — the note markers of 3.12.12 and the chapter boundaries of 3.22.17. Scrubbing names the position and nothing else: which chapter is playing is read from the transport’s second line (3.22.16), and 3.22.18 is withdrawn.
 - 📝 **3.2.10** Admins and Contributors can replace the audio file on an existing recording. This re-runs processing (3.4) and transcription (3.5) while preserving the recording's notes, metadata and member progress.
 - ✅ **3.2.11** An admin can unpublish a recording, removing it from member view without deleting it or its associated content.
 - ✅ **3.2.12** A member's landing offers the teaching they were most recently listening to, showing how far they had got. Opening it restores that position and deliberately does not start playing — a member who tapped a card has not asked for sound.
@@ -517,7 +517,7 @@ It is built as a Progressive Web App on a single codebase, reachable from any br
 - 📝 **3.21.3.5** An admin can approve a batch of reviewed recordings in one action.
 - 📝 **3.21.3.6** Back-catalogue recordings can be assigned to series in bulk.
 
-### ✅ 3.22 Chapters
+### 🔨 3.22 Chapters
 
 *A ninety-minute teaching moves through several themes. Chapters name them, so a member can find the part they came back for — and see everything the product holds about that part in one place.*
 
@@ -549,7 +549,7 @@ It is built as a Progressive Web App on a single codebase, reachable from any br
 
 - ✅ **3.22.16** The docked transport (3.2.14) names the recording playing and, beneath it, the chapter currently playing, beside the cover. A recording with no chapters shows the series name on that second line, which is what it held before.
 - ✅ **3.22.17** The progress track marks every chapter boundary, distinguishable from the note markers already on it (3.12.12): chapters divide the track, notes sit on it.
-- ✅ **3.22.18** Scrubbing the track (3.2.9) names the chapter under the thumb alongside the position, so a member dragging toward a part of the teaching sees what they are dragging into rather than a timecode alone. Where a pointer can hover, hovering shows the same thing.
+- 📝 **3.22.18** Scrubbing the track (3.2.9) names the chapter under the thumb alongside the position, so a member dragging toward a part of the teaching sees what they are dragging into rather than a timecode alone. Where a pointer can hover, hovering shows the same thing. *Built and then withdrawn by the operator: the chapter is named on the transport’s second line (3.22.16) and in that one place, so the position label stays a bare timecode.*
 - ✅ **3.22.19** The expanded now-playing view (3.2.15) names the chapter playing on the same footing as the recording.
 
 ## 4. Data & metadata definitions

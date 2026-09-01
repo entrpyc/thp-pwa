@@ -243,26 +243,31 @@ afterAll(async () => {
 // =================================================================================================
 
 describe('the transport shows where the teaching has been annotated', () => {
-  it('draws a tick per visible note in the notes green, behind the fill and the thumb', async () => {
+  it('draws a round dot per visible note in the notes green, on the line itself', async () => {
     const page = await openTeaching(markedId);
     try {
-      // Three visible notes, two of them inside one collapse window — so two ticks (3.2.6).
+      // Three visible notes, two of them inside one collapse window — so two dots (3.2.6).
       await expect.poll(() => markerLabels(page).then((all) => all.length)).toBe(2);
 
       const drawn = await bar(page)
         .getByRole('button', { name: /notes? (at|from) /i })
         .first()
         .evaluate((tick) => {
-          const style = getComputedStyle(tick);
+          // The dot is the button's `::before`; the button itself is the transparent finger target
+          // around it, so the green and the roundness are read off the mark rather than the target.
+          const dot = getComputedStyle(tick, '::before');
           const layer = tick.parentElement as HTMLElement;
           const slider = layer.parentElement?.querySelector('input[type="range"]') as HTMLElement;
           return {
-            background: style.backgroundColor,
+            background: dot.backgroundColor,
+            width: Number.parseFloat(dot.width),
+            height: Number.parseFloat(dot.height),
+            radius: Number.parseFloat(dot.borderTopLeftRadius),
             notes: getComputedStyle(document.documentElement)
               .getPropertyValue('--color-notes')
               .trim(),
-            // The stacking order is the requirement: neither the played portion nor the scrub
-            // handle may be obscured, so the layer must sit under the input rather than over it.
+            // A dot sits *on* the line, and the line is the input's own track — so the layer has
+            // to be over the input, not under it, or every dot is hidden behind the track.
             layerZ: Number(getComputedStyle(layer).zIndex),
             sliderZ: Number(getComputedStyle(slider).zIndex),
             layerTakesPointer: getComputedStyle(layer).pointerEvents,
@@ -270,7 +275,10 @@ describe('the transport shows where the teaching has been annotated', () => {
         });
 
       expect(drawn.background).toBe(hexToRgb(drawn.notes));
-      expect(drawn.layerZ).toBeLessThan(drawn.sliderZ);
+      // Round, not a rule: square, and at least half its own width in corner radius.
+      expect(drawn.width).toBe(drawn.height);
+      expect(drawn.radius).toBeGreaterThanOrEqual(drawn.width / 2);
+      expect(drawn.layerZ).toBeGreaterThan(drawn.sliderZ);
       expect(drawn.layerTakesPointer).toBe('none');
     } finally {
       await page.context().close();
