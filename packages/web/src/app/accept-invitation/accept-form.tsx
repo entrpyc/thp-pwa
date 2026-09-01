@@ -80,7 +80,13 @@ export function AcceptInvitationForm({ email, token }: { email: string; token: s
         <p className={styles.subtitle}>One field, and you are in.</p>
       </div>
 
-      <form className={styles.form} onSubmit={onSubmit} noValidate>
+      {/*
+        `POST` for the reason `sign-in-form.tsx` sets out: a submission that beats hydration is made
+        by the browser with the default method, and the default puts every field in the query string.
+        This form carries the password an invitee is choosing, on a page whose URL already carries
+        their invitation token — a `GET` here would write both into the history and the access log.
+      */}
+      <form className={styles.form} method="post" onSubmit={onSubmit} noValidate>
         <div className={styles.field}>
           <label className={styles.label} htmlFor={emailId}>
             Email

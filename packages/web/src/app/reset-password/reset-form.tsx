@@ -79,7 +79,11 @@ export function ResetPasswordForm({ email, token }: { email: string; token: stri
         <p className={styles.subtitle}>One field, and you are back in.</p>
       </div>
 
-      <form className={styles.form} onSubmit={onSubmit} noValidate>
+      {/*
+        `POST`, for the reason `sign-in-form.tsx` sets out. The same pairing as the accept screen: a
+        password being chosen, on a page whose URL carries the token that authorises choosing it.
+      */}
+      <form className={styles.form} method="post" onSubmit={onSubmit} noValidate>
         <div className={styles.field}>
           <label className={styles.label} htmlFor={emailId}>
             Email

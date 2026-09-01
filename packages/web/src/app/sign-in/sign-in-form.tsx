@@ -61,7 +61,22 @@ export function SignInForm() {
         <p className={styles.subtitle}>Teaching Hub is invitation only.</p>
       </div>
 
-      <form className={styles.form} onSubmit={onSubmit} noValidate>
+      {/*
+        **`method="post"` on a form that never posts**, and it is not decoration.
+
+        The handler below calls `preventDefault`, so on every ordinary submission this attribute does
+        nothing. The submission it exists for is the one where the handler is *not there yet*: React
+        has to hydrate before `onSubmit` is attached, and a form submitted before that — a fast
+        typist pressing Enter, a slow device, a bundle that failed — is submitted by the browser
+        itself, using the default method. The default is `GET`, which puts every field in the query
+        string. That would send this form's **password** into the address bar, the history, the
+        server's access log and every proxy in between.
+
+        `POST` puts them in a request body instead. The page route does not answer `POST`, so the
+        member gets an error rather than a session — which is the honest outcome for a press that
+        happened before the page was ready, and is the outcome they got before, minus the leak.
+      */}
+      <form className={styles.form} method="post" onSubmit={onSubmit} noValidate>
         <div className={styles.field}>
           <label className={styles.label} htmlFor={emailId}>
             Email
