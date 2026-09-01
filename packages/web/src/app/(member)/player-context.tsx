@@ -254,11 +254,20 @@ const PlayerContext = createContext<PlayerApi | null>(null);
 /**
  * **The breadcrumb trail** — set by whichever page has one, cleared when it unmounts.
  *
- * Widened in Story 6 from a single current title to an **optional parent plus a current**, which is
- * the shape `top-navigation/default.png` has always drawn: a recording in a series reads
- * `home › series › recording`, and the parent is a link because getting back to the series in one
- * press is the whole point of the segment. A recording in no series keeps today's two-segment
- * trail, so nothing about the library or the landing changed.
+ * Widened in Story 6 from a single current title to a parent plus a current, which is the shape
+ * `top-navigation/default.png` draws: a recording in a series reads `home › series › recording`,
+ * and the parent is a link because getting back to the series in one press is the whole point of the
+ * segment.
+ *
+ * **Widened again to a list of ancestors**, because the chapter page has two of them. A chapter is
+ * inside a teaching which is inside a study, and a trail that could only hold one of those had to
+ * choose — it chose the teaching, and a member three levels down was shown a path that quietly
+ * skipped where they actually were. One `parent` was never a rule about the product, only about what
+ * the shape could carry; a list carries what is true.
+ *
+ * The ancestors are **outermost first**, the order they are read in, so a page states its path the
+ * way it would be spoken: study, then teaching, then the chapter you are on. A page with none keeps
+ * the two-segment trail the library and the landing have always drawn.
  */
 export interface BreadcrumbParent {
   readonly label: string;
@@ -266,11 +275,14 @@ export interface BreadcrumbParent {
 }
 
 export interface BreadcrumbTrail {
-  readonly parent: BreadcrumbParent | null;
+  /** Outermost first. Every one is a link; the current page is the only segment that is not. */
+  readonly ancestors: readonly BreadcrumbParent[];
   readonly current: string | null;
 }
 
-const EMPTY_TRAIL: BreadcrumbTrail = { parent: null, current: null };
+const NO_ANCESTORS: readonly BreadcrumbParent[] = [];
+
+const EMPTY_TRAIL: BreadcrumbTrail = { ancestors: NO_ANCESTORS, current: null };
 
 const BreadcrumbContext = createContext<{
   readonly trail: BreadcrumbTrail;
@@ -286,27 +298,34 @@ export function usePlayer(): PlayerApi {
 /**
  * Name this page in the breadcrumb for as long as it is mounted.
  *
- * `parentLabel` and `parentHref` are passed apart rather than as an object so the effect's
- * dependencies are the two strings themselves — an object literal rebuilt on every render would
- * re-run the effect on every render and clear the trail it had just set.
+ * `ancestors` is **outermost first** and every caller rebuilds it on every render, which is the one
+ * hazard this hook has to handle: an array literal in a dependency list is a new identity each time,
+ * so the effect would re-run on every render and clear the trail it had just set. The previous shape
+ * dodged that by taking the parent apart into two strings; a list cannot be taken apart, so the
+ * effect is keyed on the array's **content** instead and reads the array itself through a ref. The
+ * result is the same property as before — the trail is written when what it says changes, and not
+ * otherwise — without the caller having to memoise anything.
  */
 export function useBreadcrumbTrail(
   current: string | null,
-  parentLabel: string | null = null,
-  parentHref: string | null = null,
+  ancestors: readonly BreadcrumbParent[] = NO_ANCESTORS,
 ): void {
   const context = useContext(BreadcrumbContext);
   const setTrail = context?.setTrail;
+
+  // Content, not identity. The separators are control characters, which cannot occur in a title
+  // or a path — so no two different trails collide on one key, which a readable separator like
+  // `|` would eventually let them do. Written as escapes: a literal control character in source
+  // is invisible in every editor and is lost by the first tool that trims the line.
+  const key = ancestors.map((one) => `${one.label}\u0000${one.href}`).join('\u0001');
+
+  const latest = useRef(ancestors);
+  latest.current = ancestors;
+
   useEffect(() => {
-    setTrail?.({
-      parent:
-        parentLabel === null || parentHref === null
-          ? null
-          : { label: parentLabel, href: parentHref },
-      current,
-    });
+    setTrail?.({ ancestors: latest.current, current });
     return () => setTrail?.(EMPTY_TRAIL);
-  }, [setTrail, current, parentLabel, parentHref]);
+  }, [setTrail, current, key]);
 }
 
 export function useBreadcrumbTrailValue(): BreadcrumbTrail {

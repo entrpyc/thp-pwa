@@ -42,10 +42,14 @@ import styles from './member.module.css';
  * only control that is on every screen. It is offered unconditionally, for the same reason the
  * report route authorises nothing beyond *who*.
  *
- * The breadcrumb is home → an optional parent → the current page's title. The parent is the series
- * segment `top-navigation/default.png` draws, inserted in Story 6, and it is a **link** rather than
- * text: getting back to the series in one press is the whole of what the segment is for. A page
- * with no parent renders exactly the two segments it always did.
+ * The breadcrumb is home → every ancestor the page named, outermost first → the current page's
+ * title. Each ancestor is a **link** rather than text: getting back up in one press is the whole of
+ * what those segments are for. A page that names none renders exactly the two segments it always
+ * did.
+ *
+ * How many there are is the page's business and not this component's. A teaching in a series names
+ * one; a chapter names the series and then the teaching, so a member three levels down reads the
+ * whole path rather than a trail that skipped a level to fit.
  */
 
 function HomeIcon() {
@@ -78,7 +82,7 @@ function MenuIcon() {
 
 export function TopNavigation({ canSeeConsole }: { canSeeConsole: boolean }) {
   const [open, setOpen] = useState(false);
-  const { parent, current } = useBreadcrumbTrailValue();
+  const { ancestors, current } = useBreadcrumbTrailValue();
   const regionRef = useRef<HTMLDivElement>(null);
 
   /*
@@ -117,16 +121,21 @@ export function TopNavigation({ canSeeConsole }: { canSeeConsole: boolean }) {
               <HomeIcon />
             </Link>
           </li>
-          {parent === null ? null : (
-            <li className={styles.crumb}>
+          {/*
+            Every ancestor the page named, outermost first — one segment for a teaching in a series,
+            two for a chapter inside one. Keyed on the href rather than the index: a trail that grows
+            a segment when the payload lands would otherwise re-key the ones already drawn.
+          */}
+          {ancestors.map((ancestor) => (
+            <li className={styles.crumb} key={ancestor.href}>
               <span className={styles.separator} aria-hidden="true">
                 ›
               </span>
-              <Link className={styles.crumbLink} href={parent.href}>
-                {parent.label}
+              <Link className={styles.crumbLink} href={ancestor.href}>
+                {ancestor.label}
               </Link>
             </li>
-          )}
+          ))}
           {current === null ? null : (
             <li className={styles.crumb}>
               <span className={styles.separator} aria-hidden="true">

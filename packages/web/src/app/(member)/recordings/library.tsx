@@ -91,6 +91,20 @@ export function Library() {
           {recordings.map((recording) => (
             <li key={recording.id} className={styles.rowGroup}>
               <Link className={styles.row} href={recordingPagePath(recording.id)}>
+                {/*
+                 * The cover of the series this teaching is in, in the same slot and at the same
+                 * size the series listing draws one — a recording has no artwork of its own
+                 * (scope prd 3.2.3), so every teaching in one study shows that study's picture.
+                 *
+                 * No alternative text: it is the *series'* cover and the series is named in the
+                 * strip below this row, so a screen reader announcing it here would read the study
+                 * twice and the teaching's own title would be the third thing said. Absent rather
+                 * than an empty frame when there is nothing to show — a teaching in no series, or
+                 * in one with no cover (scope prd 3.2.6).
+                 */}
+                {recording.series?.artworkUrl == null ? null : (
+                  <img className={styles.rowCover} src={recording.series.artworkUrl} alt="" />
+                )}
                 <span className={styles.rowText}>
                   <span className={styles.rowTitle}>{recording.title}</span>
                   {recording.description === null ? null : (

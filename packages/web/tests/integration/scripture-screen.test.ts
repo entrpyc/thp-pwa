@@ -103,9 +103,11 @@ async function openTeaching(id: string): Promise<{ page: Page; requests: Request
   await page.waitForURL(`${baseUrl}${DASHBOARD_PAGE_PATH}`, { timeout: 30_000 });
 
   await page.goto(`${baseUrl}${recordingPagePath(id)}`, { waitUntil: 'domcontentloaded' });
-  // The strip is what the page is judged on, so wait for the strip rather than for the body.
+  // The strip is what the page is judged on, so wait for the strip rather than for the body. On
+  // `Notes`, which is the one entry always drawn — this was `Transcript` until that tab was hidden,
+  // and `Scripture` comes and goes with what the teaching cites.
   await expect
-    .poll(() => page.getByRole('tab', { name: 'Transcript' }).count(), { timeout: 60_000 })
+    .poll(() => page.getByRole('tab', { name: 'Notes' }).count(), { timeout: 60_000 })
     .toBe(1);
   return { page, requests };
 }
@@ -170,11 +172,9 @@ describe('the Scripture tab on the recording page', () => {
   it('draws Scripture in its position in the strip', async () => {
     const { page } = await openTeaching(citingId);
     try {
-      expect(await tabNames(page)).toEqual([
-        'Notes',
-        'Scripture',
-        'Transcript',
-      ]);
+      // Two entries, not the three this was: `Transcript` is hidden. `Scripture` still sits after
+      // `Notes` for the reason above — what changed is what follows it, not where it is.
+      expect(await tabNames(page)).toEqual(['Notes', 'Scripture']);
     } finally {
       await page.context().close();
     }
@@ -184,7 +184,7 @@ describe('the Scripture tab on the recording page', () => {
   it('leaves the tab out altogether for a teaching that cites nothing', async () => {
     const { page } = await openTeaching(bareId);
     try {
-      expect(await tabNames(page)).toEqual(['Notes', 'Transcript']);
+      expect(await tabNames(page)).toEqual(['Notes']);
       expect(await page.getByRole('tab', { name: 'Scripture' }).count()).toBe(0);
       // Not merely unselected: nothing on the page mentions it, and nothing was fetched for it.
       expect(await panelOf(page).count()).toBe(0);
@@ -269,11 +269,16 @@ describe('the Scripture tab on the recording page', () => {
     const { page, requests } = await openTeaching(citingId);
     try {
       const tab = page.getByRole('tab', { name: 'Scripture' });
-      const transcript = page.getByRole('tab', { name: 'Transcript' });
+      // The other tab single-select is proved against. `Notes` rather than `Transcript` since that
+      // one is hidden — and it is the stronger choice anyway: `Notes` is open when the page is, so
+      // the first press of `Scripture` has to close something that was already there.
+      const notes = page.getByRole('tab', { name: 'Notes' });
 
       // Nothing is asked for a tab nobody has pressed — the whole reason the tab starts closed.
       expect(scriptureCalls(requests, citingId)).toBe(0);
       expect(await panelOf(page).count()).toBe(0);
+      // And `Notes` is the one that is open, which is what the last leg below closes.
+      expect(await notes.getAttribute('aria-selected')).toBe('true');
 
       await tab.click();
       await expect.poll(() => scriptureCalls(requests, citingId), { timeout: 30_000 }).toBe(1);
@@ -285,15 +290,14 @@ describe('the Scripture tab on the recording page', () => {
       await expect.poll(() => panelOf(page).count(), { timeout: 30_000 }).toBe(0);
       expect(await tab.getAttribute('aria-selected')).toBe('false');
 
-      // Single-select: opening the transcript and then this one leaves exactly one panel open.
-      await transcript.click();
+      // Single-select: opening the notes and then this one leaves exactly one tab selected.
+      await notes.click();
       await expect
-        .poll(() => page.getByRole('list', { name: 'Transcript' }).count(), { timeout: 30_000 })
-        .toBe(1);
+        .poll(() => notes.getAttribute('aria-selected'), { timeout: 30_000 })
+        .toBe('true');
       await tab.click();
       await expect.poll(() => panelOf(page).count(), { timeout: 30_000 }).toBe(1);
-      expect(await page.getByRole('list', { name: 'Transcript' }).count()).toBe(0);
-      expect(await transcript.getAttribute('aria-selected')).toBe('false');
+      expect(await notes.getAttribute('aria-selected')).toBe('false');
     } finally {
       await page.context().close();
     }
@@ -313,14 +317,14 @@ describe('the Scripture tab on the recording page', () => {
         .poll(() => panel.textContent(), { timeout: 30_000 })
         .toMatch(/could not|try again/i);
 
-      // The player is still there and still operable, and the transcript still opens and reads.
+      // The player is still there and still operable, and the other tab still opens. `Notes` rather
+      // than `Transcript`, which is hidden — the claim is that one panel's failure is contained by
+      // that panel, and any second tab that still works proves it.
       expect(await page.getByRole('button', { name: /^(Play|Pause)$/ }).count()).toBeGreaterThan(0);
-      await page.getByRole('tab', { name: 'Transcript' }).click();
-      await expect
-        .poll(() => page.getByRole('list', { name: 'Transcript' }).textContent(), {
-          timeout: 30_000,
-        })
-        .toContain('Turn with me to the eighth chapter.');
+      const notes = page.getByRole('tab', { name: 'Notes' });
+      await notes.click();
+      await expect.poll(() => notes.getAttribute('aria-selected'), { timeout: 30_000 }).toBe('true');
+      expect(await panelOf(page).count()).toBe(0);
     } finally {
       await page.context().close();
     }

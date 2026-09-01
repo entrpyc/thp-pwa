@@ -7,6 +7,7 @@ import {
   memberRecordingPath,
   recordingPagePath,
   recordingProgressPath,
+  seriesPagePath,
   type PlaybackProgressPayload,
   type RecordingPayload,
   type RecordingView as Recording,
@@ -36,11 +37,17 @@ type OpenTab = 'scripture' | 'notes' | 'transcript' | null;
  *   series' cover, exactly as it is on the recording page.
  * - **The recording's tabs sit beside them, each scoped to this chapter's span**
  *   ([3.22.14](docs/project/prd.md)). A note belongs to the chapter its timestamp falls in, a
- *   citation to the chapter its anchor falls in, and the transcript stops at the boundaries.
+ *   citation to the chapter its anchor falls in, and the transcript stops at the boundaries — the
+ *   last of those still true of the panel, which is intact and merely unreachable while the
+ *   `Transcript` tab is hidden. See the strip below.
  * - **It offers a route back to the recording it came from** ([3.22.13](docs/project/prd.md)) — the
- *   back control over the band, and the breadcrumb, both pointing at the teaching rather than at the
- *   library. The address is what decides that, so a member who arrived from a link gets the same
- *   route back as one who walked here.
+ *   back control over the band, pointing at the teaching rather than at the library. The address is
+ *   what decides that, so a member who arrived from a link gets the same route back as one who
+ *   walked here.
+ * - **The breadcrumb draws the whole path** — `home › series › recording › chapter` — which is a
+ *   different question from the one the back control answers. Back is *one press up*; the trail is
+ *   *where this page sits*, and a chapter sits inside a teaching inside a study. Naming only the
+ *   teaching was the old trail obeying a shape that could hold one ancestor.
  * - **Opening it loads the teaching and does not play it**
  *   ([3.22.12](docs/project/prd.md)). A member who tapped a chapter has not asked for sound. The
  *   position restored is the member's own stored one, **not the chapter's start**: this page is a
@@ -80,14 +87,30 @@ export function ChapterScreen({
       : null;
 
   /**
-   * `home › recording › chapter`. The parent is the teaching rather than the series, because that
-   * is where this page's own back route goes ([3.22.13](docs/project/prd.md)) and a trail that
-   * disagreed with the back control would be two answers to one question.
+   * `home › series › recording › chapter` — **the whole path down to here**.
+   *
+   * It used to be `home › recording › chapter`, because the trail could hold one ancestor and the
+   * teaching was the better of the two: it is where this page's own back route goes
+   * ([3.22.13](docs/project/prd.md)), and a trail that disagreed with the back control would be two
+   * answers to one question. That was a constraint of the shape rather than a decision about the
+   * product, and the shape now carries a list — so the series goes back in *above* the teaching,
+   * where it always belonged, and the back control still points at the teaching. The trail says
+   * where you are; the back control says where one press takes you. Those were never the same claim.
+   *
+   * The series comes off the recording payload, exactly as the recording page's does, so a chapter
+   * opened from a link draws the same path as one walked to. A teaching in no series simply names
+   * one fewer ancestor.
    */
   useBreadcrumbTrail(
     chapter?.title ?? null,
-    recording?.title ?? null,
-    recordingPagePath(recordingId),
+    recording === null
+      ? []
+      : [
+          ...(recording.series == null
+            ? []
+            : [{ label: recording.series.title, href: seriesPagePath(recording.series.id) }]),
+          { label: recording.title, href: recordingPagePath(recordingId) },
+        ],
   );
 
   const { open } = player;
@@ -242,15 +265,22 @@ export function ChapterScreen({
             >
               Scripture
             </button>
-            <button
-              className={styles.tab}
-              type="button"
-              role="tab"
-              aria-selected={openTab === 'transcript'}
-              onClick={() => setOpenTab((open) => (open === 'transcript' ? null : 'transcript'))}
-            >
-              Transcript
-            </button>
+            {/*
+              **`Transcript` is hidden**, the same operator decision the recording page's strip
+              carries and for the same reason — the two strips are one control a member reads twice,
+              and a tab that vanished on one screen and not the other would read as a bug rather
+              than as a decision. See `recording-view.tsx` for the whole of it.
+
+              <button
+                className={styles.tab}
+                type="button"
+                role="tab"
+                aria-selected={openTab === 'transcript'}
+                onClick={() => setOpenTab((open) => (open === 'transcript' ? null : 'transcript'))}
+              >
+                Transcript
+              </button>
+            */}
           </div>
 
           {openTab === 'notes' ? (

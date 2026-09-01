@@ -23,6 +23,12 @@ import { uploadTestAudio } from '../support/audio';
  *    client hides what a member cannot do.
  * 2. **Declining the offer does nothing at all.** Not "does nothing visible": the assertion is that
  *    the ledger has no job and the queue has no review item after the admin says *Not now*.
+ *
+ * **The whole file is skipped while the `Transcript` tab is hidden**, because both blocks reach the
+ * correction control through the panel and the tab is the only door to it. Nothing here has stopped
+ * being true: `transcript-correction.test.ts` still asserts the API half against the same rules, and
+ * `recording-view.tsx` has the tab commented in place. Un-skipping these two is the other half of
+ * putting it back, which is why they are skipped rather than deleted.
  */
 
 const baseUrl = inject('apiBaseUrl');
@@ -106,7 +112,7 @@ afterAll(async () => {
 
 // =================================================================================================
 
-describe('a member is never shown the affordance', () => {
+describe.skip('a member is never shown the affordance', () => {
   it('renders the transcript with no correction control anywhere in it', async () => {
     const recordingId = await publishedTeaching(`Correction member ${RUN}`);
     const page = await openTranscriptAs(member, recordingId);
@@ -123,7 +129,7 @@ describe('a member is never shown the affordance', () => {
   }, 240_000);
 });
 
-describe('an admin corrects a line and is offered a fresh summary', () => {
+describe.skip('an admin corrects a line and is offered a fresh summary', () => {
   it('saves the correction, shows the offer only afterwards, and enqueues nothing when declined', async () => {
     const recordingId = await publishedTeaching(`Correction admin ${RUN}`);
     const page = await openTranscriptAs(admin, recordingId);

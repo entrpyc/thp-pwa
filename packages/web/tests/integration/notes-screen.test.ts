@@ -238,30 +238,26 @@ afterAll(async () => {
 // =================================================================================================
 
 describe('the recording page carries a Notes tab', () => {
-  it('adds it beside Transcript, in the notes green, and opening one closes the other', async () => {
+  it('leads the strip, in the notes green, and is open when the page is', async () => {
     const page = await openTeaching(readingId);
     try {
       const strip = page.getByRole('tablist', { name: 'Teaching contents' });
-      // Two tabs, in the reference's order — Notes before Transcript.
-      expect(await strip.getByRole('tab').count()).toBe(2);
+      /*
+       * One tab, and it is this one. The pair this asserted — `Notes` before `Transcript` — is a
+       * pair no longer: the transcript tab is hidden, and this teaching cites nothing and has no
+       * chapters, so `Notes` is the whole strip. That it still *leads* is the half of the claim
+       * that survives, and the single-select behaviour it used to prove against `Transcript` is
+       * proved against `Scripture` in `scripture-screen.test.ts`, on a teaching that has both.
+       */
+      expect(await strip.getByRole('tab').count()).toBe(1);
       expect(
         (await strip.getByRole('tab').allInnerTexts()).map((text) => text.replace(/[^A-Za-z]/g, '')),
-      ).toEqual(['Notes', 'Transcript']);
+      ).toEqual(['Notes']);
 
-      await page.getByRole('tab', { name: 'Transcript' }).click();
-      expect(
-        await page.getByRole('tab', { name: 'Transcript' }).getAttribute('aria-selected'),
-      ).toBe('true');
-
-      // Single-select, the way the reference's strip reads.
-      await openNotes(page);
+      // Open with the page, rather than waiting to be pressed — the one tab that is.
       expect(await page.getByRole('tab', { name: 'Notes' }).getAttribute('aria-selected')).toBe(
         'true',
       );
-      expect(
-        await page.getByRole('tab', { name: 'Transcript' }).getAttribute('aria-selected'),
-      ).toBe('false');
-      expect(await page.getByRole('list', { name: 'Transcript' }).count()).toBe(0);
 
       // The green is the tab's, and it is the token rather than a colour typed here.
       const colours = await page

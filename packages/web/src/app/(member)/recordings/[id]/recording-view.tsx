@@ -32,17 +32,21 @@ type OpenTab = 'chapters' | 'scripture' | 'notes' | 'transcript' | null;
  *   `pages/chapter.png` draws it, with the back control over it (scope prd 3.2.3, 3.2.7). The
  *   cover is the *series'* — a recording has none of its own — so every teaching in one study
  *   shows the same picture, and a teaching in no series keeps the flat band (scope prd 3.2.6).
- * - **A tab strip holding four tabs.** The reference draws five — `Chapter`, `Scripture`, `Notes`,
- *   `Transcript`, `Mindmap` — and four of them now have data: `Chapters` arrived with
+ * - **A tab strip holding three tabs.** The reference draws five — `Chapter`, `Scripture`, `Notes`,
+ *   `Transcript`, `Mindmap` — and four of them have data: `Chapters` arrived with
  *   [3.22.10](docs/project/prd.md) and `Mindmap` is still dropped rather than rendered disabled,
  *   which is the line the whole member surface draws for a deferred destination. Summary and
  *   description render directly in the page body, above the strip. The strip is **single-select**,
- *   the way the reference reads it: opening `Notes` closes `Transcript`.
+ *   the way the reference reads it: opening `Notes` closes `Scripture`.
+ * - **`Transcript` is hidden**, and it is the one entry missing for a reason that is not about
+ *   data. `Mindmap` is absent because nothing was built; `Scripture` and `Chapters` come and go with
+ *   what a teaching has. This one is a decision taken over a feature that works — so the control is
+ *   commented in place at the strip rather than deleted, and everything behind it is untouched.
  * - **`Scripture` is drawn only for a teaching that has some** (active-scope prd 3.4.4) — the same
  *   line, one step further: a destination with no data behind it is left out rather than offered
  *   empty. The recording payload carries `hasScripture` so that decision costs no request.
- * - **`Notes` starts open; everything else starts closed.** A member who never presses `Transcript`
- *   downloads no transcript — pressing it is what asks for one, and pressing it again puts it away.
+ * - **`Notes` starts open; everything else starts closed.** A member who never presses a tab
+ *   downloads nothing behind it — pressing it is what asks, and pressing it again puts it away.
  *   The notes are the exception at both ends: they are fetched when the *teaching* is opened,
  *   because their markers show on the transport without the tab (active-scope prd 3.2.4), so the
  *   panel is drawing something the page already holds and there is nothing to save by hiding it.
@@ -59,8 +63,11 @@ type OpenTab = 'chapters' | 'scripture' | 'notes' | 'transcript' | null;
  * once the element has metadata — seeking before that is silently clamped to zero — and the member
  * presses play when they want sound.
  *
- * The back control returns to the library rather than to browser history, so it behaves the same
- * when the page was opened from a link rather than navigated to.
+ * **The back control returns to the series this teaching is in**, and to the library only for a
+ * teaching that is in none. Never to browser history, so it behaves the same when the page was
+ * opened from a link as when it was walked to — which is the whole reason it is a destination rather
+ * than a `history.back()`: a member who arrived from a shared link has no history to go back to, and
+ * the study is where the teaching actually lives.
  */
 export function RecordingScreen({
   recordingId,
@@ -94,10 +101,9 @@ export function RecordingScreen({
    */
   useBreadcrumbTrail(
     recording?.title ?? null,
-    recording?.series?.title ?? null,
-    recording?.series === undefined || recording.series === null
-      ? null
-      : seriesPagePath(recording.series.id),
+    recording?.series == null
+      ? []
+      : [{ label: recording.series.title, href: seriesPagePath(recording.series.id) }],
   );
 
   const { open } = player;
@@ -165,6 +171,25 @@ export function RecordingScreen({
    */
   const cover = recording?.series?.artworkUrl ?? null;
 
+  /**
+   * **Back goes to the study this teaching is part of**, and to the library only for a teaching that
+   * is in none.
+   *
+   * It is the same destination the breadcrumb's parent segment points at, read off the same field of
+   * the same payload — so the two controls that mean "up from here" cannot disagree, which they
+   * would the moment one of them derived its answer from the navigation that reached the page.
+   *
+   * A teaching in no series keeps the library, because there is no study page to return to; that is
+   * the ordinary case rather than a degraded one, exactly as the missing cover above is. The same
+   * fallback covers the moment before the payload lands, when the band is already drawn and there is
+   * nothing yet to know — the breadcrumb draws its two segments in that window for the same reason.
+   */
+  const series = recording?.series ?? null;
+  const back =
+    series === null
+      ? { href: MEMBER_LIBRARY_PAGE_PATH, label: 'Back to recordings' }
+      : { href: seriesPagePath(series.id), label: `Back to ${series.title}` };
+
   return (
     <>
       <div className={`${styles.hero}${cover === null ? '' : ` ${styles.heroCovered}`}`}>
@@ -179,7 +204,7 @@ export function RecordingScreen({
             <span className={styles.heroFade} aria-hidden="true" />
           </>
         )}
-        <Link className={styles.back} href={MEMBER_LIBRARY_PAGE_PATH} aria-label="Back to recordings">
+        <Link className={styles.back} href={back.href} aria-label={back.label}>
           <span aria-hidden="true">‹</span>
         </Link>
       </div>
@@ -227,13 +252,13 @@ export function RecordingScreen({
 
           {/*
             `pages/recording.png`'s strip, same pill shape and same spacing. The order is `Notes`,
-            then `Scripture`, then `Transcript` — the reference draws `Scripture` first, but `Notes`
+            then `Chapters`, then `Scripture` — the reference draws `Scripture` first, but `Notes`
             is the tab a member returns to and the one entry that is always there, so it takes the
             first slot rather than moving whenever a teaching happens to cite nothing. When
-            `Chapter` and `Mindmap` arrive they are entries here, not a different control.
+            `Mindmap` arrives it is an entry here, not a different control.
 
             `Notes` is the one place in the product entitled to the green (style-guide principle 5),
-            so its icon and its selected state take `--color-notes` where `Transcript` takes the
+            so its icon and its selected state take `--color-notes` where the others take the
             purple every other selected thing takes.
           */}
           <div className={styles.tabs} role="tablist" aria-label="Teaching contents">
@@ -282,15 +307,27 @@ export function RecordingScreen({
                 Scripture
               </button>
             ) : null}
-            <button
-              className={styles.tab}
-              type="button"
-              role="tab"
-              aria-selected={openTab === 'transcript'}
-              onClick={() => setOpenTab((open) => (open === 'transcript' ? null : 'transcript'))}
-            >
-              Transcript
-            </button>
+            {/*
+              **`Transcript` is hidden**, by operator decision rather than by a rule about data —
+              which is why it is commented here rather than dropped the way `Mindmap` is. Everything
+              behind it is intact: the panel, the correction path, the route and the payload. What
+              is gone is the one control that opened it, so `openTab` can no longer take the value
+              and the panel below is unreachable until this button comes back.
+
+              Bringing it back is this element and nothing else. `transcript-screen.test.ts` and
+              `transcript-correction-screen.test.ts` are skipped while it is away, and un-skipping
+              them is the other half of that change.
+
+              <button
+                className={styles.tab}
+                type="button"
+                role="tab"
+                aria-selected={openTab === 'transcript'}
+                onClick={() => setOpenTab((open) => (open === 'transcript' ? null : 'transcript'))}
+              >
+                Transcript
+              </button>
+            */}
           </div>
 
           {openTab === 'notes' ? (

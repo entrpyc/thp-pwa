@@ -228,6 +228,11 @@
  * with the default centre origin is what crops to it instead of stretching (scope prd 3.2.1).
  * The tile radius rather than the row's, because it sits inside the row.
  *
+ * **Read by the library's rows as well as the series listing's**, at the same size and in the same
+ * slot: a recording carries no artwork of its own, so what a library row shows is the cover of the
+ * study it belongs to. One rule rather than two is what stops the two listings drifting into
+ * different-sized thumbnails of the same picture.
+ *
  * There is no rule for the coverless row: the thumbnail is absent from the markup rather than
  * emptied by a stylesheet, which is scope prd 3.2.6 held where it can be read.
  */
@@ -282,23 +287,34 @@
 /*
  * The series a library row belongs to (Story 6) — the guide's link recipe at metadata size,
  * **outside** the row's own anchor because an anchor inside an anchor is not valid markup. It sits
- * under the row rather than inside it, with the row's left padding, so it reads as belonging to the
- * row above it.
+ * under the row rather than inside it, sharing the row's horizontal padding so the two line up.
+ *
+ * **A block rather than an inline-block, and the reason is the hairline.** It divides the teaching
+ * from the study it belongs to, and a divider that stopped at the end of the series' name would be
+ * a line whose length was decided by how long somebody's title happened to be. Full width is what
+ * makes it read as a rule between two things rather than as an underline on one of them — and it is
+ * the same hairline, at the same token, that divides one row from the next.
+ *
+ * Filling the width also makes the whole strip the target, which is what earns it a hover: it is a
+ * link to the study, it is now the size of a thing you press, and a pressable strip that does not
+ * respond under the pointer reads as decoration. The wash is `.row`'s own, so a member moving down
+ * the list sees one behaviour rather than two.
  */
 .rowSeries {
-  display: inline-block;
-  padding: 0 var(--space-5) var(--space-3);
+  display: block;
+  border-top: 1px solid var(--color-border);
+  padding: var(--space-3) var(--space-5);
   font-size: var(--fs-meta);
   font-weight: 500;
   color: var(--color-primary-strong);
   text-decoration: none;
-  max-width: 100%;
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
 }
 
 .rowSeries:hover {
+  background: var(--color-surface-raised);
   text-decoration: underline;
 }
 

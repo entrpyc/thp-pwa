@@ -259,19 +259,20 @@ describe('the recording page at /recordings/[id]', () => {
       expect(await page.getByText('Recorded 14 Jul 2026').count()).toBe(1);
 
       /*
-       * Two of the reference's five tabs have data. The strip arrived in Story 5 holding
-       * `Transcript` and gained `Notes` beside it; the other three are dropped rather than
-       * rendered disabled.
+       * One tab on this teaching. The strip arrived in Story 5 holding `Transcript` and gained
+       * `Notes` beside it; `Transcript` is now hidden, and this teaching is in no series and has no
+       * chapters — so `Notes`, the one entry always drawn, is the whole strip. The rest are dropped
+       * rather than rendered disabled, which is the line the member surface draws throughout.
        *
-       * Counted **inside the teaching's own strip**, because it is no longer the only one on the
-       * page: `Notes` opens with the page, and the notes panel has a filter strip of its own. An
-       * unscoped count would be counting two features at once and would say nothing about either.
+       * Counted **inside the teaching's own strip**, because it is not the only one on the page:
+       * `Notes` opens with the page, and the notes panel has a filter strip of its own. An unscoped
+       * count would be counting two features at once and would say nothing about either.
        */
       const strip = page.getByRole('tablist', { name: 'Teaching contents' });
       expect(await strip.count()).toBe(1);
-      expect(await strip.getByRole('tab').count()).toBe(2);
+      expect(await strip.getByRole('tab').count()).toBe(1);
       expect(await strip.getByRole('tab', { name: 'Notes' }).count()).toBe(1);
-      for (const absent of ['Chapter', 'Scripture', 'Mindmap', 'Download']) {
+      for (const absent of ['Chapter', 'Scripture', 'Transcript', 'Mindmap', 'Download']) {
         expect(await page.getByRole('tab', { name: absent }).count(), absent).toBe(0);
         expect(await page.getByRole('button', { name: absent }).count(), absent).toBe(0);
       }

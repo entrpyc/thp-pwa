@@ -6,14 +6,17 @@ import {
   ROLE,
   chapterPagePath,
   recordingPagePath,
+  seriesPagePath,
 } from '@thp/shared';
 import {
   createDatabase,
   insertRecording,
+  insertSeries,
   listChapters,
   replaceChapters,
   replaceTranscript,
   setRecordingPublication,
+  setRecordingSeries,
   type DatabaseHandle,
 } from '@thp/db';
 import { closeTestDatabase, createAccount, type TestAccount } from '../support/accounts';
@@ -54,6 +57,9 @@ const CHAPTER_MS = 40_000;
 const CHAPTERED_TITLE = `Chaptered teaching ${RUN}`;
 const PLAIN_TITLE = `Unchaptered teaching ${RUN}`;
 const EDITABLE_TITLE = `Editable teaching ${RUN}`;
+/** A fourth teaching, in a study, so the chapter page's full trail has three ancestors to name. */
+const IN_SERIES_TITLE = `Chaptered teaching in a series ${RUN}`;
+const SERIES_TITLE = `Chapters screen series ${RUN}`;
 
 const GENERATED = { model: 'fake', modelVersion: 'fake-1', promptVersion: 'chapters-1' };
 
@@ -77,6 +83,16 @@ let plainId: string;
 /** A third teaching, so the admin suite can rewrite a list without disturbing the others. */
 let editableId: string;
 let chapterIds: string[] = [];
+/**
+ * A fourth, in a study, and its own chapters.
+ *
+ * Its own rather than the chaptered teaching moved into a series: every assertion above about the
+ * hero band, the transport tile and the strip is written against a teaching in none, and giving that
+ * one a study would change what half this file is looking at to prove one thing about a breadcrumb.
+ */
+let inSeriesId: string;
+let seriesId: string;
+let inSeriesChapterIds: string[] = [];
 
 interface Snapshot {
   readonly currentTime: number;
@@ -197,6 +213,11 @@ beforeAll(async () => {
   editableId = await publishedTeaching(EDITABLE_TITLE, THREE);
 
   chapterIds = (await listChapters(chapteredId, handle)).map((one) => one.id);
+
+  inSeriesId = await publishedTeaching(IN_SERIES_TITLE, THREE);
+  seriesId = (await insertSeries({ title: SERIES_TITLE, description: null }, handle)).id;
+  await setRecordingSeries(inSeriesId, seriesId, handle);
+  inSeriesChapterIds = (await listChapters(inSeriesId, handle)).map((one) => one.id);
 }, 300_000);
 
 afterAll(async () => {
@@ -235,9 +256,11 @@ describe('the Chapters tab on the recording page (3.22.10)', () => {
     const page = await openTeaching(plainId);
     try {
       await expect.poll(() => strip(page).count(), { timeout: 30_000 }).toBe(1);
-      // The other tabs are there, so this is the strip having decided rather than not having drawn.
+      // Another tab is there, so this is the strip having decided rather than not having drawn.
+      // `Notes` rather than `Transcript`: the transcript tab is hidden, and `Notes` is the one entry
+      // that is always present whatever a teaching holds — which is what this needs it for.
       await expect
-        .poll(() => strip(page).getByRole('tab', { name: 'Transcript' }).count(), { timeout: 30_000 })
+        .poll(() => strip(page).getByRole('tab', { name: 'Notes' }).count(), { timeout: 30_000 })
         .toBe(1);
       expect(await strip(page).getByRole('tab', { name: 'Chapters' }).count()).toBe(0);
     } finally {
@@ -350,6 +373,68 @@ describe('the chapter page (3.22.13, 3.22.14, 3.22.15)', () => {
     }
   }, 240_000);
 
+  /**
+   * **The breadcrumb draws the whole path down to the chapter** — `home › series › recording ›
+   * chapter`.
+   *
+   * A different question from the one the back control answers, and the assertion is written so the
+   * two cannot be confused: the trail names the study *and* the teaching, in that order, while back
+   * still goes one step up to the teaching. Every ancestor is a link, because a segment you cannot
+   * press is a segment that only tells you where you are.
+   */
+  it('reads home › series › recording › chapter for a chapter of a teaching in a series', async () => {
+    const page = await openTeaching(inSeriesId);
+    try {
+      await page.goto(`${baseUrl}${chapterPagePath(inSeriesId, inSeriesChapterIds[1]!)}`, {
+        waitUntil: 'domcontentloaded',
+      });
+
+      const crumbs = page.getByRole('navigation', { name: 'Breadcrumb' });
+      const current = crumbs.locator('[aria-current="page"]');
+      await expect.poll(() => current.count(), { timeout: 30_000 }).toBe(1);
+      expect(await current.textContent()).toBe('The branches');
+
+      // Home, the series, the teaching, the chapter — four segments, in that order.
+      await expect.poll(() => crumbs.getByRole('listitem').count(), { timeout: 30_000 }).toBe(4);
+
+      const series = crumbs.getByRole('link', { name: SERIES_TITLE });
+      expect(await series.getAttribute('href')).toBe(seriesPagePath(seriesId));
+      const teaching = crumbs.getByRole('link', { name: IN_SERIES_TITLE });
+      expect(await teaching.getAttribute('href')).toBe(recordingPagePath(inSeriesId));
+
+      // The study is above the teaching, not beside or below it.
+      const order = await crumbs
+        .getByRole('link')
+        .evaluateAll((links) => links.map((link) => link.textContent?.trim() ?? ''));
+      expect(order.indexOf(SERIES_TITLE)).toBeLessThan(order.indexOf(IN_SERIES_TITLE));
+
+      // And it is a route, not a label.
+      await series.click();
+      await page.waitForURL(`${baseUrl}${seriesPagePath(seriesId)}`, { timeout: 30_000 });
+    } finally {
+      await page.context().close();
+    }
+  }, 240_000);
+
+  /** A chapter of a teaching in no study names one fewer ancestor, and nothing else changes. */
+  it('reads home › recording › chapter when the teaching is in no series', async () => {
+    const page = await openTeaching(chapteredId);
+    try {
+      await page.goto(`${baseUrl}${chapterPagePath(chapteredId, chapterIds[1]!)}`, {
+        waitUntil: 'domcontentloaded',
+      });
+
+      const crumbs = page.getByRole('navigation', { name: 'Breadcrumb' });
+      await expect
+        .poll(() => crumbs.locator('[aria-current="page"]').count(), { timeout: 30_000 })
+        .toBe(1);
+      await expect.poll(() => crumbs.getByRole('listitem').count(), { timeout: 30_000 }).toBe(3);
+      expect(await crumbs.getByRole('link', { name: CHAPTERED_TITLE }).count()).toBe(1);
+    } finally {
+      await page.context().close();
+    }
+  }, 240_000);
+
   /** The recording's tabs, minus `Chapters` — a chapter does not divide into chapters. */
   it('carries the recording’s tabs beside it', async () => {
     const page = await openTeaching(chapteredId);
@@ -362,15 +447,23 @@ describe('the chapter page (3.22.13, 3.22.14, 3.22.15)', () => {
 
       expect(await tabs.getByRole('tab', { name: 'Notes' }).count()).toBe(1);
       expect(await tabs.getByRole('tab', { name: 'Scripture' }).count()).toBe(1);
-      expect(await tabs.getByRole('tab', { name: 'Transcript' }).count()).toBe(1);
+      // Hidden on this strip exactly as it is on the recording page's — the two are one control a
+      // member reads twice, so the entry is absent from both or from neither.
+      expect(await tabs.getByRole('tab', { name: 'Transcript' }).count()).toBe(0);
       expect(await tabs.getByRole('tab', { name: 'Chapters' }).count()).toBe(0);
     } finally {
       await page.context().close();
     }
   }, 240_000);
 
-  /** **The transcript shows that chapter's lines and stops at its boundaries** (3.22.14). */
-  it('shows only this chapter’s transcript lines', async () => {
+  /**
+   * **The transcript shows that chapter's lines and stops at its boundaries** (3.22.14).
+   *
+   * Skipped while the `Transcript` tab is hidden — the tab is the only way into the panel, so there
+   * is nothing to open. The scoping itself is still asserted against the API in `chapters.test.ts`;
+   * what is out of reach is the screen half. Un-skip with the tab.
+   */
+  it.skip('shows only this chapter’s transcript lines', async () => {
     const page = await openTeaching(chapteredId);
     try {
       await page.goto(`${baseUrl}${chapterPagePath(chapteredId, chapterIds[1]!)}`, {
