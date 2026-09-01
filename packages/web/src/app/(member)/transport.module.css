@@ -265,6 +265,13 @@
   font-size: var(--fs-meta);
   font-variant-numeric: tabular-nums;
   white-space: nowrap;
+  /*
+   * A floor on the width of both timecodes, so the scrubber between them keeps its own width — and
+   * its thumb keeps its place — as the elapsed label gains a digit crossing 10:00 or an hour.
+   * Tabular figures hold a label steady within a width; this is what holds the width itself.
+   */
+  min-width: 42px;
+  text-align: center;
 }
 
 /*
@@ -525,29 +532,49 @@
   height: var(--space-6);
 }
 
+/*
+ * Above the input, unlike the boundaries beneath it. A dot sits *on* the line, and the line is
+ * drawn by the input itself — a layer below it would put every dot behind the track it belongs to.
+ * Only each dot's own button takes a pointer; the rest of the band is still a scrub.
+ */
 .markers {
   position: absolute;
   inset: 0;
-  z-index: 0;
+  z-index: 2;
   pointer-events: none;
 }
 
+/*
+ * A note is a **dot on the line**, and a chapter boundary is a rule across it — which is how the
+ * two are told apart at a glance. The button itself is the transparent target, sized for a finger
+ * and centred on its own position, and the dot it draws is the small mark in the middle of it.
+ */
 .marker {
   position: absolute;
-  top: 0;
-  bottom: 0;
-  width: 2px;
+  top: 50%;
+  width: var(--space-5);
+  height: var(--space-6);
   /* Centred on its own position by a transform, so no spacing value is spelled in pixels. */
-  transform: translateX(-50%);
+  transform: translate(-50%, -50%);
+  display: flex;
+  align-items: center;
+  justify-content: center;
   padding: 0;
-  background: var(--color-notes);
+  background: transparent;
   border: none;
-  border-radius: 0;
   pointer-events: auto;
   cursor: pointer;
 }
 
-/* Above the layer, so the fill and the thumb are drawn over every tick (5.7.1). */
+.marker::before {
+  content: '';
+  width: var(--space-2);
+  height: var(--space-2);
+  border-radius: var(--radius-pill);
+  background: var(--color-notes);
+}
+
+/* Above the boundary layer, so the fill and the thumb are drawn over every division (5.7.1). */
 .scrubber {
   position: relative;
   z-index: 1;
@@ -698,9 +725,9 @@
 
 .boundary {
   position: absolute;
-  top: 0;
-  bottom: 0;
-  width: 1px;
+  top: 1px;
+  bottom: 1px;
+  width: 3px;
   /* Centred on its own position by a transform, so no spacing value is spelled in pixels. */
   transform: translateX(-50%);
   background: var(--color-border-strong);
