@@ -306,6 +306,12 @@ describe('the console shell and its gate', () => {
       await link.click();
       await adminPage.waitForURL(CONSOLE_URL, { timeout: 30_000 });
       expect(await adminPage.getByRole('heading', { level: 1, name: 'Admin console' }).count()).toBe(1);
+
+      // And back out again. The way in was one-directional until the header got its link, which
+      // left an operator who came here to publish a teaching typing the root to go and hear it.
+      await adminPage.getByRole('link', { name: 'Dashboard' }).click();
+      await adminPage.waitForURL(`${baseUrl}/`, { timeout: 30_000 });
+      expect(await adminPage.getByRole('heading', { level: 1, name: 'Dashboard' }).count()).toBe(1);
     } finally {
       await adminPage.context().close();
     }

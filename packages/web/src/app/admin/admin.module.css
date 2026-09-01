@@ -96,6 +96,38 @@
   overflow-wrap: anywhere;
 }
 
+/*
+ * The header's two ways out of the console, side by side: back to the member dashboard, and out of
+ * the session. A row rather than another step of the identity column, because they are one pair of
+ * choices and stacking them would push the panels down a control's height to say nothing.
+ */
+.identityLinks {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: var(--space-2);
+}
+
+/*
+ * The guide's outlined button, which is the shape `sign-out.module.css` gives the control beside
+ * it. Composed from the guide rather than imported from there, for the reason the file's header
+ * states: the console copies no component, it reads the same rule.
+ */
+.identityLink {
+  background: transparent;
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-pill);
+  padding: var(--space-2) var(--space-4);
+  color: var(--color-text-muted);
+  font-size: var(--fs-body);
+  text-decoration: none;
+}
+
+.identityLink:hover {
+  border-color: var(--color-border-strong);
+  color: var(--color-text);
+}
+
 .panels {
   min-width: 0;
 }

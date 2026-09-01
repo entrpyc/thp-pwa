@@ -5,13 +5,14 @@ import {
   ADMIN_RECORDINGS_PAGE_PATH,
   ADMIN_REVIEWS_PAGE_PATH,
   ADMIN_SERIES_PAGE_PATH,
+  DASHBOARD_PAGE_PATH,
 } from '@thp/shared';
 import type { Actor } from '@/server/auth/policy';
 import { SignOutButton } from '../sign-out-button';
 import styles from './admin.module.css';
 
 /**
- * The console's chrome: who is signed in, the way out, and the list of panels.
+ * The console's chrome: who is signed in, the ways out, and the list of panels.
  *
  * Extracted when the second panel arrived (Story 2 Ticket 01). The shell was always described as
  * "a layout and a panel list, not a registry" — one entry today, a later panel is a file and a line
@@ -54,7 +55,20 @@ export function ConsoleShell({
           <div className={styles.identity}>
             <p className={styles.identityName}>{actor.displayName}</p>
             <p className={styles.identityEmail}>{actor.email}</p>
-            <SignOutButton />
+            {/*
+              **The way back.** The member navigation offers the console; nothing offered the
+              member surface in return, so an operator who came here to publish a teaching had to
+              type the root to go and listen to it. It sits beside sign-out rather than among the
+              panels: the panel list is a tab strip of things this console *is*, and the dashboard
+              is not one of them — a sixth entry there would read as a panel that never takes the
+              current mark.
+            */}
+            <div className={styles.identityLinks}>
+              <a className={styles.identityLink} href={DASHBOARD_PAGE_PATH}>
+                Dashboard
+              </a>
+              <SignOutButton />
+            </div>
           </div>
         </header>
 
