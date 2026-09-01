@@ -21,6 +21,35 @@
  *    that every control stays reachable, not that the layout is identical.
  */
 
+/*
+ * **Nothing on this bar is text to be selected.** Every control here is pressed, and three of them
+ * — the rate pill, the `···` and the scrubber — are *held and dragged*, which is the gesture a
+ * touch browser also reads as "select the words under the finger" and, held long enough, as "raise
+ * a callout over them". The selection that results lands on whatever the strip is drawn over and
+ * survives the release, so the member ends a rate change looking at highlighted text and a menu
+ * they did not ask for.
+ *
+ * The timecode is in the list because it is the only real *text* beside the scrubber: a drag along
+ * the track that starts a selection starts it there.
+ *
+ * The drag handlers in `transport-bar.tsx` also cancel `selectstart` and `contextmenu` while a
+ * press is held — this rule covers the controls, that covers the page the drag travels across.
+ */
+.slotPress,
+.skip,
+.play,
+.time,
+.scrubber,
+.marker,
+.speed,
+.speedPicker,
+.more,
+.tool {
+  -webkit-user-select: none;
+  user-select: none;
+  -webkit-touch-callout: none;
+}
+
 .dock {
   position: fixed;
   left: 0;
@@ -271,6 +300,7 @@
   margin-top: var(--space-3);
   position: relative;
   display: inline-flex;
+  margin-left: auto;
 }
 
 /* The rate pill, carrying the one thing it says: the rate. */

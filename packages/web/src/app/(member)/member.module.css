@@ -164,6 +164,20 @@
  * Boxed on the right, as the reference has it. There is deliberately no search control beside it:
  * §3.10 is deferred, and a magnifier that opens nothing is a promise this epic cannot keep.
  */
+/*
+ * **The menu is pressed, never read.** A tap held a moment on a phone — which is what a tap on a
+ * moving page often becomes — otherwise selects the row's label and raises a callout over it, and
+ * the highlight outlives the press: the member arrives at the page they asked for with a word from
+ * the menu still selected behind them. Kept with the menu rather than beside each rule, because
+ * the button and every row it opens want the same thing for the same reason.
+ */
+.menuButton,
+.menuLink {
+  -webkit-user-select: none;
+  user-select: none;
+  -webkit-touch-callout: none;
+}
+
 .menuButton {
   display: inline-flex;
   align-items: center;
