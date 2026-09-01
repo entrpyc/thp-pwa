@@ -36,7 +36,9 @@ type OpenTab = 'chapters' | 'scripture' | 'notes' | 'transcript' | null;
  *   `Transcript`, `Mindmap` — and four of them have data: `Chapters` arrived with
  *   [3.22.10](docs/project/prd.md) and `Mindmap` is still dropped rather than rendered disabled,
  *   which is the line the whole member surface draws for a deferred destination. Summary and
- *   description render directly in the page body, above the strip. The strip is **single-select**,
+ *   description render directly in the page body, above the strip — description first, then
+ *   summary, which is what a member reads in: the chosen line about the teaching, then what was
+ *   said in it. The strip is **single-select**,
  *   the way the reference reads it: opening `Notes` closes `Scripture`.
  * - **`Transcript` is hidden**, and it is the one entry missing for a reason that is not about
  *   data. `Mindmap` is absent because nothing was built; `Scripture` and `Chapters` come and go with
@@ -237,17 +239,21 @@ export function RecordingScreen({
           </header>
 
           {/*
-            Both blocks open rather than run: a summary is as long as the teaching was and a
-            description is as long as an admin typed, so between them they can push the tab strip
-            off the screen on the way to a transcript. Clamped, they cost six lines each and the
-            strip stays where a member left it.
-          */}
-          {recording.summary === null ? null : (
-            <CollapsibleProse label="Summary" text={recording.summary} />
-          )}
+            **Description first, then summary.** The description is what an admin wrote *about* this
+            teaching — a line or two, chosen, and the same text the library row carries — so it is
+            the sentence a member arriving from that row is already half-reading. The summary is
+            generated from what was actually said and is as long as the teaching was; it answers a
+            question the description has just raised rather than the other way round.
 
+            Both blocks clamp rather than run: between them they can push the tab strip off the
+            screen. Clamped, they cost six lines each and the strip stays where a member left it.
+          */}
           {recording.description === null ? null : (
             <CollapsibleProse label="Description" text={recording.description} />
+          )}
+
+          {recording.summary === null ? null : (
+            <CollapsibleProse label="Summary" text={recording.summary} />
           )}
 
           {/*

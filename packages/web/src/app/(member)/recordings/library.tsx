@@ -17,9 +17,16 @@ import styles from '../screens.module.css';
  *
  * There is no `pages/library.png`. The nearest reference is `pages/series-listing.png`, and the
  * layout is taken from it: a page title, one sentence under it, then rounded rows with a chevron.
- * What is dropped is its artwork thumbnail — artwork is deferred
- * (core-listening scope prd) — and the row carries the date
- * recorded in its place, which is the thing that actually orders this list.
+ * The row carries the date recorded, which is the thing that actually orders this list, and the
+ * cover of the study it belongs to — a recording has no artwork of its own, so it shows its
+ * series'.
+ *
+ * **Where it departs from the reference: each row is its own card, with air between them**, where
+ * `pages/series-listing.png` draws one panel divided by hairlines. That panel is still what the
+ * series listing and the series page draw, and the split is earned rather than a second opinion: a
+ * library row carries a cover, a title, a description, a date **and** a strip naming its study, and
+ * five of those stacked behind nothing but hairlines read as one long block. The gap is what makes
+ * a teaching legible as a thing rather than as a band.
  *
  * **The order is the query's, never re-sorted here.** `GET /api/v1/recordings` orders by
  * `recorded_at`, and a second ordering in the client would be a second answer to "what is most
@@ -87,9 +94,9 @@ export function Library() {
       ) : null}
 
       {recordings !== null && recordings.length > 0 ? (
-        <ul className={styles.rows} aria-label="Recordings">
+        <ul className={styles.rowsSpaced} aria-label="Recordings">
           {recordings.map((recording) => (
-            <li key={recording.id} className={styles.rowGroup}>
+            <li key={recording.id} className={styles.rowCard}>
               <Link className={styles.row} href={recordingPagePath(recording.id)}>
                 {/*
                  * The cover of the series this teaching is in, in the same slot and at the same

@@ -451,7 +451,13 @@ describe('the transport shows the cover of what is playing', () => {
         .poll(async () => (await audioState(page)).currentTime, { timeout: 30_000 })
         .toBeGreaterThan(1);
 
-      await page.getByRole('link', { name: 'Back to recordings' }).click();
+      // Through the menu rather than the back control: this teaching is in a series, so back goes
+      // to the study. What matters here is only that the walk is client-side, so the bar survives.
+      await page.getByRole('button', { name: 'Menu' }).click();
+      await page
+        .getByRole('list', { name: 'Navigation' })
+        .getByRole('link', { name: 'All recordings' })
+        .click();
       await page.waitForURL(`${baseUrl}${MEMBER_LIBRARY_PAGE_PATH}`, { timeout: 30_000 });
 
       // The bar is in the member layout and never remounts, so the cover it holds is the one it was

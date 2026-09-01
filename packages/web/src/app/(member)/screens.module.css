@@ -206,6 +206,39 @@
   border-bottom: none;
 }
 
+/*
+ * **The library's list, spaced** — the same rows, but each on its own card with air between them
+ * rather than hairlines inside one panel.
+ *
+ * A separate pair of rules rather than a modifier composed onto `.rows`, and deliberately: the
+ * hairline recipe above owns `.rows li:last-child`, which is more specific than any class could be,
+ * so a card composed onto it would have its bottom border stripped by the rule that exists to strip
+ * the *divider* off the last row. Two short rules that do not fight each other beat one that wins on
+ * a specificity accident.
+ *
+ * Only the library reads these. `pages/series-listing.png`'s single panel is still what the series
+ * listing and the series page draw, and the difference is earned: a library row carries a cover, a
+ * title, a description, a date **and** the study it belongs to, and a stack of those divided only by
+ * hairlines reads as one long block rather than as a column of teachings.
+ */
+.rowsSpaced {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-3);
+}
+
+/* The panel recipe, per row. No bottom hairline — the gap is what divides these. */
+.rowCard {
+  background: var(--color-surface);
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-md);
+  /* Clips the row's hover wash and the series strip's to the card's corners. */
+  overflow: hidden;
+}
+
 .row {
   display: flex;
   align-items: center;

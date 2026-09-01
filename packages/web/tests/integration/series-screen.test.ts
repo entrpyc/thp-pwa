@@ -349,12 +349,18 @@ describe('the series listing at /series', () => {
       const strip = row.getByRole('link', { name: COVERED_SERIES_TITLE });
       await expect.poll(() => strip.count(), { timeout: 30_000 }).toBe(1);
 
-      // Full width: the strip is as wide as the row it belongs to, which is as wide as the panel.
+      /*
+       * Full width: the strip fills the card it sits in.
+       *
+       * Against the card's `clientWidth` rather than its bounding box, because the box includes the
+       * card's own 1px border on each side and the strip — a block child — fills the content box
+       * inside it. Comparing box to box would be off by two pixels for a reason that has nothing to
+       * do with what is being asserted.
+       */
       const stripBox = await strip.boundingBox();
-      const rowBox = await row.boundingBox();
       expect(stripBox).not.toBeNull();
-      expect(rowBox).not.toBeNull();
-      expect((stripBox as { width: number }).width).toBe((rowBox as { width: number }).width);
+      const cardContent = await row.evaluate((element) => element.clientWidth);
+      expect(Math.round((stripBox as { width: number }).width)).toBe(cardContent);
 
       // And the divider is a real border on it rather than a shorter line drawn by the text.
       const border = await strip.evaluate((element) => {

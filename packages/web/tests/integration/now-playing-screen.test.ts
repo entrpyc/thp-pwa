@@ -281,8 +281,14 @@ describe('the transport opens the now-playing view, and it closes back', () => {
       await page.getByRole('button', { name: 'Close now playing' }).click();
       await page.waitForURL(`${baseUrl}${recordingPagePath(coveredId)}`, { timeout: 30_000 });
 
-      // Now from the library, reached by a client-side press rather than a fresh load.
-      await page.getByRole('link', { name: 'Back to recordings' }).click();
+      // Now from the library, reached by a client-side press rather than a fresh load. Through the
+      // menu rather than the back control: this teaching is in a series, so back goes to the study,
+      // and what this test needs is any client-side route to the library.
+      await page.getByRole('button', { name: 'Menu' }).click();
+      await page
+        .getByRole('list', { name: 'Navigation' })
+        .getByRole('link', { name: 'All recordings' })
+        .click();
       await page.waitForURL(`${baseUrl}${MEMBER_LIBRARY_PAGE_PATH}`, { timeout: 30_000 });
 
       await openTheView(page);

@@ -220,6 +220,50 @@ describe('the library at /recordings', () => {
     }
   }, 180_000);
 
+  /**
+   * **Each teaching is its own card, with a gap between them** — not one panel divided by hairlines,
+   * which is what the series listing draws and what this list used to.
+   *
+   * Asserted as real vertical space between consecutive rows rather than as a class name: a
+   * CSS-module class is a bundler hash, and asserting one would be asserting against the build. A
+   * measurable gap is the thing a member actually sees.
+   */
+  it('separates the rows with space rather than dividing one panel', async () => {
+    const page = await signInAs(member);
+    try {
+      await page.goto(`${baseUrl}${MEMBER_LIBRARY_PAGE_PATH}`, { waitUntil: 'domcontentloaded' });
+      const rows = page.getByRole('list', { name: 'Recordings' }).getByRole('listitem');
+      await expect.poll(() => rows.count(), { timeout: 30_000 }).toBeGreaterThan(1);
+
+      const boxes = await rows.evaluateAll((items) =>
+        items.map((item) => {
+          const box = item.getBoundingClientRect();
+          return { top: box.top, bottom: box.bottom };
+        }),
+      );
+
+      for (let index = 1; index < boxes.length; index += 1) {
+        const gap = boxes[index]!.top - boxes[index - 1]!.bottom;
+        // Strictly positive: touching rows would be the old single panel, and a negative would be
+        // an overlap. A hairline divider is zero, which is exactly what this rules out.
+        expect(gap, `gap above row ${index}`).toBeGreaterThan(0);
+      }
+
+      // And each row is a card in its own right rather than a band of a shared one.
+      const framed = await rows.first().evaluate((item) => {
+        const style = getComputedStyle(item);
+        return {
+          border: `${style.borderTopWidth} ${style.borderTopStyle}`,
+          radius: Number.parseFloat(style.borderTopLeftRadius),
+        };
+      });
+      expect(framed.border).toBe('1px solid');
+      expect(framed.radius).toBeGreaterThan(0);
+    } finally {
+      await page.context().close();
+    }
+  }, 180_000);
+
   it('shows an admin browsing the library exactly what a member sees', async () => {
     const page = await signInAs(admin);
     try {
