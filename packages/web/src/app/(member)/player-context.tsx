@@ -671,6 +671,25 @@ export function PlayerProvider({
   }, [pushProgress]);
 
   /*
+   * **A finer clock, only while a caption is on screen.** `timeupdate` fires about four times a
+   * second, which is plenty for the scrubber but visibly late for a caption — a line can land a
+   * quarter-second after the voice has moved on. While captions are showing and sound is running,
+   * the position is re-read every tenth of a second so a caption changes with the sentence rather
+   * than after it. Captions off (or paused), the interval is not running at all and `timeupdate`
+   * remains the only clock, exactly as before.
+   */
+  useEffect(() => {
+    if (!captionsOn || !playing) return;
+    const timer = setInterval(() => {
+      const element = audioRef.current;
+      if (element !== null && element.readyState >= 1) {
+        setCurrentMs(Math.round(element.currentTime * 1000));
+      }
+    }, 100);
+    return () => clearInterval(timer);
+  }, [captionsOn, playing]);
+
+  /*
    * **The sitting survives the app being closed.** On the first load of the member surface, the
    * teaching this member was last part-way through is opened into the player — so the transport is
    * already docked, already naming it and already holding the position, and picking it back up is
