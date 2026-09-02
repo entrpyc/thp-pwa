@@ -189,6 +189,23 @@ export interface PlayerApi {
   readonly composerAnchorMs: number | null;
   /** Load a teaching and seek to `startAtMs`, without playing. Re-opening the current one is a no-op. */
   open(recording: LoadedRecording, startAtMs: number | null): void;
+  /**
+   * {@link open}, unless opening would silence a **different teaching that is audibly playing**.
+   *
+   * What a recording page calls on mount. Arriving on a page is not a decision about sound — the
+   * page must neither start any nor stop what a member is in the middle of hearing. When the
+   * transport is idle (nothing loaded, or loaded and paused) this is exactly `open`; when another
+   * teaching is playing, the page leaves the player alone and its play control takes it over
+   * through {@link openAndPlay} instead.
+   */
+  openIfIdle(recording: LoadedRecording, startAtMs: number | null): void;
+  /**
+   * {@link open} **and play once the grant arrives** — the recording page's play control when the
+   * transport holds a different teaching. One method rather than an open followed by a toggle,
+   * because the toggle would race the grant: there is nothing to play until `pointAt` answers, and
+   * the press has to survive that wait the same way it survives a renewal.
+   */
+  openAndPlay(recording: LoadedRecording, startAtMs: number | null): void;
   toggle(): void;
   seekToMs(ms: number): void;
   /**
@@ -498,6 +515,44 @@ export function PlayerProvider({
       });
     },
     [loadChapters, loadNotes, pointAt],
+  );
+
+  /**
+   * `open`, unless it would stop sound. The element is read directly rather than through state,
+   * because this is called from a fetch's resolution and a state snapshot from the closure could
+   * describe a press that has happened since.
+   */
+  const openIfIdle = useCallback(
+    (recording: LoadedRecording, startAtMs: number | null): void => {
+      const element = audioRef.current;
+      const loaded = loadedRef.current;
+      if (loaded !== null && loaded.id !== recording.id && element !== null && !element.paused) {
+        return;
+      }
+      open(recording, startAtMs);
+    },
+    [open],
+  );
+
+  /**
+   * `open` with the play intent armed. The flags are set **after** `open` because `open` clears
+   * them, and they are the same pair a grant renewal uses — the press plays the teaching when
+   * `loadedmetadata` fires, however long the grant takes to arrive.
+   */
+  const openAndPlay = useCallback(
+    (recording: LoadedRecording, startAtMs: number | null): void => {
+      if (loadedRef.current?.id === recording.id) {
+        // Already the loaded teaching: this is a plain press for sound on it.
+        const element = audioRef.current;
+        wantsPlay.current = true;
+        if (element !== null) void element.play().catch(() => undefined);
+        return;
+      }
+      open(recording, startAtMs);
+      wantsPlay.current = true;
+      playOnLoad.current = true;
+    },
+    [open],
   );
 
   /**
@@ -871,6 +926,8 @@ export function PlayerProvider({
       currentChapter,
       composerAnchorMs,
       open,
+      openIfIdle,
+      openAndPlay,
       toggle,
       seekToMs,
       playFromMs,
@@ -899,6 +956,8 @@ export function PlayerProvider({
       currentChapter,
       composerAnchorMs,
       open,
+      openIfIdle,
+      openAndPlay,
       toggle,
       seekToMs,
       playFromMs,

@@ -88,6 +88,12 @@ export function RecordingScreen({
   const player = usePlayer();
   const [recording, setRecording] = useState<Recording | null>(null);
   const [failure, setFailure] = useState<string | null>(null);
+  /**
+   * The stored position, kept for the play control. Usually `openIfIdle` has already handed it to
+   * the player on mount — but when another teaching was playing then, the hand-over happens at the
+   * play press instead, and the position has to still be in hand at that moment.
+   */
+  const [startAtMs, setStartAtMs] = useState<number | null>(null);
   /*
    * **Notes is open when the page is.** Every other tab is a download a member asks for, but the
    * notes are already in hand — the player fetches them on open, because the transport's markers
@@ -179,7 +185,7 @@ export function RecordingScreen({
       : [{ label: recording.series.title, href: seriesPagePath(recording.series.id) }],
   );
 
-  const { open } = player;
+  const { openIfIdle } = player;
   useEffect(() => {
     let live = true;
 
@@ -194,8 +200,12 @@ export function RecordingScreen({
       ]);
       if (!live) return;
       setRecording(payload.recording);
+      setStartAtMs(progress.positionMs);
       setFailure(null);
-      open(
+      // `openIfIdle`, not `open`: arriving on the page loads the teaching into the transport only
+      // when doing so silences nothing. A member listening to something else keeps hearing it, and
+      // this teaching takes the player over at the play control instead.
+      openIfIdle(
         {
           id: payload.recording.id,
           title: payload.recording.title,
@@ -221,7 +231,7 @@ export function RecordingScreen({
     return () => {
       live = false;
     };
-  }, [open, recordingId]);
+  }, [openIfIdle, recordingId]);
 
   const isCurrent = player.loaded?.id === recordingId;
 
@@ -286,7 +296,22 @@ export function RecordingScreen({
               className={styles.detailPlay}
               type="button"
               aria-label={isCurrent && player.playing ? 'Pause' : 'Play'}
-              onClick={() => player.toggle()}
+              onClick={() =>
+                isCurrent
+                  ? player.toggle()
+                  : // The transport holds a different teaching (it was playing when this page
+                    // arrived, so the page left it alone). The press is the decision: this
+                    // teaching takes the player over, at the stored position, playing.
+                    player.openAndPlay(
+                      {
+                        id: recording.id,
+                        title: recording.title,
+                        artworkUrl: recording.series?.artworkUrl ?? null,
+                        seriesTitle: recording.series?.title ?? null,
+                      },
+                      startAtMs,
+                    )
+              }
             >
               <span aria-hidden="true">{isCurrent && player.playing ? '❚❚' : '▶'}</span>
             </button>
@@ -325,6 +350,21 @@ export function RecordingScreen({
             so its icon and its selected state take `--color-notes` where the others take the
             purple every other selected thing takes.
           */}
+          {/*
+            **The strip and its panels wait for this teaching to hold the player.** Everything
+            behind the tabs — the notes, the chapters, the composer's anchor — reads from the
+            player, and while a member is still listening to something else the player holds *that*
+            teaching: panels drawn now would show another recording's notes under this one's title,
+            and a note written in them would anchor to the wrong teaching. The play control above
+            is what hands the player over; until it is pressed, the page says so instead.
+          */}
+          {!isCurrent ? (
+            <p className={styles.quiet}>
+              You are listening to something else. Press play to switch to this teaching and open
+              its notes and chapters.
+            </p>
+          ) : (
+            <>
           <div className={styles.tabs} role="tablist" aria-label="Teaching contents">
             <button
               className={`${styles.tab} ${styles.notesTab}`}
@@ -419,6 +459,8 @@ export function RecordingScreen({
                 <TranscriptPanel recordingId={recordingId} canCorrect={canCorrect} />
               ) : null}
             </div>
+          )}
+            </>
           )}
         </>
       )}

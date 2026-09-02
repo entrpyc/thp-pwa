@@ -5,9 +5,11 @@ import { useEffect, useState } from 'react';
 import {
   formatTimecode,
   memberRecordingPath,
+  recordingChaptersPath,
   recordingPagePath,
   recordingProgressPath,
   seriesPagePath,
+  type ChaptersPayload,
   type PlaybackProgressPayload,
   type RecordingPayload,
   type RecordingView as Recording,
@@ -73,18 +75,54 @@ export function ChapterScreen({
   const [recording, setRecording] = useState<Recording | null>(null);
   const [failure, setFailure] = useState<string | null>(null);
   const [openTab, setOpenTab] = useState<OpenTab>('notes');
+  /** The stored position, kept for the moment the play control hands the player over. */
+  const [startAtMs, setStartAtMs] = useState<number | null>(null);
+
+  /** Whether this teaching holds the player — false while a member is still hearing another one. */
+  const isCurrent = player.loaded?.id === recordingId;
 
   /**
-   * The chapter, out of the list the player fetched when the teaching was opened.
+   * The chapter list this page reads when the player is holding a **different** teaching.
    *
-   * `null` while that fetch is in flight, and `null` for good if the id names no chapter of this
+   * Usually the player's own list is in hand — opening the teaching fetches it, because the
+   * transport names the chapter playing on every screen. But arriving here while listening to
+   * something else leaves the player alone (see `openIfIdle` below), so the page asks for the list
+   * itself: the chapter's title and summary are what this page *is*, and a page that answered
+   * "press play to find out what this chapter is called" would be gating reading on sound.
+   */
+  const [fallbackChapters, setFallbackChapters] = useState<{
+    readonly recordingId: string;
+    readonly chapters: ChaptersPayload['chapters'];
+  } | null>(null);
+  useEffect(() => {
+    if (isCurrent) return;
+    let live = true;
+    void apiFetch<ChaptersPayload>(recordingChaptersPath(recordingId), { credentials: 'include' })
+      .then((payload) => {
+        if (live) setFallbackChapters({ recordingId, chapters: payload.chapters });
+      })
+      .catch(() => {
+        // The page falls back to its loading line; the teaching link above it still works.
+      });
+    return () => {
+      live = false;
+    };
+  }, [isCurrent, recordingId]);
+
+  /**
+   * The chapter, out of the player's list when this teaching holds the player and out of the
+   * page's own fetch when it does not.
+   *
+   * `null` while the list is in flight, and `null` for good if the id names no chapter of this
    * teaching — the two are told apart below by whether the list itself has arrived.
    */
-  const chapters = player.chapters;
-  const chapter =
-    chapters?.recordingId === recordingId
-      ? (chapters.chapters.find((one) => one.id === chapterId) ?? null)
-      : null;
+  const chapters =
+    player.chapters?.recordingId === recordingId
+      ? player.chapters
+      : fallbackChapters?.recordingId === recordingId
+        ? fallbackChapters
+        : null;
+  const chapter = chapters?.chapters.find((one) => one.id === chapterId) ?? null;
 
   /**
    * `home › series › recording › chapter` — **the whole path down to here**.
@@ -113,7 +151,7 @@ export function ChapterScreen({
         ],
   );
 
-  const { open } = player;
+  const { openIfIdle } = player;
   useEffect(() => {
     let live = true;
 
@@ -128,8 +166,11 @@ export function ChapterScreen({
       ]);
       if (!live) return;
       setRecording(payload.recording);
+      setStartAtMs(progress.positionMs);
       setFailure(null);
-      open(
+      // `openIfIdle`, exactly as the recording page: arriving here must not stop what a member is
+      // in the middle of hearing. The play control is what hands the player over.
+      openIfIdle(
         {
           id: payload.recording.id,
           title: payload.recording.title,
@@ -153,7 +194,7 @@ export function ChapterScreen({
     return () => {
       live = false;
     };
-  }, [open, recordingId]);
+  }, [openIfIdle, recordingId]);
 
   const cover = recording?.series?.artworkUrl ?? null;
 
@@ -191,7 +232,7 @@ export function ChapterScreen({
       {chapter === null ? (
         failure === null ? (
           <p className={styles.quiet}>
-            {chapters?.recordingId === recordingId
+            {chapters !== null
               ? // The list arrived and this id is not in it — a chapter that was merged away or a
                 // regeneration that replaced the list while the member was reading it. It says so
                 // and offers the teaching, which is the only place left to go.
@@ -211,7 +252,24 @@ export function ChapterScreen({
               className={styles.detailPlay}
               type="button"
               aria-label={`Play from ${chapter.title}`}
-              onClick={() => player.playFromMs(chapter.startMs)}
+              onClick={() =>
+                isCurrent
+                  ? player.playFromMs(chapter.startMs)
+                  : // The transport still holds whatever the member was hearing when they arrived.
+                    // The press is the decision: this teaching takes the player over, from this
+                    // chapter's start, playing.
+                    recording === null
+                    ? undefined
+                    : player.openAndPlay(
+                        {
+                          id: recording.id,
+                          title: recording.title,
+                          artworkUrl: recording.series?.artworkUrl ?? null,
+                          seriesTitle: recording.series?.title ?? null,
+                        },
+                        chapter.startMs,
+                      )
+              }
             >
               <span aria-hidden="true">▶</span>
             </button>
@@ -231,6 +289,18 @@ export function ChapterScreen({
           */}
           <p className={styles.chapterSummary}>{chapter.summary}</p>
 
+          {/*
+            **The strip and its panels wait for this teaching to hold the player**, exactly as the
+            recording page's do and for the same reason: everything behind the tabs reads from the
+            player, which is still holding whatever the member was hearing when they arrived.
+          */}
+          {!isCurrent ? (
+            <p className={styles.quiet}>
+              You are listening to something else. Press play to switch to this teaching and open
+              its notes.
+            </p>
+          ) : (
+            <>
           {/*
             **The recording's tabs, scoped** ([3.22.13](docs/project/prd.md),
             [3.22.14](docs/project/prd.md)). The same strip in the same order as the recording page,
@@ -302,6 +372,8 @@ export function ChapterScreen({
               chapterId={chapterId}
             />
           ) : null}
+            </>
+          )}
         </>
       )}
     </>
