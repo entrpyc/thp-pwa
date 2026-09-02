@@ -18,14 +18,28 @@ import { mediaStore, type MediaStore } from '@thp/media';
  */
 
 /**
- * One hour, the same as playback.
+ * **A day, and the same URL all day** — unlike playback, which is an hour and fresh every time.
  *
- * A cover is looked at for as long as a page is open, and a page open longer than that re-mints on
- * its next read. What a longer expiry would buy is nothing anybody notices; what it costs is that a
- * URL copied out of a network tab stays live for the afternoon — and a cover is member-exclusive
- * content behind the same login the audio is.
+ * A cover is on every listing row, every hero band and the transport's tile, and a member sees the
+ * same handful of covers on every page they open. Signed afresh per page, each one is a new URL
+ * the browser has never seen, so it is fetched again and painted from nothing on every navigation
+ * — which reads from the screen as the pictures flashing. Signed as of the start of the day and
+ * carrying a `Cache-Control` for the day, the same cover is the same URL on every page until
+ * midnight, and the browser paints it from its own cache.
+ *
+ * The cost is that a URL copied out of a network tab stays live for up to two days rather than an
+ * hour. A cover is member-exclusive content behind the same login the audio is, but it is a
+ * picture of a study rather than the teaching itself, and a still-frame is what a member could
+ * screenshot anyway — which is why the trade is taken here and not for audio.
  */
-export const ARTWORK_GRANT_SECONDS = 60 * 60;
+export const ARTWORK_CACHE_WINDOW_SECONDS = 24 * 60 * 60;
+
+/**
+ * Twice the window, which is the least the store accepts for a cacheable grant: a URL minted a
+ * second before midnight has to be honoured for the whole of the following day, because that is
+ * how long the browser was told it may keep the picture.
+ */
+export const ARTWORK_GRANT_SECONDS = ARTWORK_CACHE_WINDOW_SECONDS * 2;
 
 export async function mintArtworkGrant(
   key: string | null,
@@ -34,5 +48,9 @@ export async function mintArtworkGrant(
   // No cover is the ordinary state (scope prd 3.1.7), and it costs no signature: the store is not
   // asked, and what the surface gets is `null` rather than a URL to nothing.
   if (key === null) return null;
-  return store.presignGet({ key, expiresInSeconds: ARTWORK_GRANT_SECONDS });
+  return store.presignGet({
+    key,
+    expiresInSeconds: ARTWORK_GRANT_SECONDS,
+    cache: { windowSeconds: ARTWORK_CACHE_WINDOW_SECONDS },
+  });
 }

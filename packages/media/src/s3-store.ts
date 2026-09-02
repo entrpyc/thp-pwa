@@ -48,13 +48,46 @@ export function buildMediaStore(): MediaStore {
       );
     },
 
-    async presignGet({ key, expiresInSeconds }) {
+    async presignGet({ key, expiresInSeconds, cache }) {
+      if (cache !== undefined && expiresInSeconds < cache.windowSeconds * 2) {
+        // Stated rather than quietly signed short: a URL minted at the end of a window would stop
+        // working partway through the next one, and the failure would look like a missing cover.
+        const least = cache.windowSeconds * 2;
+        throw new Error(
+          `a cacheable read grant needs an expiry of at least twice its window (${least}s), ` +
+            `got ${expiresInSeconds}s`,
+        );
+      }
       // No signable-headers set, unlike the `PUT`: a reader sends no headers worth binding, and the
       // signature already covers the bucket, the key and the expiry — which is the whole of what a
       // read grant is allowed to be.
-      return getSignedUrl(client, new GetObjectCommand({ Bucket: settings.bucket, Key: key }), {
-        expiresIn: expiresInSeconds,
-      });
+      //
+      // **A cacheable grant is signed as of the start of its window rather than as of now.** The
+      // signing time is part of the URL (`X-Amz-Date`) and of the signature, so two grants for
+      // the same key differ unless they were signed at the same instant — pinning that instant to
+      // the window's start is what makes them the same string, which is what a browser cache
+      // needs. Expiry counts from the signing time, which is the reason for the check above.
+      //
+      // The `Cache-Control` travels as a signed `response-cache-control` parameter, which S3, R2
+      // and MinIO all honour on a `GET` — so nothing about the object in the bucket changes, and
+      // an uncached grant for the same object stays exactly what it was.
+      const windowMs = cache === undefined ? 0 : cache.windowSeconds * 1000;
+      return getSignedUrl(
+        client,
+        new GetObjectCommand({
+          Bucket: settings.bucket,
+          Key: key,
+          ...(cache === undefined
+            ? {}
+            : { ResponseCacheControl: `private, max-age=${cache.windowSeconds}, immutable` }),
+        }),
+        {
+          expiresIn: expiresInSeconds,
+          ...(cache === undefined
+            ? {}
+            : { signingDate: new Date(Math.floor(Date.now() / windowMs) * windowMs) }),
+        },
+      );
     },
 
     async head(key: string): Promise<StoredObject | null> {

@@ -77,6 +77,15 @@ export function SeriesScreen({ seriesId }: { seriesId: string }) {
    */
   const cover = payload?.series.artworkUrl ?? null;
 
+  /**
+   * **The band keeps the cover's proportion while the page is still loading.** Most studies have a
+   * cover, so the likeliest shape is the 3:1 band; drawing the coverless strip first and growing
+   * it when the payload lands moved everything below it on nearly every open. A study that turns
+   * out to have no cover settles to the strip once that is known — and so does a page that could
+   * not be loaded, which has nothing to reserve room for.
+   */
+  const covered = cover !== null || (payload === null && failure === null);
+
   useEffect(() => {
     let live = true;
 
@@ -103,9 +112,7 @@ export function SeriesScreen({ seriesId }: { seriesId: string }) {
 
   return (
     <>
-      <div
-        className={`${styles.hero}${cover === null ? '' : ` ${styles.heroCovered}`}`}
-      >
+      <div className={`${styles.hero}${covered ? ` ${styles.heroCovered}` : ''}`}>
         {/*
           The cover behind the back control, and nothing at all when there is none (scope prd
           3.2.6). No alternative text: the series title is the `h1` immediately below it, and 4.3

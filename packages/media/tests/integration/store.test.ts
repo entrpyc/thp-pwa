@@ -181,6 +181,16 @@ describe('a presigned GET', () => {
     expect(new URL(url).searchParams.get('X-Amz-Expires')).toBe('7200');
   });
 
+  it('is a different URL each time it is minted, so a browser cannot cache it', async () => {
+    // The property the cacheable grant below is the exception to, pinned here so that it stays an
+    // exception: an audio grant re-minted per sitting is a fresh URL per sitting.
+    const { key } = await stored();
+    const first = await store.presignGet({ key, expiresInSeconds: 3600 });
+    await new Promise((done) => setTimeout(done, 1_100));
+    const second = await store.presignGet({ key, expiresInSeconds: 3600 });
+    expect(second).not.toBe(first);
+  });
+
   it('authorises that key and no other', async () => {
     const first = await stored();
     const second = await stored();
@@ -194,6 +204,46 @@ describe('a presigned GET', () => {
     const response = await fetch(swapped);
     expect(response.ok).toBe(false);
     expect(response.status).toBe(403);
+  });
+
+  describe('a cacheable presigned GET', () => {
+    it('is the same URL every time it is minted within the window', async () => {
+      // What a browser cache needs and what an ordinary grant cannot give it: the same key signed
+      // twice, a second apart, is the same string — because both are signed as of the window's
+      // start rather than as of now.
+      const { key } = await stored();
+      // A day-long window so that the two mints cannot straddle a window boundary in practice.
+      const cache = { windowSeconds: 86_400 };
+      const first = await store.presignGet({ key, expiresInSeconds: 172_800, cache });
+      await new Promise((done) => setTimeout(done, 1_100));
+      const second = await store.presignGet({ key, expiresInSeconds: 172_800, cache });
+      expect(second).toBe(first);
+    });
+
+    it('fetches the object and tells the browser to keep it for the window', async () => {
+      const { key, body } = await stored(48);
+      const url = await store.presignGet({
+        key,
+        expiresInSeconds: 7200,
+        cache: { windowSeconds: 3600 },
+      });
+
+      const response = await fetch(url);
+      expect(response.status).toBe(200);
+      // The store enforces the header, not us: it is a signed response parameter, so the bucket
+      // answers it on this URL and on no other.
+      expect(response.headers.get('cache-control')).toBe('private, max-age=3600, immutable');
+      expect(new Uint8Array(await response.arrayBuffer())).toEqual(body);
+    });
+
+    it('refuses an expiry shorter than twice the window', async () => {
+      // A URL minted at the end of a window would otherwise stop working partway through the next
+      // one — and from the screen that is a cover that went missing for no reason.
+      const { key } = await stored();
+      await expect(
+        store.presignGet({ key, expiresInSeconds: 3600, cache: { windowSeconds: 3600 } }),
+      ).rejects.toThrow(/twice its window/);
+    });
   });
 });
 

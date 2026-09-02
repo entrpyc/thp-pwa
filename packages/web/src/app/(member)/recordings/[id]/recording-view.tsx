@@ -242,6 +242,15 @@ export function RecordingScreen({
   const cover = recording?.series?.artworkUrl ?? null;
 
   /**
+   * **The band keeps the cover's proportion while the page is still loading.** Most studies have a
+   * cover, so the likeliest shape is the 3:1 band; drawing the coverless strip first and growing
+   * it when the payload lands moved everything below it on nearly every open. A study that turns
+   * out to have no cover settles to the strip once that is known — and so does a page that could
+   * not be loaded, which has nothing to reserve room for.
+   */
+  const covered = cover !== null || (recording === null && failure === null);
+
+  /**
    * **Back goes to the study this teaching is part of**, and to the library only for a teaching that
    * is in none.
    *
@@ -262,7 +271,7 @@ export function RecordingScreen({
 
   return (
     <>
-      <div className={`${styles.hero}${cover === null ? '' : ` ${styles.heroCovered}`}`}>
+      <div className={`${styles.hero}${covered ? ` ${styles.heroCovered}` : ''}`}>
         {/*
           The cover of the *series* this teaching is in — a recording has none of its own (scope
           prd 3.2.3). A teaching in no series has no ref to read one from, which is 3.2.6's case

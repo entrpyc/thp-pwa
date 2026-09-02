@@ -198,9 +198,18 @@ export function ChapterScreen({
 
   const cover = recording?.series?.artworkUrl ?? null;
 
+  /**
+   * **The band keeps the cover's proportion while the page is still loading.** Most studies have a
+   * cover, so the likeliest shape is the 3:1 band; drawing the coverless strip first and growing
+   * it when the payload lands moved everything below it on nearly every open. A study that turns
+   * out to have no cover settles to the strip once that is known — and so does a page that could
+   * not be loaded, which has nothing to reserve room for.
+   */
+  const covered = cover !== null || (recording === null && failure === null);
+
   return (
     <>
-      <div className={`${styles.hero}${cover === null ? '' : ` ${styles.heroCovered}`}`}>
+      <div className={`${styles.hero}${covered ? ` ${styles.heroCovered}` : ''}`}>
         {/*
           The cover of the series the *teaching* is in ([3.22.3](docs/project/prd.md)): a chapter is
           shown under the cover of the recording it belongs to, because it is part of a teaching

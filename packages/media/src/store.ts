@@ -82,8 +82,21 @@ export interface MediaStore {
    * The expiry is the caller's, not the port's: what a browser needs for one sitting and what a
    * transcription provider needs to fetch a 200 MB file are different numbers, and each belongs
    * beside the reason for it.
+   *
+   * **`cache` makes the grant one a browser can keep.** A fresh signature is a fresh URL, and a
+   * browser caches by URL — so a picture signed anew on every page is fetched anew on every page,
+   * and repaints from nothing each time. With `cache` set, the same key answers the *same* URL
+   * for `windowSeconds` at a stretch and the response carries a `Cache-Control` telling the
+   * browser to hold it for that long; the second page that shows the picture paints it from disk.
+   * The caller's `expiresInSeconds` has to be at least twice the window, so a URL minted at the
+   * very end of one window is still honoured for the whole of the next. Audio never sets it: a
+   * playback grant is one sitting's, and its expiry is the property playback is built on.
    */
-  presignGet(input: { readonly key: string; readonly expiresInSeconds: number }): Promise<string>;
+  presignGet(input: {
+    readonly key: string;
+    readonly expiresInSeconds: number;
+    readonly cache?: { readonly windowSeconds: number };
+  }): Promise<string>;
 }
 
 /**
