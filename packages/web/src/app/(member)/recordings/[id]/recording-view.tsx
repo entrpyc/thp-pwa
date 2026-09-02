@@ -16,6 +16,7 @@ import { useBreadcrumbTrail, usePlayer } from '../../player-context';
 import { ChaptersPanel } from './chapters-panel';
 import { CollapsibleProse } from './collapsible-prose';
 import { NotesPanel } from './notes-panel';
+import { RecordingContentProvider, toLoaded, useRecordingContentFor } from './recording-content';
 import { ScripturePanel } from './scripture-panel';
 import { TranscriptPanel } from './transcript-panel';
 import styles from '../../screens.module.css';
@@ -205,17 +206,7 @@ export function RecordingScreen({
       // `openIfIdle`, not `open`: arriving on the page loads the teaching into the transport only
       // when doing so silences nothing. A member listening to something else keeps hearing it, and
       // this teaching takes the player over at the play control instead.
-      openIfIdle(
-        {
-          id: payload.recording.id,
-          title: payload.recording.title,
-          // The transport's tile is the series' cover, handed over with the teaching rather than
-          // fetched by the bar — this is the one place that knows both (scope prd 3.2.4).
-          artworkUrl: payload.recording.series?.artworkUrl ?? null,
-          seriesTitle: payload.recording.series?.title ?? null,
-        },
-        progress.positionMs,
-      );
+      openIfIdle(toLoaded(payload.recording), progress.positionMs);
     }
 
     void load().catch((caught: unknown) => {
@@ -234,6 +225,14 @@ export function RecordingScreen({
   }, [openIfIdle, recordingId]);
 
   const isCurrent = player.loaded?.id === recordingId;
+
+  /**
+   * What the strip and its panels read: the player's notes and chapters while the player holds this
+   * teaching, and the page's own fetch of them while a member is still hearing another one. See
+   * `recording-content.tsx` — it is what lets the panels draw before the play control is pressed,
+   * without ever showing another teaching's notes under this one's title.
+   */
+  const content = useRecordingContentFor(recordingId, recording, startAtMs);
 
   /**
    * The band holds the back control and is drawn before the teaching arrives, so the cover is read
@@ -311,15 +310,7 @@ export function RecordingScreen({
                   : // The transport holds a different teaching (it was playing when this page
                     // arrived, so the page left it alone). The press is the decision: this
                     // teaching takes the player over, at the stored position, playing.
-                    player.openAndPlay(
-                      {
-                        id: recording.id,
-                        title: recording.title,
-                        artworkUrl: recording.series?.artworkUrl ?? null,
-                        seriesTitle: recording.series?.title ?? null,
-                      },
-                      startAtMs,
-                    )
+                    player.openAndPlay(toLoaded(recording), startAtMs)
               }
             >
               <span aria-hidden="true">{isCurrent && player.playing ? '❚❚' : '▶'}</span>
@@ -360,20 +351,14 @@ export function RecordingScreen({
             purple every other selected thing takes.
           */}
           {/*
-            **The strip and its panels wait for this teaching to hold the player.** Everything
-            behind the tabs — the notes, the chapters, the composer's anchor — reads from the
-            player, and while a member is still listening to something else the player holds *that*
-            teaching: panels drawn now would show another recording's notes under this one's title,
-            and a note written in them would anchor to the wrong teaching. The play control above
-            is what hands the player over; until it is pressed, the page says so instead.
+            **The strip and its panels do not wait for this teaching to hold the player.** A member
+            still hearing another teaching reads this one's notes and chapters all the same: the
+            panels draw from `content`, which is the page's own fetch of *this* teaching while the
+            player holds a different one, so nothing under this title can be another recording's.
+            Nothing under the strip starts sound either — the play control above is what hands the
+            player over, and until it is pressed the other teaching keeps playing.
           */}
-          {!isCurrent ? (
-            <p className={styles.quiet}>
-              You are listening to something else. Press play to switch to this teaching and open
-              its notes and chapters.
-            </p>
-          ) : (
-            <>
+          <RecordingContentProvider value={content}>
           <div className={styles.tabs} role="tablist" aria-label="Teaching contents">
             <button
               className={`${styles.tab} ${styles.notesTab}`}
@@ -394,11 +379,11 @@ export function RecordingScreen({
             */}
             {/*
               Absent entirely for a teaching with no chapters (3.22.10) — the same line, decided off
-              the list the player already holds rather than off a flag on the recording payload,
+              the list the page already holds rather than off a flag on the recording payload,
               because that list is fetched when the teaching is opened regardless (3.22.16) and a
               second answer to "does this teaching have chapters" could disagree with the first.
             */}
-            {(player.chapters?.chapters.length ?? 0) > 0 ? (
+            {(content.chapters?.length ?? 0) > 0 ? (
               <button
                 className={styles.tab}
                 type="button"
@@ -469,8 +454,7 @@ export function RecordingScreen({
               ) : null}
             </div>
           )}
-            </>
-          )}
+          </RecordingContentProvider>
         </>
       )}
     </>

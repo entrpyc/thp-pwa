@@ -13,7 +13,7 @@ import {
   type ChapterWritePayload,
 } from '@thp/shared';
 import { ApiClientError, apiFetch } from '@/client/api-client';
-import { usePlayer } from '../../player-context';
+import { useRecordingContent } from './recording-content';
 import styles from './chapters.module.css';
 
 /**
@@ -25,10 +25,12 @@ import styles from './chapters.module.css';
  *
  * Four decisions worth stating:
  *
- * - **It reads the list the player already holds** rather than fetching one. The transport needs the
+ * - **It reads the list the page already holds** rather than fetching one. The transport needs the
  *   whole list wherever the member is (project tdd 5.9), so it is fetched when the teaching is
- *   opened and this panel is drawing something the page already has. A fetch here would be a second
- *   answer to a question already answered, and the two could disagree about where a chapter ends.
+ *   opened and this panel is drawing something the page already has — the player's list while the
+ *   player holds this teaching, the page's own while it holds another (see
+ *   `recording-content.tsx`). A fetch here would be a second answer to a question already
+ *   answered, and the two could disagree about where a chapter ends.
  * - **The row is a link and the play control is a button** ([3.22.12](docs/project/prd.md)).
  *   Selecting a chapter opens its page and does **not** start playback — a member who tapped a
  *   chapter has not asked for sound, which is the rule opening a teaching (3.2.12) and selecting a
@@ -56,17 +58,17 @@ export function ChaptersPanel({
   /** Whether to draw the edit, split and merge controls. It grants nothing — the API refuses. */
   canEdit: boolean;
 }) {
-  const player = usePlayer();
+  const content = useRecordingContent();
   const [query, setQuery] = useState('');
   const [editing, setEditing] = useState<string | null>(null);
   const [splitting, setSplitting] = useState<string | null>(null);
   const [failure, setFailure] = useState<string | null>(null);
 
-  const chapters = player.chapters?.chapters ?? [];
+  const chapters = content.chapters ?? [];
   const shown = filterChapters(chapters, query);
 
   /**
-   * Send a write and put the answer back in the player's hands.
+   * Send a write and put the answer back in the content source's hands.
    *
    * Every chapter write answers with the **whole list**, because a boundary move changes where the
    * chapter before it ends and a merge removes one entirely — so the panel never patches a row, it
@@ -84,7 +86,7 @@ export function ChaptersPanel({
           ? {}
           : { headers: { 'content-type': 'application/json' }, body: JSON.stringify(body) }),
       });
-      player.replaceChapters(recordingId, payload.chapters);
+      content.replaceChapters(payload.chapters);
       setEditing(null);
       setSplitting(null);
     } catch (caught: unknown) {
@@ -146,13 +148,15 @@ export function ChaptersPanel({
 
                 {/*
                   The one control on the row that asks for sound (3.22.12). Outside the link rather
-                  than inside it, because a button inside a link is a press with two meanings.
+                  than inside it, because a button inside a link is a press with two meanings. On a
+                  teaching the player does not hold, this is the press that takes the player over —
+                  from this chapter's start, playing — exactly as the page's own play control is.
                 */}
                 <button
                   className={styles.play}
                   type="button"
                   aria-label={`Play from ${chapter.title}`}
-                  onClick={() => player.playFromMs(chapter.startMs)}
+                  onClick={() => content.playFromMs(chapter.startMs)}
                 >
                   <span aria-hidden="true">▶</span>
                 </button>
@@ -201,7 +205,7 @@ export function ChaptersPanel({
                   chapter={chapter}
                   legend="Edit this chapter"
                   submitLabel="Save"
-                  currentMs={player.currentMs}
+                  currentMs={content.positionMs}
                   onSubmit={(values) => void write(chapterPath(chapter.id), 'PUT', values)}
                 />
               ) : null}
@@ -211,7 +215,7 @@ export function ChaptersPanel({
                   chapter={chapter}
                   legend="Split this chapter"
                   submitLabel="Split"
-                  currentMs={player.currentMs}
+                  currentMs={content.positionMs}
                   /*
                    * A split takes the *new* chapter's title and summary, so the form opens empty
                    * rather than carrying the words of the chapter being divided — which would invite

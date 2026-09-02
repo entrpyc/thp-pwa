@@ -11,7 +11,7 @@ import {
 } from '@thp/shared';
 import { ApiClientError, apiFetch } from '@/client/api-client';
 import { clearNoteDraft, readNoteDraft, writeNoteDraft } from '@/client/notes/draft';
-import { usePlayer } from '../../player-context';
+import { useRecordingContent } from './recording-content';
 import styles from './notes.module.css';
 
 /**
@@ -88,7 +88,7 @@ export function NoteComposer({
   title?: string;
   onSaved?: () => void;
 }) {
-  const player = usePlayer();
+  const content = useRecordingContent();
   const [text, setText] = useState('');
   const [visibility, setVisibility] = useState<NoteVisibility>('private');
   /**
@@ -104,11 +104,13 @@ export function NoteComposer({
    * player is holding while nothing has been typed, or the one it was holding at the first
    * keystroke ever after.
    *
-   * Read from the player rather than taken as a prop, so the inline mount and the transport's sheet
-   * cannot be looking at two different moments — which is what 3.1.2's *"both produce the same
-   * note"* has to mean once the same composer is on screen twice.
+   * Read from the content source rather than taken as a prop, so the inline mount and the
+   * transport's sheet cannot be looking at two different moments — which is what 3.1.2's *"both
+   * produce the same note"* has to mean once the same composer is on screen twice. For the loaded
+   * teaching the source is the player itself; for a teaching the player does not hold, the moment
+   * is the member's stored position on it, which is where pressing play would start.
    */
-  const anchorMs = draftAnchorMs ?? player.composerAnchorMs ?? player.currentMs;
+  const anchorMs = draftAnchorMs ?? content.composerAnchorMs ?? content.positionMs;
   const [saving, setSaving] = useState(false);
   const [failure, setFailure] = useState<string | null>(null);
   /**
@@ -126,7 +128,7 @@ export function NoteComposer({
   const count = text.trim().length;
   const overLimit = count > MAX_NOTE_LENGTH;
 
-  const { refreshNotes, lockComposerAnchor, releaseComposerAnchor } = player;
+  const { refreshNotes, lockComposerAnchor, releaseComposerAnchor } = content;
 
   /*
    * **Read the draft back on mount, never during render.** Local storage does not exist on the
@@ -208,6 +210,13 @@ export function NoteComposer({
             // **The first character is the decision.** Every later one finds the moment already
             // held, so this is a no-op for the rest of the note.
             lockComposerAnchor();
+            // On a teaching the player does not hold, the moment is also kept **here**, the way a
+            // restored draft's is. The source's anchor lives with the page's own content, and the
+            // press that loads this teaching into the player swaps that source out from under the
+            // composer — at whatever moment the press named, which is not the one this note showed
+            // when it was begun. For the loaded teaching the player's own lock is the record and
+            // nothing is duplicated, so the two mounts of this composer still read one moment.
+            if (!content.current) setDraftAnchorMs((held) => held ?? anchorMs);
             setText(event.target.value);
           }}
         />

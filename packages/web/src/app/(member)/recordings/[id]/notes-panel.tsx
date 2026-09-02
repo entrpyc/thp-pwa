@@ -17,7 +17,7 @@ import {
   type NoteView,
 } from '@thp/shared';
 import { ApiClientError, apiFetch } from '@/client/api-client';
-import { usePlayer } from '../../player-context';
+import { useRecordingContent } from './recording-content';
 import { CharacterCount, NoteComposer } from './note-composer';
 import styles from './notes.module.css';
 
@@ -87,7 +87,7 @@ export function NotesPanel({
    */
   chapterId?: string | null;
 }) {
-  const player = usePlayer();
+  const content = useRecordingContent();
   const [filter, setFilter] = useState<Filter>('all');
 
   /**
@@ -96,22 +96,23 @@ export function NotesPanel({
    * (scope prd 3.1.1). Closing the tab arms it again rather than leaving a moment
    * held, so a composer re-opened an hour later does not still be pointing at where it was shut.
    */
-  const { releaseComposerAnchor } = player;
+  const { releaseComposerAnchor } = content;
   useEffect(() => {
     releaseComposerAnchor();
     return () => releaseComposerAnchor();
   }, [releaseComposerAnchor]);
 
   /**
-   * Whatever the player is holding, rendered as-is.
+   * Whatever the content source is holding, rendered as-is.
    *
-   * **No second check that these notes belong to this teaching.** The store is cleared when a
-   * different recording is opened and the provider discards an answer that arrives late for the
-   * previous one, so a set that does not belong here cannot reach this component — and a duplicate
-   * guard here would hide a broken one there from every screen except the transport, which has no
-   * panel to filter it.
+   * **No second check that these notes belong to this teaching.** The source is the page's
+   * decision — the player's store while the player holds this teaching, the page's own fetch while
+   * it holds another (see `recording-content.tsx`) — and both discard an answer that arrives late
+   * for a previous teaching, so a set that does not belong here cannot reach this component. A
+   * duplicate guard here would hide a broken one there from every screen except the transport,
+   * which has no panel to filter it.
    */
-  const held = player.notes?.notes ?? null;
+  const held = content.notes;
 
   /*
    * The chapter's span, when the page asked for one ([3.22.14](docs/project/prd.md)). `null` while
@@ -125,18 +126,18 @@ export function NotesPanel({
   const scope =
     chapterId === null
       ? null
-      : (player.chapters?.chapters.find((one) => one.id === chapterId) ?? null);
+      : (content.chapters?.find((one) => one.id === chapterId) ?? null);
 
   const notes =
     held === null || scope === null
       ? held
       : held.filter((one) => one.timestampMs !== null && isInChapter(scope, one.timestampMs));
 
-  if (player.notesFailed) {
+  if (content.notesFailed) {
     return (
       <div className={styles.panel}>
         <p className={styles.failure}>Couldn&apos;t load notes.</p>
-        <button className={styles.retry} type="button" onClick={() => player.refreshNotes()}>
+        <button className={styles.retry} type="button" onClick={() => content.refreshNotes()}>
           Try again
         </button>
       </div>
@@ -246,7 +247,7 @@ interface CardProps {
  * an admin-removed note sees exactly this, like everyone else.
  */
 function NoteCard({ note, canModerate }: CardProps) {
-  const player = usePlayer();
+  const content = useRecordingContent();
   const [editing, setEditing] = useState(false);
   const [replying, setReplying] = useState(false);
   const [failure, setFailure] = useState<string | null>(null);
@@ -326,7 +327,7 @@ function NoteCard({ note, canModerate }: CardProps) {
       {replying ? (
         <ReplyComposer
           note={note}
-          recordingId={player.notes?.recordingId ?? ''}
+          recordingId={content.recordingId}
           onDone={() => setReplying(false)}
         />
       ) : note.deleted || isReply || note.visibility === 'private' ? null : (
@@ -362,17 +363,19 @@ function Thread({ note, canModerate }: CardProps) {
  * The timestamp, pressable (scope prd 5.2.2, 3.2.5).
  *
  * Seeks and does **not** start playback — the same rule selecting a transcript line already
- * follows, and for the same reason: a member finding their place has not asked for sound.
+ * follows, and for the same reason: a member finding their place has not asked for sound. On a
+ * teaching the player does not hold, "seek" loads that teaching at the moment, still paused: the
+ * member pressed a moment in *this* teaching, and what they hear next is theirs to decide.
  */
 function TimeLink({ note }: { note: NoteView }) {
-  const player = usePlayer();
+  const content = useRecordingContent();
   const at = formatTimecode(note.timestampMs ?? 0);
   return (
     <button
       className={styles.noteTime}
       type="button"
       aria-label={`The note at ${at}`}
-      onClick={() => player.seekToMs(note.timestampMs ?? 0)}
+      onClick={() => content.seekToMs(note.timestampMs ?? 0)}
     >
       {at}
     </button>
@@ -393,7 +396,7 @@ function ReactionRow({
   note: NoteView;
   onFailure: (message: string | null) => void;
 }) {
-  const player = usePlayer();
+  const content = useRecordingContent();
   const [open, setOpen] = useState(false);
 
   // A private note takes no reactions, so it shows neither the row nor the control (3.4.8).
@@ -417,7 +420,7 @@ function ReactionRow({
       .catch((caught: unknown) => {
         onFailure(removedMessage(caught, NOTE_REMOVED_MESSAGE));
       })
-      .finally(() => player.refreshNotes());
+      .finally(() => content.refreshNotes());
   }
 
   return (
@@ -482,7 +485,7 @@ function Overflow({
   onEdit: () => void;
   onFailure: (message: string | null) => void;
 }) {
-  const player = usePlayer();
+  const content = useRecordingContent();
   const [open, setOpen] = useState(false);
   const [confirming, setConfirming] = useState(false);
 
@@ -498,7 +501,7 @@ function Overflow({
     onFailure(null);
     void apiFetch(path, { method, credentials: 'include' })
       .catch((caught: unknown) => onFailure(removedMessage(caught, NOTE_ALREADY_REMOVED_MESSAGE)))
-      .finally(() => player.refreshNotes());
+      .finally(() => content.refreshNotes());
   }
 
   return (
@@ -599,7 +602,7 @@ function EditForm({
   onDone: () => void;
   onFailure: (message: string | null) => void;
 }) {
-  const player = usePlayer();
+  const content = useRecordingContent();
   const [text, setText] = useState(note.text);
   const [saving, setSaving] = useState(false);
   const count = text.trim().length;
@@ -620,11 +623,11 @@ function EditForm({
         })
           .then(() => {
             onDone();
-            player.refreshNotes();
+            content.refreshNotes();
           })
           .catch((caught: unknown) => {
             onFailure(removedMessage(caught, NOTE_ALREADY_REMOVED_MESSAGE));
-            player.refreshNotes();
+            content.refreshNotes();
           })
           .finally(() => setSaving(false));
       }}
@@ -676,7 +679,7 @@ function ReplyComposer({
   recordingId: string;
   onDone: () => void;
 }) {
-  const player = usePlayer();
+  const content = useRecordingContent();
   const [text, setText] = useState('');
   const [saving, setSaving] = useState(false);
   const [failure, setFailure] = useState<string | null>(null);
@@ -702,11 +705,11 @@ function ReplyComposer({
           .then(() => {
             setText('');
             onDone();
-            player.refreshNotes();
+            content.refreshNotes();
           })
           .catch((caught: unknown) => {
             setFailure(removedMessage(caught, NOTE_REMOVED_WHILE_REPLYING_MESSAGE));
-            player.refreshNotes();
+            content.refreshNotes();
           })
           .finally(() => setSaving(false));
       }}
