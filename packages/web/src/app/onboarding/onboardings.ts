@@ -44,7 +44,7 @@ export const ONBOARDINGS: Record<OnboardingId, OnboardingDefinition> = {
       newUserSlide(
         1,
         "Quick tour before you start",
-        "To play a recording click on the link to all series, then choose a series to see its' recordings. Once you are on the recording page, click on the play button.",
+        "To play a recording click on the link to all series, then choose a series to see its' recordings. Once you are on the recording page, click on the play button. Opening the app from a different device or coming back to a recording will resume your progress from wherever you left off.",
       ),
       newUserSlide(
         2,
