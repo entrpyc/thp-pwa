@@ -8,6 +8,8 @@ import {
   FEEDBACK_PAGE_PATH,
   MEMBER_LIBRARY_PAGE_PATH,
   MEMBER_SERIES_PAGE_PATH,
+  NEW_USER_ONBOARDING_ID,
+  onboardingPagePath,
 } from '@thp/shared';
 import { SignOutButton } from '../sign-out-button';
 import { InstallApp } from './install-app';
@@ -193,6 +195,20 @@ export function TopNavigation({ canSeeConsole }: { canSeeConsole: boolean }) {
                 </Link>
               </li>
             ) : null}
+            {/*
+              The tour's own promise, kept: its last slide says "you can always come back to it
+              later", and this is the way back. Replaying it changes nothing — the completion is
+              already recorded, so finishing or skipping simply returns to the dashboard.
+            */}
+            <li>
+              <Link
+                className={styles.menuLink}
+                href={onboardingPagePath(NEW_USER_ONBOARDING_ID)}
+                onClick={() => setOpen(false)}
+              >
+                App tour
+              </Link>
+            </li>
             {/*
               Below the destinations and above the utilities, because it is neither: it is not a
               place in the product, and it is not something the browser or the session does. It is
