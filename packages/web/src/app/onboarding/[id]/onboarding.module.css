@@ -7,7 +7,10 @@
  */
 
 .screen {
-  min-height: 100dvh;
+  /* Exactly the viewport, never more: the tour neither scrolls nor grows. `dvh` is `vh` that
+     tracks the real visible height on phones, where the browser chrome comes and goes. */
+  height: 100dvh;
+  overflow: hidden;
   display: flex;
   flex-direction: column;
   gap: var(--space-6);
@@ -37,11 +40,12 @@
 }
 
 .stage {
-  flex: 1;
+  /* Grows into spare room but never shrinks: the media's ratio holds, and it is the text block
+     below that scrolls when a small viewport runs out of height. */
+  flex: 1 0 auto;
   display: flex;
   align-items: center;
   gap: var(--space-2);
-  min-height: 0;
 }
 
 .arrow {
@@ -94,10 +98,8 @@
   flex: 0 0 100%;
   min-width: 0;
   display: flex;
-  flex-direction: column;
   align-items: center;
   justify-content: center;
-  gap: var(--space-4);
   padding: 0 var(--space-2);
 }
 
@@ -120,6 +122,21 @@
   display: block;
 }
 
+/*
+ * The words, outside the arrow-flanked stage so they span the whole screen. The stage above keeps
+ * its size (the media's ratio is not negotiable), so when a small viewport runs out of room it is
+ * this block that scrolls rather than the dots that vanish.
+ */
+.text {
+  flex: 0 1 auto;
+  min-height: 0;
+  overflow-y: auto;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: var(--space-3);
+}
+
 .title {
   margin: var(--space-2) 0 0;
   font-size: var(--fs-card-title);
@@ -131,7 +148,7 @@
 
 .description {
   margin: 0;
-  max-width: 40rem;
+  max-width: 52rem;
   font-size: var(--fs-body);
   color: var(--color-text-muted);
   line-height: 1.4;

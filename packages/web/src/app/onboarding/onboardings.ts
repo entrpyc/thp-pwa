@@ -49,7 +49,7 @@ export const ONBOARDINGS: Record<OnboardingId, OnboardingDefinition> = {
       newUserSlide(
         2,
         'Adding a note',
-        'You can share your thoughts publicly or keep private notes. On the recording page, scroll to the "Notes" tab. Type in your note and choose to keep it private or share it with the group. Click on "Save note" and your note is now displayed below.',
+        'You can share your thoughts with the group or keep private notes. On the recording page, scroll to the "Notes" tab. Type in your note and choose to keep it private or public. Click on "Save note" and your note is now displayed below.',
       ),
       newUserSlide(
         3,
@@ -58,23 +58,23 @@ export const ONBOARDINGS: Record<OnboardingId, OnboardingDefinition> = {
       ),
       newUserSlide(
         4,
-        'Thematic chapters',
+        'Chapters',
         'Each recording is divided into chapters - themes that appear in the recording. Scroll to the "Chapters" tab and click it. A list of chapters will be displayed. Click on the play button next to a chapter to jump to that moment in the recording, or click on the chapter title to open the chapter\'s page.',
       ),
       newUserSlide(
         5,
         'Playback controls',
-        'The playback menu on the bottom is visible and interactive in any page. You can pause, play, skip forward or backward.',
+        'The playback menu on the bottom is visible and interactive in any page. You can pause, play, skip forward or backward. The playback track contains indicators for notes (green dots) and chapters (grey lines) that appear in the recording.',
       ),
       newUserSlide(
         6,
         'Speed control and quick actions',
-        'In the playback menu, you can change the speed of the recording by clicking on the speed button. You can also click, hold and drag to select specific speed. The quick action menu allows you to add a note, or enable captions. You can use it by clicking on the button, or click, hold and drag to select a specific action from the menu.',
+        'In the playback menu, you can change the speed of the recording by clicking on the speed button. You can also click-hold and drag to select specific speed. The quick action menu allows you to add a note, or enable captions. You can use it by clicking on the button, or click-hold and drag to select a specific action from the menu.',
       ),
       newUserSlide(
         7,
         'Page navigation with breadcrumb',
-        'Quickly navigate back. In the top navigation you can see the route to the current page in the format "Homepage > Series > Recording > Chapter". You can click on any of the items in the breadcrumb to navigate to that page.',
+        'Quickly navigate back. In the top navigation you can see the path to the current page in the format "Homepage > Series > Recording > Chapter". You can click on any of the items in the breadcrumb to navigate to that page.',
       ),
       newUserSlide(
         8,
@@ -84,7 +84,7 @@ export const ONBOARDINGS: Record<OnboardingId, OnboardingDefinition> = {
       newUserSlide(
         9,
         'Feedback and bug report',
-        'Anything feels off or you have ideas for the app? Click on the top-right button and select the "Report a bug" link. You can fill out the form and submit it.',
+        'Anything feels off or you have ideas for the app? Click on the top-right button and select the "Report a bug" link. You can fill out the form and submit it, that would be greatly appreciated.',
       ),
       newUserSlide(
         10,

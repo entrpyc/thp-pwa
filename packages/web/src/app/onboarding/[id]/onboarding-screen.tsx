@@ -128,9 +128,8 @@ export function OnboardingScreen({
               <li
                 key={slide.media}
                 className={styles.slide}
+                // Only the media rides the track; the words render once, full-width, below it.
                 aria-hidden={i !== index}
-                // `inert` is what makes aria-hidden true: nothing on an off-screen slide can be
-                // focused or clicked, including the last slide's start button.
                 inert={i !== index ? true : undefined}
               >
                 <div className={styles.media}>
@@ -151,18 +150,6 @@ export function OnboardingScreen({
                     <img src={slide.media} alt="" />
                   )}
                 </div>
-                <h2 className={styles.title}>{slide.title}</h2>
-                <p className={styles.description}>{slide.description}</p>
-                {i === lastIndex ? (
-                  <button
-                    className={styles.start}
-                    type="button"
-                    onClick={() => void leave()}
-                    disabled={leaving}
-                  >
-                    {leaving ? 'Starting…' : 'Let’s Start'}
-                  </button>
-                ) : null}
               </li>
             ))}
           </ul>
@@ -186,6 +173,22 @@ export function OnboardingScreen({
             />
           </svg>
         </button>
+      </div>
+
+      {/* Outside the arrow-flanked track, so the words get the whole screen's width. */}
+      <div className={styles.text}>
+        <h2 className={styles.title}>{slides[index]?.title}</h2>
+        <p className={styles.description}>{slides[index]?.description}</p>
+        {index === lastIndex ? (
+          <button
+            className={styles.start}
+            type="button"
+            onClick={() => void leave()}
+            disabled={leaving}
+          >
+            {leaving ? 'Starting…' : 'Let’s Start'}
+          </button>
+        ) : null}
       </div>
 
       <div className={styles.dots}>
