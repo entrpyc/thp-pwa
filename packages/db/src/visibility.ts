@@ -39,6 +39,11 @@ export interface VisibleRecordingRow {
   readonly summary: string | null;
   /** Admin-only at every call site. Never a URL. */
   readonly originalMediaKey: string;
+  /**
+   * The playback rendition `process_audio` wrote, or `null` while none exists. The grant prefers
+   * it and falls back to the original — a key, never a URL, exactly as the original's is.
+   */
+  readonly playbackMediaKey: string | null;
   readonly createdAt: Date;
   /** The series this recording is in, or `null` for the many in none (Story 6). */
   readonly seriesId: string | null;
@@ -115,6 +120,7 @@ export async function listVisibleRecordings(
       description: recording.description,
       summary: visibleSummary,
       originalMediaKey: recording.originalMediaKey,
+      playbackMediaKey: recording.playbackMediaKey,
       createdAt: recording.createdAt,
       seriesId: recording.seriesId,
       seriesTitle: series.title,
@@ -166,6 +172,7 @@ export async function findVisibleRecording(
       description: recording.description,
       summary: visibleSummary,
       originalMediaKey: recording.originalMediaKey,
+      playbackMediaKey: recording.playbackMediaKey,
       createdAt: recording.createdAt,
       seriesId: recording.seriesId,
       seriesTitle: series.title,

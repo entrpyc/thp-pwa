@@ -47,6 +47,7 @@ const FAILING_MAIL = {
   // What the switch was covering. Named here so turning it off widens nothing.
   ASR_PROVIDER: 'fake',
   GENERATE_PROVIDER: 'fake',
+  PROCESS_AUDIO_PROVIDER: 'fake',
 } as const;
 
 /**

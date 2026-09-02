@@ -115,6 +115,22 @@ export function mintOriginalKey(contentType: string): string {
   return `originals/${randomUUID()}.${extension}`;
 }
 
+/**
+ * `playback/<uuid>.<ext>` — **`mintOriginalKey`'s rule, one prefix over**, for the processed
+ * rendition [§3.4](docs/project/prd.md)'s `process_audio` step writes.
+ *
+ * The extension is the caller's because the step knows what it produced — `m4a` from the real
+ * transcoder, the original's own extension from the fake that copies instead of transcoding — and
+ * a mint that guessed would name a format the object is not.
+ *
+ * **It brings no delete with it.** A re-run writes a new key and repoints the recording; the
+ * superseded object stays where it is, unreferenced and invisible — the same accepted price
+ * replaced artwork pays.
+ */
+export function mintPlaybackKey(extension: string): string {
+  return `playback/${randomUUID()}.${extension}`;
+}
+
 let store: MediaStore | undefined;
 
 /**

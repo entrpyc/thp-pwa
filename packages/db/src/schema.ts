@@ -309,6 +309,15 @@ export const recording = pgTable(
     id: uuid('id').primaryKey().defaultRandom(),
     /** Where the original sits in the object store. Never overwritten, never deleted. */
     originalMediaKey: text('original_media_key').notNull(),
+    /**
+     * **The playback rendition** the `process_audio` step wrote, or `null` while none exists.
+     *
+     * The second media pointer core-listening scope tdd § Extension points reserved: playback
+     * prefers it and falls back to the original, so a recording processed before the step existed
+     * still plays. Nullable rather than defaulted, because "no rendition yet" is a fact the grant
+     * reads, not a state to disguise.
+     */
+    playbackMediaKey: text('playback_media_key'),
     title: text('title').notNull(),
     recordedAt: date('recorded_at').notNull(),
     /** `null` until Story 3 Ticket 04 publishes it. Nothing in this ticket writes it. */

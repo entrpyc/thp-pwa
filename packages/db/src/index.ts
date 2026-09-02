@@ -118,7 +118,9 @@ export {
 export {
   findRecordingById,
   insertRecording,
+  listRecordingsMissingPlayback,
   setRecordingDescription,
+  setRecordingPlaybackKey,
   setRecordingPublication,
   updateRecordingDetails,
   type NewRecording,

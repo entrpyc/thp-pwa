@@ -1,4 +1,4 @@
-import { eq } from 'drizzle-orm';
+import { asc, eq, isNull } from 'drizzle-orm';
 import { getDatabase, queryable, type Executor } from './client';
 import { recording } from './schema';
 
@@ -12,6 +12,8 @@ export interface RecordingRow {
   readonly id: string;
   /** Where the original sits in the object store. Unique — one object, one recording. */
   readonly originalMediaKey: string;
+  /** The playback rendition `process_audio` wrote, or `null` while none exists. */
+  readonly playbackMediaKey: string | null;
   readonly title: string;
   /** `YYYY-MM-DD`. A SQL `date`, so it comes back as the string it was written as. */
   readonly recordedAt: string;
@@ -120,6 +122,43 @@ export async function setRecordingPublication(
  * second gate: it rides the recording's publish state. Approving the `recording_metadata` draft is
  * what calls this, and nothing else does.
  */
+/**
+ * Every recording still playing from its original — the backfill's worklist.
+ *
+ * Oldest first, so an interrupted backfill resumed later converges on the same order and the
+ * library's long tail is what waits, not its newest teaching.
+ */
+export async function listRecordingsMissingPlayback(
+  executor: Executor = getDatabase(),
+): Promise<RecordingRow[]> {
+  const rows = await queryable(executor)
+    .select()
+    .from(recording)
+    .where(isNull(recording.playbackMediaKey))
+    .orderBy(asc(recording.createdAt));
+  return rows as RecordingRow[];
+}
+
+/**
+ * Point a recording at the playback rendition `process_audio` wrote.
+ *
+ * A plain overwrite, which is what makes the step idempotent end to end: a re-run writes a new
+ * object under a new key and repoints the row, and the superseded object stays where it is,
+ * unreferenced and invisible — the same accepted price replaced artwork already pays.
+ */
+export async function setRecordingPlaybackKey(
+  id: string,
+  playbackMediaKey: string,
+  executor: Executor = getDatabase(),
+): Promise<RecordingRow | null> {
+  const rows = await queryable(executor)
+    .update(recording)
+    .set({ playbackMediaKey })
+    .where(eq(recording.id, id))
+    .returning();
+  return (rows[0] as RecordingRow | undefined) ?? null;
+}
+
 export async function setRecordingDescription(
   id: string,
   description: string,

@@ -71,6 +71,7 @@ function formatMoment(iso: string): string {
 
 /** What a step is called on screen. A step with no entry here would be a compiler error. */
 const STEP_LABEL: Record<PipelineStep, string> = {
+  process_audio: 'Process audio',
   transcribe: 'Transcribe',
   generate_draft: 'Generate draft',
   generate_chapters: 'Generate chapters',
@@ -97,6 +98,12 @@ const STEP_LABEL: Record<PipelineStep, string> = {
  * something — which is the one question about a new step this screen genuinely cannot guess.
  */
 const CONFIRMS_RERUN: Record<PipelineStep, boolean> = {
+  // The re-encode itself destroys nothing — but a succeeded step enqueues its successor, and the
+  // successor is `transcribe`: the whole chain runs behind this press, replacing the transcript
+  // and the chapters with it. That cascade is what the confirmation names. (The backfill CLI
+  // exists precisely because of this — it produces renditions outside the ledger, chaining
+  // nothing.)
+  process_audio: true,
   transcribe: true,
   generate_draft: false,
   generate_chapters: true,
@@ -132,11 +139,18 @@ function confirmationFor(step: PipelineStep, title: string, editedChapters: numb
       );
     case 'generate_draft':
       return `Generate the drafts of “${title}” again?`;
+    case 'process_audio':
+      return (
+        `Process the audio of “${title}” again? The playback rendition is replaced, and the whole pipeline ` +
+        'runs on from it: the teaching is transcribed again (replacing the transcript and any corrections), ' +
+        'and the drafts and chapters are regenerated. To refresh only the rendition, use the backfill command instead.'
+      );
   }
 }
 
 /** What the confirming button says. Naming the act rather than saying *Yes*, per step. */
 const CONFIRM_ACTION: Record<PipelineStep, string> = {
+  process_audio: 'Yes, process again',
   transcribe: 'Yes, transcribe again',
   generate_draft: 'Yes, generate again',
   generate_chapters: 'Yes, replace the chapters',

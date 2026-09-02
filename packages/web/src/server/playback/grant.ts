@@ -56,9 +56,15 @@ export async function mintPlaybackGrant(
     throw ApiError.notFound('There is no such teaching.');
   }
 
+  // The processed rendition when `process_audio` has written one, the original otherwise — the
+  // preference core-listening scope tdd § Extension points promised this function would one day
+  // hold. The rendition is what makes seeking exact; the fallback is what keeps a recording
+  // processed before the step existed playable.
+  const mediaKey = row.playbackMediaKey ?? row.originalMediaKey;
+
   const expiresAt = new Date(Date.now() + PLAYBACK_GRANT_SECONDS * 1000);
   const url = await mediaStore().presignGet({
-    key: row.originalMediaKey,
+    key: mediaKey,
     expiresInSeconds: PLAYBACK_GRANT_SECONDS,
   });
 
@@ -68,7 +74,7 @@ export async function mintPlaybackGrant(
     target: `recording:${row.id}`,
     // The key is logged, never returned: an operator tracing a failed listen needs to know which
     // object it was, and a client has no business being able to name one.
-    mediaKey: row.originalMediaKey,
+    mediaKey,
     expiresAt: expiresAt.toISOString(),
   });
 

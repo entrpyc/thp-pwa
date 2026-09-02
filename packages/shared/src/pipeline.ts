@@ -16,8 +16,22 @@ import { RECORDINGS_PATH } from './recordings';
  *
  * It runs **after** drafting rather than beside it because the chain is a list: the successor of a
  * step is read from this array and nowhere else, so ordering it here is the whole of ordering it.
+ *
+ * `process_audio` is the step [§3.4](docs/project/prd.md) reserved a place for, arrived: it
+ * transcodes the uploaded original into a **playback rendition** whose container carries an exact
+ * seek index. It exists because browsers cannot seek a VBR MP3 accurately — measured on a real
+ * teaching, `currentTime` after a seek was up to nine seconds away from the audio actually
+ * playing, which dragged captions, note anchors and chapter boundaries with it while the
+ * transcript's own timings were right to within a frame. It runs **first**, before `transcribe`,
+ * exactly where the reservation put it — the rendition is what members hear, so it is the thing to
+ * produce before anything downstream spends money.
  */
-export const PIPELINE_STEPS = ['transcribe', 'generate_draft', 'generate_chapters'] as const;
+export const PIPELINE_STEPS = [
+  'process_audio',
+  'transcribe',
+  'generate_draft',
+  'generate_chapters',
+] as const;
 
 export type PipelineStep = (typeof PIPELINE_STEPS)[number];
 

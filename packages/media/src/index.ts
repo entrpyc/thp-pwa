@@ -4,6 +4,7 @@ export {
   mediaStore,
   mintArtworkKey,
   mintOriginalKey,
+  mintPlaybackKey,
   type MediaStore,
   type PresignedPut,
   type StoredObject,

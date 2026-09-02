@@ -5,6 +5,7 @@ import {
   type GenerateChaptersDependencies,
 } from './generate-chapters';
 import { createGenerateDraftHandler, type GenerateDraftDependencies } from './generate-draft';
+import { createProcessAudioHandler, type ProcessAudioDependencies } from './process-audio';
 import { createTranscribeHandler, type TranscribeDependencies } from './transcribe';
 
 /**
@@ -42,7 +43,8 @@ export type HandlerRegistry = Readonly<Partial<Record<PipelineStep, JobHandler>>
  * hand in a fake provider for one without having to satisfy the other.
  */
 export interface WorkerDependencies
-  extends TranscribeDependencies,
+  extends ProcessAudioDependencies,
+    TranscribeDependencies,
     GenerateDraftDependencies,
     GenerateChaptersDependencies {}
 
@@ -66,6 +68,7 @@ export interface WorkerDependencies
  */
 export function createHandlers(deps: WorkerDependencies = {}): HandlerRegistry {
   return {
+    process_audio: createProcessAudioHandler(deps),
     transcribe: createTranscribeHandler(deps),
     generate_draft: createGenerateDraftHandler(deps),
     generate_chapters: createGenerateChaptersHandler(deps),

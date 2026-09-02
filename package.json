@@ -16,6 +16,7 @@
     "worker": "node --import tsx scripts/with-env.mjs packages/worker/src/index.ts",
     "typecheck": "tsc --noEmit -p tsconfig.json",
     "migrate": "node --import tsx scripts/with-env.mjs packages/db/src/cli/migrate.ts",
+    "backfill:playback": "node --import tsx scripts/with-env.mjs packages/worker/src/cli/backfill-playback.ts",
     "seed:admin": "node --import tsx scripts/with-env.mjs packages/web/src/server/auth/cli/seed-admin.ts",
     "db:generate": "npm run generate --workspace @thp/db",
     "check:origin": "node --import tsx scripts/with-env.mjs scripts/check-origin.ts",
