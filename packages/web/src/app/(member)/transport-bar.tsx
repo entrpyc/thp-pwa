@@ -9,7 +9,6 @@ import {
   formatTimecode,
   type NoteView,
 } from '@thp/shared';
-import { captionAt } from '@/client/transcript/caption-line';
 import { segmentAt } from '@/client/transcript/current-segment';
 import { NoteComposer } from './recordings/[id]/note-composer';
 import { usePlayer } from './player-context';
@@ -199,11 +198,13 @@ export function TransportBar() {
   const spoken =
     player.transcript === null ? null : segmentAt(player.transcript.segments, player.currentMs);
   /*
-   * The pill shows a caption, not a whole segment. The ASR hands back sentences, and a long one
-   * would grow the pill up over the controls under it — so a segment past the character limit is
-   * paced through the pill piece by piece across the seconds it is being said.
+   * The pill shows the segment whole, for the segment's whole duration. It used to be cut into
+   * pieces paced across the sentence, so a long one could not grow the pill over the controls —
+   * but the provider gives no word-level timing, and pacing by character count drifted against the
+   * voice: pieces shown out of step with what was being said read as broken captions, where a tall
+   * pill merely reads as a long sentence.
    */
-  const caption = spoken === null ? null : captionAt(spoken, player.currentMs);
+  const caption = spoken === null || spoken.text.trim() === '' ? null : spoken.text;
 
   /*
    * No duration means no positions to place ticks at, and a failed or empty notes fetch means no
