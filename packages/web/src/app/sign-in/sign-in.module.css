@@ -27,8 +27,14 @@
 
 .screen {
   min-height: 100vh;
+  /* The visible height on a phone, where the browser chrome comes and goes — without it the card
+     centres in a viewport partly hidden behind the toolbar and reads as sitting too high. */
+  min-height: 100dvh;
   display: flex;
   align-items: center;
+  /* `safe` keeps a card taller than a short viewport reachable from the top instead of clipping
+     both ends; browsers without it fall back to the plain `center` above. */
+  align-items: safe center;
   justify-content: center;
   padding: var(--space-5);
   background: var(--color-bg);
@@ -163,10 +169,14 @@
   color: var(--color-text-muted);
 }
 
+/*
+ * A phone keeps the centring: `safe center` above already falls back to the top when the card
+ * genuinely outgrows the viewport, so pinning it there on every small screen was centring lost
+ * for nothing.
+ */
 @media (max-width: 30rem) {
   .screen {
     padding: var(--space-4);
-    align-items: flex-start;
   }
 
   .card {
