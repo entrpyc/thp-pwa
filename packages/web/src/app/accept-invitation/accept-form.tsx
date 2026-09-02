@@ -61,6 +61,7 @@ export function AcceptInvitationForm({ email, token }: { email: string; token: s
         body: JSON.stringify({ token, password }),
       });
       // The session cookie is set by that response; `/` is a server component and re-reads it.
+      // The member layout is what routes this first launch into the new-user onboarding.
       router.replace('/');
       router.refresh();
     } catch (caught) {

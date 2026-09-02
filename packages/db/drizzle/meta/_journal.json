@@ -141,6 +141,13 @@
       "when": 1788263403222,
       "tag": "0019_chapters",
       "breakpoints": true
+    },
+    {
+      "idx": 20,
+      "version": "7",
+      "when": 1788350445279,
+      "tag": "0020_user_onboarding",
+      "breakpoints": true
     }
   ]
 }

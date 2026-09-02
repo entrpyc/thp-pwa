@@ -1,0 +1,185 @@
+/*
+ * The onboarding screen, composed from tokens.css as every stylesheet is.
+ *
+ * One column: Skip in the top corner, the slide stage in the middle (arrows either side of a
+ * swipeable viewport), the dot indicators at the bottom. The stage is a horizontal track moved by
+ * `translateX` from the component, so a swipe and an arrow press are the same motion.
+ */
+
+.screen {
+  min-height: 100dvh;
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-6);
+  padding: var(--space-5);
+  background: var(--color-bg);
+}
+
+.top {
+  display: flex;
+  justify-content: flex-end;
+}
+
+.skip {
+  background: transparent;
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-pill);
+  color: var(--color-text-muted);
+  font-family: var(--font-sans);
+  font-size: var(--fs-body);
+  padding: var(--space-2) var(--space-4);
+  cursor: pointer;
+}
+
+.skip:hover:enabled {
+  border-color: var(--color-border-strong);
+  color: var(--color-text);
+}
+
+.stage {
+  flex: 1;
+  display: flex;
+  align-items: center;
+  gap: var(--space-2);
+  min-height: 0;
+}
+
+.arrow {
+  flex: none;
+  width: 40px;
+  height: 40px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  background: transparent;
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-pill);
+  color: var(--color-primary-icon);
+  cursor: pointer;
+}
+
+.arrow:disabled {
+  color: var(--color-text-dim);
+  opacity: 0.4;
+  cursor: default;
+}
+
+.arrow:hover:enabled {
+  border-color: var(--color-border-strong);
+}
+
+.viewport {
+  flex: 1;
+  overflow: hidden;
+  align-self: stretch;
+  display: flex;
+}
+
+.track {
+  display: flex;
+  width: 100%;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+  transition: transform 0.3s ease;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .track {
+    transition: none;
+  }
+}
+
+.slide {
+  flex: 0 0 100%;
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: var(--space-4);
+  padding: 0 var(--space-2);
+}
+
+.media {
+  /* The width a 9:16 box needs at the height cap, clamped by the slide's own width — so the box
+     is always exactly 9:16, shrinking whole rather than cropping on narrow screens. */
+  width: min(100%, calc(min(55dvh, 560px) * 9 / 16));
+  aspect-ratio: 9 / 16;
+  background: var(--color-surface);
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-lg);
+  overflow: hidden;
+}
+
+.media video,
+.media img {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+  display: block;
+}
+
+.title {
+  margin: var(--space-2) 0 0;
+  font-size: var(--fs-card-title);
+  font-weight: 600;
+  color: var(--color-text);
+  line-height: 1.2;
+  text-align: center;
+}
+
+.description {
+  margin: 0;
+  max-width: 40rem;
+  font-size: var(--fs-body);
+  color: var(--color-text-muted);
+  line-height: 1.4;
+  text-align: center;
+}
+
+.start {
+  margin-top: var(--space-2);
+  background: var(--color-primary);
+  border: none;
+  border-radius: var(--radius-pill);
+  color: var(--color-text);
+  font-family: var(--font-sans);
+  font-size: var(--fs-body);
+  font-weight: 500;
+  padding: var(--space-3) var(--space-8);
+  cursor: pointer;
+}
+
+.start:hover:enabled {
+  background: var(--color-primary-strong);
+}
+
+.start:disabled {
+  opacity: 0.6;
+  cursor: default;
+}
+
+.dots {
+  display: flex;
+  justify-content: center;
+  align-items: center;
+  gap: var(--space-3);
+  padding: var(--space-2) 0 var(--space-4);
+}
+
+.dot,
+.dotActive {
+  width: 10px;
+  height: 10px;
+  padding: 0;
+  border: none;
+  border-radius: var(--radius-pill);
+  background: var(--color-text-dim);
+  cursor: pointer;
+}
+
+.dotActive {
+  background: var(--color-primary);
+  transform: scale(1.25);
+}

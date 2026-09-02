@@ -58,6 +58,7 @@ export function SignUpForm() {
         body: JSON.stringify({ email, password }),
       });
       // The session cookie is set by that response; `/` is a server component and re-reads it.
+      // The member layout is what routes this first launch into the new-user onboarding.
       router.replace('/');
       router.refresh();
     } catch (caught) {

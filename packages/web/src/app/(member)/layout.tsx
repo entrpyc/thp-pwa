@@ -1,6 +1,8 @@
 import type { ReactNode } from 'react';
 import { redirect } from 'next/navigation';
+import { onboardingPagePath } from '@thp/shared';
 import { currentActor } from '@/server/auth/current-actor';
+import { pendingOnboardingFor } from '@/server/onboarding/completion';
 import { can } from '@/server/auth/policy';
 import { PlayerProvider } from './player-context';
 import { TopNavigation } from './top-navigation';
@@ -27,6 +29,14 @@ export const dynamic = 'force-dynamic';
 export default async function MemberLayout({ children }: { children: ReactNode }) {
   const actor = await currentActor();
   if (!actor) redirect('/sign-in');
+
+  // An account that has never been through the new-user onboarding is routed into it before the
+  // member surface renders — on every launch, not only at sign-in, so closing the tab mid-tour
+  // resumes it next visit. A rendering decision like the session check above it: the completion
+  // that ends the redirect is recorded by an API route that refuses independently, and
+  // `/onboarding` lives outside this layout, so the redirect cannot chase itself.
+  const pendingOnboarding = await pendingOnboardingFor(actor.id);
+  if (pendingOnboarding !== null) redirect(onboardingPagePath(pendingOnboarding));
 
   return (
     <PlayerProvider initialSpeed={actor.preferredPlaybackSpeed}>

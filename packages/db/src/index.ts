@@ -90,6 +90,11 @@ export {
   type NoteWithAuthorRow,
 } from './notes';
 export {
+  completeOnboarding,
+  findOnboardingCompletion,
+  type UserOnboardingRow,
+} from './onboarding';
+export {
   findPlaybackProgress,
   setPreferredPlaybackSpeed,
   upsertPlaybackProgress,

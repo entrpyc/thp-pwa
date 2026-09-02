@@ -669,6 +669,31 @@ export const playbackProgress = pgTable(
 );
 
 /**
+ * **Which onboardings this account has been through.**
+ *
+ * A row means "seen, never show it on sign-in again"; its absence means the next sign-in routes
+ * into the onboarding. One table for every onboarding the product will ever have rather than a
+ * column per onboarding on `user`, so the next onboarding is a shared id plus its slides and no
+ * migration.
+ *
+ * `onboarding_id` is plain text rather than an enum: the set of onboardings is a fact about the
+ * client (`ONBOARDING_IDS` in `@thp/shared`, which the API checks against before writing), and an
+ * enum here would make retiring an old onboarding a migration on rows nobody reads any more.
+ * The composite key is the idempotence: completing twice updates nothing and grows nothing.
+ */
+export const userOnboarding = pgTable(
+  'user_onboarding',
+  {
+    userId: uuid('user_id')
+      .notNull()
+      .references(() => user.id, { onDelete: 'cascade' }),
+    onboardingId: text('onboarding_id').notNull(),
+    completedAt: timestamp('completed_at', { withTimezone: true }).notNull().defaultNow(),
+  },
+  (table) => [primaryKey({ columns: [table.userId, table.onboardingId] })],
+);
+
+/**
  * **A note written at a moment in a teaching** (active-scope architecture § 6.1) — the first
  * member-authored content in the product, and the first table whose rules are worth stating at the
  * database rather than in the code that writes it.

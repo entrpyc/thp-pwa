@@ -8,6 +8,7 @@ export * from './health';
 export * from './invitations';
 export * from './jobs';
 export * from './notes';
+export * from './onboarding';
 export * from './passwords';
 export * from './playback';
 export * from './pipeline';

@@ -41,7 +41,8 @@ export function SignInForm() {
         headers: { 'content-type': 'application/json' },
         body: JSON.stringify({ email, password }),
       });
-      // The session cookie is set; `/` is a server component and re-reads it.
+      // The session cookie is set; `/` is a server component and re-reads it. The member layout is
+      // what routes a first launch into the new-user onboarding.
       router.replace('/');
       router.refresh();
     } catch (caught) {
