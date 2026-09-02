@@ -40,9 +40,10 @@
 }
 
 .stage {
-  /* Grows into spare room but never shrinks: the media's ratio holds, and it is the text block
-     below that scrolls when a small viewport runs out of height. */
-  flex: 1 0 auto;
+  /* The one flexible row: the title and description below take their natural height, and it is
+     the media that gives ground — shrinking, ratio intact, until everything fits. */
+  flex: 1 1 auto;
+  min-height: 0;
   display: flex;
   align-items: center;
   gap: var(--space-2);
@@ -77,11 +78,15 @@
   overflow: hidden;
   align-self: stretch;
   display: flex;
+  /* A size container, so the media below can read the real room it has (`cqh`) and fit a 9:16
+     box inside it exactly — the only way to honour the ratio, the width *and* the height at once. */
+  container-type: size;
 }
 
 .track {
   display: flex;
   width: 100%;
+  height: 100%;
   margin: 0;
   padding: 0;
   list-style: none;
@@ -104,9 +109,10 @@
 }
 
 .media {
-  /* The width a 9:16 box needs at the height cap, clamped by the slide's own width — so the box
-     is always exactly 9:16, shrinking whole rather than cropping on narrow screens. */
-  width: min(100%, calc(min(55dvh, 560px) * 9 / 16));
+  /* Exactly 9:16, always: the width a 9:16 box needs at the stage's real height (`100cqh`, from
+     the container above), clamped by the slide's width and a desktop cap — whichever is tightest.
+     On a short screen the whole box shrinks; nothing crops and nothing below it scrolls. */
+  width: min(100%, calc(100cqh * 9 / 16), calc(560px * 9 / 16));
   aspect-ratio: 9 / 16;
   background: var(--color-surface);
   border: 1px solid var(--color-border);
@@ -123,14 +129,12 @@
 }
 
 /*
- * The words, outside the arrow-flanked stage so they span the whole screen. The stage above keeps
- * its size (the media's ratio is not negotiable), so when a small viewport runs out of room it is
- * this block that scrolls rather than the dots that vanish.
+ * The words, outside the arrow-flanked stage so they span the whole screen. They take their
+ * natural height and never scroll: when a small viewport runs out of room, the *stage* above is
+ * what shrinks, and the media in it scales down with its ratio intact.
  */
 .text {
-  flex: 0 1 auto;
-  min-height: 0;
-  overflow-y: auto;
+  flex: none;
   display: flex;
   flex-direction: column;
   align-items: center;
