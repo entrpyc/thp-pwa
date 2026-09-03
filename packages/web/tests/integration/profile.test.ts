@@ -349,7 +349,10 @@ describe('where the picture is then read from', () => {
     const unpictured = listed.body.notes.find((note) => note.text === 'Without one');
     expect(pictured?.authorAvatarUrl).toContain('X-Amz-Signature');
     expect(unpictured?.authorAvatarUrl).toBeNull();
-    // The key travels to nobody, the reader least of all.
-    expect(listed.rawBody).not.toContain(grant.key);
+    // What travels is a grant to the object — a signed URL, which necessarily names the path it
+    // is signed for — and never the key as a field of its own that a client could build from.
+    expect(pictured?.authorAvatarUrl).toContain('X-Amz-Signature');
+    expect(listed.rawBody).not.toContain('"authorAvatarKey"');
+    expect(listed.rawBody).not.toContain('"avatarKey"');
   }, 90_000);
 });

@@ -1,7 +1,19 @@
 import { afterAll, beforeAll, describe, expect, it, inject } from 'vitest';
 import { chromium, type Browser, type Page } from 'playwright';
-import { DASHBOARD_PAGE_PATH, PROFILE_PAGE_PATH, ROLE } from '@thp/shared';
-import { closeTestDatabase, createAccount, type TestAccount } from '../support/accounts';
+import {
+  DASHBOARD_PAGE_PATH,
+  NEW_USER_ONBOARDING_ID,
+  PROFILE_PAGE_PATH,
+  ROLE,
+  type Role,
+} from '@thp/shared';
+import { completeOnboarding } from '@thp/db';
+import {
+  closeTestDatabase,
+  createAccount,
+  testDatabase,
+  type TestAccount,
+} from '../support/accounts';
 
 /**
  * **The profile screen, driven in a real browser** (docs/project/prd.md 3.1.12).
@@ -29,6 +41,18 @@ afterAll(async () => {
   await browser?.close();
   await closeTestDatabase();
 });
+
+/**
+ * A fresh account that has already been through the new-user tour. The member layout routes an
+ * account that has not into the onboarding before anything else renders, and that is the tour's
+ * business, not this screen's — so the completion is recorded up front, the way a member who has
+ * used the product for a week already has it.
+ */
+async function memberPastTheTour(label: string, role: Role = ROLE.member): Promise<TestAccount> {
+  const account = await createAccount(databaseUrl, role, label);
+  await completeOnboarding(account.id, NEW_USER_ONBOARDING_ID, testDatabase(databaseUrl));
+  return account;
+}
 
 async function signInAs(
   account: TestAccount,
@@ -82,7 +106,7 @@ async function landscapePng(page: Page, width: number, height: number): Promise<
 
 describe('getting there', () => {
   it('is reached from the navigation menu, and refuses an anonymous visitor', async () => {
-    const member = await createAccount(databaseUrl, ROLE.member, 'profile-menu');
+    const member = await memberPastTheTour('profile-menu');
     const page = await signInAs(member);
     try {
       await page.getByRole('button', { name: 'Menu' }).click();
@@ -113,7 +137,7 @@ describe('getting there', () => {
 
 describe('the name', () => {
   it('shows the current name, saves a new one, and the next load shows what was saved', async () => {
-    const member = await createAccount(databaseUrl, ROLE.member, 'profile-name');
+    const member = await memberPastTheTour('profile-name');
     const page = await onTheProfile(member);
     try {
       const field = page.getByLabel('Display name');
@@ -141,7 +165,7 @@ describe('the name', () => {
   }, 120_000);
 
   it('says the rule while it is being broken, and will not send a name over the ceiling', async () => {
-    const member = await createAccount(databaseUrl, ROLE.member, 'profile-long');
+    const member = await memberPastTheTour('profile-long');
     const page = await onTheProfile(member);
     try {
       const field = page.getByLabel('Display name');
@@ -160,7 +184,7 @@ describe('the name', () => {
 
 describe('the picture', () => {
   it('starts as initials, becomes the chosen picture squared in the browser, and can be removed', async () => {
-    const member = await createAccount(databaseUrl, ROLE.member, 'profile-picture');
+    const member = await memberPastTheTour('profile-picture');
     const page = await onTheProfile(member, PHONE);
     try {
       // No picture: the monogram, and no remove control to press.
@@ -235,7 +259,7 @@ describe('the picture', () => {
   }, 180_000);
 
   it('refuses a file that is not an image before anything is sent, in the API’s own words', async () => {
-    const member = await createAccount(databaseUrl, ROLE.member, 'profile-not-image');
+    const member = await memberPastTheTour('profile-not-image');
     const page = await onTheProfile(member);
     try {
       const requests: string[] = [];
