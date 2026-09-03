@@ -39,6 +39,7 @@ import { can, type Actor } from '@/server/auth/policy';
 import { requireChapterScope } from '@/server/chapters/service';
 import { audit } from '@/server/observability/audit';
 import { logger } from '@/server/observability/logger';
+import { mintArtworkGrant } from '@/server/series/artwork-grant';
 
 /**
  * **Notes, written and read** (active-scope architecture § 4.3) — scope prd 3.1
@@ -110,7 +111,7 @@ export async function createNote(
       timestampMs: row.timestampMs,
     });
 
-    return { note: bare({ ...row, authorDisplayName: actor.displayName }, actor) };
+    return { note: await bare(authoredBy(row, actor), actor) };
   }
 
   const parent = await requireReplyableParent(parentId, recordingId, fields);
@@ -133,7 +134,7 @@ export async function createNote(
     parentId: parent.id,
   });
 
-  return { note: bare({ ...row, authorDisplayName: actor.displayName }, actor) };
+  return { note: await bare(authoredBy(row, actor), actor) };
 }
 
 /**
@@ -345,6 +346,7 @@ export async function readNotesFor(
     else held.push(reply);
   }
   const byNote = groupReactions(reactions);
+  const avatars = await signAvatars([...rows, ...replies]);
 
   logger.info('note.read', {
     actorId: actor.id,
@@ -355,8 +357,10 @@ export async function readNotesFor(
 
   return {
     notes: rows.map((row) => ({
-      ...describe(row, actor, byNote, pinned.has(row.id)),
-      replies: (byParent.get(row.id) ?? []).map((reply) => describe(reply, actor, byNote, false)),
+      ...describe(row, actor, byNote, pinned.has(row.id), avatars),
+      replies: (byParent.get(row.id) ?? []).map((reply) =>
+        describe(reply, actor, byNote, false, avatars),
+      ),
     })),
   };
 }
@@ -508,6 +512,7 @@ function describe(
   reader: Actor,
   byNote: Map<string, NoteReactionRow[]>,
   pinned: boolean,
+  avatars: ReadonlyMap<string, string>,
 ): NoteView {
   const deleted = row.deletedAt !== null;
   const reactions: ReactionCount[] = deleted
@@ -518,6 +523,12 @@ function describe(
     id: row.id,
     timestampMs: row.timestampMs,
     authorDisplayName: row.authorDisplayName,
+    // Looked up rather than signed here: a list of forty notes by three people signs three URLs,
+    // and a tombstone's author has no line to put a picture on.
+    authorAvatarUrl:
+      deleted || row.authorAvatarKey === null
+        ? null
+        : (avatars.get(row.authorAvatarKey) ?? null),
     visibility: row.visibility,
     // Answered here rather than compared on the client: the server is the side that knows who is
     // reading, and it is the side that already decided which rows this reader may have.
@@ -548,21 +559,53 @@ async function describeOne(row: NoteRow, actor: Actor): Promise<NoteView> {
     listPinnedNoteIds(row.recordingId),
   ]);
   const byNote = groupReactions(reactions);
-  const authored = { ...row, authorDisplayName: actor.displayName };
+  const authored = authoredBy(row, actor);
+  const avatars = await signAvatars([authored, ...replies]);
+  const own = row.authorId === actor.id;
 
   return {
-    ...describe(authored, actor, byNote, pinned.includes(row.id)),
+    ...describe(authored, actor, byNote, pinned.includes(row.id), avatars),
     // The author's own name is only right where the actor *is* the author, which is every path that
     // reaches here except an admin's moderation — and that one answers a tombstone, whose author
-    // line is replaced by 5.3.3's single line anyway.
-    authorDisplayName: row.authorId === actor.id ? actor.displayName : '',
-    replies: replies.map((reply) => describe(reply, actor, byNote, false)),
+    // line is replaced by 5.3.3's single line anyway. The picture follows the name.
+    authorDisplayName: own ? actor.displayName : '',
+    authorAvatarUrl:
+      own && actor.avatarKey !== null ? (avatars.get(actor.avatarKey) ?? null) : null,
+    replies: replies.map((reply) => describe(reply, actor, byNote, false, avatars)),
   };
 }
 
 /** A freshly written note, before anything can have replied or reacted to it. */
-function bare(row: NoteWithAuthorRow, actor: Actor): NoteView {
-  return describe(row, actor, new Map(), false);
+async function bare(row: NoteWithAuthorRow, actor: Actor): Promise<NoteView> {
+  return describe(row, actor, new Map(), false, await signAvatars([row]));
+}
+
+/** A row the actor wrote, carrying what the join would have carried had it been read back. */
+function authoredBy(row: NoteRow, actor: Actor): NoteWithAuthorRow {
+  return { ...row, authorDisplayName: actor.displayName, authorAvatarKey: actor.avatarKey };
+}
+
+/**
+ * One signed URL per **distinct** avatar among these rows, keyed by the object key.
+ *
+ * Signing is per key rather than per note so a busy thread by a handful of people costs a handful
+ * of signatures, and every note by one person paints from one URL — which is also what lets the
+ * browser cache it once across all of them. The grant is the cover's day-cacheable one, for the
+ * reason `session-user.ts` gives.
+ */
+async function signAvatars(
+  rows: readonly NoteWithAuthorRow[],
+): Promise<ReadonlyMap<string, string>> {
+  const keys = [
+    ...new Set(rows.flatMap((row) => (row.authorAvatarKey === null ? [] : [row.authorAvatarKey]))),
+  ];
+  const signed = await Promise.all(keys.map((key) => mintArtworkGrant(key)));
+  const byKey = new Map<string, string>();
+  keys.forEach((key, index) => {
+    const url = signed[index];
+    if (url !== null && url !== undefined) byKey.set(key, url);
+  });
+  return byKey;
 }
 
 // =================================================================================================

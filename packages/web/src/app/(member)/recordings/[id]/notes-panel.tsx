@@ -9,6 +9,7 @@ import {
   REACTIONS,
   formatTimecode,
   isInChapter,
+  monogramFor,
   noteReactionPath,
   notePath,
   notePinPath,
@@ -298,9 +299,18 @@ function NoteCard({ note, canModerate }: CardProps) {
           </div>
 
           <div className={styles.noteWho}>
-            <span className={styles.monogram} aria-hidden="true">
-              {monogram(note.authorDisplayName)}
-            </span>
+            {/*
+              The picture when the author has one, the initials when they do not
+              ([3.1.12](docs/project/prd.md): the avatar is optional). Decorative either way — the
+              name is printed beside it, and a reader announced the author twice is worse than once.
+            */}
+            {note.authorAvatarUrl === null ? (
+              <span className={styles.monogram} aria-hidden="true">
+                {monogram(note.authorDisplayName)}
+              </span>
+            ) : (
+              <img className={styles.avatar} src={note.authorAvatarUrl} alt="" />
+            )}
             <span className={styles.noteAuthor}>{note.authorDisplayName}</span>
             <span className={styles.noteWhen}>{writtenAt(note.createdAt)}</span>
           </div>
@@ -760,13 +770,12 @@ function removedMessage(caught: unknown, whenRemoved: string): string {
     : 'That did not go through. Try again.';
 }
 
-/** Up to two initials, which is what 5.2.4's circle holds instead of a picture. */
+/**
+ * Up to two initials, which is what 5.2.4's circle holds instead of a picture. The shared helper,
+ * so the profile screen and this card agree on which letters a person is.
+ */
 function monogram(displayName: string): string {
-  const words = displayName.trim().split(/\s+/).filter(Boolean);
-  const letters = [words[0], words[words.length - 1]]
-    .filter((word, index, all) => word !== undefined && (index === 0 || word !== all[0]))
-    .map((word) => (word as string).slice(0, 1));
-  return letters.join('').toUpperCase() || '?';
+  return monogramFor(displayName);
 }
 
 const WRITTEN = new Intl.DateTimeFormat('en-GB', {

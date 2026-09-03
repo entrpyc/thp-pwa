@@ -28,42 +28,44 @@ describe('the display-name rules', () => {
 });
 
 /**
- * **The avatar is deferred, and this is what keeps it deferred.**
+ * **The avatar key stops at the server, and this is what keeps it there.**
  *
- * docs/project/prd.md 3.1.12 names an avatar and core-listening scope plan § Ticket 4 defers it. A nullable
- * column, an optional payload field or a placeholder component "for later" is how deferral quietly
- * stops being deferral — six months on, half the product assumes the field exists and removing it is
- * a migration. So the absence is asserted at the source level, across the schema, the wire contract
- * and the screens at once, rather than left to whoever reviews the next pull request.
+ * This block used to assert that no avatar existed anywhere — docs/project/prd.md 3.1.12 names one
+ * and core-listening scope plan § Ticket 4 deferred it, and a source-level guard was what kept a
+ * nullable column "for later" from quietly arriving. The profile screen ended the deferral, and the
+ * guard turned into the property that matters once the field is real: **what travels is a signed
+ * URL, never the object's name in the bucket.** A payload type with a key in it is a payload type a
+ * client will one day paint from directly, and a client that names the key is a client that could
+ * build a URL nobody signed. So the wire contract and everything that runs in a browser are asserted
+ * never to spell the key, at the source level, rather than left to whoever reviews the next pull
+ * request.
  *
- * The schema half is checked again against a migrated database in the db package's accounts suite;
- * this is the half that catches a payload type or a component before either reaches a migration.
+ * The server half — the row, the policy actor, the service — is where the key legitimately lives,
+ * and `policy.test.ts` pins that `describeActor` is the boundary at which it stops.
  */
-describe('no avatar exists anywhere', () => {
+describe('the avatar key never reaches the wire or the browser', () => {
   const REPO_ROOT = resolve(import.meta.dirname, '..', '..', '..', '..');
 
-  const SOURCE_DIRS = [
-    'packages/shared/src',
-    'packages/db/src',
-    'packages/web/src',
-    'packages/worker/src',
-  ];
+  /** The contract every consumer reads, and the two trees that are shipped to a browser. */
+  const CLIENT_SIDE_DIRS = ['packages/shared/src', 'packages/web/src/app', 'packages/web/src/client'];
 
-  /** Written as fragments rather than whole identifiers, so `avatarUrl` and `avatar_key` both hit. */
-  const FORBIDDEN = [/\bavatar/i, /\bgravatar/i, /profilePicture/i, /profile_picture/i];
+  /** Written as fragments rather than whole identifiers, so `authorAvatarKey` and `avatar_key` both hit. */
+  const FORBIDDEN = [/avatarKey/, /avatar_key/i, /avatars\//];
 
-  it('names one in no source file, in any casing or spelling', () => {
+  it('is named in no contract, page or client module', () => {
     const offenders: string[] = [];
 
-    for (const dir of SOURCE_DIRS) {
+    for (const dir of CLIENT_SIDE_DIRS) {
       for (const file of walkFiles(resolve(REPO_ROOT, dir), ['.ts', '.tsx', '.css'])) {
+        // Route handlers live under `app/` but run on the server, and they are where the key is
+        // legitimately read out of a body. Everything else under `app/` is a page or a component.
+        if (/[\\/]api[\\/]/.test(file)) continue;
         readFileSync(file, 'utf8')
           .split('\n')
           .forEach((line, index) => {
-            // A comment saying the avatar is deferred is not an avatar. Only code counts. The
-            // trailing `\r` is trimmed first: `.` does not match a carriage return, so on a file
-            // checked out with CRLF endings the doc-comment pattern would fail to anchor and every
-            // explanation of the deferral would read as a violation of it.
+            // A comment explaining the rule is not a breach of it. Only code counts. The trailing
+            // `\r` is trimmed first: `.` does not match a carriage return, so on a file checked out
+            // with CRLF endings the doc-comment pattern would fail to anchor.
             const code = line
               .replace(/\r$/, '')
               .replace(/\/\/.*$/, '')
@@ -81,7 +83,7 @@ describe('no avatar exists anywhere', () => {
   it('would report one if it appeared', () => {
     // The check above is only worth having if it can fail — the same patterns, run against what an
     // innocent-looking first step actually looks like.
-    const sample = '  readonly avatarUrl: string | null;';
+    const sample = '  readonly avatarKey: string | null;';
     expect(FORBIDDEN.some((pattern) => pattern.test(sample))).toBe(true);
   });
 });

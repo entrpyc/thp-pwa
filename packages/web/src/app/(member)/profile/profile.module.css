@@ -1,0 +1,201 @@
+/*
+ * The profile screen.
+ *
+ * No reference image, and it invents as little as the report screen did: the page furniture is
+ * `screens.module.css`'s and the form recipe is `sign-in.module.css`'s, composed rather than
+ * restated. What is declared here is the one thing neither has — a portrait — and the two button
+ * shapes the report screen also had to declare, spelled the same way.
+ *
+ * Everything composes from tokens.css. Nothing here spells a colour, a radius or a spacing value.
+ */
+
+/* ------------------------------------------------------------------------- the member furniture */
+
+.pageHead {
+  composes: pageHead from '../screens.module.css';
+}
+
+.pageTitle {
+  composes: pageTitle from '../screens.module.css';
+}
+
+.pageLead {
+  composes: pageLead from '../screens.module.css';
+}
+
+.card {
+  composes: card from '../screens.module.css';
+}
+
+.cardTitle {
+  composes: cardTitle from '../screens.module.css';
+}
+
+.prose {
+  composes: prose from '../screens.module.css';
+}
+
+.quiet {
+  composes: quiet from '../screens.module.css';
+}
+
+.failure {
+  composes: failure from '../screens.module.css';
+}
+
+/* ----------------------------------------------------------------------------- the form recipe */
+
+.field {
+  composes: field from '../../sign-in/sign-in.module.css';
+}
+
+.fieldLabel {
+  composes: label from '../../sign-in/sign-in.module.css';
+}
+
+.input {
+  composes: input from '../../sign-in/sign-in.module.css';
+}
+
+/* --------------------------------------------------------------------------- what is new here */
+
+/* A rule being broken, said in the meta voice at the weight that reads as a stop — no second hue. */
+.fieldError {
+  margin: 0;
+  font-size: var(--fs-meta);
+  color: var(--color-text);
+  font-weight: 600;
+}
+
+/* A write that worked, in the quiet voice: the screen already shows the result. */
+.done {
+  margin: 0;
+  font-size: var(--fs-body);
+  color: var(--color-text-muted);
+}
+
+.portraitRow {
+  display: flex;
+  align-items: center;
+  gap: var(--space-5);
+  flex-wrap: wrap;
+}
+
+/*
+ * The portrait: three times the note card's circle, which is the largest an avatar is drawn
+ * anywhere. The same circle, the same hairline, the same raised fill behind a picture that has
+ * transparent corners.
+ */
+.portrait {
+  flex: none;
+  width: calc(var(--space-8) * 3);
+  height: calc(var(--space-8) * 3);
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-circle);
+  object-fit: cover;
+  background: var(--color-surface-raised);
+}
+
+/* The same circle holding initials — the note card's monogram at portrait size. */
+.portraitMonogram {
+  flex: none;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: calc(var(--space-8) * 3);
+  height: calc(var(--space-8) * 3);
+  background: var(--color-surface-raised);
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-circle);
+  color: var(--color-text-muted);
+  font-size: var(--fs-title);
+  font-weight: 600;
+}
+
+.portraitControls {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-4);
+  flex: 1 1 12rem;
+  min-width: 0;
+}
+
+/* Present for the label and the keyboard, and not painted. */
+.fileInput {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  margin: 0;
+  padding: 0;
+  overflow: hidden;
+  clip-path: inset(50%);
+  white-space: nowrap;
+}
+
+/* The picker's label takes the primary shape; this is the ring the button would have shown. */
+.fileInput:focus-visible + .secondary,
+.fileInput:focus-visible ~ .primary {
+  outline: 2px solid var(--color-primary-icon);
+  outline-offset: 2px;
+}
+
+.actions {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: var(--space-4);
+}
+
+/* The one solid fill per card — the report screen's button, spelled the same way. */
+.primary {
+  display: inline-flex;
+  align-items: center;
+  background: var(--color-primary);
+  border: 1px solid var(--color-primary);
+  border-radius: var(--radius-pill);
+  padding: var(--space-3) var(--space-6);
+  color: var(--color-text);
+  font-family: inherit;
+  font-size: var(--fs-body);
+  font-weight: 600;
+  line-height: 1.2;
+  cursor: pointer;
+}
+
+.primary:hover {
+  background: var(--color-primary-strong);
+  border-color: var(--color-primary-strong);
+}
+
+.primary:disabled,
+.fileInput:disabled ~ .primary {
+  cursor: not-allowed;
+  background: var(--color-primary-strong);
+  border-color: var(--color-primary-strong);
+  color: var(--color-text-muted);
+}
+
+/* The same shape, outlined — a real action, but not the one the card is for. */
+.secondary {
+  display: inline-flex;
+  align-items: center;
+  background: transparent;
+  border: 1px solid var(--color-border-strong);
+  border-radius: var(--radius-pill);
+  padding: var(--space-3) var(--space-6);
+  color: var(--color-text);
+  font-family: inherit;
+  font-size: var(--fs-body);
+  font-weight: 600;
+  line-height: 1.2;
+  cursor: pointer;
+}
+
+.secondary:hover {
+  border-color: var(--color-primary-strong);
+}
+
+.secondary:disabled {
+  cursor: not-allowed;
+  color: var(--color-text-muted);
+}

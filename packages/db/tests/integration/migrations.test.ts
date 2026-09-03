@@ -2111,3 +2111,89 @@ describe('the chapter table, and nothing beside it', () => {
     expect(rows.map((row) => row.step)).toEqual(['transcribe']);
   });
 });
+
+// =================================================================================================
+
+/**
+ * **The avatar pointer** — `0022_user_avatar` (docs/project/prd.md 3.1.12).
+ *
+ * The series cover's migration, one table over, and it is held to the same three claims: the
+ * column did not exist and now does, nothing else anywhere changed, and every account that already
+ * existed keeps the state it was in — no picture — rather than acquiring a placeholder.
+ */
+describe('the avatar pointer, and nothing beside it', () => {
+  let target: ThrowawayDatabase;
+  let before: Map<string, string[]>;
+  let after: Map<string, string[]>;
+  let sql: ReturnType<typeof postgres>;
+  /** An account written before the column existed, to read back afterwards. */
+  let existingUserId: string;
+
+  beforeAll(async () => {
+    target = await createThrowawayDatabase(inject('databaseUrl'), 'user_avatar_migration');
+
+    const priorCount = journalCountBefore('0022_user_avatar');
+    await runMigrations({ url: target.url, migrationsFolder: migrationsFolderUpTo(priorCount) });
+    before = await readColumnSets(target.url);
+
+    sql = postgres(target.url, { max: 2, onnotice: () => {} });
+    const [written] = await sql<{ id: string }[]>`
+      insert into "user" (email, password_hash, display_name, role)
+      values ('before-avatars@example.test', 'not-a-real-hash', 'From Before Pictures', 'member')
+      returning id
+    `;
+    existingUserId = written?.id as string;
+
+    await runMigrations({ url: target.url, migrationsFolder: migrationsFolderUpTo(priorCount + 1) });
+    after = await readColumnSets(target.url);
+  }, 120_000);
+
+  afterAll(async () => {
+    await sql?.end({ timeout: 5 });
+    await target?.drop();
+  }, 60_000);
+
+  it('did not exist before this migration and does after — otherwise the comparison is vacuous', () => {
+    expect(before.get('user')).not.toContain('avatar_key');
+    expect(after.get('user')).toContain('avatar_key');
+  });
+
+  it('adds one column to user and nothing anywhere else', () => {
+    for (const [table, columns] of before) {
+      const expected = table === 'user' ? [...columns, 'avatar_key'].sort() : columns;
+      expect(after.get(table), `${table} changed`).toEqual(expected);
+    }
+    expect([...after.keys()].sort()).toEqual([...before.keys()].sort());
+  });
+
+  it('is one nullable text pointer, and none of the deferred columns', async () => {
+    const rows = await sql<{ data_type: string; is_nullable: string }[]>`
+      select data_type, is_nullable from information_schema.columns
+      where table_schema = 'public' and table_name = 'user' and column_name = 'avatar_key'
+    `;
+    expect(rows).toEqual([{ data_type: 'text', is_nullable: 'YES' }]);
+
+    // Width, height, byte size, content type and an uploaded-at are a second copy of what the store
+    // already knows and `head` already answers; a URL is minted per response and never stored.
+    for (const deferred of [
+      'avatar_url',
+      'avatar_width',
+      'avatar_height',
+      'avatar_bytes',
+      'avatar_content_type',
+      'avatar_uploaded_at',
+      'image_url',
+    ]) {
+      expect(after.get('user'), `${deferred} must not exist`).not.toContain(deferred);
+    }
+  });
+
+  it('leaves an account written before the column with no picture rather than a default one', async () => {
+    const rows = await sql<{ avatar_key: string | null; display_name: string }[]>`
+      select avatar_key, display_name from "user" where id = ${existingUserId}
+    `;
+    expect(rows).toHaveLength(1);
+    expect(rows[0]?.avatar_key).toBeNull();
+    expect(rows[0]?.display_name).toBe('From Before Pictures');
+  });
+});

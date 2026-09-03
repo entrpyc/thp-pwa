@@ -18,7 +18,8 @@ import { logger } from '@/server/observability/logger';
 import { displayNameFor } from './display-name';
 import { hashPassword } from './password';
 import { issueSession, type IssuedSession } from './session';
-import { describeActor, toActor } from './policy';
+import { toActor } from './policy';
+import { describeSessionUser } from '@/server/accounts/session-user';
 
 /**
  * Registering an account (docs/project/prd.md, 3.1.15).
@@ -111,7 +112,7 @@ export async function signUp(body: unknown): Promise<SignUpResult> {
     action: 'signup',
     target: `account:${row.id}`,
   });
-  return { user: describeActor(toActor(row)), session };
+  return { user: await describeSessionUser(toActor(row)), session };
 }
 
 /** The insert, and the one refusal it can come back with that is not a bug. */

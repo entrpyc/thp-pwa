@@ -1,4 +1,4 @@
-import type { Role, SessionUser } from '@thp/shared';
+import type { Role, SessionIdentity } from '@thp/shared';
 import type { UserRow } from '@thp/db';
 
 /**
@@ -237,6 +237,12 @@ export interface Actor {
    * round trip on every page load to fetch one number the session lookup already read.
    */
   readonly preferredPlaybackSpeed: number;
+  /**
+   * The avatar's object key, or `null`. Not an authorisation input and never consulted by
+   * {@link can}; carried for the reason the speed is — the session lookup already read the row,
+   * and the payload the client renders from needs a URL signed for this key.
+   */
+  readonly avatarKey: string | null;
 }
 
 /**
@@ -381,15 +387,21 @@ export function toActor(row: UserRow): Actor {
     displayName: row.displayName,
     role: row.role,
     preferredPlaybackSpeed: row.preferredPlaybackSpeed,
+    avatarKey: row.avatarKey,
   };
 }
 
 /**
- * What the client renders from. It carries the role so the interface can *hide* what a member
- * cannot do — it is never what permits anything, because the client holds no decision
- * (docs/project/prd.md, 3.1.5).
+ * What the client renders from, less the one field that is not the row's to give. It carries the
+ * role so the interface can *hide* what a member cannot do — it is never what permits anything,
+ * because the client holds no decision (docs/project/prd.md, 3.1.5).
+ *
+ * A `SessionIdentity` rather than a `SessionUser`: the avatar travels as a signed URL, signing is
+ * the store's answer, and this module does not talk to the store. `server/accounts/session-user.ts`
+ * adds that field and is what every session-answering route calls. **The key is deliberately not
+ * here** — this is the boundary at which it stops travelling.
  */
-export function describeActor(actor: Actor): SessionUser {
+export function describeActor(actor: Actor): SessionIdentity {
   return {
     id: actor.id,
     email: actor.email,

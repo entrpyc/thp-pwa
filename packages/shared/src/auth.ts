@@ -19,10 +19,14 @@ export interface SignInRequest {
 }
 
 /**
- * The current user, as the client is allowed to see it. `role` is here so the interface can *hide*
- * what a member cannot do; it is never what permits anything — the API refuses independently.
+ * The current user as the policy module describes them — everything in {@link SessionUser} that
+ * can be read straight off the account row.
+ *
+ * Split from the payload because one field cannot be: the avatar travels as a signed URL, and
+ * signing is the store's answer rather than the row's. The policy module builds this
+ * synchronously; the accounts module adds the one asynchronous field and hands back the payload.
  */
-export interface SessionUser {
+export interface SessionIdentity {
   readonly id: string;
   readonly email: string;
   readonly displayName: string;
@@ -37,6 +41,18 @@ export interface SessionUser {
    * preference the interface applies, and the API refuses a value outside the six whoever sends it.
    */
   readonly preferredPlaybackSpeed: number;
+}
+
+/**
+ * The current user, as the client is allowed to see it. `role` is here so the interface can *hide*
+ * what a member cannot do; it is never what permits anything — the API refuses independently.
+ *
+ * `avatarUrl` is a signed, day-cacheable grant to the picture, or `null` — the ordinary state, and
+ * the one every account starts in (docs/project/prd.md 3.1.12: the avatar is optional). **Never the
+ * key**: a client is handed a URL it can paint from, not a name in the bucket.
+ */
+export interface SessionUser extends SessionIdentity {
+  readonly avatarUrl: string | null;
 }
 
 /** Payload of `POST /api/v1/auth/session` and `GET /api/v1/auth/session`. */

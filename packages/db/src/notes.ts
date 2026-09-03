@@ -63,6 +63,11 @@ export interface NoteRow {
  */
 export interface NoteWithAuthorRow extends NoteRow {
   readonly authorDisplayName: string;
+  /**
+   * The author's avatar key, or `null`. Joined for the reason the name is — one statement, not
+   * N+1 — and signed into a URL by the service, never handed to a client as it is.
+   */
+  readonly authorAvatarKey: string | null;
 }
 
 /** A note as a writer supplies it. The id and the timestamps are the table's business. */
@@ -158,7 +163,11 @@ export async function listNotesForReader(
   executor: Executor = getDatabase(),
 ): Promise<NoteWithAuthorRow[]> {
   const rows = await queryable(executor)
-    .select({ ...NOTE_COLUMNS, authorDisplayName: user.displayName })
+    .select({
+      ...NOTE_COLUMNS,
+      authorDisplayName: user.displayName,
+      authorAvatarKey: user.avatarKey,
+    })
     .from(note)
     .innerJoin(user, eq(note.authorId, user.id))
     .where(
@@ -236,7 +245,11 @@ export async function listRepliesForNotes(
   if (parentIds.length === 0) return [];
 
   const rows = await queryable(executor)
-    .select({ ...NOTE_COLUMNS, authorDisplayName: user.displayName })
+    .select({
+      ...NOTE_COLUMNS,
+      authorDisplayName: user.displayName,
+      authorAvatarKey: user.avatarKey,
+    })
     .from(note)
     .innerJoin(user, eq(note.authorId, user.id))
     .where(and(inArray(note.parentId, [...parentIds]), isNull(note.deletedAt)))

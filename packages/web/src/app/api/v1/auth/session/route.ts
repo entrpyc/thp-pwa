@@ -1,7 +1,7 @@
 import type { SessionPayload, SignOutPayload } from '@thp/shared';
 import { PUBLIC, SESSION, permits } from '@/server/api/access';
 import { ApiSuccess, apiRoute } from '@/server/api/route';
-import { describeActor } from '@/server/auth/policy';
+import { describeSessionUser } from '@/server/accounts/session-user';
 import {
   clearedSessionCookieHeader,
   readSessionCookie,
@@ -26,15 +26,15 @@ export const dynamic = 'force-dynamic';
 export const POST = apiRoute(PUBLIC, async (request) => {
   const body: unknown = await request.json().catch(() => null);
   const { actor, session } = await signIn(body);
-  const payload: SessionPayload = { user: describeActor(actor) };
+  const payload: SessionPayload = { user: await describeSessionUser(actor) };
   return new ApiSuccess(payload, 201, {
     'set-cookie': sessionCookieHeader(session.token, session.expiresAt),
   });
 });
 
 /** The signed-in account. */
-export const GET = apiRoute(permits('session.read'), (_request, context) => {
-  const payload: SessionPayload = { user: describeActor(context.actor) };
+export const GET = apiRoute(permits('session.read'), async (_request, context) => {
+  const payload: SessionPayload = { user: await describeSessionUser(context.actor) };
   return payload;
 });
 

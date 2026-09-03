@@ -107,3 +107,65 @@ export async function encodeArtwork(file: File): Promise<EncodedArtwork> {
 
   return { blob, contentType: ARTWORK_OUTPUT_TYPE };
 }
+
+// =================================================================================================
+// The avatar — the same encoder, one shape stricter
+// =================================================================================================
+
+/**
+ * 512 px on both edges.
+ *
+ * An avatar is painted at the size of a note's monogram circle and, at its largest, the profile
+ * screen's portrait; 512 covers the densest phone display at either and is a small fraction of the
+ * shared 4 MB ceiling at any quality. Bounded by the same rule the cover is bounded by, so a phone
+ * camera's 12 MP portrait is a legal upload rather than a refusal.
+ */
+export const AVATAR_MAX_EDGE = 512;
+
+/**
+ * The square cut from `width × height`, centred — where to start reading and how much to read.
+ *
+ * **Here the shape does not survive, deliberately.** A cover keeps its aspect ratio because the
+ * surfaces crop it differently; an avatar is drawn in exactly one shape everywhere it appears — a
+ * circle — and a landscape photo left landscape would be squashed into it by whichever surface
+ * drew it. Taking the centre square once, in the browser, means one stored image that every circle
+ * agrees on. Pure, and separate from the plumbing, so the decision is the part a test can reach.
+ */
+export function centreSquare(
+  width: number,
+  height: number,
+): { readonly x: number; readonly y: number; readonly size: number } {
+  const size = Math.max(1, Math.min(width, height));
+  return {
+    x: Math.floor((width - size) / 2),
+    y: Math.floor((height - size) / 2),
+    size,
+  };
+}
+
+/**
+ * Decode, crop to the centre square, resize to the bound, and re-encode to one WebP — the cover's
+ * encoder with the square applied, and the same `createImageBitmap` refusal of a file that is not
+ * really an image.
+ */
+export async function encodeAvatar(file: File): Promise<EncodedArtwork> {
+  const source = await createImageBitmap(file);
+  const square = centreSquare(source.width, source.height);
+  const edge = Math.min(square.size, AVATAR_MAX_EDGE);
+
+  const canvas = document.createElement('canvas');
+  canvas.width = edge;
+  canvas.height = edge;
+
+  const context = canvas.getContext('2d');
+  if (context === null) throw new Error('this browser gave no 2d canvas context');
+  context.drawImage(source, square.x, square.y, square.size, square.size, 0, 0, edge, edge);
+  source.close();
+
+  const blob = await new Promise<Blob | null>((done) => {
+    canvas.toBlob(done, ARTWORK_OUTPUT_TYPE, ARTWORK_QUALITY);
+  });
+  if (blob === null) throw new Error('this browser encoded no image');
+
+  return { blob, contentType: ARTWORK_OUTPUT_TYPE };
+}

@@ -248,6 +248,7 @@ describe('finalising an upload', () => {
       displayName: admin.displayName,
       role: ROLE.admin,
       preferredPlaybackSpeed: DEFAULT_PLAYBACK_SPEED,
+      avatarKey: null,
     };
 
     try {

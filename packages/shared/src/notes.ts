@@ -98,6 +98,12 @@ export interface NoteView {
   readonly timestampMs: number | null;
   /** The author's display name ([3.1.12](docs/project/prd.md)). A monogram is drawn from it. */
   readonly authorDisplayName: string;
+  /**
+   * A signed grant to the author's avatar, or `null` when they have none — in which case the
+   * monogram stands in ([3.1.12](docs/project/prd.md)). Never the key. Empty on a tombstone, whose
+   * author line is replaced by a single sentence anyway.
+   */
+  readonly authorAvatarUrl: string | null;
   readonly visibility: NoteVisibility;
   /** Whether the reading member wrote it. */
   readonly mine: boolean;

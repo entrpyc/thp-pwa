@@ -62,9 +62,10 @@ export const scriptureOrigin = pgEnum('scripture_origin', SCRIPTURE_ORIGINS);
 
 /**
  * An account. Columns arrive with the steps that use them: `deactivated_at` comes with ticket 4
- * (account lifecycle) and `preferred_playback_speed` with Story 4 Ticket 03, which is where the
- * speed control that writes it ships. There is still no avatar — docs/project/prd.md 3.1.12's is
- * deferred, and a nullable column "for later" is how deferral quietly stops being deferral.
+ * (account lifecycle), `preferred_playback_speed` with Story 4 Ticket 03, which is where the
+ * speed control that writes it ships, and `avatar_key` with the profile screen — the first surface
+ * that could set one, and therefore the first moment docs/project/prd.md 3.1.12's avatar stopped
+ * being a nullable column "for later".
  *
  * `email` is stored normalised (trimmed, lowercased) by the application, and uniqueness is
  * enforced on `lower(email)` by the index below — at the database, so two accounts differing only
@@ -105,6 +106,17 @@ export const user = pgTable(
     preferredPlaybackSpeed: real('preferred_playback_speed')
       .notNull()
       .default(DEFAULT_PLAYBACK_SPEED),
+    /**
+     * **The object key of this person's avatar, or `null`** — the ordinary state
+     * ([3.1.12](docs/project/prd.md): optional), and the one every existing account keeps.
+     *
+     * One nullable pointer and nothing beside it, exactly as `series.artwork_key` is: width,
+     * height, byte size and content type are what the store already knows and `head` already
+     * answers, and a second copy of them here would be a second copy that could drift. Replacing an
+     * avatar writes a new key and leaves the old object where it is — the store has no delete, and
+     * the orphan is the accepted price.
+     */
+    avatarKey: text('avatar_key'),
   },
   (table) => [
     uniqueIndex('user_email_lower_unique').on(sql`lower(${table.email})`),

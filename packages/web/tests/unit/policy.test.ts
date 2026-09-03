@@ -16,6 +16,7 @@ function actorWith(role: (typeof ROLES)[number]): Actor {
     displayName: 'A',
     role,
     preferredPlaybackSpeed: DEFAULT_PLAYBACK_SPEED,
+    avatarKey: null,
   };
 }
 
@@ -79,6 +80,7 @@ describe('the policy module answers (actor, action, resource)', () => {
       updatedAt: new Date(),
       deactivatedAt: null,
       preferredPlaybackSpeed: DEFAULT_PLAYBACK_SPEED,
+      avatarKey: 'avatars/private-object-name.webp',
     };
 
     const actor = toActor(row);
@@ -88,10 +90,15 @@ describe('the policy module answers (actor, action, resource)', () => {
       displayName: 'Person',
       role: ROLE.member,
       preferredPlaybackSpeed: DEFAULT_PLAYBACK_SPEED,
+      avatarKey: 'avatars/private-object-name.webp',
     });
 
     const payload = describeActor(actor);
-    expect(payload).toEqual(actor);
+    // Everything but the key: the actor carries it so the accounts module can sign a URL for it,
+    // and the payload is the boundary at which it stops travelling.
+    const { avatarKey: _withheld, ...identity } = actor;
+    expect(payload).toEqual(identity);
+    expect(JSON.stringify(payload)).not.toContain('private-object-name');
     // The hash must not survive the trip, however the payload is built.
     expect(JSON.stringify(payload)).not.toContain('argon2-hash-goes-here');
   });
@@ -113,6 +120,7 @@ describe('an owned action is answered against the resource, not only the role', 
     displayName: 'Owner',
     role: ROLE.member,
     preferredPlaybackSpeed: DEFAULT_PLAYBACK_SPEED,
+    avatarKey: null,
   };
   const somebodyElse: Actor = { ...owner, id: 'other-1', email: 'other@example.test' };
   const admin: Actor = { ...owner, id: 'admin-1', email: 'admin@example.test', role: ROLE.admin };
@@ -230,6 +238,7 @@ describe('the six moderation, ownership and reaction actions', () => {
     displayName: 'Owner',
     role: ROLE.member,
     preferredPlaybackSpeed: DEFAULT_PLAYBACK_SPEED,
+    avatarKey: null,
   };
   const somebodyElse: Actor = { ...owner, id: 'other-1', email: 'other@example.test' };
   const admin: Actor = { ...owner, id: 'admin-1', email: 'admin@example.test', role: ROLE.admin };

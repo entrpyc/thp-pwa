@@ -26,7 +26,8 @@ import { displayNameFor } from '@/server/auth/display-name';
 import { hashPassword } from '@/server/auth/password';
 import { generateToken, hashToken } from '@/server/auth/tokens';
 import { issueSession, type IssuedSession } from '@/server/auth/session';
-import { describeActor, toActor, type Actor } from '@/server/auth/policy';
+import { toActor, type Actor } from '@/server/auth/policy';
+import { describeSessionUser } from '@/server/accounts/session-user';
 import { readAppOrigin } from '@/server/mail/env';
 import { invitationMessage } from '@/server/mail/invitation-message';
 import { sendMail } from '@/server/mail/mailer';
@@ -374,5 +375,5 @@ export async function acceptInvitationWithPassword(
     target: `invitation:${accepted.invitation.id}`,
   });
 
-  return { user: describeActor(toActor(accepted.user)), session };
+  return { user: await describeSessionUser(toActor(accepted.user)), session };
 }

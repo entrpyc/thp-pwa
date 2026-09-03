@@ -12,9 +12,11 @@ import type { Role } from './roles';
  * raw reset token exists in exactly two places — the link in the message, and the body of the
  * complete request — and neither is a representation of a reset.
  *
- * **No shape in this file carries an avatar.** docs/project/prd.md 3.1.12 names one and
- * core-listening scope plan § Ticket 4 defers it; a nullable field "for later" is how deferral
- * quietly stops being deferral.
+ * **The avatar arrived with the profile screen.** docs/project/prd.md 3.1.12 names one and
+ * core-listening scope plan § Ticket 4 deferred it; the deferral ended when a screen existed to set
+ * it from. What travels is never the object key — a `SessionUser` carries a signed URL or `null`
+ * (see `auth.ts`), and the two avatar routes below take the same grant → `PUT` → finalise shape a
+ * series cover does, so there is one way an image gets into this product rather than two.
  */
 
 /** Paths of the account resource, relative to the `/api/v1` prefix. */
@@ -39,6 +41,43 @@ export const RESET_PASSWORD_PAGE_PATH = '/reset-password';
  * over exactly the account routes declared above, and one string does not earn a file.
  */
 export const ADMIN_PAGE_PATH = '/admin';
+
+/**
+ * The profile screen, on the web origin — where a person edits the two things about their account
+ * that are theirs to edit (docs/project/prd.md 3.1.12): the name others see, and the picture beside it.
+ */
+export const PROFILE_PAGE_PATH = '/profile';
+
+/**
+ * The signed-in account's avatar: `PUT` points it at an uploaded image, `DELETE` takes it away.
+ *
+ * `me` rather than an id, exactly as the playback-speed route is `me`: the only avatar anybody may
+ * set is their own, and a path that could name somebody else's would need an ownership rule to
+ * refuse what it should never have been able to express. An admin ends accounts and changes roles
+ * and does not touch the face on one — which is 3.1.12's rule for the name, applied to the picture.
+ */
+export const AVATAR_PATH = `${USERS_PATH}/me/avatar`;
+
+/** Permission to send the picture — the grant half of the upload. */
+export const AVATAR_UPLOADS_PATH = `${AVATAR_PATH}/uploads`;
+
+/**
+ * Body of `POST /api/v1/users/me/avatar/uploads` — the same three fields a series cover's grant
+ * takes, meaning the same things: the filename is logged and never used to build the key, and the
+ * size is a convenience that fails an oversized request before an upload rather than after one.
+ * The vocabulary of accepted formats and the byte ceiling are `artwork.ts`'s, deliberately — a
+ * second image vocabulary would be a second thing the screen and the API could disagree about.
+ */
+export interface AvatarGrantRequest {
+  readonly filename: string;
+  readonly contentType: string;
+  readonly size: number;
+}
+
+/** Body of `PUT /api/v1/users/me/avatar`. The key from the grant, now with bytes behind it. */
+export interface SetAvatarRequest {
+  readonly key: string;
+}
 
 /** The query parameter the reset link carries the token in. */
 export const RESET_TOKEN_PARAM = 'token';
@@ -143,4 +182,23 @@ export function checkDisplayName(displayName: string): string | null {
     return `That is ${trimmed.length} characters; names go up to ${MAX_DISPLAY_NAME_LENGTH}.`;
   }
   return null;
+}
+
+/**
+ * Up to two initials — what a circle holds for a person who has set no picture
+ * (docs/project/prd.md 3.1.12: the avatar is optional, so this is the ordinary state).
+ *
+ * The first word's initial and the last word's, so "Ada Byron King" reads `AK` rather than `AB`;
+ * one initial for a one-word name; `?` for a name that is somehow blank. In `shared` because the
+ * note card and the profile screen both draw it, and two drawings of one name would be two answers
+ * to which letters a person is.
+ */
+export function monogramFor(displayName: string): string {
+  const words = displayName.trim().split(/\s+/).filter(Boolean);
+  const first = words[0];
+  const last = words[words.length - 1];
+  const letters = [first, ...(last !== undefined && last !== first ? [last] : [])]
+    .filter((word): word is string => word !== undefined)
+    .map((word) => word.slice(0, 1));
+  return letters.join('').toUpperCase() || '?';
 }

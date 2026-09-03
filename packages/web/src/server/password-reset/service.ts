@@ -22,7 +22,8 @@ import {
 } from '@thp/shared';
 import { ApiError } from '@/server/api/errors';
 import { hashPassword } from '@/server/auth/password';
-import { describeActor, toActor } from '@/server/auth/policy';
+import { toActor } from '@/server/auth/policy';
+import { describeSessionUser } from '@/server/accounts/session-user';
 import { issueSession, type IssuedSession } from '@/server/auth/session';
 import { generateToken, hashToken } from '@/server/auth/tokens';
 import { readAppOrigin } from '@/server/mail/env';
@@ -291,5 +292,5 @@ export async function completePasswordResetWithPassword(
     target: `account:${completed.user.id}`,
   });
 
-  return { user: describeActor(toActor(completed.user)), session };
+  return { user: await describeSessionUser(toActor(completed.user)), session };
 }

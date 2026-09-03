@@ -3,6 +3,7 @@ export {
   UPLOAD_GRANT_SECONDS,
   mediaStore,
   mintArtworkKey,
+  mintAvatarKey,
   mintOriginalKey,
   mintPlaybackKey,
   type MediaStore,

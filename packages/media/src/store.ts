@@ -178,3 +178,24 @@ export function mintArtworkKey(contentType: string): string {
   }
   return `artwork/${randomUUID()}.${extension}`;
 }
+
+/**
+ * `avatars/<uuid>.<ext>` — **`mintArtworkKey`'s rule, one prefix over**, for the picture a member
+ * puts beside their own name (docs/project/prd.md 3.1.12).
+ *
+ * The same image vocabulary as a cover, deliberately: an avatar is re-encoded in the browser to the
+ * same WebP a cover is, checked against the same ceiling, and named by the same table — so there is
+ * one answer to "what is an image this product stores" rather than two. Its own prefix because it
+ * is its own kind of thing: an operator reading the bucket should be able to tell a study's face
+ * from a person's without opening either.
+ *
+ * **It brings no delete with it.** Replacing an avatar, or removing one, repoints the account and
+ * leaves the object where it is — the accepted price every other upload in this product pays.
+ */
+export function mintAvatarKey(contentType: string): string {
+  const extension = extensionForArtworkType(contentType);
+  if (extension === null) {
+    throw new Error(`no accepted avatar extension for content type "${contentType}"`);
+  }
+  return `avatars/${randomUUID()}.${extension}`;
+}

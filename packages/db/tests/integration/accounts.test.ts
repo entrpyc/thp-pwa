@@ -33,6 +33,7 @@ describe('the accounts schema', () => {
     `;
 
     expect(columns.map((column) => column.column_name)).toEqual([
+      'avatar_key',
       'created_at',
       'deactivated_at',
       'display_name',
@@ -44,17 +45,19 @@ describe('the accounts schema', () => {
       'updated_at',
     ]);
     // `preferred_playback_speed` arrived with Story 4 Ticket 03, which is the ticket that ships the
-    // speed control that writes it — columns arrive with the ticket that uses them. An avatar is
-    // still deferred outright, and its absence here is the point: a nullable column "for later" is
-    // how deferral quietly stops being deferral.
-    for (const absent of ['avatar', 'avatar_url', 'avatar_key', 'image_url']) {
+    // speed control that writes it, and `avatar_key` with the profile screen, which is the first
+    // surface that can set one — columns arrive with the ticket that uses them. What the avatar
+    // is *not* is a second copy of the store's metadata or a URL: one pointer, as a series cover
+    // is one pointer, and the deferred spellings stay absent.
+    for (const absent of ['avatar', 'avatar_url', 'image_url', 'avatar_content_type', 'avatar_bytes']) {
       expect(columns.map((column) => column.column_name)).not.toContain(absent);
     }
 
-    // Deactivation is the only column that may be absent from a row: an account is active by
-    // omission, so no existing row had to be given a value when the column arrived.
+    // The two columns that may be absent from a row, and both mean "the ordinary state": an
+    // account is active by omission and has no picture by omission, so no existing row had to be
+    // given a value when either column arrived.
     const nullable = columns.filter((column) => column.is_nullable === 'YES');
-    expect(nullable.map((column) => column.column_name)).toEqual(['deactivated_at']);
+    expect(nullable.map((column) => column.column_name)).toEqual(['avatar_key', 'deactivated_at']);
   });
 
   it('migrates every account that already existed to active', async () => {

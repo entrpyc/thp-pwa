@@ -256,7 +256,18 @@
   min-width: 0;
 }
 
-/* Initials in a circle. No picture is drawn here — none is stored. */
+/* The author's picture, in the circle the monogram would otherwise fill. */
+.avatar {
+  flex: none;
+  width: var(--space-8);
+  height: var(--space-8);
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-circle);
+  object-fit: cover;
+  background: var(--color-surface-raised);
+}
+
+/* Initials in a circle, for an author who has set no picture. */
 .monogram {
   flex: none;
   display: inline-flex;

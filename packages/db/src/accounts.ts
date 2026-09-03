@@ -21,6 +21,8 @@ export interface UserRow {
   readonly deactivatedAt: Date | null;
   /** One of the six steps. `1` for every account until its owner changes it (Story 4 Ticket 03). */
   readonly preferredPlaybackSpeed: number;
+  /** The avatar's object key, or `null` — the ordinary state (docs/project/prd.md 3.1.12). */
+  readonly avatarKey: string | null;
 }
 
 export interface NewUser {
@@ -111,6 +113,28 @@ export async function updateDisplayName(
   const rows = await handle.db
     .update(user)
     .set({ displayName: displayName.trim(), updatedAt: new Date() })
+    .where(eq(user.id, id))
+    .returning();
+  return (rows[0] as UserRow | undefined) ?? null;
+}
+
+/**
+ * Point an account at an avatar that landed, or at nothing. Returns the updated row, or `null` if
+ * there is no such account.
+ *
+ * One write for both directions, because they are the same write: `null` is not a second state
+ * somebody has to keep in step with a flag, it is the absence of a picture — which is what every
+ * account starts with (docs/project/prd.md 3.1.12). The superseded object, if any, stays in the
+ * store; there is nothing to delete it with, and that is by design.
+ */
+export async function setUserAvatar(
+  id: string,
+  avatarKey: string | null,
+  handle: DatabaseHandle = getDatabase(),
+): Promise<UserRow | null> {
+  const rows = await handle.db
+    .update(user)
+    .set({ avatarKey, updatedAt: new Date() })
     .where(eq(user.id, id))
     .returning();
   return (rows[0] as UserRow | undefined) ?? null;

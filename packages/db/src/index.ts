@@ -6,6 +6,7 @@ export {
   listUsers,
   normaliseEmail,
   reactivateUser,
+  setUserAvatar,
   setUserRole,
   updateDisplayName,
   type GuardedWrite,

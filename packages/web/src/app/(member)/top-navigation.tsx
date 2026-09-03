@@ -9,6 +9,7 @@ import {
   MEMBER_LIBRARY_PAGE_PATH,
   MEMBER_SERIES_PAGE_PATH,
   NEW_USER_ONBOARDING_ID,
+  PROFILE_PAGE_PATH,
   onboardingPagePath,
 } from '@thp/shared';
 import { SignOutButton } from '../sign-out-button';
@@ -225,6 +226,17 @@ export function TopNavigation({ canSeeConsole }: { canSeeConsole: boolean }) {
               </Link>
             </li>
             <InstallApp className={styles.menuLink} hintClassName={styles.menuHint} />
+            {/*
+              The two things about an account that are its owner's to change
+              ([3.1.12](docs/project/prd.md)) — the name others see and the picture beside it. After
+              the destinations and before the console, because it is a place in the product that
+              every member has and the console is one that most do not.
+            */}
+            <li>
+              <Link className={styles.menuLink} href={PROFILE_PAGE_PATH} onClick={() => setOpen(false)}>
+                My profile
+              </Link>
+            </li>
             <li className={styles.menuSignOut}>
               <SignOutButton className={styles.menuLink} />
             </li>
