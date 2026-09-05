@@ -409,7 +409,8 @@ Nothing reaches the box by `git pull`. A deploy is a **release tag**, cut and sh
 [Deploy workflow](.github/workflows/deploy.yml) once a person approves it:
 
 1. **Actions → Deploy → Run workflow**, on `main`, choosing `patch`, `minor` or `major`.
-2. The `gate` job refuses unless CI has passed on that exact commit, then shows the next tag in the
+2. The `gate` job refuses unless CI has passed on that exact commit (ticking **skip_ci_gate** on the
+   form gets past it, and marks the run summary and the release notes), then shows the next tag in the
    run summary (`v0.1.0` when there is none yet).
 3. The run pauses at the **production** environment. Approving it is the deploy decision.
 4. `release` tags the commit, pushes the tag and publishes a GitHub Release with generated notes.

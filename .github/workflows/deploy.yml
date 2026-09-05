@@ -24,6 +24,11 @@ on:
         required: true
         default: patch
         options: [patch, minor, major]
+      skip_ci_gate:
+        description: Deploy even though CI has not passed on this commit
+        type: boolean
+        required: false
+        default: false
 
 # One deploy at a time, and never cancel one that has started — half a deploy is the worst outcome.
 concurrency:
@@ -50,7 +55,10 @@ jobs:
 
       # A `workflow_dispatch` run is not itself CI, so ask for the CI run on this exact commit. A
       # run still in progress fails the gate too — "probably fine" is not a state a deploy ships from.
+      # The `skip_ci_gate` input is the one way past this, and it leaves a mark on the run summary and
+      # the release notes so nobody later mistakes that release for a verified one.
       - name: CI has passed on this commit
+        if: ${{ !inputs.skip_ci_gate }}
         env:
           GH_TOKEN: ${{ github.token }}
         run: |
@@ -62,7 +70,15 @@ jobs:
           if [ "$(echo "$runs" | jq '[.[] | select(.status != "completed")] | length')" -gt 0 ]; then
             echo "::error::CI is still running on ${{ github.sha }}. Wait for it, then start the deploy again."; exit 1
           fi
-          echo "::error::No successful CI run for ${{ github.sha }}. Runs seen: $runs"; exit 1
+          echo "::error::No successful CI run for ${{ github.sha }}. Runs seen: $runs. Re-run with 'skip_ci_gate' ticked to deploy anyway."; exit 1
+
+      - name: CI gate skipped
+        if: ${{ inputs.skip_ci_gate }}
+        run: |
+          echo "::warning::The CI gate was skipped by ${{ github.actor }}. This deploy has not been verified by CI."
+          echo "## ⚠️ CI gate skipped" >> "$GITHUB_STEP_SUMMARY"
+          echo "${{ github.actor }} chose to deploy \`${{ github.sha }}\` without a passing CI run." >> "$GITHUB_STEP_SUMMARY"
+          echo >> "$GITHUB_STEP_SUMMARY"
 
       - uses: actions/checkout@v5
         with:
@@ -126,7 +142,14 @@ jobs:
         env:
           GH_TOKEN: ${{ github.token }}
           TAG: ${{ needs.gate.outputs.tag }}
-        run: gh release create "$TAG" --verify-tag --generate-notes --title "$TAG"
+          SKIPPED_CI: ${{ inputs.skip_ci_gate }}
+        run: |
+          if [ "$SKIPPED_CI" = "true" ]; then
+            gh release create "$TAG" --verify-tag --generate-notes --title "$TAG" \
+              --notes "> ⚠️ **Released with the CI gate skipped** by ${{ github.actor }}. CI had not passed on this commit."
+          else
+            gh release create "$TAG" --verify-tag --generate-notes --title "$TAG"
+          fi
 
   deploy:
     name: Deploy ${{ needs.gate.outputs.tag }} to the box
