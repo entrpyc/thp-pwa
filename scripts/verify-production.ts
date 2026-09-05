@@ -344,6 +344,29 @@ const CHECKS: readonly Check[] = [
     },
   },
   {
+    name: 'release',
+    reach: 'box',
+    async run() {
+      // What runs must be a published release, exactly — not a branch tip, not "a tag plus two
+      // commits". That is what makes the box reproducible from the tag alone, and it is the
+      // property a `git pull` on the box would silently take away.
+      const tag = (
+        await run('git', ['-C', REPO_ROOT, 'describe', '--tags', '--exact-match', 'HEAD']).catch(
+          () => '',
+        )
+      ).trim();
+      if (tag === '') {
+        return bad('the checkout is not at a release tag — deploy through the Deploy workflow, not `git pull`');
+      }
+      // Set by scripts/deploy.sh: the tag the approver approved. Absent when run by hand.
+      const requested = process.env['THP_RELEASE']?.trim();
+      if (requested && requested !== tag) {
+        return bad(`the checkout is at ${tag}, but the deploy asked for ${requested}`);
+      }
+      return ok(`at ${tag}`);
+    },
+  },
+  {
     name: 'services',
     reach: 'box',
     async run() {

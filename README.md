@@ -396,12 +396,41 @@ Two commands matter after the first setup:
 
 | Command                      | What it does                                                                         |
 | :--------------------------- | :----------------------------------------------------------------------------------- |
-| `./scripts/deploy.sh`        | Pull, install, migrate, build, check the origin, restart, verify. The whole deploy.   |
+| `./scripts/deploy.sh vX.Y.Z` | Check out the tag, install, migrate, build, check the origin, restart, verify. The whole deploy. The Deploy workflow runs it — see **Releasing**. |
 | `npm run verify:production`  | Reads the box and prints one PASS/FAIL line per check. Repairs nothing.               |
 
 `npm run verify:production -- --remote-only` runs just the checks that need nothing but HTTP, so
 they can be run from a laptop. `-- --kill-drill` kills the worker and watches pm2 bring it back.
 `-- --smoke --audio=<file>` drives a real upload through the real pipeline and **spends real money**.
+
+### Releasing
+
+Nothing reaches the box by `git pull`. A deploy is a **release tag**, cut and shipped by the
+[Deploy workflow](.github/workflows/deploy.yml) once a person approves it:
+
+1. **Actions → Deploy → Run workflow**, on `main`, choosing `patch`, `minor` or `major`.
+2. The `gate` job refuses unless CI has passed on that exact commit, then shows the next tag in the
+   run summary (`v0.1.0` when there is none yet).
+3. The run pauses at the **production** environment. Approving it is the deploy decision.
+4. `release` tags the commit, pushes the tag and publishes a GitHub Release with generated notes.
+5. `deploy` connects to the box over SSH and sends just the tag. The deploy key is bound to
+   [scripts/deploy-ssh-entry.sh](scripts/deploy-ssh-entry.sh), which accepts nothing but a release
+   tag and runs `scripts/deploy.sh` with it — so the key can deploy a published release and do
+   nothing else.
+
+The box ends detached at the tag, and `verify:production`'s `release` check fails the deploy if it
+is anywhere else. Deploying by hand is the same command over an ordinary SSH session:
+`./scripts/deploy.sh v1.2.3`.
+
+The workflow needs, in the repository's **Settings**:
+
+| Where                      | Name                   | Value                                                                        |
+| :------------------------- | :--------------------- | :--------------------------------------------------------------------------- |
+| Environments → production  | Required reviewers     | Whoever may approve a deploy.                                                |
+| Secrets → Actions          | `DEPLOY_SSH_KEY`       | The private half of the deploy key, generated in **First setup — 8**.        |
+| Variables → Actions        | `DEPLOY_HOST`          | `167.86.71.60`                                                               |
+| Variables → Actions        | `DEPLOY_USER`          | `thp`                                                                        |
+| Variables → Actions        | `DEPLOY_KNOWN_HOSTS`   | The output of `ssh-keyscan -t ed25519 167.86.71.60`, so the runner pins the host. |
 
 ### Two things that bite silently
 
@@ -510,6 +539,25 @@ anything. Then `-- --kill-drill`, then `-- --smoke --audio=<a short file>`. The 
 only thing that exercises a presigned `PUT` from the real origin through the real CORS rule, and an
 ASR provider fetching the object *itself* from a bucket it can reach — the boundary that makes MinIO
 unusable for real transcription, and therefore the one thing no local run has ever tested.
+
+**8 — The deploy key.** A keypair the Deploy workflow uses and nothing else, bound on the box to the
+one script it may run:
+
+```bash
+ssh-keygen -t ed25519 -N '' -C 'thp deploy' -f /tmp/thp-deploy      # on your machine
+ssh-keyscan -t ed25519 167.86.71.60                                   # → DEPLOY_KNOWN_HOSTS
+```
+
+Then, as `thp` on the box, one line in `~/.ssh/authorized_keys` — the public key prefixed with the
+forced command and no other capability:
+
+```
+command="/home/thp/app/scripts/deploy-ssh-entry.sh",no-port-forwarding,no-agent-forwarding,no-pty,no-X11-forwarding ssh-ed25519 AAAA… thp deploy
+```
+
+Put the private key in the `DEPLOY_SSH_KEY` secret, delete it locally, and check the binding holds:
+`ssh -i /tmp/thp-deploy thp@167.86.71.60 whoami` must print `refused: expected a release tag`,
+not `thp`.
 
 ### Backups
 

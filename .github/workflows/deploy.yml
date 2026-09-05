@@ -1,0 +1,168 @@
+# Deploy — **cut a release tag from main and ship it to the box.**
+#
+# Started by hand from the Actions tab. Three jobs, in order:
+#
+#   gate     Refuses unless this is `main` and CI has passed on this exact commit, then works out
+#            the next tag so the approver can see it before approving.
+#   release  Waits at the `production` environment for approval. Then tags the commit, pushes the
+#            tag and publishes a GitHub Release with generated notes.
+#   deploy   SSHes to the box as the deploy key and hands it the tag. The key is bound to
+#            scripts/deploy-ssh-entry.sh on the box, so the only thing it can do is deploy a tag.
+#
+# What is deliberately not here: a tag-push trigger (the deploy is the same run that made the tag,
+# so nothing has to guess what a tag means), a rollback (scripts/deploy.sh says why), and any
+# build on the runner (the box builds, because `.env` — and the origin inlined from it — lives there).
+
+name: Deploy
+
+on:
+  workflow_dispatch:
+    inputs:
+      bump:
+        description: Version bump for the new tag
+        type: choice
+        required: true
+        default: patch
+        options: [patch, minor, major]
+
+# One deploy at a time, and never cancel one that has started — half a deploy is the worst outcome.
+concurrency:
+  group: deploy-production
+  cancel-in-progress: false
+
+permissions:
+  contents: read
+  actions: read
+
+jobs:
+  gate:
+    name: CI passed on main, next tag
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    outputs:
+      tag: ${{ steps.next.outputs.tag }}
+    steps:
+      - name: Only main deploys
+        if: github.ref != 'refs/heads/main'
+        run: |
+          echo "::error::Deploys come from main, not ${{ github.ref_name }}."
+          exit 1
+
+      # A `workflow_dispatch` run is not itself CI, so ask for the CI run on this exact commit. A
+      # run still in progress fails the gate too — "probably fine" is not a state a deploy ships from.
+      - name: CI has passed on this commit
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          runs=$(gh api "repos/${{ github.repository }}/actions/workflows/ci.yml/runs?head_sha=${{ github.sha }}&per_page=20" \
+            --jq '[.workflow_runs[] | {status, conclusion}]')
+          if [ "$(echo "$runs" | jq '[.[] | select(.conclusion == "success")] | length')" -gt 0 ]; then
+            echo "CI passed on ${{ github.sha }}"; exit 0
+          fi
+          if [ "$(echo "$runs" | jq '[.[] | select(.status != "completed")] | length')" -gt 0 ]; then
+            echo "::error::CI is still running on ${{ github.sha }}. Wait for it, then start the deploy again."; exit 1
+          fi
+          echo "::error::No successful CI run for ${{ github.sha }}. Runs seen: $runs"; exit 1
+
+      - uses: actions/checkout@v5
+        with:
+          fetch-depth: 0
+
+      - name: Next tag
+        id: next
+        run: |
+          latest=$(git tag --list 'v[0-9]*' --sort=-v:refname | head -n 1)
+          if [ -z "$latest" ]; then
+            tag=v0.1.0
+          else
+            IFS=. read -r major minor patch <<< "${latest#v}"
+            case "${{ inputs.bump }}" in
+              major) tag="v$((major + 1)).0.0" ;;
+              minor) tag="v${major}.$((minor + 1)).0" ;;
+              patch) tag="v${major}.${minor}.$((patch + 1))" ;;
+            esac
+          fi
+          if git rev-parse -q --verify "refs/tags/$tag" > /dev/null; then
+            echo "::error::$tag already exists."; exit 1
+          fi
+          echo "tag=$tag" >> "$GITHUB_OUTPUT"
+          {
+            echo "## Ready to release \`$tag\`"
+            echo
+            echo "- previous: \`${latest:-none}\`"
+            echo "- commit: \`${{ github.sha }}\`"
+            echo "- approve the **production** environment to tag, publish and deploy"
+          } >> "$GITHUB_STEP_SUMMARY"
+
+  release:
+    name: Tag and publish ${{ needs.gate.outputs.tag }}
+    needs: gate
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    # The approval. Required reviewers on this environment are the human step; nothing below runs
+    # until one of them clicks Approve.
+    environment:
+      name: production
+      url: https://thp.indepthwebsolutions.com
+    permissions:
+      contents: write
+    steps:
+      - uses: actions/checkout@v5
+        with:
+          fetch-depth: 0
+
+      # The tag is created at the commit the run was started from, not whatever main is by the time
+      # someone approved — the approver approved that commit.
+      - name: Tag
+        env:
+          TAG: ${{ needs.gate.outputs.tag }}
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git tag -a "$TAG" "${{ github.sha }}" -m "Release $TAG"
+          git push origin "refs/tags/$TAG"
+
+      - name: Publish the release
+        env:
+          GH_TOKEN: ${{ github.token }}
+          TAG: ${{ needs.gate.outputs.tag }}
+        run: gh release create "$TAG" --verify-tag --generate-notes --title "$TAG"
+
+  deploy:
+    name: Deploy ${{ needs.gate.outputs.tag }} to the box
+    needs: [gate, release]
+    runs-on: ubuntu-latest
+    # A deploy is install + migrate + build + restart + verify on a 4 vCPU box. Generous on purpose.
+    timeout-minutes: 30
+    steps:
+      - name: SSH key and host key
+        env:
+          DEPLOY_SSH_KEY: ${{ secrets.DEPLOY_SSH_KEY }}
+          DEPLOY_KNOWN_HOSTS: ${{ vars.DEPLOY_KNOWN_HOSTS }}
+        run: |
+          mkdir -p ~/.ssh && chmod 700 ~/.ssh
+          printf '%s\n' "$DEPLOY_SSH_KEY" > ~/.ssh/deploy_key && chmod 600 ~/.ssh/deploy_key
+          # Pinned, so the runner refuses a host that is not the box rather than trusting whatever answers.
+          printf '%s\n' "$DEPLOY_KNOWN_HOSTS" > ~/.ssh/known_hosts && chmod 644 ~/.ssh/known_hosts
+
+      # The command sent is just the tag. The box's authorized_keys binds this key to
+      # scripts/deploy-ssh-entry.sh, which validates it and runs scripts/deploy.sh with it.
+      - name: Deploy
+        env:
+          TAG: ${{ needs.gate.outputs.tag }}
+        run: |
+          ssh -i ~/.ssh/deploy_key \
+              -o IdentitiesOnly=yes \
+              -o StrictHostKeyChecking=yes \
+              -o ServerAliveInterval=30 \
+              -o BatchMode=yes \
+              "${{ vars.DEPLOY_USER }}@${{ vars.DEPLOY_HOST }}" "$TAG"
+
+      - name: Summary
+        run: |
+          {
+            echo "## Deployed \`${{ needs.gate.outputs.tag }}\`"
+            echo
+            echo "- release: ${{ github.server_url }}/${{ github.repository }}/releases/tag/${{ needs.gate.outputs.tag }}"
+            echo "- site: https://thp.indepthwebsolutions.com"
+          } >> "$GITHUB_STEP_SUMMARY"
