@@ -158,6 +158,27 @@ jobs:
     # A deploy is install + migrate + build + restart + verify on a 4 vCPU box. Generous on purpose.
     timeout-minutes: 30
     steps:
+      # Repository-level, not environment-level: this job carries no `environment:`, on purpose — a
+      # second reference to `production` would demand a second approval. Values put on the environment
+      # arrive here empty, and an empty user or host makes ssh print its usage, which explains nothing.
+      - name: Deploy settings are present
+        env:
+          DEPLOY_HOST: ${{ vars.DEPLOY_HOST }}
+          DEPLOY_USER: ${{ vars.DEPLOY_USER }}
+          DEPLOY_KNOWN_HOSTS: ${{ vars.DEPLOY_KNOWN_HOSTS }}
+          DEPLOY_SSH_KEY: ${{ secrets.DEPLOY_SSH_KEY }}
+        run: |
+          missing=""
+          [ -z "$DEPLOY_HOST" ] && missing="$missing DEPLOY_HOST"
+          [ -z "$DEPLOY_USER" ] && missing="$missing DEPLOY_USER"
+          [ -z "$DEPLOY_KNOWN_HOSTS" ] && missing="$missing DEPLOY_KNOWN_HOSTS"
+          [ -z "$DEPLOY_SSH_KEY" ] && missing="$missing DEPLOY_SSH_KEY(secret)"
+          if [ -n "$missing" ]; then
+            echo "::error::Not set at repository level (Settings → Secrets and variables → Actions):$missing. Environment-scoped values do not reach this job."
+            exit 1
+          fi
+          echo "deploying as $DEPLOY_USER@$DEPLOY_HOST"
+
       - name: SSH key and host key
         env:
           DEPLOY_SSH_KEY: ${{ secrets.DEPLOY_SSH_KEY }}
