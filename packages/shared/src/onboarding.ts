@@ -10,7 +10,7 @@
  */
 
 /** Every onboarding the product has. A new onboarding is one entry here plus its slides in web. */
-export const ONBOARDING_IDS = ['new-user'] as const;
+export const ONBOARDING_IDS = ['new-user', 'release-0.3.0'] as const;
 
 export type OnboardingId = (typeof ONBOARDING_IDS)[number];
 
