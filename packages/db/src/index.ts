@@ -167,6 +167,20 @@ export {
   type SummaryRow,
 } from './summaries';
 export {
+  deleteTag,
+  ensureTags,
+  findTagById,
+  insertTag,
+  listTags,
+  listTagsForRecordings,
+  listTagsForSeries,
+  renameTag,
+  replaceRecordingTags,
+  replaceSeriesTags,
+  type TagCountRow,
+  type TagRow,
+} from './tags';
+export {
   findResumeProgress,
   findVisibleRecording,
   findVisibleSeries,

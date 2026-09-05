@@ -97,6 +97,10 @@ It is built as a Progressive Web App on a single codebase, reachable from any br
 - 📝 **3.3.8** The series view surfaces the videos derived from that series' recordings alongside the recordings themselves (3.11.5.2).
 - ✅ **3.3.9** A recording can exist without a series and still appear in date-ordered browsing. Most do, which is why belonging to no series is an ordinary state rather than an exception.
 - ✅ **3.3.10** A recording that belongs to a series carries the series name wherever it is listed, and its page offers a route back to the series it came from. The date-ordered library is not regrouped by series — 3.3.1 stands, and the series name is a label on the row rather than a second ordering.
+- ✅ **3.3.11** Admins tag recordings and series by hand from a single shared taxonomy (4.7). A tag is typed straight onto the recording's or the series' row in the console: a word that is not yet a tag becomes one in the same step, and a word that is offers the existing tag as it is typed. A series' tags are its own — they are not derived from, and are not inherited by, the recordings in it. Tagging writes nothing on the recording or series itself, so tagging a live teaching leaves it live and tagging a draft does not publish it.
+- ✅ **3.3.12** Tags are managed from a dedicated console panel (3.19.15) listing every tag with how many recordings and how many series carry it. A tag can be created there ahead of use, renamed — which renames it on everything it is applied to at once — or deleted, which removes it from every recording and series it was on and changes nothing else about them. Deleting takes a confirming press that states those counts.
+- ✅ **3.3.13** Members see a recording's or a series' tags as labels on its page, beneath the title. They are labels only in this iteration — not links and not filters; narrowing by tag arrives with search (3.10.8). A tag is visible to a member exactly when the thing it is on is (3.2.2): a tag applied only to unpublished teachings appears nowhere on the member surface.
+- ✅ **3.3.14** A tag name is stored lowercase with whitespace trimmed and collapsed, and that spelling is its identity: `Grace`, `grace` and `GRACE ` are one tag, and creating or renaming onto a name that already exists is refused rather than merged. A name is at most 40 characters.
 
 ### 📝 3.4 Audio processing & quality
 
@@ -127,7 +131,7 @@ It is built as a Progressive Web App on a single codebase, reachable from any br
 - ✅ **3.5.3** Members can read the transcript on the recording page, and the transcript view follows along with playback, highlighting the currently spoken segment. The view scrolls itself to keep the highlight in sight, and stops following the moment a member scrolls it themselves — offering a control to jump back to the current line rather than fighting them for the scroll position.
 - ✅ **3.5.4** Selecting any point in the transcript seeks the audio to that position. Seeking from the transcript does not start playback: a member reading a paused teaching has not asked for sound.
 - 🔨 **3.5.5** Admins and Contributors can correct transcript text, which is necessary for names, scripture citations and terminology specific to the ministry. A correction restates what the line says and where it starts and ends; the speaker index (3.5.9) is not something a correction can change. Every correction records who made it and when.
-- 🔨 **3.5.6** Correcting a transcript offers to regenerate the artefacts derived from it — summary (3.6), mind map (3.8.1), scripture references (3.7.1), tags (4.17.1), chapters (3.22.1) and cross-references (3.9.1). The regeneration is offered and never performed unasked: declining it leaves the recording exactly as it was, and the offer covers only those artefacts that exist at the time.
+- 🔨 **3.5.6** Correcting a transcript offers to regenerate the artefacts derived from it — summary (3.6), mind map (3.8.1), scripture references (3.7.1), chapters (3.22.1) and cross-references (3.9.1). The regeneration is offered and never performed unasked: declining it leaves the recording exactly as it was, and the offer covers only those artefacts that exist at the time.
 - ✅ **3.5.7** The transcript records the language it was transcribed in. That language is currently pinned to English rather than detected, because the monolingual model is the more accurate one for a library that is entirely English. Detection returns as a requirement when non-English teachings do, and the field is already there to hold the answer.
 - ✅ **3.5.8** If transcription fails, the recording is flagged for admin attention (3.19.4) rather than proceeding to downstream generation on bad input. If it succeeds but comes back below the accepted confidence threshold, the transcript is still written and still readable — so an admin can judge it and correct it (3.5.5) — but the pipeline halts there and is flagged, and nothing downstream is generated until an admin re-runs the step on words a human has accepted.
 - ✅ **3.5.9** Each segment carries the transcription provider's anonymous speaker index where one was returned. It is an index and never a name: nothing in the product resolves it to a person, and the same voice is not the same index across two recordings. It is not editable, and a segment the provider attributes to nobody carries none.
@@ -160,7 +164,7 @@ It is built as a Progressive Web App on a single codebase, reachable from any br
 
 **Functional requirements**
 
-- 🔨 **3.7.1** Scripture references are automatically suggested from the transcript (3.5) and the recording's topics, produced as suggestions rather than published facts.
+- 🔨 **3.7.1** Scripture references are automatically suggested from the transcript (3.5), produced as suggestions rather than published facts.
 - ✅ **3.7.2** An admin reviews suggested references and can accept, edit, remove or manually add references before the recording publishes (4.17.2).
 - ✅ **3.7.3** References are stored as structured citations — book, chapter, and verse or verse range — not as free text, so they can be compared across teachings.
 - ✅ **3.7.4** Each reference displays the full verse text, readable without leaving the recording page.
@@ -204,7 +208,7 @@ It is built as a Progressive Web App on a single codebase, reachable from any br
 
 - 📝 **3.9.1** The system automatically detects thematically similar segments across every teaching in the library, comparing at segment level rather than whole-recording level.
 - 📝 **3.9.2** Related segments from other teachings are surfaced to the member while they listen, anchored to the part of the current teaching that triggered them.
-- 📝 **3.9.3** Cross-references are drawn from transcripts (3.5), topics and tags (4.7), scripture references (3.7) and detected themes.
+- 📝 **3.9.3** Cross-references are drawn from transcripts (3.5), tags (4.7), scripture references (3.7) and detected themes.
 - 📝 **3.9.4** A scripture passage cited in one teaching surfaces every other teaching citing the same passage (3.7.6).
 - 📝 **3.9.5** Selecting a related segment opens that recording at the relevant timestamp.
 - 📝 **3.9.6** Cross-references are recomputed when a new recording joins the library, so new teachings link into existing ones and existing ones gain links to the new arrival.
@@ -220,11 +224,11 @@ It is built as a Progressive Web App on a single codebase, reachable from any br
 - 📝 **3.10.1** A single search entry point queries the entire library from anywhere in the app.
 - 📝 **3.10.2** Search matches on meaning, not only literal keywords: a member searching for a concept finds teachings that discuss it without using their exact words.
 - 📝 **3.10.3** Results return specific segments with timestamps, not only whole recordings, so a member lands on the moment rather than the hour.
-- 📝 **3.10.4** Search covers recording titles and descriptions, transcripts (3.5), published summaries (3.6.7), topics and tags (4.7), scripture references (3.7), chapter titles and summaries (3.22) and series (3.3).
+- 📝 **3.10.4** Search covers recording titles and descriptions, transcripts (3.5), published summaries (3.6.7), tags (4.7), scripture references (3.7), chapter titles and summaries (3.22) and series (3.3).
 - 📝 **3.10.5** Members can search by scripture citation and find every teaching covering that passage.
 - 📝 **3.10.6** Each result shows the matching passage in context, with its source recording, series and timestamp.
 - 📝 **3.10.7** Selecting a result opens the recording at the matched timestamp. A result that matched a chapter's title or summary opens that chapter's page instead (3.22.13).
-- 📝 **3.10.8** Results can be filtered by series, date range, topic and scripture book.
+- 📝 **3.10.8** Results can be filtered by series, date range, tag and scripture book.
 - 📝 **3.10.9** Search respects visibility: a member's results include all published content plus their own private notes (3.12.3) and personal mind maps (3.8.5), and never include another member's private content or any unpublished draft.
 - 📝 **3.10.10** Members can restrict a search to their own notes and mind maps, to find something they know they wrote.
 - 📝 **3.10.11** Search returns a clear empty state that distinguishes "nothing in the library matches" from "search is unavailable".
@@ -271,7 +275,7 @@ It is built as a Progressive Web App on a single codebase, reachable from any br
 - 📝 **3.11.5.1** All published videos are stored permanently as a growing catalogue.
 - 📝 **3.11.5.2** Each video is classified under the series of its parent recording (3.3.8).
 - 📝 **3.11.5.3** A separate view collects videos intended for external distribution.
-- 📝 **3.11.5.4** Videos inherit topics and tags from their parent recording by default, and an admin can override them (4.8).
+- 📝 **3.11.5.4** Videos inherit tags from their parent recording by default, and an admin can override them (4.8).
 - 📝 **3.11.5.5** An admin can unpublish or delete a video from the catalogue.
 
 ### 🔨 3.12 Timestamp notes
@@ -331,12 +335,12 @@ It is built as a Progressive Web App on a single codebase, reachable from any br
 - 📝 **3.14.3** The system assembles questions covering each teaching topic from the most recent teaching back to the selected starting point.
 - 📝 **3.14.4** Questions are drawn from teaching content and from admin-curated question banks.
 - 📝 **3.14.5** Questions are presented in reverse chronological order — from the latest teaching back to the point of divergence.
-- 📝 **3.14.6** Where a response indicates a gap in understanding, the system surfaces the teachings and topics that address it, using the cross-referencing layer (3.9.8).
+- 📝 **3.14.6** Where a response indicates a gap in understanding, the system surfaces the teachings that address it, using the cross-referencing layer (3.9.8).
 - 📝 **3.14.7** Each recommendation links directly to the relevant recording and to the timestamp where that topic is covered.
 - 📝 **3.14.8** Flow Tracker responses are strictly private to the member. No result is visible to admins or to other members.
 - 📝 **3.14.9** There is no score, grade or pass mark. The output is a reading list, not a result.
 - 📝 **3.14.10** A member can run the Flow Tracker as often as they like, and can leave a session and resume it.
-- 📝 **3.14.11** Admins curate the question banks that feed 3.14.4, per teaching or per topic, from the admin dashboard (3.19.7).
+- 📝 **3.14.11** Admins curate the question banks that feed 3.14.4, per teaching or per tag, from the admin dashboard (3.19.7).
 
 ### 📝 3.15 Highlights playlist
 
@@ -345,7 +349,7 @@ It is built as a Progressive Web App on a single codebase, reachable from any br
 **Functional requirements**
 
 - 📝 **3.15.1** Any member can pin a full recording to their Highlights.
-- 📝 **3.15.2** Any member can pin a specific topic or segment of a recording, capturing the moment rather than the whole teaching.
+- 📝 **3.15.2** Any member can pin a specific segment of a recording, capturing the moment rather than the whole teaching.
 - 📝 **3.15.3** Members can pin timestamp notes they have written (3.12.17).
 - 📝 **3.15.4** Pinning is available from the recording page, the series view, and while listening.
 - 📝 **3.15.5** Highlights are accessible as a dedicated section from the member's profile.
@@ -464,6 +468,7 @@ It is built as a Progressive Web App on a single codebase, reachable from any br
 - 📝 **3.19.12** SOS oversight: view open signals, close them, remove them (3.16.9, 3.16.11).
 - ✅ **3.19.13** Every automated step records what it cost to run — provider, model, billed quantity, spend and the provider's own request id — against the recording that caused it, so the running cost of the library is measured rather than estimated.
 - ✅ **3.19.14** Chapter editing on a recording — retitling, rewriting a summary, moving a boundary, splitting and merging (3.22.7). It is not an entry in the Pending Reviews queue, because chapters carry no gate of their own (3.22.6).
+- ✅ **3.19.15** Tag management (3.3.12): every tag with its counts, and the controls to create, rename and delete one. Applying a tag is a control on the recording's and the series' own rows (3.3.11), not on this panel.
 
 ### 📝 3.20 External distribution
 
@@ -494,7 +499,7 @@ It is built as a Progressive Web App on a single codebase, reachable from any br
 | 2    | Upload recording                                                    | Admin / Contributor | 3.2.1            |
 | 3    | Audio processing: noise reduction, voice enhancement, normalisation | Automated           | 3.4              |
 | 4    | Transcription                                                       | Automated           | 3.5              |
-| 5    | Summary, scripture references and tags drafted; chapters generated  | Automated           | 3.6, 3.7, 3.22, 4.17.1 |
+| 5    | Summary and scripture references drafted; chapters generated        | Automated           | 3.6, 3.7, 3.22, 4.17.1 |
 | 6    | Mind map generated                                                  | Automated           | 3.8.1            |
 | 7    | Cross-references computed against the existing library              | Automated           | 3.9.6            |
 | 8    | Metadata, summary and references reviewed and approved              | Admin               | 4.17.2           |
@@ -517,9 +522,9 @@ It is built as a Progressive Web App on a single codebase, reachable from any br
 #### 📝 3.21.3 Back-catalogue processing
 
 - 📝 **3.21.3.1** Historical teachings can be uploaded in bulk rather than one at a time.
-- 📝 **3.21.3.2** Bulk-uploaded recordings run through the same pipeline: processing, transcription, summary, scripture references, tags, chapters, mind map and cross-referencing.
+- 📝 **3.21.3.2** Bulk-uploaded recordings run through the same pipeline: processing, transcription, summary, scripture references, chapters, mind map and cross-referencing.
 - 📝 **3.21.3.3** Batch processing is rate-limited and runs in the background so it does not delay the current week's upload.
-- 📝 **3.21.3.4** AI populates all metadata fields in bulk, and an admin reviews them through the Pending Reviews queue (3.19.2) rather than opening each recording individually.
+- 📝 **3.21.3.4** AI populates the fields it suggests (4.17.1) in bulk, and an admin reviews them through the Pending Reviews queue (3.19.2) rather than opening each recording individually.
 - 📝 **3.21.3.5** An admin can approve a batch of reviewed recordings in one action.
 - 📝 **3.21.3.6** Back-catalogue recordings can be assigned to series in bulk.
 
@@ -582,7 +587,7 @@ It is built as a Progressive Web App on a single codebase, reachable from any br
 | :------------------- | :--------------------------- | :-------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
 | Title                | Admin-set                    | Confirmed at upload, correctable afterwards from the console row (3.2.16)                                                                                              |
 | Description          | AI-suggested, admin-editable | 1–3 sentences from the transcript                                                                                                                                    |
-| Topics / tags        | AI-suggested, admin-editable | Admin can add or remove (4.7)                                                                                                                                         |
+| Tags                 | Admin-set                    | Added by hand from the shared taxonomy (4.7); never AI-suggested                                                                                                      |
 | Scripture references | AI-suggested, admin-editable | Structured citations (3.7.3)                                                                                                                                          |
 | Date recorded        | Admin-set                    | Primary sort key (3.3.1); set at upload and correctable afterwards, which moves the recording in every list that orders by it (3.2.16)                                 |
 | Series               | Admin-set                    | Optional (3.3.9)                                                                                                                                                      |
@@ -598,6 +603,7 @@ It is built as a Progressive Web App on a single codebase, reachable from any br
 | Title                       | Admin-set       | Also the podcast feed title (3.20.10)                                                        |
 | Description                 | Admin-written   | Series themes and goals                                                                      |
 | Cover artwork               | Admin-uploaded  | Series poster and podcast artwork (3.3.3)                                                    |
+| Tags                        | Admin-set       | Added by hand from the shared taxonomy (4.7); the series' own, independent of its recordings' |
 | Date range                  | Auto-calculated | Earliest to latest recording the reader may see                                              |
 | Recording count             | Auto-calculated | Over the recordings the reader may see, so a member counts published recordings only (3.3.5) |
 | External publication status | Auto-tracked    | Per platform (3.20.7)                                                                        |
@@ -637,14 +643,16 @@ It is built as a Progressive Web App on a single codebase, reachable from any br
 
 A reference carries no status of its own. Suggested-versus-accepted is the state of the review item that holds the draft (4.17.6): a reference exists only once an admin has approved the list it belongs to, so a status field here would be a second answer to a question the review item already answers.
 
-### 4.7 Topic / tag
+### ✅ 4.7 Tag
 
-| Field      | Set by                       | Notes                                  |
-| :--------- | :--------------------------- | :------------------------------------- |
-| Name       | Admin-set                    | Admins can create new tags at any time |
-| Applied to | AI-suggested, admin-editable | Typically 3–6 per item                |
+| Field      | Set by    | Notes                                                                                                                                                                            |
+| :--------- | :-------- | :------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| Name       | Admin-set | Lowercase, whitespace trimmed and collapsed, at most 40 characters, unique across the taxonomy (3.3.14). Created ahead of use on the Tags panel (3.19.15) or by typing it onto an item. Renaming renames it everywhere it is applied |
+| Applied to | Admin-set | Recordings and series today (3.3.11), typed straight onto the item's console row or picked from the existing tags; videos (4.8) when they arrive. AI never suggests or applies a tag                                                |
 
-- Tags form a single shared taxonomy across recordings and videos: a tag used on a recording is the same tag used on a video.
+- Tags form a single shared taxonomy: a tag used on a recording is the same tag used on a series, and will be the same tag used on a video.
+- A tag has no publication state of its own. It is visible to a member exactly when the recording or series it is on is (3.3.13); a tag applied only to unpublished teachings is not visible to members anywhere.
+- Deleting a tag removes it from every recording and series it was on and changes nothing else about them (3.3.12).
 - Tags are a foundation for cross-referencing (3.9.3) and search (3.10.4).
 
 ### 4.8 Video
@@ -653,7 +661,7 @@ A reference carries no status of its own. Suggested-versus-accepted is the state
 | :----------------- | :--------------------------------------- | :------------------------------------------ |
 | Title              | Admin-set                                | Can differ from the parent recording title  |
 | Description        | Admin-written                            | Short context for the video                 |
-| Topics / tags      | Inherited from parent, admin-overridable | 3.11.5.4                                    |
+| Tags               | Inherited from parent, admin-overridable | 3.11.5.4                                    |
 | Video type         | Admin-set                                | Reel or summary video (3.11.1)              |
 | Parent recording   | Auto-set                                 | The source teaching                         |
 | Style preset       | Admin-set                                | 3.11.2                                      |
@@ -713,7 +721,7 @@ Mind maps carry no title: the source recording or video title labels them in the
 
 | Field     | Set by        | Notes                             |
 | :-------- | :------------ | :-------------------------------- |
-| Scope     | Admin-set     | Attached to a teaching or a topic |
+| Scope     | Admin-set     | Attached to a teaching or a tag   |
 | Questions | Admin-written | Feeds the Flow Tracker (3.14.11)  |
 
 ### 4.14 Highlight entry
@@ -750,12 +758,12 @@ Mind maps carry no title: the source recording or video title labels them in the
 
 ### 🔨 4.17 Metadata population workflow
 
-- 🔨 **4.17.1** On upload, AI processes the transcript and suggests description, topics and tags, and scripture references.
+- 🔨 **4.17.1** On upload, AI processes the transcript and suggests description and scripture references. Tags are not AI-suggested: an admin adds them by hand (4.7).
 - ✅ **4.17.2** The admin sees suggestions pre-filled in the review form and can accept, edit or discard each field individually.
 - ✅ **4.17.3** Nothing publishes automatically. An admin must confirm before a recording goes live (3.2.2, 3.21.2.2).
 - 📝 **4.17.4** Back-catalogue batches follow the bulk review path defined at 3.21.3.4.
 - ✅ **4.17.5** Every AI-suggested field records that it was AI-suggested and whether an admin changed it, alongside the model, model version and prompt version that produced it and any steering prompt used (3.6.14).
-- ✅ **4.17.6** Every AI artefact awaiting review is the same kind of item, distinguished by what kind of artefact it holds. Summary and description are the two kinds today; scripture references, tags, mind maps and video scripts become further kinds of the same item rather than queues of their own, which is what keeps 3.19.2 one queue and one review form however many artefacts the pipeline learns to produce.
+- ✅ **4.17.6** Every AI artefact awaiting review is the same kind of item, distinguished by what kind of artefact it holds. Summary and description are the two kinds today; scripture references, mind maps and video scripts become further kinds of the same item rather than queues of their own, which is what keeps 3.19.2 one queue and one review form however many artefacts the pipeline learns to produce.
 
 ### 4.18 Pipeline job
 
@@ -850,12 +858,12 @@ A chapter carries no publication status of its own, for the reason 3.22.6 gives:
 
 *This section exists to show the product above can be built and to sketch how. It deliberately stops short of designing it.*
 
-**How it works, in outline.** A recording enters the system through an upload from an admin or contributor and lands in durable media storage. From there an asynchronous processing chain runs: clean and normalise the audio, transcribe it into timestamped segments, then fan out to the derived artefacts — summary, scripture references, tags, mind map — each produced as a draft. Segment text is additionally turned into a semantic representation that supports both similarity matching between teachings and meaning-based search. Everything generated waits at an admin review gate; only on approval does content become member-visible. Members reach the product through a web application that also serves as an installable PWA, packaged for the two app stores from the same codebase. That application talks to a backend API which owns access control, playback progress, notes, questionnaires and every other piece of member state, and pushes events out through a notification service. Offline works because the client keeps its own copy of downloaded media and any writes made while disconnected, reconciling with the server when connectivity returns. Video generation and external publishing run as their own asynchronous jobs, triggered by an admin and reported back through the same notification path.
+**How it works, in outline.** A recording enters the system through an upload from an admin or contributor and lands in durable media storage. From there an asynchronous processing chain runs: clean and normalise the audio, transcribe it into timestamped segments, then fan out to the derived artefacts — summary, scripture references, mind map — each produced as a draft. Segment text is additionally turned into a semantic representation that supports both similarity matching between teachings and meaning-based search. Everything generated waits at an admin review gate; only on approval does content become member-visible. Members reach the product through a web application that also serves as an installable PWA, packaged for the two app stores from the same codebase. That application talks to a backend API which owns access control, playback progress, notes, questionnaires and every other piece of member state, and pushes events out through a notification service. Offline works because the client keeps its own copy of downloaded media and any writes made while disconnected, reconciling with the server when connectivity returns. Video generation and external publishing run as their own asynchronous jobs, triggered by an admin and reported back through the same notification path.
 
 ### 7.1 What makes it possible
 
 - **7.1.1** Speech-to-text with word- or segment-level timestamps — the single capability everything downstream depends on (3.5). **Deepgram**'s pre-recorded API on the English Nova-3 model is what fills it today, behind a one-file adapter, with the provider handed a short-lived signed location to fetch the audio from rather than the bytes themselves.
-- **7.1.2** A general-purpose language model for summarisation, tagging, scripture identification, mind map extraction and video script assembly (3.6, 3.7, 3.8, 3.11.3.1). **MiniMax M3**, over its Anthropic-compatible endpoint, fills it today behind the same shape of adapter; structured output is taken as a forced tool call, and a model that answers in prose instead fails the step visibly rather than writing something nobody asked for.
+- **7.1.2** A general-purpose language model for summarisation, scripture identification, mind map extraction and video script assembly (3.6, 3.7, 3.8, 3.11.3.1). **MiniMax M3**, over its Anthropic-compatible endpoint, fills it today behind the same shape of adapter; structured output is taken as a forced tool call, and a model that answers in prose instead fails the step visibly rather than writing something nobody asked for.
 - **7.1.3** Semantic similarity over text segments, which is what makes cross-referencing (3.9) and meaning-based search (3.10) the same underlying capability rather than two separate builds.
 - **7.1.4** Generative video with text-to-speech, for reels and summary videos (3.11).
 - **7.1.5** Audio processing capable of noise reduction, clarity enhancement and loudness normalisation as a repeatable profile (3.4).

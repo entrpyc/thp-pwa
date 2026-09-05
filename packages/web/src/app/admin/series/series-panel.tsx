@@ -11,15 +11,20 @@ import {
 import {
   ACCEPTED_ARTWORK_TYPES,
   SERIES_PATH,
+  TAGS_PATH,
   seriesArtworkPath,
   seriesArtworkUploadsPath,
   seriesPath,
+  seriesTagsPath,
   type SeriesListPayload,
   type SeriesView,
+  type TagListPayload,
+  type TagView,
   type UploadGrantPayload,
 } from '@thp/shared';
 import { ApiClientError, apiFetch } from '@/client/api-client';
 import { checkChosenArtwork, encodeArtwork } from '@/client/artwork/encode';
+import { TagEditor } from '../tag-editor';
 import styles from './series.module.css';
 
 /**
@@ -109,6 +114,29 @@ export function SeriesPanel() {
   useEffect(() => {
     void loadSeries();
   }, [loadSeries]);
+
+  /**
+   * Every tag, for type-to-add on each row ([4.7](docs/project/prd.md)) — fetched once for the
+   * panel and re-read whenever a row changes, for the reason the Recordings panel gives: a word
+   * typed on one row may have just become a tag the next row should offer.
+   */
+  const [tags, setTags] = useState<readonly TagView[]>([]);
+  const loadTags = useCallback(async (): Promise<void> => {
+    try {
+      const payload = await apiFetch<TagListPayload>(TAGS_PATH, { credentials: 'include' });
+      setTags(payload.tags);
+    } catch {
+      setTags([]);
+    }
+  }, []);
+
+  useEffect(() => {
+    void loadTags();
+  }, [loadTags]);
+
+  const onRowChanged = useCallback(async (): Promise<void> => {
+    await Promise.all([loadSeries(), loadTags()]);
+  }, [loadSeries, loadTags]);
 
   async function onSubmit(event: FormEvent<HTMLFormElement>): Promise<void> {
     event.preventDefault();
@@ -220,7 +248,7 @@ export function SeriesPanel() {
         ) : (
           <ul className={styles.list}>
             {series.map((entry) => (
-              <SeriesRow key={entry.id} entry={entry} onChanged={loadSeries} />
+              <SeriesRow key={entry.id} entry={entry} tags={tags} onChanged={onRowChanged} />
             ))}
           </ul>
         )}
@@ -232,9 +260,12 @@ export function SeriesPanel() {
 /** One series, its count and range, and the inline form that renames it. */
 function SeriesRow({
   entry,
+  tags,
   onChanged,
 }: {
   entry: SeriesView;
+  /** Every tag, for the type-to-add suggestions. One list for every row. */
+  tags: readonly TagView[];
   onChanged: () => Promise<void>;
 }) {
   const [editing, setEditing] = useState(false);
@@ -376,6 +407,19 @@ function SeriesRow({
           {editing ? 'Cancel edit' : 'Rename'}
         </button>
       </div>
+
+      {/*
+        **The tags on this study** ([4.7](docs/project/prd.md)) — its own, and independent of the
+        tags on the teachings in it. Always drawn, for the reason the Recordings panel gives.
+      */}
+      <TagEditor
+        tags={entry.tags}
+        suggestions={tags}
+        path={seriesTagsPath(entry.id)}
+        subject={entry.title}
+        disabled={busy}
+        onChanged={onChanged}
+      />
 
       {editing ? (
         <div className={styles.editor}>

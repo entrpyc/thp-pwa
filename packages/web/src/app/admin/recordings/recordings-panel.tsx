@@ -10,6 +10,7 @@ import {
   RECORDING_UPLOADS_PATH,
   REVIEW_RECORDING_PARAM,
   SERIES_PATH,
+  TAGS_PATH,
   checkChosenFile,
   contentTypeForExtension,
   describeBytes,
@@ -20,14 +21,18 @@ import {
   recordingSeriesPath,
   recordingSummaryPath,
   recordingSummaryUnpublishPath,
+  recordingTagsPath,
   recordingUnpublishPath,
   type AdminRecordingListPayload,
   type RecordingSummary,
   type SeriesListPayload,
   type SeriesView,
+  type TagListPayload,
+  type TagView,
   type UploadGrantPayload,
 } from '@thp/shared';
 import { ApiClientError, apiFetch } from '@/client/api-client';
+import { TagEditor } from '../tag-editor';
 import styles from './recordings.module.css';
 
 /**
@@ -132,6 +137,32 @@ export function RecordingsPanel() {
       .then((payload) => setSeries(payload.series))
       .catch(() => setSeries([]));
   }, []);
+
+  /**
+   * Every tag, for type-to-add on each row ([4.7](docs/project/prd.md)).
+   *
+   * Fetched once for the panel, as the series are, and re-read whenever a row changes: adding a
+   * word that was not yet a tag creates one, and the next row's suggestions should know it. A
+   * failure leaves the field offering nothing rather than breaking the list beside it — typing
+   * still works, because the suggestions were only ever a convenience.
+   */
+  const [tags, setTags] = useState<readonly TagView[]>([]);
+  const loadTags = useCallback(async (): Promise<void> => {
+    try {
+      const payload = await apiFetch<TagListPayload>(TAGS_PATH, { credentials: 'include' });
+      setTags(payload.tags);
+    } catch {
+      setTags([]);
+    }
+  }, []);
+
+  useEffect(() => {
+    void loadTags();
+  }, [loadTags]);
+
+  const onRowChanged = useCallback(async (): Promise<void> => {
+    await Promise.all([loadRecordings(), loadTags()]);
+  }, [loadRecordings, loadTags]);
 
   /**
    * The refusal that costs nothing. `checkChosenFile` is the shared rule — the same one the API
@@ -359,7 +390,8 @@ export function RecordingsPanel() {
                 key={entry.id}
                 entry={entry}
                 series={series}
-                onChanged={loadRecordings}
+                tags={tags}
+                onChanged={onRowChanged}
               />
             ))}
           </ul>
@@ -394,11 +426,14 @@ type RowBusy = 'publish' | 'unpublish' | 'summary' | 'summaryDown' | 'series' | 
 function RecordingRow({
   entry,
   series,
+  tags,
   onChanged,
 }: {
   entry: RecordingSummary;
   /** Every series, for the picker. The same list for every row — there is only one. */
   series: readonly SeriesView[];
+  /** Every tag, for the type-to-add suggestions. Likewise one list for every row. */
+  tags: readonly TagView[];
   onChanged: () => Promise<void>;
 }) {
   const [busy, setBusy] = useState<RowBusy>(null);
@@ -573,6 +608,22 @@ function RecordingRow({
           </>
         ) : null}
       </div>
+
+      {/*
+        **The tags on this teaching, and the field that adds one** ([4.7](docs/project/prd.md)).
+        Always drawn rather than behind a press, because what a teaching is about is something an
+        admin scanning the list wants to see, and it is added by hand here and nowhere else — no
+        draft ever proposes one (4.17.1). Offered on live and unpublished rows alike: tagging
+        writes the join table and nothing on the recording, so a live teaching stays live.
+      */}
+      <TagEditor
+        tags={entry.tags}
+        suggestions={tags}
+        path={recordingTagsPath(entry.id)}
+        subject={entry.title}
+        disabled={busy !== null}
+        onChanged={onChanged}
+      />
 
       {/*
         The two fields the upload form asked for, asked again in the same order and with the same

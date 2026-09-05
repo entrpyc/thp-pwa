@@ -21,6 +21,7 @@ import {
   DEFAULT_PLAYBACK_SPEED,
   JOB_STATUSES,
   MAX_NOTE_LENGTH,
+  MAX_TAG_LENGTH,
   NOTE_VISIBILITIES,
   PIPELINE_STEPS,
   PLAYBACK_SPEEDS,
@@ -1111,5 +1112,95 @@ export const chapter = pgTable(
     index('chapter_recording_start_idx').on(table.recordingId, table.startMs),
     /** An offset into a recording. A negative one names no moment of any teaching. */
     check('chapter_start_non_negative', sql`${table.startMs} >= 0`),
+  ],
+);
+
+/**
+ * **A tag** — one name in the shared taxonomy over recordings and series
+ * ([4.7](docs/project/prd.md)).
+ *
+ * A name and nothing beside it. **No provenance columns** — no model, no prompt version, no
+ * `edited_by_admin` — because a tag is never AI-suggested ([4.17.1](docs/project/prd.md)): every
+ * one is typed by an admin, and a column recording that would record a constant. No `status`
+ * either: a tag has no gate of its own and rides the publication of whatever it is on.
+ *
+ * **The name is the identity, and it is unique.** `Grace` and `grace` are one tag, which is made
+ * true by two rules that meet here: the shared `normaliseTagName` lowercases and collapses every
+ * name before a write, and the check below refuses any row that did not go through it — so the
+ * unique index compares normalised names and a second spelling cannot exist to be compared. The
+ * ceiling is the shared `MAX_TAG_LENGTH`, read from the same constant the API refuses on.
+ */
+export const tag = pgTable(
+  'tag',
+  {
+    id: uuid('id').primaryKey().defaultRandom(),
+    /** Lowercase, trimmed, single-spaced — the output of `normaliseTagName` and nothing else. */
+    name: text('name').notNull(),
+    createdAt: timestamp('created_at', { withTimezone: true }).notNull().defaultNow(),
+  },
+  (table) => [
+    uniqueIndex('tag_name_unique').on(table.name),
+    /** Not blank, and already in the one spelling the product uses. */
+    check(
+      'tag_name_normalised',
+      sql`${table.name} <> '' and ${table.name} = lower(btrim(${table.name}))`,
+    ),
+    check(
+      'tag_name_length',
+      sql`char_length(${table.name}) <= ${sql.raw(String(MAX_TAG_LENGTH))}`,
+    ),
+  ],
+);
+
+/**
+ * **A tag on a recording.** A join table rather than an array column, because the tag is a row
+ * with an identity: renaming it renames it everywhere ([4.7](docs/project/prd.md)) by writing one
+ * `tag` row, and deleting it takes it off every recording by cascading through this one.
+ *
+ * Both cascades are deliberate and both go one way only. A recording deleted at the database
+ * takes its applications with it and leaves the tag; a tag deleted from the console takes its
+ * applications with it and leaves every recording untouched — **nothing on `recording` is ever
+ * written by a tag operation**, which is a property of there being no column there to write.
+ *
+ * The primary key is the pair, so a tag is on a recording once or not at all. Indexed on the tag
+ * for the console's counts and for the cascade.
+ */
+export const recordingTag = pgTable(
+  'recording_tag',
+  {
+    recordingId: uuid('recording_id')
+      .notNull()
+      .references(() => recording.id, { onDelete: 'cascade' }),
+    tagId: uuid('tag_id')
+      .notNull()
+      .references(() => tag.id, { onDelete: 'cascade' }),
+    createdAt: timestamp('created_at', { withTimezone: true }).notNull().defaultNow(),
+  },
+  (table) => [
+    primaryKey({ columns: [table.recordingId, table.tagId] }),
+    index('recording_tag_tag_id_idx').on(table.tagId),
+  ],
+);
+
+/**
+ * **A tag on a series.** The same shape as {@link recordingTag} for the same reasons, and a second
+ * table rather than a polymorphic `(kind, owner_id)` pair so that both foreign keys are real ones
+ * the database enforces. A series' tags are its own: nothing here is derived from the recordings
+ * in it, and nothing in it flows down to them.
+ */
+export const seriesTag = pgTable(
+  'series_tag',
+  {
+    seriesId: uuid('series_id')
+      .notNull()
+      .references(() => series.id, { onDelete: 'cascade' }),
+    tagId: uuid('tag_id')
+      .notNull()
+      .references(() => tag.id, { onDelete: 'cascade' }),
+    createdAt: timestamp('created_at', { withTimezone: true }).notNull().defaultNow(),
+  },
+  (table) => [
+    primaryKey({ columns: [table.seriesId, table.tagId] }),
+    index('series_tag_tag_id_idx').on(table.tagId),
   ],
 );

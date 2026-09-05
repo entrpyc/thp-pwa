@@ -15,7 +15,7 @@ feed, and a worker pool — over a shared Postgres and an object store. The clie
 is also packaged, unchanged, into the two app stores; it holds its own copy of downloaded media and
 of any writes made while offline. The API owns every piece of member state and every access-control
 decision, and is the only thing that writes to the database. The workers own the entire asynchronous
-pipeline: an uploaded recording is cleaned, transcribed, fanned out into summary, tags, scripture
+pipeline: an uploaded recording is cleaned, transcribed, fanned out into summary, scripture
 references, chapters and mind map, embedded segment by segment, and cross-referenced against the
 existing library — none of it reaching a member before an admin acts: most as drafts behind the
 review gate, and chapters behind the recording's own publication (6.2).
@@ -101,8 +101,8 @@ Conceptual only — project prd 4 already defines the fields; this is how the en
 - **3.2 Derived artefacts** all hang off the recording and all carry a `status` of draft/published
   plus provenance — which model produced it and whether an admin changed it (project prd 4.17.5):
   `Summary` (one per recording), `ScriptureReference` (structured book/chapter/verse, never free
-  text — project prd 3.7.3), `Tag` applied through a shared taxonomy across recordings and videos
-  (project prd 4.7), `MindMap`, and `Video` with a parent recording.
+  text — project prd 3.7.3), `MindMap`, and `Video` with a parent recording. `Tag` is deliberately
+  **not** among them — see 3.9.
 
 - **3.3 Cross-references** are a derived edge table over segment pairs — `(segment_a, segment_b,
   score, basis)` where basis is embedding similarity, shared tag, or shared scripture citation
@@ -148,6 +148,17 @@ Conceptual only — project prd 4 already defines the fields; this is how the en
   `start_ms`. Which is what makes project prd 3.22.15 true by construction — regenerating the list
   cannot orphan a member's note, because nothing was ever attached to the thing that changed.
 
+- **3.9 Tags are hand-applied, and they are rows.** `Tag` is a name with one normalised spelling,
+  unique across the taxonomy, and `RecordingTag` and `SeriesTag` are two join tables pointing at it
+  (project prd 4.7). It is not a derived artefact: no provenance, no draft state and no review item,
+  because nothing generates one (project prd 4.17.1) — every tag was typed by an admin. A row rather
+  than an array column on the owner, so that a rename is one write and a delete cascades through
+  both join tables; two join tables rather than a polymorphic `(kind, owner_id)` pair, so that both
+  foreign keys are ones the database enforces. A tag has no gate of its own: reads attach tags to a
+  page of recordings or series with one statement over the ids the visibility read already allowed,
+  never with a join inside that read — so nothing about an unpublished teaching is ever looked up on
+  a member's behalf, and the visibility condition stays written once (project prd 3.3.13).
+
 ## 4. Key technology choices
 
 | #    | Choice | Why | Reversal cost |
@@ -161,7 +172,7 @@ Conceptual only — project prd 4 already defines the fields; this is how the en
 | 4.7 | **The job ledger *is* the queue — `SKIP LOCKED` polling, no broker** | project prd 3.21.2.4 requires re-running one step of a pipeline, and project prd 3.19.4 requires showing an admin exactly where each recording sits. Both need pipeline state to be queryable data, not queue internals — so the ledger lives in Postgres, and once it does, a separate broker is carrying almost nothing. Polling the ledger directly rather than adopting a queue library keeps one job store instead of two: `pg-boss` and its equivalents bring their own schema, which would leave the dispatcher's state and the state project prd 3.19.4 reads as different tables. At this cadence — roughly fifty jobs a month — `SELECT … FOR UPDATE SKIP LOCKED` has four orders of magnitude of headroom, and enqueue becomes transactional with the ledger write, which removes the dispatched-but-unrecorded failure class outright. Redis returns behind the same queue port when dispatch latency or fan-out concurrency actually demands it, not before. | Low |
 | 4.8 | **FFmpeg for the sound profile** (`afftdn` denoise → clarity EQ/compression → `loudnorm` two-pass to a fixed LUFS target) | project prd 3.4.5 asks for one named profile applied library-wide, and project prd 3.4.6 asks to preview it before saving. A parameterised FFmpeg filter chain stored as a versioned row gives both, and re-processing is just re-running it. Loudness normalisation to a broadcast target also satisfies project prd 3.4.10 — podcast platforms expect it. | Low |
 | 4.9 | **Managed ASR with segment timestamps, behind an adapter** | project prd 3.5.2 is the hinge of the product and project prd 7.2.7 names accuracy on ministry-specific vocabulary as a real risk. An adapter interface means the provider can be swapped, or a custom-vocabulary provider adopted, without touching anything downstream. Deepgram Nova-3 fills it today (project prd 7.3.1), handed a short-lived signed location to fetch from rather than the bytes. | Low — deliberately |
-| 4.10 | **One language model behind an adapter for all text generation** | Summary, description, tags, scripture identification, mind-map extraction, chapter segmentation and video script segmentation are one capability used seven ways (project prd 3.6, 3.7.1, 3.8.1, 3.11.3.1, 3.22.1, 4.17.1). Long context matters: a 90-minute transcript is fed whole rather than chunked, which is what keeps a summary faithful to the teaching. Structured output is taken as a forced tool call, and a model that answers in prose instead fails the step visibly rather than writing something nobody asked for. The provider is configuration, not architecture — MiniMax M3 over its Anthropic-compatible endpoint today (project prd 7.3.1), and the deferral in project prd 7.5.1 is cheap for exactly this reason. | Low |
+| 4.10 | **One language model behind an adapter for all text generation** | Summary, description, scripture identification, mind-map extraction, chapter segmentation and video script segmentation are one capability used seven ways (project prd 3.6, 3.7.1, 3.8.1, 3.11.3.1, 3.22.1, 4.17.1). Long context matters: a 90-minute transcript is fed whole rather than chunked, which is what keeps a summary faithful to the teaching. Structured output is taken as a forced tool call, and a model that answers in prose instead fails the step visibly rather than writing something nobody asked for. The provider is configuration, not architecture — MiniMax M3 over its Anthropic-compatible endpoint today (project prd 7.3.1), and the deferral in project prd 7.5.1 is cheap for exactly this reason. | Low |
 | 4.11 | **Template-based video rendering (Remotion-style) + TTS, with a generative backend behind the same interface** | project prd 3.11.2.1 describes presets as detailed descriptions of a visual treatment, and project prd 3.11.2.3 wants consistency across the catalogue — both of which argue for deterministic templates over per-generation model output. project prd 7.2.3 independently flags generative video as the least proven, most expensive capability. Making the renderer an interface means the cheap path ships and the expensive path is an upgrade, not a rewrite. This is the decision with the largest financial swing in the architecture — see 8.4 — and the template path is the default until real output is measured against it. | Low (by design) |
 | 4.12 | **Self-hosted email/password auth with server-side role checks** | No social login, no SSO, ~100–1,000 users, and two account-creation flows — invitation (project prd 3.1.3) and registration (project prd 3.1.15) — that a third-party identity provider would only complicate, since both end in a role this product assigns and enforces. Roles live in our database because every permission check also needs product context. Transactional delivery is SMTP so the provider is configuration rather than code (project prd 7.1.6). | Moderate |
 | 4.13 | **Structured citations + verse text fetched and cached from a free-use Bible text source** | project prd 3.7.3 mandates structured storage regardless. Keeping verse *text* as a cache rather than as data means the licensing answer changes one component instead of the schema — worst case, project prd 3.7.4 degrades to a link out. One free-use translation named in deployment configuration (project prd 3.7.9), which is what closed project prd 7.2.5. | Low — deliberately |

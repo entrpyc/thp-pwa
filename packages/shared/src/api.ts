@@ -97,6 +97,13 @@ export const CORRELATION_ID_HEADER = 'x-correlation-id';
  *   caller was wrong: the screen has to say "wait and try again" rather than "fix this", and a
  *   client cannot tell those apart from a status alone. The response carries `Retry-After`, so
  *   the wait is a number the screen prints rather than a guess it makes.
+ *
+ * Tags add one, on the same argument `email_taken` was made on:
+ *
+ * - `tag_exists` — a tag with that name already exists, so it cannot be created again or renamed
+ *   onto. Names are lowercase and whitespace-collapsed before they are compared, so this refuses
+ *   `Grace` when `grace` exists. Its own code rather than `invalid_input` because the name was
+ *   fine and the fix is different: pick the tag that is already there, or choose another name.
  */
 export const API_ERROR_CODES = [
   'unauthenticated',
@@ -118,6 +125,7 @@ export const API_ERROR_CODES = [
   'generation_in_flight',
   'note_removed',
   'rate_limited',
+  'tag_exists',
   'not_found',
   'internal_error',
   'service_unavailable',

@@ -207,6 +207,15 @@ export class ApiError extends Error {
     });
   }
 
+  /**
+   * A tag with that name already exists ([4.7](docs/project/prd.md)). `409` — a conflict with the
+   * state of the taxonomy, not a malformed request: the name was fine, and the thing to do is use
+   * the tag that is already there or choose another name. Raised on create and on rename alike.
+   */
+  static tagExists(message: string): ApiError {
+    return new ApiError('tag_exists', 409, message);
+  }
+
   static notFound(message = 'The requested resource does not exist.'): ApiError {
     return new ApiError('not_found', 404, message);
   }

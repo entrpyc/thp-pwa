@@ -23,6 +23,7 @@ import {
   type SeriesRecordingView,
   type SeriesView,
   type SetSeriesArtworkRequest,
+  type TagRef,
   type UpdateSeriesRequest,
   type UploadGrantPayload,
 } from '@thp/shared';
@@ -33,6 +34,7 @@ import { audit } from '@/server/observability/audit';
 import { logger } from '@/server/observability/logger';
 import { mintArtworkGrant } from '@/server/series/artwork-grant';
 import type { Surface } from '@/server/recordings/service';
+import { tagRefsForSeries } from '@/server/tags/service';
 
 /**
  * **Series — three writes and two reads** (Story 6).
@@ -87,7 +89,7 @@ function readsAsOperator(actor: Actor, surface: Surface): boolean {
  * rename reads this too, and its `artworkKey` is whatever the series already had — which is what
  * stops a rename blanking the cover in the response it answers with.
  */
-async function describeNew(row: SeriesRow): Promise<SeriesView> {
+async function describeNew(row: SeriesRow, tags: readonly TagRef[]): Promise<SeriesView> {
   return {
     id: row.id,
     title: row.title,
@@ -96,10 +98,11 @@ async function describeNew(row: SeriesRow): Promise<SeriesView> {
     recordingCount: 0,
     firstRecordedAt: null,
     lastRecordedAt: null,
+    tags,
   };
 }
 
-async function describe(row: VisibleSeriesRow): Promise<SeriesView> {
+async function describe(row: VisibleSeriesRow, tags: readonly TagRef[]): Promise<SeriesView> {
   return {
     id: row.id,
     title: row.title,
@@ -108,7 +111,16 @@ async function describe(row: VisibleSeriesRow): Promise<SeriesView> {
     recordingCount: row.recordingCount,
     firstRecordedAt: row.firstRecordedAt,
     lastRecordedAt: row.lastRecordedAt,
+    // Handed in rather than fetched here, so a list of series costs one tag query and not one per
+    // row. A series' tags are its own ([4.7](docs/project/prd.md)) — nothing here is derived from
+    // the recordings counted above.
+    tags,
   };
+}
+
+/** The tags on one series, for the writes that answer with the row they changed. */
+async function tagsOn(seriesId: string): Promise<TagRef[]> {
+  return (await tagRefsForSeries([seriesId])).get(seriesId) ?? [];
 }
 
 /**
@@ -128,7 +140,8 @@ export async function createSeries(actor: Actor, body: unknown): Promise<SeriesV
 
   logger.info('series.create', audit(actor, 'series.create', `series:${row.id}`));
 
-  return await describeNew(row);
+  // A series one request old is tagged with nothing by construction.
+  return await describeNew(row, []);
 }
 
 /**
@@ -148,7 +161,7 @@ export async function renameSeries(
 
   logger.info('series.update', audit(actor, 'series.update', `series:${id}`));
 
-  return await describeNew(row);
+  return await describeNew(row, await tagsOn(id));
 }
 
 /**
@@ -209,7 +222,9 @@ export async function listSeriesFor(
     asOperator,
   });
 
-  return Promise.all(rows.map(describe));
+  // One statement for every series on the page, over the ids the visibility read allowed.
+  const tags = await tagRefsForSeries(rows.map((row) => row.id));
+  return Promise.all(rows.map((row) => describe(row, tags.get(row.id) ?? [])));
 }
 
 /**
@@ -252,7 +267,7 @@ export async function readSeriesFor(
     positionMs: row.positionMs,
   }));
 
-  return { series: await describe(found.series), recordings };
+  return { series: await describe(found.series, await tagsOn(id)), recordings };
 }
 
 /**
@@ -355,7 +370,7 @@ export async function setArtwork(
 
   const found = await findSeriesById(seriesId);
   if (found === null) throw notFound();
-  return await describeNew(found);
+  return await describeNew(found, await tagsOn(seriesId));
 }
 
 function refuseArtwork(

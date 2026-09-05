@@ -18,6 +18,7 @@
  */
 
 import { RECORDINGS_PATH, RECORDING_SURFACE_PARAM, LIBRARY_SURFACE } from './recordings';
+import type { TagRef } from './tags';
 
 /** The series collection, relative to the `/api/v1` prefix. */
 export const SERIES_PATH = '/series';
@@ -118,6 +119,12 @@ export interface SeriesView {
   readonly firstRecordedAt: string | null;
   /** `YYYY-MM-DD` — the latest. Equal to the first for a series holding one recording. */
   readonly lastRecordedAt: string | null;
+  /**
+   * The tags an admin put on this series ([4.7](docs/project/prd.md)), alphabetically, and empty
+   * for one with none. **Its own, not its recordings'**: a series and each teaching in it are
+   * tagged by hand and independently, so nothing here is derived from the rows below it.
+   */
+  readonly tags: readonly TagRef[];
 }
 
 /**
@@ -196,4 +203,13 @@ export interface ArtworkGrantRequest {
 /** Body of `PUT /api/v1/series/{id}/artwork`. The key from the grant, now with bytes behind it. */
 export interface SetSeriesArtworkRequest {
   readonly key: string;
+}
+
+/**
+ * **Where a series' tags are set** ([4.7](docs/project/prd.md)) — a sub-resource of the series,
+ * for the reason the artwork is: what the request changes is the series. `PUT` of the whole set,
+ * by name; see `SetTagsRequest` in `tags.ts`.
+ */
+export function seriesTagsPath(seriesId: string): string {
+  return `${seriesPath(seriesId)}/tags`;
 }

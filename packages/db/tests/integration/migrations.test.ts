@@ -161,7 +161,10 @@ describe('migrations apply to an empty database by one command', () => {
       // `verse_text` (Task 3.2). The chapters scope adds `chapter`
       // ([3.22](docs/project/prd.md), [4.19](docs/project/prd.md)) — and, notably, nothing else:
       // 3.7.10's anchor is a column on a table that already existed, and chapters own no member
-      // content of their own (project tdd 3.8), so there is no join table beside this one.
+      // content of their own (project tdd 3.8), so there is no join table beside this one. The
+      // tags scope adds `tag` and the two join tables that apply it, `recording_tag` and
+      // `series_tag` ([4.7](docs/project/prd.md)) — join tables because a tag is a row with an
+      // identity that is renamed once and deleted once (project tdd 3.9).
       const tables = await sql<{ tablename: string }[]>`
         select tablename from pg_tables where schemaname = 'public' order by tablename
       `;
@@ -175,14 +178,18 @@ describe('migrations apply to an empty database by one command', () => {
         'password_reset',
         'playback_progress',
         'recording',
+        'recording_tag',
         'review_item',
         'scripture_reference',
         'segment',
         'series',
+        'series_tag',
         'session',
         'summary',
+        'tag',
         'transcript',
         'user',
+        'user_onboarding',
         'verse_text',
       ]);
     } finally {

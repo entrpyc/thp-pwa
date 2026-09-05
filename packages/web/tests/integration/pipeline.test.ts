@@ -329,6 +329,8 @@ describe('what the read answers with', () => {
       // nothing else.
       'series',
       'summary',
+      // Tags ([4.7](docs/project/prd.md)), and still not a speaker: hand-applied labels.
+      'tags',
       'title',
     ]);
 

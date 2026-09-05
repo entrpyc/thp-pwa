@@ -1,0 +1,84 @@
+/*
+ * The tag editor on a console row — shared by the Recordings and Series panels, so it lives beside
+ * `admin.module.css` rather than in either panel's stylesheet and `composes` from it like the
+ * panels do. It invents two things and takes everything else from the guide:
+ *
+ * 1. `.chip` is the console's existing pill with a remove control inside it, so the right-hand
+ *    padding steps down to leave the control room without the pill growing.
+ * 2. `.remove` is that control: no border and no fill, because a bordered button inside a bordered
+ *    pill is two outlines around one glyph.
+ */
+
+/* Full width under the row's controls — the same break-out the details and summary editors take. */
+.editor {
+  flex: 1 1 100%;
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: var(--space-2);
+  min-width: 0;
+}
+
+/* Metadata, so it reads at `--fs-meta` on `--color-text-dim` like every other label in a row. */
+.label {
+  font-size: var(--fs-meta);
+  color: var(--color-text-dim);
+}
+
+.chips {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--space-2);
+  margin: 0;
+  padding: 0;
+  list-style: none;
+  min-width: 0;
+}
+
+.chip {
+  composes: chip from './admin.module.css';
+  padding-right: var(--space-1);
+  color: var(--color-text);
+}
+
+.remove {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  min-width: var(--space-5);
+  min-height: var(--space-5);
+  margin: 0;
+  padding: 0;
+  background: transparent;
+  border: 0;
+  border-radius: var(--radius-pill);
+  color: var(--color-text-muted);
+  font: inherit;
+  line-height: 1;
+  cursor: pointer;
+}
+
+.remove:hover:not(:disabled) {
+  color: var(--color-text);
+  background: var(--color-surface-raised);
+}
+
+.remove:disabled {
+  cursor: progress;
+  color: var(--color-text-dim);
+}
+
+/* The field recipe, sized for a word rather than a sentence. */
+.input {
+  composes: input from './admin.module.css';
+  flex: 1 1 10rem;
+  max-width: 18rem;
+}
+
+.add {
+  composes: action from './admin.module.css';
+}
+
+.refusal {
+  composes: rowRefusal from './admin.module.css';
+}

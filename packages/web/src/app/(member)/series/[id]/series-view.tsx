@@ -12,6 +12,7 @@ import {
 import { ApiClientError, apiFetch } from '@/client/api-client';
 import { useBreadcrumbTrail } from '../../player-context';
 import { seriesMeta } from '../series-listing';
+import { TagLabels } from '../../tag-labels';
 import styles from '../../screens.module.css';
 
 /**
@@ -143,6 +144,8 @@ export function SeriesScreen({ seriesId }: { seriesId: string }) {
               <p className={styles.seriesDescription}>{payload.series.description}</p>
             )}
             <p className={styles.detailMeta}>{seriesMeta(payload.series)}</p>
+            {/* The study's own tags, as labels ([4.7](docs/project/prd.md)); nothing when it has none. */}
+            <TagLabels tags={payload.series.tags} />
           </header>
 
           <ul className={styles.rows} aria-label="Recordings">

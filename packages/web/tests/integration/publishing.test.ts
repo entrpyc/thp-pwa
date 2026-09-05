@@ -292,6 +292,9 @@ describe('what a member is answered', () => {
       // and the recording page's breadcrumb parent — so it crosses on both surfaces.
       'series',
       'summary',
+      // Tags ([4.7](docs/project/prd.md)). Hand-applied labels a member reads under the title, so
+      // they cross on both surfaces; an empty list for the many teachings with none.
+      'tags',
       'title',
     ]);
   });
@@ -313,6 +316,9 @@ describe('what a member is answered', () => {
       'recordedAt',
       'series',
       'summary',
+      // Tags ([4.7](docs/project/prd.md)). Hand-applied labels a member reads under the title, so
+      // they cross on both surfaces; an empty list for the many teachings with none.
+      'tags',
       'title',
     ]);
   });

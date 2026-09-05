@@ -220,6 +220,25 @@ export const POLICY_ACTIONS = [
    * which is exactly what 3.22.6 refuses.
    */
   'chapter.edit',
+  /**
+   * **The five tag actions** ([4.7](docs/project/prd.md)), split the way every group above is:
+   * seeing the taxonomy, adding a name to it, changing a name everywhere, removing one everywhere,
+   * and deciding which tags a teaching or a study carries are the same question only while there
+   * are two roles. The day a Contributor may tag the teaching they uploaded without being able to
+   * delete a tag from the whole library is the day the split stops being decoration.
+   *
+   * There is deliberately **no `tag.read`**. A tag rides the thing it is on: a member reads a
+   * recording's tags because `recording.browse` admitted them to the recording, and a series' tags
+   * through `series.browse`. A second gate would be a second answer to "may this person see this
+   * teaching", which is the question the visibility module already owns. `tag.list` is the
+   * console's reading of the taxonomy itself — every tag with its counts — and is the
+   * `recording.list` / `series.list` shape again.
+   */
+  'tag.list',
+  'tag.create',
+  'tag.rename',
+  'tag.delete',
+  'tag.assign',
 ] as const;
 
 export type PolicyAction = (typeof POLICY_ACTIONS)[number];
@@ -373,6 +392,14 @@ const RULES: PolicyRules = {
   // Contributor as well, and that role does not exist in the enum yet — so this is the only
   // reachable answer, and widening it is one word the day it does.
   'chapter.edit': { roles: { admin: true, member: false } },
+  // The taxonomy is operator work whole ([4.7](docs/project/prd.md)): a member reads tags on the
+  // teachings and studies they may read, and writes none. Widening any of the five to Contributor
+  // is one line here and nothing else anywhere.
+  'tag.list': { roles: { admin: true, member: false } },
+  'tag.create': { roles: { admin: true, member: false } },
+  'tag.rename': { roles: { admin: true, member: false } },
+  'tag.delete': { roles: { admin: true, member: false } },
+  'tag.assign': { roles: { admin: true, member: false } },
 };
 
 export function isPolicyAction(value: string): value is PolicyAction {

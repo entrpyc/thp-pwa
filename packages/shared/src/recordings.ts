@@ -1,3 +1,5 @@
+import type { TagRef } from './tags';
+
 /**
  * The recording wire contract, and the two rules an upload has to satisfy.
  *
@@ -356,6 +358,16 @@ export interface RecordingView {
    * references it promises.
    */
   readonly hasScripture: boolean;
+  /**
+   * The tags an admin put on this teaching ([4.7](docs/project/prd.md)), alphabetically, and
+   * empty for the many with none.
+   *
+   * On both surfaces: a member reads them as labels under the title, and the console's row draws
+   * its chips from them. Refs rather than names alone, so a row can take one off without a second
+   * lookup. Never AI-suggested and never gated separately — they ride the recording's own
+   * publication state, exactly as the description does.
+   */
+  readonly tags: readonly TagRef[];
 }
 
 /**
@@ -414,6 +426,15 @@ export function recordingSummaryPath(recordingId: string): string {
 /** Where a published summary is returned to draft ([3.6.12](docs/project/prd.md)). */
 export function recordingSummaryUnpublishPath(recordingId: string): string {
   return `${RECORDINGS_PATH}/${recordingId}/summary/unpublish`;
+}
+
+/**
+ * **Where a recording's tags are set** ([4.7](docs/project/prd.md)) — a sub-resource of the
+ * recording, because what the request changes is which tags are on this recording and nothing
+ * about any tag. `PUT` of the whole set, by name; see `SetTagsRequest` in `tags.ts`.
+ */
+export function recordingTagsPath(recordingId: string): string {
+  return `${RECORDINGS_PATH}/${recordingId}/tags`;
 }
 
 /** Body of `PUT /api/v1/recordings/{id}/summary`. Plain text with line breaks. */

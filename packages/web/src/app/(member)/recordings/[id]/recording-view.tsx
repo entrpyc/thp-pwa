@@ -19,6 +19,7 @@ import { NotesPanel } from './notes-panel';
 import { RecordingContentProvider, toLoaded, useRecordingContentFor } from './recording-content';
 import { ScripturePanel } from './scripture-panel';
 import { TranscriptPanel } from './transcript-panel';
+import { TagLabels } from '../../tag-labels';
 import styles from '../../screens.module.css';
 
 /** The strip is single-select: opening one tab closes the others, and `null` is all closed. */
@@ -318,6 +319,12 @@ export function RecordingScreen({
             <div className={styles.detailText}>
               <h1 className={styles.detailTitle}>{recording.title}</h1>
               <p className={styles.detailMeta}>Recorded {formatDay(recording.recordedAt)}</p>
+              {/*
+                The teaching's tags, as labels under the date ([4.7](docs/project/prd.md)) — read
+                off the payload, so a teaching opened from a link shows the same labels as one
+                walked to. Nothing at all for a teaching with none, which is most of them.
+              */}
+              <TagLabels tags={recording.tags} />
             </div>
           </header>
 

@@ -1,0 +1,132 @@
+/*
+ * The tags panel.
+ *
+ * There is no `pages/admin.png`; this panel takes the same carve-out every other admin screen has,
+ * so it is composed from docs/design-references/style-guide.md and the token layer. It **invents
+ * nothing at all**: every class below `composes` from `admin.module.css`, so the extrapolations
+ * documented there are stated once and the six panels cannot drift. The two layout rules that are
+ * not a `composes` — `.form` and `.editor` — are the recordings panel's row-of-fields shape, taken
+ * because a tag is one short field and a press, and they read the same way there.
+ */
+
+.panel {
+  composes: panel from '../admin.module.css';
+}
+
+.section {
+  composes: section from '../admin.module.css';
+}
+
+.sectionTitle {
+  composes: sectionTitle from '../admin.module.css';
+}
+
+.sectionNote {
+  composes: sectionNote from '../admin.module.css';
+}
+
+.empty {
+  composes: empty from '../admin.module.css';
+}
+
+.failure {
+  composes: failure from '../admin.module.css';
+}
+
+.done {
+  composes: done from '../admin.module.css';
+}
+
+.field {
+  composes: field from '../admin.module.css';
+  /* A tag is a word; the field should not stretch to a sentence. */
+  flex: 1 1 12rem;
+  max-width: 24rem;
+}
+
+.label {
+  composes: label from '../admin.module.css';
+}
+
+.input {
+  composes: input from '../admin.module.css';
+}
+
+.submit {
+  composes: submit from '../admin.module.css';
+}
+
+.list {
+  composes: list from '../admin.module.css';
+}
+
+.listRow {
+  composes: row from '../admin.module.css';
+}
+
+.rowIdentity {
+  composes: rowIdentity from '../admin.module.css';
+}
+
+.rowName {
+  composes: rowName from '../admin.module.css';
+}
+
+.rowMeta {
+  composes: rowMeta from '../admin.module.css';
+}
+
+.rowControls {
+  composes: rowControls from '../admin.module.css';
+}
+
+.action {
+  composes: action from '../admin.module.css';
+}
+
+.actionStrong {
+  composes: actionStrong from '../admin.module.css';
+}
+
+.confirm {
+  composes: confirm from '../admin.module.css';
+}
+
+.confirmText {
+  composes: confirmText from '../admin.module.css';
+}
+
+.confirmActions {
+  composes: confirmActions from '../admin.module.css';
+}
+
+.rowRefusal {
+  composes: rowRefusal from '../admin.module.css';
+}
+
+/*
+ * A row rather than a column: one field and a press read as one line, and `align-items: flex-end`
+ * keeps the button's baseline on the input's rather than on its label's. The messages beneath take
+ * the whole width so they never sit beside the field they are about.
+ */
+.form {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: flex-end;
+  gap: var(--space-3);
+}
+
+.form .failure,
+.form .done {
+  flex: 1 1 100%;
+}
+
+/* The rename field on a row — the same full-width break-out every row editor in the console takes. */
+.editor {
+  flex: 1 1 100%;
+  display: flex;
+  flex-wrap: wrap;
+  align-items: flex-end;
+  gap: var(--space-3);
+  min-width: 0;
+}

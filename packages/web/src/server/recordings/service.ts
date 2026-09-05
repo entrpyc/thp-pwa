@@ -23,6 +23,7 @@ import {
   type CreateRecordingRequest,
   type RecordingSummary,
   type RecordingView,
+  type TagRef,
   type UpdateRecordingRequest,
   type UploadGrantPayload,
   type UploadGrantRequest,
@@ -31,6 +32,7 @@ import { ApiError } from '@/server/api/errors';
 import { can, type Actor } from '@/server/auth/policy';
 import { audit } from '@/server/observability/audit';
 import { mintArtworkGrant } from '@/server/series/artwork-grant';
+import { tagRefsForRecordings } from '@/server/tags/service';
 import { queue } from '@/server/jobs/queue';
 import { UPLOAD_GRANT_SECONDS, mediaStore, mintOriginalKey } from '@thp/media';
 import { logger } from '@/server/observability/logger';
@@ -81,6 +83,9 @@ export function describeRecording(row: RecordingRow): RecordingSummary {
     // And it cites nothing: the draft that will propose references has not been written yet, let
     // alone approved.
     hasScripture: false,
+    // And it is tagged with nothing: tags are put on by hand from the row this creation adds to
+    // the list, never by the upload ([4.17.1](docs/project/prd.md)).
+    tags: [],
     createdAt: row.createdAt.toISOString(),
   };
 }
@@ -265,7 +270,8 @@ export async function editRecording(
   const saved = await findVisibleRecording(id, { includeUnpublished: true });
   if (saved === null) throw notFound();
 
-  return await describeForOperator(saved);
+  const tags = await tagRefsForRecordings([id]);
+  return await describeForOperator(saved, tags.get(id) ?? []);
 }
 
 function notFound(): ApiError {
@@ -328,10 +334,18 @@ export async function listRecordingsFor(
     asOperator,
   });
 
+  // The tags for the whole page in one statement, keyed by recording, rather than one query per
+  // row — and fetched *after* the visibility read, over the ids it allowed, so nothing about an
+  // unpublished teaching is ever looked up on a member's behalf ([4.7](docs/project/prd.md)).
+  const tags = await tagRefsForRecordings(rows.map((row) => row.id));
+
   // One signature per row, and never a call to the store — presigning is a local HMAC, so a page
   // of teachings costs no round trips (scope tdd 1.4).
   return await Promise.all(
-    rows.map((row) => (asOperator ? describeForOperator(row) : describeForMember(row))),
+    rows.map((row) => {
+      const own = tags.get(row.id) ?? [];
+      return asOperator ? describeForOperator(row, own) : describeForMember(row, own);
+    }),
   );
 }
 
@@ -372,7 +386,8 @@ export async function readRecordingFor(
     asOperator,
   });
 
-  return asOperator ? await describeForOperator(row) : await describeForMember(row);
+  const own = (await tagRefsForRecordings([row.id])).get(row.id) ?? [];
+  return asOperator ? await describeForOperator(row, own) : await describeForMember(row, own);
 }
 
 /**
@@ -382,7 +397,10 @@ export async function readRecordingFor(
  * ref carries a signed URL rather than a key, and signing is the store's answer rather than this
  * function's (scope tdd 1.4).
  */
-async function describeForMember(row: VisibleRecordingRow): Promise<RecordingView> {
+async function describeForMember(
+  row: VisibleRecordingRow,
+  tags: readonly TagRef[],
+): Promise<RecordingView> {
   return {
     id: row.id,
     title: row.title,
@@ -406,13 +424,19 @@ async function describeForMember(row: VisibleRecordingRow): Promise<RecordingVie
     // rather than fetched here: the page needs to know before it asks for a passage, and asking for
     // the passages to find out is the download the closed tab exists to avoid.
     hasScripture: row.hasScripture,
+    // Handed in rather than fetched here, so a list of teachings costs one tag query and not one
+    // per row. Both surfaces get them: a member reads labels, the console draws chips.
+    tags,
   };
 }
 
 /** The same, plus the two fields the console needs and a member never receives. */
-async function describeForOperator(row: VisibleRecordingRow): Promise<RecordingSummary> {
+async function describeForOperator(
+  row: VisibleRecordingRow,
+  tags: readonly TagRef[],
+): Promise<RecordingSummary> {
   return {
-    ...(await describeForMember(row)),
+    ...(await describeForMember(row, tags)),
     originalMediaKey: row.originalMediaKey,
     createdAt: row.createdAt.toISOString(),
   };

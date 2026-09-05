@@ -14,8 +14,9 @@ import type { PolicyRules } from '@/server/auth/policy';
  * member may take over somebody else's content. Story 5 adds two — correcting a transcript, and
  * asking for a summary built on the correction. The notes scope adds two more — reading a
  * teaching's notes and writing one. The artwork scope adds `series.artwork` — setting a cover, split
- * from `series.update` for the reason every pair here is split. The same edit was required every
- * time.
+ * from `series.update` for the reason every pair here is split. The tags scope adds five — the
+ * taxonomy's list, create, rename and delete, and applying tags to a recording or a series. The same
+ * edit was required every time.
  */
 export const rules: PolicyRules = {
   'session.read': { roles: { admin: true, member: true } },
@@ -60,4 +61,9 @@ export const rules: PolicyRules = {
   'note.pin': { roles: { admin: true, member: false } },
   'note.unpin': { roles: { admin: true, member: false } },
   'chapter.edit': { roles: { admin: true, member: false } },
+  'tag.list': { roles: { admin: true, member: false } },
+  'tag.create': { roles: { admin: true, member: false } },
+  'tag.rename': { roles: { admin: true, member: false } },
+  'tag.delete': { roles: { admin: true, member: false } },
+  'tag.assign': { roles: { admin: true, member: false } },
 };
