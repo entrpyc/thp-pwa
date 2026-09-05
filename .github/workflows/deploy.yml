@@ -186,6 +186,12 @@ jobs:
         run: |
           mkdir -p ~/.ssh && chmod 700 ~/.ssh
           printf '%s\n' "$DEPLOY_SSH_KEY" > ~/.ssh/deploy_key && chmod 600 ~/.ssh/deploy_key
+          # A key that was pasted with its lines joined, wrapped or cut fails inside ssh as "error in
+          # libcrypto", which names nothing. Prove it parses first, and say what a good one looks like.
+          if ! ssh-keygen -y -f ~/.ssh/deploy_key > /dev/null 2>&1; then
+            echo "::error::DEPLOY_SSH_KEY is not a valid private key. It must be the whole file, every line intact: '-----BEGIN OPENSSH PRIVATE KEY-----', the base64 lines, '-----END OPENSSH PRIVATE KEY-----'. Lines seen: $(wc -l < ~/.ssh/deploy_key)."
+            exit 1
+          fi
           # Pinned, so the runner refuses a host that is not the box rather than trusting whatever answers.
           printf '%s\n' "$DEPLOY_KNOWN_HOSTS" > ~/.ssh/known_hosts && chmod 644 ~/.ssh/known_hosts
 
