@@ -5,6 +5,7 @@ import {
   FEEDBACK_KINDS,
   JOB_STATUSES,
   NOTE_VISIBILITIES,
+  NOTIFICATION_KINDS,
   REACTIONS,
   PIPELINE_STEPS,
   REVIEW_KINDS,
@@ -96,6 +97,12 @@ export const DOMAIN_DECLARATIONS: readonly DomainDeclaration[] = [
     members: FEEDBACK_KINDS,
   },
   { name: 'FeedbackKind', canonicalFile: 'packages/shared/src/feedback.ts' },
+  {
+    name: 'NOTIFICATION_KINDS',
+    canonicalFile: 'packages/shared/src/notifications.ts',
+    members: NOTIFICATION_KINDS,
+  },
+  { name: 'NotificationKind', canonicalFile: 'packages/shared/src/notifications.ts' },
 ];
 
 export interface DeclarationViolation {

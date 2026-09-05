@@ -1,5 +1,6 @@
 import type { ReactNode } from 'react';
 import {
+  ADMIN_ANNOUNCEMENTS_PAGE_PATH,
   ADMIN_PAGE_PATH,
   ADMIN_PIPELINE_PAGE_PATH,
   ADMIN_RECORDINGS_PAGE_PATH,
@@ -25,7 +26,7 @@ import styles from './admin.module.css';
  * independently.
  */
 
-/** The panels, in the order they are read. The sixth is one entry — as the fifth was. */
+/** The panels, in the order they are read. The seventh is one entry — as the sixth was. */
 const PANELS = [
   { id: 'users', href: ADMIN_PAGE_PATH, label: 'User management' },
   { id: 'recordings', href: ADMIN_RECORDINGS_PAGE_PATH, label: 'Recordings' },
@@ -33,6 +34,7 @@ const PANELS = [
   { id: 'reviews', href: ADMIN_REVIEWS_PAGE_PATH, label: 'Pending Reviews' },
   { id: 'series', href: ADMIN_SERIES_PAGE_PATH, label: 'Series' },
   { id: 'tags', href: ADMIN_TAGS_PAGE_PATH, label: 'Tags' },
+  { id: 'announcements', href: ADMIN_ANNOUNCEMENTS_PAGE_PATH, label: 'Announcements' },
 ] as const;
 
 export type PanelId = (typeof PANELS)[number]['id'];

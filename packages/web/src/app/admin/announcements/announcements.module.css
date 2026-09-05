@@ -1,0 +1,143 @@
+/*
+ * The announcements panel.
+ *
+ * There is no `pages/admin.png`; this panel takes the same carve-out every other admin screen has,
+ * so it is composed from docs/design-references/style-guide.md and the token layer. It **invents
+ * almost nothing**: every class below `composes` from `admin.module.css`, and the kind picker is
+ * the role picker under another name — two mutually exclusive choices, one current, which is the
+ * guide's pill tab. What is declared here is a textarea (the console had no multi-line field
+ * before this), a hint line under a field, and a body line on a sent row.
+ */
+
+.panel {
+  composes: panel from '../admin.module.css';
+}
+
+.section {
+  composes: section from '../admin.module.css';
+}
+
+.sectionTitle {
+  composes: sectionTitle from '../admin.module.css';
+}
+
+.sectionNote {
+  composes: sectionNote from '../admin.module.css';
+}
+
+.empty {
+  composes: empty from '../admin.module.css';
+}
+
+.failure {
+  composes: failure from '../admin.module.css';
+}
+
+.done {
+  composes: done from '../admin.module.css';
+}
+
+.field {
+  composes: field from '../admin.module.css';
+  flex: 1 1 100%;
+  max-width: 40rem;
+}
+
+.fieldTight {
+  composes: fieldTight from '../admin.module.css';
+}
+
+.label {
+  composes: label from '../admin.module.css';
+}
+
+.input {
+  composes: input from '../admin.module.css';
+}
+
+/* The console's input, allowed to grow: a message is a paragraph rather than a line. */
+.textarea {
+  composes: input from '../admin.module.css';
+  min-height: calc(var(--space-8) * 3);
+  resize: vertical;
+}
+
+.submit {
+  composes: submit from '../admin.module.css';
+}
+
+.kindPicker {
+  composes: rolePicker from '../admin.module.css';
+}
+
+.kindOption {
+  composes: roleOption from '../admin.module.css';
+}
+
+.list {
+  composes: list from '../admin.module.css';
+}
+
+.listRow {
+  composes: row from '../admin.module.css';
+}
+
+.rowIdentity {
+  composes: rowIdentity from '../admin.module.css';
+}
+
+.rowName {
+  composes: rowName from '../admin.module.css';
+}
+
+.rowMeta {
+  composes: rowMeta from '../admin.module.css';
+}
+
+.chip {
+  composes: chip from '../admin.module.css';
+}
+
+.action {
+  composes: action from '../admin.module.css';
+}
+
+.actionStrong {
+  composes: actionStrong from '../admin.module.css';
+}
+
+.confirm {
+  composes: confirm from '../admin.module.css';
+}
+
+.confirmText {
+  composes: confirmText from '../admin.module.css';
+}
+
+.confirmActions {
+  composes: confirmActions from '../admin.module.css';
+}
+
+/* A column: the kind, then the two texts, then the link, then the press — read top to bottom. */
+.form {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: var(--space-4);
+}
+
+/* The sentence under a field that says what the field is for, in the guide's meta voice. */
+.hint {
+  margin: 0;
+  font-size: var(--fs-meta);
+  color: var(--color-text-dim);
+}
+
+/* The message a send carried, under its title. Wraps — this is the one place it is read whole. */
+.rowBody {
+  margin: 0 0 var(--space-1);
+  font-size: var(--fs-body);
+  color: var(--color-text-muted);
+  white-space: pre-wrap;
+  overflow-wrap: anywhere;
+}

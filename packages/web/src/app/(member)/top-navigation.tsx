@@ -9,11 +9,13 @@ import {
   MEMBER_LIBRARY_PAGE_PATH,
   MEMBER_SERIES_PAGE_PATH,
   NEW_USER_ONBOARDING_ID,
+  NOTIFICATIONS_PAGE_PATH,
   PROFILE_PAGE_PATH,
   onboardingPagePath,
 } from '@thp/shared';
 import { SignOutButton } from '../sign-out-button';
 import { InstallApp } from './install-app';
+import { useNotifications } from './notifications-context';
 import { useBreadcrumbTrailValue } from './player-context';
 import styles from './member.module.css';
 
@@ -66,6 +68,48 @@ function HomeIcon() {
         strokeLinejoin="round"
       />
     </svg>
+  );
+}
+
+function BellIcon() {
+  return (
+    <svg viewBox="0 0 24 24" width="18" height="18" aria-hidden="true" focusable="false">
+      <path
+        d="M6 16V11a6 6 0 0 1 12 0v5l1.5 2h-15zM10 20a2 2 0 0 0 4 0"
+        fill="none"
+        stroke="currentColor"
+        strokeWidth="1.6"
+        strokeLinejoin="round"
+        strokeLinecap="round"
+      />
+    </svg>
+  );
+}
+
+/**
+ * **The bell** ([3.17.2](docs/project/prd.md), [3.17.3](docs/project/prd.md)) — the way into the
+ * centre, carrying the unread count. A link rather than a button that opens a panel: the centre is
+ * a page, so it is reachable by URL, survives a reload, and reads on a phone as a screen rather
+ * than as a popover fighting the menu for the same corner.
+ *
+ * The count is capped in print at ninety-nine — the label says the real number — because a badge
+ * three digits wide stops being a badge.
+ */
+function Bell() {
+  const { unreadCount } = useNotifications();
+  const label =
+    unreadCount === 0
+      ? 'Notifications'
+      : `Notifications, ${unreadCount} unread`;
+  return (
+    <Link className={styles.bellLink} href={NOTIFICATIONS_PAGE_PATH} aria-label={label}>
+      <BellIcon />
+      {unreadCount > 0 ? (
+        <span className={styles.bellCount} aria-hidden="true">
+          {unreadCount > 99 ? '99+' : unreadCount}
+        </span>
+      ) : null}
+    </Link>
   );
 }
 
@@ -151,15 +195,18 @@ export function TopNavigation({ canSeeConsole }: { canSeeConsole: boolean }) {
           )}
         </ol>
 
-        <button
-          className={styles.menuButton}
-          type="button"
-          aria-expanded={open}
-          aria-label="Menu"
-          onClick={() => setOpen((was) => !was)}
-        >
-          <MenuIcon />
-        </button>
+        <div className={styles.navControls}>
+          <Bell />
+          <button
+            className={styles.menuButton}
+            type="button"
+            aria-expanded={open}
+            aria-label="Menu"
+            onClick={() => setOpen((was) => !was)}
+          >
+            <MenuIcon />
+          </button>
+        </div>
       </nav>
 
       {open ? (

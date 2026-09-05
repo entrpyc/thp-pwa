@@ -10,6 +10,7 @@ import type { EditSummaryRequest, PublicationPayload } from '@thp/shared';
 import { emitDomainEvent } from '@thp/shared/observability/events';
 import { ApiError } from '@/server/api/errors';
 import type { Actor } from '@/server/auth/policy';
+import { notifyRecordingPublished } from '@/server/notifications/service';
 import { audit } from '@/server/observability/audit';
 import { logger } from '@/server/observability/logger';
 
@@ -63,8 +64,12 @@ export async function publishRecording(actor: Actor, id: string): Promise<Public
     publishedAt: row.publishedAt?.toISOString() ?? null,
   });
 
-  // Nothing subscribes. §3.17's "a teaching you follow has been published" is what will.
   emitDomainEvent({ type: 'recording_published', recordingId: id });
+
+  // The first subscriber ([3.17.4](docs/project/prd.md)): every active account is told, after the
+  // publish is committed and never as a condition of it. A notice that cannot be written is a
+  // line in the log; the teaching is live either way.
+  await notifyRecordingPublished({ recordingId: id, title: existing.title });
 
   return describe(id, row.publishedAt, await findSummaryByRecording(id));
 }

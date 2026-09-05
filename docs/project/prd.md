@@ -299,11 +299,12 @@ It is built as a Progressive Web App on a single codebase, reachable from any br
 - ✅ **3.12.13** Members can react to any public note with an emoji from a constrained picker of six reactions.
 - ✅ **3.12.14** A member has one reaction per note, changeable by selecting a different one.
 - ✅ **3.12.15** Admins can pin any number of public notes on a recording. Pinned notes appear above the main note list, each with a visual indicator.
-- 📝 **3.12.16** The author of a public note is notified when someone replies to it (3.17.2).
+- ✅ **3.12.16** The author of a public note is notified when someone replies to it (3.17.2).
 - 📝 **3.12.17** Members can pin their own notes to Highlights (3.15.3).
 - ✅ **3.12.18** Deleting a note that carries replies leaves a placeholder in its position, holding the moment it was written at, its marker on the progress bar (3.12.12) and the replies underneath it. One member deleting their own note does not delete the replies other members wrote to it. A note with no replies is removed outright, and a placeholder is never pinned (3.12.15).
 - ✅ **3.12.19** A deleted note’s text is returned to nobody — its author and an admin included — and the placeholder says only that the note was removed, never who removed it. The record of who removed it is the audit log (3.12.10).
 - ✅ **3.12.20** A member can clear their reaction to a note by selecting the one they have already chosen (3.12.14).
+- ✅ **3.12.21** The author of a public note is notified when someone reacts to it (3.17.16). One member changing their reaction replaces their earlier notice rather than adding a second, and clearing a reaction sends nothing.
 
 ### 📝 3.13 Reflective questionnaires
 
@@ -385,15 +386,15 @@ It is built as a Progressive Web App on a single codebase, reachable from any br
 - 📝 **3.16.12** A member can have a limited number of open signals at once, so the channel keeps its urgency.
 - 📝 **3.16.13** Signals and their replies are visible to all members. There is no private or anonymous SOS.
 
-### 📝 3.17 Notifications
+### 🔨 3.17 Notifications
 
 *One event model, delivered through two channels. Both channels reflect the same events.*
 
 **Delivery channels**
 
 - 📝 **3.17.1** Push notifications reach the member at device level, working when the app is backgrounded or closed, on the web PWA and in the store-distributed app alike (5.2.5).
-- 📝 **3.17.2** An in-app notification centre, reachable from a bell in the main navigation, lists the same events for any signed-in member.
-- 📝 **3.17.3** The bell shows an unread count, and opening a notification takes the member to the content that triggered it.
+- ✅ **3.17.2** An in-app notification centre, reachable from a bell in the main navigation, lists the same events for any signed-in member.
+- ✅ **3.17.3** The bell shows an unread count, and opening a notification takes the member to the content that triggered it. A member can also mark one notification, or every notification, as read without opening it. An admin announcement (3.17.9) opens nothing — the notification is the message — and is marked read by pressing it.
 
 **Events**
 
@@ -408,12 +409,17 @@ It is built as a Progressive Web App on a single codebase, reachable from any br
 | 3.17.10 | Summary ready for review  | An AI summary reaches draft state (3.6.3)               | Admins                       |
 | 3.17.11 | Video generation complete | Generation finishes or fails (3.11.4.5)                 | The creator who triggered it |
 | 3.17.12 | Processing failure        | Audio processing or transcription fails (3.4.11, 3.5.8) | Admins                       |
+| 3.17.16 | Note reaction             | Another member reacts to your public note (3.12.21)     | Note author                  |
+| 3.17.17 | New feature announcement  | An admin announces a feature the product has gained (3.17.18) | All members            |
+
+Five rows reach the in-app centre today — 3.17.4, 3.17.6, 3.17.9, 3.17.16 and 3.17.17. Push (3.17.1) is unbuilt for every row. *All members* means every active account at the moment of the event: a deactivated account is not written to, and reactivating it does not back-fill what it missed.
 
 **Preferences**
 
 - 📝 **3.17.13** Members can turn push delivery on or off per event category, while the in-app centre continues to receive everything.
 - 📝 **3.17.14** Admin announcements and SOS signals can be muted by a member like any other category — the group does not override individual choice.
-- 📝 **3.17.15** Admins compose and send announcements from the admin dashboard (3.19.8).
+- ✅ **3.17.15** Admins compose and send announcements from the admin dashboard (3.19.8), choosing between the two kinds the console offers: an admin announcement (3.17.9) and a new-feature announcement (3.17.17). Both take a title and a message and go to every active account at once; a send cannot be recalled, so the console asks for a confirming press.
+- ✅ **3.17.18** A new-feature announcement is the product speaking rather than the admin: it is labelled as a new feature, not as a message from a person, and opening it takes the member into the onboarding that shows the feature (the same kind of walkthrough as the new-user tour). The admin names the onboarding by its id when sending, and the product refuses an id it does not have — so adding a feature is: add its onboarding, then announce it.
 
 ### 📝 3.18 Offline support & downloads
 
@@ -461,7 +467,7 @@ It is built as a Progressive Web App on a single codebase, reachable from any br
 - 🔨 **3.19.5** Series management (3.3.6), including artwork upload.
 - 📝 **3.19.6** Video creation entry point and generation status (3.11.4.1).
 - 📝 **3.19.7** Questionnaire authoring (3.13.2) and Flow Tracker question bank curation (3.14.11).
-- 📝 **3.19.8** Announcement composition and broadcast (3.17.15).
+- ✅ **3.19.8** Announcement composition and broadcast (3.17.15), with the list of past sends — who sent each, when, and how many accounts it reached.
 - ✅ **3.19.9** User management: invitations, role assignment, deactivation and the member list (3.1.3–3.1.7). The list is every account, however it arrived — registered (3.1.15) and invited accounts are one list with one set of controls, because an admin managing roles is not interested in which door somebody came through.
 - 📝 **3.19.10** Audio processing settings and sound profile configuration (3.4.6).
 - 📝 **3.19.11** External publishing status and queues (3.20.6).
@@ -746,15 +752,19 @@ Mind maps carry no title: the source recording or video title labels them in the
 | Status                   | Author or admin-set | Open, closed or removed (3.16.8–3.16.11) |
 | Closing note             | Author-set          | Optional (3.16.8)                         |
 
-### 4.16 Notification
+### 🔨 4.16 Notification
 
-| Field              | Set by       | Notes                                           |
-| :----------------- | :----------- | :---------------------------------------------- |
-| Event type         | Auto-set     | One of 3.17.4–3.17.12                          |
-| Recipient          | Auto-derived | From the event's audience                       |
-| Source item        | Auto-set     | What to open when selected (3.17.3)             |
-| Read state         | Auto-set     | Drives the unread count                         |
-| Delivered channels | Auto-set     | Push, in-app, or both per preferences (3.17.13) |
+| Field              | Set by       | Notes                                                                                   |
+| :----------------- | :----------- | :-------------------------------------------------------------------------------------- |
+| Event type         | Auto-set     | One of 3.17.4–3.17.12, 3.17.16–3.17.17                                                  |
+| Recipient          | Auto-derived | From the event's audience; one notification per recipient                               |
+| Title and body     | Auto-set     | The sentence the centre lists, fixed at the moment of the event — a reply's excerpt stays what was written even if the reply is later edited or removed. For an announcement, what the admin typed |
+| Source item        | Auto-set     | What to open when selected (3.17.3); nothing, for an admin announcement                 |
+| Actor              | Auto-set     | Who caused it, where somebody did — the replier, the reactor, the sending admin         |
+| Read state         | User-set     | Set once by the recipient, drives the unread count                                      |
+| Delivered channels | Auto-set     | Push, in-app, or both per preferences (3.17.13). In-app only today                      |
+
+An announcement (3.17.9, 3.17.17) is kept once as a record of the send — kind, title, message, the onboarding it opens, who sent it, when, and how many accounts it reached — with one notification per recipient hanging off it.
 
 ### 🔨 4.17 Metadata population workflow
 

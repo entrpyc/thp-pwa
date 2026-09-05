@@ -270,3 +270,62 @@
   font-size: var(--fs-meta);
   line-height: 1.5;
 }
+
+/* ------------------------------------------------------------------------------------ the bell */
+
+/*
+ * The bell sits beside the menu, at the right of the bar, in the same boxed shape — a second
+ * control in the corner rather than a second kind of control. The pair is one flex group so the
+ * crumbs' overflow is measured against both of them together.
+ */
+.navControls {
+  flex: none;
+  display: flex;
+  align-items: center;
+  gap: var(--space-2);
+}
+
+.bellLink {
+  position: relative;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  min-width: calc(var(--space-8) + var(--space-3));
+  min-height: calc(var(--space-8) + var(--space-3));
+  background: var(--color-surface-raised);
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-md);
+  color: var(--color-primary-icon);
+  text-decoration: none;
+  -webkit-user-select: none;
+  user-select: none;
+  -webkit-touch-callout: none;
+}
+
+.bellLink:hover {
+  border-color: var(--color-border-strong);
+}
+
+/*
+ * The unread count, on the bell's top-right corner. The one solid fill in the bar — principle 3
+ * allows it because it is the one thing here that is asking for a press — in the accent, with the
+ * pill radius, sized by the spacing scale so it never spells a pixel.
+ */
+.bellCount {
+  position: absolute;
+  top: calc(var(--space-1) * -1);
+  right: calc(var(--space-1) * -1);
+  min-width: var(--space-5);
+  height: var(--space-5);
+  padding: 0 var(--space-1);
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  background: var(--color-primary);
+  border-radius: var(--radius-pill);
+  color: var(--color-text);
+  font-size: var(--fs-meta);
+  font-weight: 600;
+  line-height: 1;
+  font-variant-numeric: tabular-nums;
+}

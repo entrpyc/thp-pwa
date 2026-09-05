@@ -37,6 +37,7 @@ import { ApiError } from '@/server/api/errors';
 import { authorise } from '@/server/auth/authorise';
 import { can, type Actor } from '@/server/auth/policy';
 import { requireChapterScope } from '@/server/chapters/service';
+import { notifyNoteReaction, notifyNoteReply } from '@/server/notifications/service';
 import { audit } from '@/server/observability/audit';
 import { logger } from '@/server/observability/logger';
 import { mintArtworkGrant } from '@/server/series/artwork-grant';
@@ -132,6 +133,16 @@ export async function createNote(
     target: `note:${row.id}`,
     recordingId,
     parentId: parent.id,
+  });
+
+  // The author is told ([3.12.16](docs/project/prd.md), [3.17.6](docs/project/prd.md)) — after
+  // the reply is written and never as a condition of it, and not when they answered themselves.
+  await notifyNoteReply({
+    authorId: parent.authorId,
+    recordingId,
+    noteId: parent.id,
+    replier: actor,
+    replyText: text,
   });
 
   return { note: await bare(authoredBy(row, actor), actor) };
@@ -234,6 +245,18 @@ export async function setReaction(
   }
 
   await setNoteReaction(noteId, actor.id, emoji);
+
+  // The author is told ([3.17.16](docs/project/prd.md)), once per reactor: changing the glyph
+  // replaces the earlier notice rather than stacking a second one.
+  await notifyNoteReaction({
+    authorId: existing.authorId,
+    recordingId: existing.recordingId,
+    noteId,
+    reactor: actor,
+    emoji,
+    noteText: existing.text ?? '',
+  });
+
   return { note: await describeOne(existing, actor) };
 }
 

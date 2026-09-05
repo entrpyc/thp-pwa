@@ -18,11 +18,15 @@ import {
   uuid,
 } from 'drizzle-orm/pg-core';
 import {
+  ANNOUNCEMENT_KINDS,
   DEFAULT_PLAYBACK_SPEED,
   JOB_STATUSES,
+  MAX_ANNOUNCEMENT_BODY_LENGTH,
+  MAX_ANNOUNCEMENT_TITLE_LENGTH,
   MAX_NOTE_LENGTH,
   MAX_TAG_LENGTH,
   NOTE_VISIBILITIES,
+  NOTIFICATION_KINDS,
   PIPELINE_STEPS,
   PLAYBACK_SPEEDS,
   REVIEW_KINDS,
@@ -60,6 +64,8 @@ export const reviewStatus = pgEnum('review_status', REVIEW_STATUSES);
 export const noteVisibility = pgEnum('note_visibility', NOTE_VISIBILITIES);
 
 export const scriptureOrigin = pgEnum('scripture_origin', SCRIPTURE_ORIGINS);
+
+export const notificationKind = pgEnum('notification_kind', NOTIFICATION_KINDS);
 
 /**
  * An account. Columns arrive with the steps that use them: `deactivated_at` comes with ticket 4
@@ -1202,5 +1208,113 @@ export const seriesTag = pgTable(
   (table) => [
     primaryKey({ columns: [table.seriesId, table.tagId] }),
     index('series_tag_tag_id_idx').on(table.tagId),
+  ],
+);
+
+/**
+ * **Something an admin sent to everybody** ([3.17.9](docs/project/prd.md),
+ * [3.17.17](docs/project/prd.md), [3.19.8](docs/project/prd.md)) — the message itself, kept once,
+ * with one `notification` row per recipient hanging off it.
+ *
+ * Its own table rather than the text repeated on every recipient's row, for two reasons the
+ * console needs and one the database does: the console lists *past sends* rather than past rows,
+ * and prints how many accounts each reached; and a send is one fact with one author and one
+ * moment, which a thousand copies of it are not.
+ *
+ * `kind` is the shared enum restricted to the two an admin composes — a check rather than a
+ * second enum, so the vocabulary stays declared once. `onboarding_id` is plain text, exactly as
+ * `user_onboarding.onboarding_id` is: which ids are real is a fact about the client, checked by
+ * the API before the write. `sent_by` sets null on delete, the house shape for `invited_by` and
+ * `pinned_by` — the send survives the account.
+ */
+export const announcement = pgTable(
+  'announcement',
+  {
+    id: uuid('id').primaryKey().defaultRandom(),
+    kind: notificationKind('kind').notNull(),
+    title: text('title').notNull(),
+    body: text('body').notNull(),
+    /** Where a new-feature notice lands. Present exactly on a new feature. */
+    onboardingId: text('onboarding_id'),
+    sentBy: uuid('sent_by').references(() => user.id, { onDelete: 'set null' }),
+    sentAt: timestamp('sent_at', { withTimezone: true }).notNull().defaultNow(),
+    /** Every active account at the moment of sending — what the fan-out wrote, counted once. */
+    recipientCount: integer('recipient_count').notNull().default(0),
+  },
+  (table) => [
+    /** Only the two an admin composes; the other three kinds are raised by the product. */
+    check(
+      'announcement_kind_composed',
+      sql`${table.kind} in (${sql.raw(ANNOUNCEMENT_KINDS.map((one) => `'${one}'`).join(', '))})`,
+    ),
+    /** A new feature points at an onboarding; an announcement points at nothing. */
+    check(
+      'announcement_onboarding_on_new_feature',
+      sql`(${table.kind} = 'new_feature') = (${table.onboardingId} is not null)`,
+    ),
+    check(
+      'announcement_title_length',
+      sql`char_length(${table.title}) between 1 and ${sql.raw(String(MAX_ANNOUNCEMENT_TITLE_LENGTH))}`,
+    ),
+    check(
+      'announcement_body_length',
+      sql`char_length(${table.body}) between 1 and ${sql.raw(String(MAX_ANNOUNCEMENT_BODY_LENGTH))}`,
+    ),
+  ],
+);
+
+/**
+ * **One event, for one member** ([4.16](docs/project/prd.md)) — what the bell counts and the
+ * centre lists.
+ *
+ * A row per recipient rather than a row per event with a read-set beside it, because the two
+ * questions the product asks are both per member: *how many has this person not read*, and *what
+ * does this person's list say*. Both are one indexed read here, and neither has to join through
+ * the event to find out who it was for.
+ *
+ * **The text is denormalised on purpose.** A notification says what happened *when it happened*:
+ * a reply's excerpt is the words that were written, and it stays those words if the reply is later
+ * edited or removed — the member was told a thing, and the row is the record of having been told.
+ * `href` is stored for the same reason: where a press lands was decided at the moment of writing,
+ * by the service that knew what the event was about.
+ *
+ * The three source pointers are for **hygiene, not for reading**: a teaching deleted at the
+ * database takes its notifications with it, as does a note and an announcement, so no row can
+ * outlive the thing it was about. `actor_id` — who caused it — sets null instead, and is what lets
+ * a repeated reaction by one person replace its earlier notice rather than stack a second.
+ *
+ * `read_at` is the whole of the read state. The partial index below is the unread count: one
+ * index scan over exactly the rows that are still unread, for a member with a year of history.
+ */
+export const notification = pgTable(
+  'notification',
+  {
+    id: uuid('id').primaryKey().defaultRandom(),
+    /** Cascades: a notification is for somebody, and is nothing without them. */
+    userId: uuid('user_id')
+      .notNull()
+      .references(() => user.id, { onDelete: 'cascade' }),
+    kind: notificationKind('kind').notNull(),
+    title: text('title').notNull(),
+    body: text('body').notNull(),
+    /** A path on the web origin, or null for a notice that is its own content. */
+    href: text('href'),
+    recordingId: uuid('recording_id').references(() => recording.id, { onDelete: 'cascade' }),
+    noteId: uuid('note_id').references(() => note.id, { onDelete: 'cascade' }),
+    actorId: uuid('actor_id').references(() => user.id, { onDelete: 'set null' }),
+    announcementId: uuid('announcement_id').references(() => announcement.id, {
+      onDelete: 'cascade',
+    }),
+    createdAt: timestamp('created_at', { withTimezone: true }).notNull().defaultNow(),
+    /** Null while unread. Set once, by the member it is for, and never cleared. */
+    readAt: timestamp('read_at', { withTimezone: true }),
+  },
+  (table) => [
+    /** The centre's list: this member's rows, newest first. */
+    index('notification_user_created_idx').on(table.userId, table.createdAt),
+    /** The bell's count: this member's unread rows and nothing else. */
+    index('notification_user_unread_idx')
+      .on(table.userId)
+      .where(sql`${table.readAt} is null`),
   ],
 );

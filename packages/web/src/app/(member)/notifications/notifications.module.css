@@ -1,0 +1,150 @@
+/*
+ * The notification centre.
+ *
+ * No reference image, and it invents as little as the profile screen did: the page furniture and
+ * the list panel are `screens.module.css`'s, composed rather than restated. What is declared here
+ * is the unread mark — a dot and a weight, never a hue — and the one outlined control at the top.
+ *
+ * Everything composes from tokens.css. Nothing here spells a colour, a radius or a spacing value.
+ */
+
+.pageHead {
+  composes: pageHead from '../screens.module.css';
+}
+
+.pageTitle {
+  composes: pageTitle from '../screens.module.css';
+}
+
+.pageLead {
+  composes: pageLead from '../screens.module.css';
+}
+
+.quiet {
+  composes: quiet from '../screens.module.css';
+}
+
+.failure {
+  composes: failure from '../screens.module.css';
+}
+
+.rows {
+  composes: rows from '../screens.module.css';
+}
+
+.rowGroup {
+  composes: rowGroup from '../screens.module.css';
+}
+
+.rowChevron {
+  composes: rowChevron from '../screens.module.css';
+}
+
+.toolbar {
+  display: flex;
+  justify-content: flex-end;
+}
+
+/* The guide's outlined button — the shape the console's `.action` and sign-out both take. */
+.readAll {
+  min-height: calc(var(--space-8) + var(--space-3));
+  background: transparent;
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-pill);
+  padding: var(--space-2) var(--space-5);
+  color: var(--color-text-muted);
+  font-family: inherit;
+  font-size: var(--fs-body);
+  cursor: pointer;
+}
+
+.readAll:hover {
+  border-color: var(--color-border-strong);
+  color: var(--color-text);
+}
+
+/*
+ * One row, whether it is a link or a button: the list's own row recipe, restated here rather than
+ * composed because a `<button>` needs the resets a link does not — no border, no fill, the page's
+ * font — and composing a link's rule onto a button leaves the button looking like a button.
+ */
+.row {
+  display: flex;
+  align-items: center;
+  gap: var(--space-4);
+  width: 100%;
+  padding: var(--space-4) var(--space-5);
+  background: transparent;
+  border: none;
+  color: inherit;
+  font-family: inherit;
+  text-align: left;
+  text-decoration: none;
+  cursor: pointer;
+  min-width: 0;
+}
+
+.row:hover {
+  background: var(--color-surface-raised);
+}
+
+/* The mark: present on every row so the text lines up, painted only while unread. */
+.rowDot {
+  flex: none;
+  width: var(--space-2);
+  height: var(--space-2);
+  border-radius: var(--radius-pill);
+  background: transparent;
+}
+
+.rowUnread .rowDot {
+  background: var(--color-primary-icon);
+}
+
+.rowText {
+  display: flex;
+  flex: 1 1 auto;
+  flex-direction: column;
+  gap: var(--space-1);
+  min-width: 0;
+}
+
+/* Which kind of thing this is, in the meta voice, above the sentence. */
+.rowKind {
+  font-size: var(--fs-meta);
+  color: var(--color-text-dim);
+  text-transform: uppercase;
+  letter-spacing: 0.08em;
+}
+
+.rowTitle {
+  font-size: var(--fs-body);
+  font-weight: 500;
+  color: var(--color-text);
+  overflow-wrap: anywhere;
+}
+
+.rowUnread .rowTitle {
+  font-weight: 600;
+}
+
+/* One line in the list, as the guide specifies. The whole text is where the press lands. */
+.rowBody {
+  font-size: var(--fs-body);
+  color: var(--color-text-muted);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+/* An announcement is its own content, so its body wraps: there is nowhere else to read it. */
+.row[aria-pressed] .rowBody {
+  white-space: pre-wrap;
+  overflow: visible;
+  overflow-wrap: anywhere;
+}
+
+.rowMeta {
+  font-size: var(--fs-meta);
+  color: var(--color-text-dim);
+}

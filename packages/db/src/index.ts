@@ -91,6 +91,23 @@ export {
   type NoteWithAuthorRow,
 } from './notes';
 export {
+  countUnreadNotifications,
+  deleteReactionNotifications,
+  findAnnouncementById,
+  insertAnnouncement,
+  insertNotification,
+  insertNotificationForAllMembers,
+  listAnnouncements,
+  listNotificationsForUser,
+  markAllNotificationsRead,
+  markNotificationRead,
+  setAnnouncementRecipientCount,
+  type AnnouncementRow,
+  type NewAnnouncement,
+  type NotificationContent,
+  type NotificationRow,
+} from './notifications';
+export {
   completeOnboarding,
   findOnboardingCompletion,
   type UserOnboardingRow,

@@ -239,6 +239,19 @@ export const POLICY_ACTIONS = [
   'tag.rename',
   'tag.delete',
   'tag.assign',
+  /**
+   * **The two announcement actions** ([3.17.15](docs/project/prd.md),
+   * [3.19.8](docs/project/prd.md)): sending a notice to everybody, and reading the list of what
+   * has been sent. Two rather than one `announcement.manage`, for the reason every pair above is
+   * two — the day a Contributor may read what the group was told without being able to tell it
+   * something is the day the split stops being decoration.
+   *
+   * There is deliberately **no `notification.read`**. A member's notifications are keyed on the
+   * caller's own id, the shape playback progress and onboarding completion already take: there is
+   * no resource to authorise against, so those routes are behind a session and nothing more.
+   */
+  'announcement.send',
+  'announcement.list',
 ] as const;
 
 export type PolicyAction = (typeof POLICY_ACTIONS)[number];
@@ -400,6 +413,10 @@ const RULES: PolicyRules = {
   'tag.rename': { roles: { admin: true, member: false } },
   'tag.delete': { roles: { admin: true, member: false } },
   'tag.assign': { roles: { admin: true, member: false } },
+  // Telling the whole group something is operator work ([3.1](docs/project/prd.md)'s role table
+  // puts *broadcast announcements* under Admin alone). A member is told; a member does not tell.
+  'announcement.send': { roles: { admin: true, member: false } },
+  'announcement.list': { roles: { admin: true, member: false } },
 };
 
 export function isPolicyAction(value: string): value is PolicyAction {
