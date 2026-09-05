@@ -24,101 +24,96 @@ export interface OnboardingDefinition {
   readonly slides: readonly OnboardingSlide[];
 }
 
-function onboardingSlide(
-  id: OnboardingId,
-  n: number,
-  title: string,
-  description: string,
-  extension: 'mp4' | 'webp' = 'mp4',
-): OnboardingSlide {
-  return { media: `/onboarding/${id}/slide-${n}.${extension}`, title, description };
+type MediaExtension = 'mp4' | 'webp';
+
+interface SlideCopy {
+  readonly title: string;
+  readonly description: string;
+  /** Defaults to `mp4`; set `webp` for a still image. */
+  readonly extension?: MediaExtension;
 }
 
-const NEW_USER_ONBOARDING: OnboardingDefinition = {
-  slides: [
-    onboardingSlide(
-      'new-user',
-      1,
-      "Quick tour before you start",
-      "To play a recording click on the link to all series, then choose a series to see its' recordings. Once you are on the recording page, click on the play button. Opening the app from a different device or coming back to a recording will resume your progress from wherever you left off.",
-    ),
-    onboardingSlide(
-      'new-user',
-      2,
-      'Adding a note',
-      'You can share your thoughts with the group or keep private notes. On the recording page, scroll to the "Notes" tab. Type in your note and choose to keep it private or public. Click on "Save note" and your note is now displayed below.',
-    ),
-    onboardingSlide(
-      'new-user',
-      3,
-      'Browsing and interacting with notes',
-      'You can filter notes by visibility, use reactions, click on their timestamps to jump to that moment in the recording, edit or delete your note, and also reply to any public note.',
-    ),
-    onboardingSlide(
-      'new-user',
-      4,
-      'Chapters',
-      'Each recording is divided into chapters - themes that appear in the recording. Scroll to the "Chapters" tab and click it. A list of chapters will be displayed. Click on the play button next to a chapter to jump to that moment in the recording, or click on the chapter title to open the chapter\'s page.',
-    ),
-    onboardingSlide(
-      'new-user',
-      5,
-      'Playback controls',
-      'The playback menu on the bottom is visible and interactive in any page. You can pause, play, skip forward or backward. The playback track contains indicators for notes (green dots) and chapters (grey lines) that appear in the recording.',
-    ),
-    onboardingSlide(
-      'new-user',
-      6,
-      'Speed control and quick actions',
-      'In the playback menu, you can change the speed of the recording by clicking on the speed button. You can also click-hold and drag to select specific speed. The quick action menu allows you to add a note, or enable captions. You can use it by clicking on the button, or click-hold and drag to select a specific action from the menu.',
-    ),
-    onboardingSlide(
-      'new-user',
-      7,
-      'Page navigation with breadcrumb',
-      'Quickly navigate back. In the top navigation you can see the path to the current page in the format "Homepage > Series > Recording > Chapter". You can click on any of the items in the breadcrumb to navigate to that page.',
-    ),
-    onboardingSlide(
-      'new-user',
-      8,
-      'Top navigation menu',
-      'Need to browse a list of all series or all recordings? You can navigate using the top-right button.',
-    ),
-    onboardingSlide(
-      'new-user',
-      9,
-      'Feedback and bug report',
-      'Anything feels off or you have ideas for the app? Click on the top-right button and select the "Report a bug" link. You can fill out the form and submit it, that would be greatly appreciated.',
-    ),
-    onboardingSlide(
-      'new-user',
-      10,
-      'Install the app',
-      'Want quick access from your home screen? Click on the top-right button and select the "Install app". Follow the instructions to add the app to your home screen. You can also install the app from your browser\'s menu.',
-      'webp',
-    ),
-  ],
-};
-const RELEASE_0_3_0_ONBOARDING: OnboardingDefinition = {
-  slides: [
-    onboardingSlide(
-      'release-0.3.0',
-      1,
-      'Notifications',
-      'You will now get in-app notifications when a new recording is available, when someone replies or reacts to your note, for new features, or when the admin publishes an announcement.',
-      'webp',
-    ),
-    onboardingSlide(
-      'release-0.3.0',
-      2,
-      'Personal Profile',
-      'From the top-right menu, you can access the "My Profile" page. Here you can change your display name and profile picture.',
-      'webp',
-    ),
-  ]
+/**
+ * Builds the definition for one onboarding. Slides are numbered by position (1-based) and their
+ * media resolved to `/onboarding/{id}/slide-{n}.{extension}`, so a slide only carries its copy
+ * and, when it is a still image, the extension.
+ */
+function onboarding(id: OnboardingId, slides: readonly SlideCopy[]): OnboardingDefinition {
+  return {
+    slides: slides.map(({ title, description, extension = 'mp4' }, i) => ({
+      media: `/onboarding/${id}/slide-${i + 1}.${extension}`,
+      title,
+      description,
+    })),
+  };
 }
 
 export const ONBOARDINGS: Record<OnboardingId, OnboardingDefinition> = {
-  'new-user': NEW_USER_ONBOARDING,
-  'release-0.3.0': RELEASE_0_3_0_ONBOARDING,
+  'new-user': onboarding('new-user', [
+    {
+      title: 'Quick tour before you start',
+      description:
+        "To play a recording click on the link to all series, then choose a series to see its' recordings. Once you are on the recording page, click on the play button. Opening the app from a different device or coming back to a recording will resume your progress from wherever you left off.",
+    },
+    {
+      title: 'Adding a note',
+      description:
+        'You can share your thoughts with the group or keep private notes. On the recording page, scroll to the "Notes" tab. Type in your note and choose to keep it private or public. Click on "Save note" and your note is now displayed below.',
+    },
+    {
+      title: 'Browsing and interacting with notes',
+      description:
+        'You can filter notes by visibility, use reactions, click on their timestamps to jump to that moment in the recording, edit or delete your note, and also reply to any public note.',
+    },
+    {
+      title: 'Chapters',
+      description:
+        'Each recording is divided into chapters - themes that appear in the recording. Scroll to the "Chapters" tab and click it. A list of chapters will be displayed. Click on the play button next to a chapter to jump to that moment in the recording, or click on the chapter title to open the chapter\'s page.',
+    },
+    {
+      title: 'Playback controls',
+      description:
+        'The playback menu on the bottom is visible and interactive in any page. You can pause, play, skip forward or backward. The playback track contains indicators for notes (green dots) and chapters (grey lines) that appear in the recording.',
+    },
+    {
+      title: 'Speed control and quick actions',
+      description:
+        'In the playback menu, you can change the speed of the recording by clicking on the speed button. You can also click-hold and drag to select specific speed. The quick action menu allows you to add a note, or enable captions. You can use it by clicking on the button, or click-hold and drag to select a specific action from the menu.',
+    },
+    {
+      title: 'Page navigation with breadcrumb',
+      description:
+        'Quickly navigate back. In the top navigation you can see the path to the current page in the format "Homepage > Series > Recording > Chapter". You can click on any of the items in the breadcrumb to navigate to that page.',
+    },
+    {
+      title: 'Top navigation menu',
+      description:
+        'Need to browse a list of all series or all recordings? You can navigate using the top-right button.',
+    },
+    {
+      title: 'Feedback and bug report',
+      description:
+        'Anything feels off or you have ideas for the app? Click on the top-right button and select the "Report a bug" link. You can fill out the form and submit it, that would be greatly appreciated.',
+    },
+    {
+      title: 'Install the app',
+      description:
+        'Want quick access from your home screen? Click on the top-right button and select the "Install app". Follow the instructions to add the app to your home screen. You can also install the app from your browser\'s menu.',
+      extension: 'webp',
+    },
+  ]),
+  'release-0.3.0': onboarding('release-0.3.0', [
+    {
+      title: 'Notifications',
+      description:
+        'You will now get in-app notifications when a new recording is available, when someone replies or reacts to your note, for new features, or when the admin publishes an announcement.',
+      extension: 'webp',
+    },
+    {
+      title: 'Personal Profile',
+      description:
+        'From the top-right menu, you can access the "My Profile" page. Here you can change your display name and profile picture.',
+      extension: 'webp',
+    },
+  ]),
 };
