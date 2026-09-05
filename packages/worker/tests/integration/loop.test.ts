@@ -8,7 +8,7 @@ import {
   type DatabaseHandle,
   type JobRow,
 } from '@thp/db';
-import { PIPELINE_STEPS, type PipelineStep } from '@thp/shared';
+import { FIRST_PIPELINE_STEP, PIPELINE_STEPS, type PipelineStep } from '@thp/shared';
 import { setLogSink, type LogLine } from '@thp/shared/observability/logger';
 import type { HandlerRegistry } from '../../src/handlers';
 import { startWorkerLoop, type WorkerLoop } from '../../src/loop';
@@ -224,7 +224,9 @@ describe('the worker loop', () => {
     restoreSink();
     restoreSink = setLogSink((line) => captured.push(line));
 
-    const job = await queueJob();
+    // From the first step, whichever that is: the chain is drained from where an upload starts it,
+    // and the other tests' default of `transcribe` would leave the step ahead of it never claimed.
+    const job = await queueJob(FIRST_PIPELINE_STEP);
     const loop = start({ handlers: succeeds });
 
     await waitFor('the chain to reach a draft', async () => {
@@ -254,7 +256,7 @@ describe('the worker loop', () => {
     expect(claims).toHaveLength(PIPELINE_STEPS.length);
     expect(claims[0]).toMatchObject({
       jobId: job.id,
-      step: 'transcribe',
+      step: FIRST_PIPELINE_STEP,
       recordingId: job.recordingId,
       correlationId: job.correlationId,
     });

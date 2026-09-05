@@ -396,16 +396,20 @@ describe('the top navigation', () => {
     }
   }, 120_000);
 
-  it('offers a member exactly Dashboard, All recordings, Report a bug and Sign out', async () => {
+  it('offers a member exactly the destinations, the tour, the bug report, the profile and the way out', async () => {
     const page = await signInAs(member);
     try {
       expect(await menuEntries(page)).toEqual([
         'Dashboard',
         'All series',
         'All recordings',
-        // Below the destinations and above the way out: it is not a place in the product, and it is
-        // offered to every role on the same terms.
+        // Below the destinations and above the way out: neither is a place in the product, and
+        // both are offered to every role on the same terms. The tour replays the new-user
+        // onboarding; the report is the one entry that is not a destination at all.
+        'App tour',
         'Report a bug',
+        // The member's own account, last before the way out.
+        'My profile',
         'Sign out',
       ]);
     } finally {
@@ -413,7 +417,7 @@ describe('the top navigation', () => {
     }
   }, 120_000);
 
-  it('offers an admin the same three plus the console', async () => {
+  it('offers an admin the same entries plus the console', async () => {
     const page = await signInAs(admin);
     try {
       // The entry is rendered from the policy module's answer and grants nothing: `/admin` gates
@@ -423,7 +427,9 @@ describe('the top navigation', () => {
         'All series',
         'All recordings',
         'Admin console',
+        'App tour',
         'Report a bug',
+        'My profile',
         'Sign out',
       ]);
     } finally {

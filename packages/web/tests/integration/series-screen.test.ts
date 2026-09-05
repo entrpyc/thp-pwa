@@ -737,14 +737,16 @@ describe('the ways in and the way through', () => {
     }
   }, 180_000);
 
-  it('offers a member Dashboard, All series, All recordings, Report a bug and Sign out, in that order', async () => {
+  it('offers a member All series between Dashboard and All recordings, ahead of the rest', async () => {
     const page = await signInAs(member);
     try {
       expect(await menuEntries(page)).toEqual([
         'Dashboard',
         'All series',
         'All recordings',
+        'App tour',
         'Report a bug',
+        'My profile',
         'Sign out',
       ]);
 

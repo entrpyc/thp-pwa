@@ -338,13 +338,17 @@ describe('presign, PUT, finalise, worker', () => {
       expect(row.correlation_id).toBe(correlationId);
     }
 
-    // **Both steps did real work**, and each says what it cost. Story 3 Ticket 01 replaced the
+    // **Every step did real work**, and each says what it cost. Story 3 Ticket 01 replaced the
     // last stub, so there is no longer a row in this ledger that succeeded without doing anything —
-    // which is what `/admin/pipeline` stops having to say *not built yet* about.
-    expect(rows[0]?.provider_meta).toMatchObject({ model: 'fake', durationSeconds: 372.5 });
-    expect(rows[1]?.provider_meta).toMatchObject({ model: 'fake', costUsd: 0 });
-    expect(rows[1]?.provider_meta).not.toHaveProperty('stub');
-    expect(rows[1]?.provider_meta).toHaveProperty('promptVersion');
+    // which is what `/admin/pipeline` stops having to say *not built yet* about. The rows are read
+    // by step rather than by position, because §3.4 put `process_audio` ahead of `transcribe` and
+    // a position is a fact about the ordered list that belongs to the list.
+    const metaOf = (step: string): unknown => rows.find((row) => row.step === step)?.provider_meta;
+    expect(metaOf('process_audio')).toMatchObject({ tool: 'fake-copy', costUsd: 0 });
+    expect(metaOf('transcribe')).toMatchObject({ model: 'fake', durationSeconds: 372.5 });
+    expect(metaOf('generate_draft')).toMatchObject({ model: 'fake', costUsd: 0 });
+    expect(metaOf('generate_draft')).not.toHaveProperty('stub');
+    expect(metaOf('generate_draft')).toHaveProperty('promptVersion');
 
     // And the point of the whole chain: the recording has a transcript.
     const transcript = await findTranscriptByRecording(created.body.id, handle);

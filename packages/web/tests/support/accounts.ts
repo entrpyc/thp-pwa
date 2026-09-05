@@ -1,5 +1,11 @@
-import { createDatabase, insertUser, type DatabaseHandle } from '@thp/db';
-import { API_PREFIX, AUTH_SESSION_PATH, SESSION_COOKIE_NAME, type Role } from '@thp/shared';
+import { completeOnboarding, createDatabase, insertUser, type DatabaseHandle } from '@thp/db';
+import {
+  API_PREFIX,
+  AUTH_SESSION_PATH,
+  NEW_USER_ONBOARDING_ID,
+  SESSION_COOKIE_NAME,
+  type Role,
+} from '@thp/shared';
 import { hashPassword } from '@/server/auth/password';
 
 /**
@@ -34,12 +40,32 @@ export interface TestAccount {
   readonly password: string;
 }
 
-/** A fresh account, with an address unique to this call so tests never collide. */
+export interface CreateAccountOptions {
+  /**
+   * Whether the account has already been through the new-user tour. `true` unless a test says
+   * otherwise — see {@link createAccount}.
+   */
+  readonly onboarded?: boolean;
+}
+
+/**
+ * A fresh account, with an address unique to this call so tests never collide.
+ *
+ * **Past the tour by default.** The member layout routes an account that has never finished the
+ * new-user onboarding into it before anything else renders — on every visit, not only the first —
+ * so an account written straight into the database here would meet the tour instead of the screen
+ * a test came to drive. That is the tour's business, not every other suite's: the completion is
+ * recorded up front, the way a member who has used the product for a week already has it. A test
+ * that is *about* the tour asks for `{ onboarded: false }` and gets the account as registration
+ * would have left it; the flows that create an account for real — sign-up, accepting an
+ * invitation — never come through here, so they still land in the tour and their tests say so.
+ */
 export async function createAccount(
   databaseUrl: string,
   role: Role,
   label = 'user',
   password: string = TEST_PASSWORD,
+  options: CreateAccountOptions = {},
 ): Promise<TestAccount> {
   const suffix = `${Date.now().toString(36)}${Math.floor(Math.random() * 1e6).toString(36)}`;
   const email = `${label}-${suffix}@example.test`;
@@ -52,6 +78,9 @@ export async function createAccount(
     },
     testDatabase(databaseUrl),
   );
+  if (options.onboarded !== false) {
+    await completeOnboarding(row.id, NEW_USER_ONBOARDING_ID, testDatabase(databaseUrl));
+  }
   return { id: row.id, email: row.email, displayName: row.displayName, password };
 }
 

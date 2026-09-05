@@ -7,7 +7,9 @@ import {
   INVITATIONS_PATH,
   INVITATION_TOKEN_PARAM,
   MINIMUM_PASSWORD_LENGTH,
+  NEW_USER_ONBOARDING_ID,
   ROLE,
+  onboardingPagePath,
   type InvitationSummary,
 } from '@thp/shared';
 import { closeTestDatabase, signedInAccount } from '../support/accounts';
@@ -124,22 +126,21 @@ describe('the accept-invitation screen', () => {
     }
   }, 90_000);
 
-  it('sets a password and lands the person on an authenticated view, in one motion', async () => {
+  it('sets a password and lands the person, signed in, in the new-user tour', async () => {
     const { email, token } = await invite('screen-accept');
     const page = await openAccept(token);
     try {
       await page.getByLabel('Password').fill(CHOSEN_PASSWORD);
       await page.getByRole('button', { name: /set password/i }).click();
 
-      // Straight to the authenticated landing. Never via the sign-in form.
-      await page.waitForURL(`${baseUrl}/`, { timeout: 30_000 });
-      // The landing's own content, rather than the address the retired placeholder used to print:
-      // Story 4 Ticket 01 replaced that screen with `pages/dashboard.png`, which shows a member
-      // their library rather than their credentials.
+      // Straight to an authenticated view, never via the sign-in form — and for an account this
+      // new, that view is the tour: the member layout routes an account that has never finished
+      // the new-user onboarding into it before the dashboard renders.
+      await page.waitForURL(`${baseUrl}${onboardingPagePath(NEW_USER_ONBOARDING_ID)}`, {
+        timeout: 30_000,
+      });
       await expect
-        .poll(() => page.getByRole('link', { name: 'View all series' }).count(), {
-          timeout: 30_000,
-        })
+        .poll(() => page.getByRole('button', { name: 'Skip' }).count(), { timeout: 30_000 })
         .toBe(1);
       expect(new URL(page.url()).pathname).not.toBe('/sign-in');
     } finally {

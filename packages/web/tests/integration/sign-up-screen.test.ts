@@ -1,6 +1,6 @@
 import { afterAll, beforeAll, describe, expect, it, inject } from 'vitest';
 import { chromium, type Browser, type Page } from 'playwright';
-import { ROLE, SIGN_UP_PAGE_PATH } from '@thp/shared';
+import { NEW_USER_ONBOARDING_ID, ROLE, SIGN_UP_PAGE_PATH, onboardingPagePath } from '@thp/shared';
 import { closeTestDatabase, createAccount, type TestAccount } from '../support/accounts';
 
 /**
@@ -73,17 +73,20 @@ describe('the sign-up screen', () => {
     }
   }, 60_000);
 
-  it('registers somebody and lands them on an authenticated view', async () => {
+  it('registers somebody and lands them, signed in, in the new-user tour', async () => {
     const page = await openSignUp();
     try {
       await fillAndSubmit(page, freshEmail('browser-signup'), PASSWORD);
-      await page.waitForURL(`${baseUrl}/`, { timeout: 30_000 });
-      // Scoped to the heading rather than counting matches: registering is a soft navigation, and
-      // Next copies the new page's `h1` into its route announcer shortly afterwards — the same race
-      // `sign-in-screen.test.ts` documents.
+      // A brand-new account has never been through the tour, so the member layout routes it there
+      // before the dashboard renders. Registering therefore lands in the tour — signed in, and
+      // never via the sign-in form — and the tour's own way out is what is on screen.
+      await page.waitForURL(`${baseUrl}${onboardingPagePath(NEW_USER_ONBOARDING_ID)}`, {
+        timeout: 30_000,
+      });
       await expect
-        .poll(() => page.getByRole('heading', { level: 1 }).textContent())
-        .toBe('Dashboard');
+        .poll(() => page.getByRole('button', { name: 'Skip' }).count(), { timeout: 30_000 })
+        .toBe(1);
+      expect(new URL(page.url()).pathname).not.toBe('/sign-in');
     } finally {
       await page.context().close();
     }

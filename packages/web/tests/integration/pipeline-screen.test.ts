@@ -7,6 +7,7 @@ import {
   API_PREFIX,
   PIPELINE_POLL_INTERVAL_MS,
   PIPELINE_PATH,
+  PIPELINE_STEPS,
   STUB_PROVIDER_META_KEY,
   ROLE,
   type PipelineStep,
@@ -325,6 +326,16 @@ describe('what a row says', () => {
   }, 120_000);
 });
 
+/**
+ * Press *Run again* on one step's cell. The cells come off the ordered step list, so the cell is
+ * found by the step's place in that list rather than by a position spelled out here — which is
+ * what lets a step arrive ahead of another (`process_audio` did, ahead of `transcribe`) without
+ * every press in this file moving one cell to the right.
+ */
+async function runAgain(row: Locator, step: PipelineStep): Promise<void> {
+  await row.getByRole('button', { name: 'Run again' }).nth(PIPELINE_STEPS.indexOf(step)).click();
+}
+
 describe('asking again', () => {
   it('re-reads while work is in flight and stops once nothing is', async () => {
     // **The panel shows every recording, and the suite shares one database** — so "nothing on
@@ -386,8 +397,8 @@ describe('running a step again from the screen', () => {
       expect(before).toContain(reason);
       expect(before).toContain('attempt 1');
 
-      // The first cell is `transcribe`, because the cells come off the ordered step list.
-      await row.getByRole('button', { name: 'Run again' }).first().click();
+      // The cell is `transcribe`'s, found by its place in the ordered step list.
+      await runAgain(row, 'transcribe');
 
       // **One press is not enough for this step.** Re-running `transcribe` sends the audio to the
       // provider again and replaces the transcript, so it takes a confirming press that names the
@@ -441,7 +452,7 @@ describe('running a step again from the screen', () => {
     const page = await openPanel();
     try {
       const row = rowFor(page, title);
-      await row.getByRole('button', { name: 'Run again' }).first().click();
+      await runAgain(row, 'transcribe');
       await row.getByRole('button', { name: 'Cancel' }).click();
 
       await expect
@@ -469,10 +480,10 @@ describe('running a step again from the screen', () => {
     const page = await openPanel();
     try {
       const row = rowFor(page, title);
-      // The second cell is `generate_draft`. No confirmation: it costs nothing and replaces
+      // `generate_draft` takes no confirmation: it costs nothing and replaces
       // nothing, so a second press there would be friction with no guardrail behind it. This is
       // also 3.5.8's escape hatch being one tap — the admin read the transcript and judged it usable.
-      await row.getByRole('button', { name: 'Run again' }).nth(1).click();
+      await runAgain(row, 'generate_draft');
 
       await waitForRow(page, title, 'Waiting');
       const rows = await sql<{ step: string; status: string }[]>`
@@ -534,8 +545,8 @@ describe('running chapter generation again (3.22.8)', () => {
     const page = await openPanel();
     try {
       const row = rowFor(page, title);
-      // The third cell is `generate_chapters`, because the cells come off the ordered step list.
-      await row.getByRole('button', { name: 'Run again' }).nth(2).click();
+      // The cell is `generate_chapters`'s, found by its place in the ordered step list.
+      await runAgain(row, 'generate_chapters');
 
       await expect
         .poll(async () => (await row.textContent()) ?? '', { timeout: 30_000 })
@@ -584,7 +595,7 @@ describe('running chapter generation again (3.22.8)', () => {
     const page = await openPanel();
     try {
       const row = rowFor(page, title);
-      await row.getByRole('button', { name: 'Run again' }).nth(2).click();
+      await runAgain(row, 'generate_chapters');
 
       await expect
         .poll(async () => (await row.textContent()) ?? '', { timeout: 30_000 })
@@ -602,7 +613,7 @@ describe('running chapter generation again (3.22.8)', () => {
     const page = await openPanel();
     try {
       const row = rowFor(page, title);
-      await row.getByRole('button', { name: 'Run again' }).nth(2).click();
+      await runAgain(row, 'generate_chapters');
       await row.getByRole('button', { name: 'Cancel' }).click();
 
       await expect

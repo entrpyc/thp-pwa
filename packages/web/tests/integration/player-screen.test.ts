@@ -554,8 +554,8 @@ describe('the notes the player now holds cannot reach the audio', () => {
   it('plays through a notes failure, and mints no second grant for it', async () => {
     const context = await browser.newContext({ viewport: { width: 1280, height: 900 } });
     const page = await context.newPage();
-    const asked: string[] = [];
-    page.on('request', (request) => asked.push(request.url()));
+    const asked: { readonly url: string; readonly at: number }[] = [];
+    let notesRefusedAt: number | null = null;
     try {
       await page.goto(`${baseUrl}/sign-in`, { waitUntil: 'domcontentloaded' });
       await page.getByLabel('Email').fill(member.email);
@@ -563,11 +563,18 @@ describe('the notes the player now holds cannot reach the audio', () => {
       await page.getByRole('button', { name: 'Sign in' }).click();
       await page.waitForURL(`${baseUrl}${DASHBOARD_PAGE_PATH}`, { timeout: 30_000 });
 
+      // Listened for from here, not from sign-in: the dashboard restores this member's last
+      // teaching into the transport and mints a grant of its own for it — a fact about the
+      // landing, not about the notes. Each request is stamped, because the claim below is about
+      // *when* a grant was asked for, not how many there were.
+      page.on('request', (request) => asked.push({ url: request.url(), at: Date.now() }));
+
       // **Held, then refused** — so the failure lands while the member is already listening. A
       // request that had already failed before the play press would let a `pause()` in the failure
       // path pass unnoticed, which is precisely the regression this is about.
       await page.route(`**${API_PREFIX}${recordingNotesPath(recordingId)}`, async (route) => {
         await new Promise((resolve) => setTimeout(resolve, 6_000));
+        notesRefusedAt = Date.now();
         await route.abort();
       });
 
@@ -593,11 +600,17 @@ describe('the notes the player now holds cannot reach the audio', () => {
       // The same source, so nothing re-pointed the element on the way through.
       expect(after.src).toBe(listening.src);
 
-      // And one grant across the whole visit: the notes never asked for another.
-      const grants = asked.filter(
-        (url) => url === `${baseUrl}${API_PREFIX}${recordingPlaybackPath(recordingId)}`,
-      );
-      expect(grants).toHaveLength(1);
+      // And the notes never asked for a grant. The claim is about the failure, so it is asserted
+      // against the moment of the failure: nothing asked for a grant from the refusal onwards.
+      // Not "exactly one grant across the visit", because the element's own error path renews a
+      // grant by design, and a transient media error while the page was still loading — which a
+      // machine under the whole suite's load does produce — would fail that count for a reason
+      // that has nothing to do with the notes.
+      const grantUrl = `${baseUrl}${API_PREFIX}${recordingPlaybackPath(recordingId)}`;
+      const grants = asked.filter((request) => request.url === grantUrl);
+      expect(grants.length).toBeGreaterThanOrEqual(1);
+      expect(notesRefusedAt).not.toBeNull();
+      expect(grants.filter((request) => request.at >= (notesRefusedAt ?? 0))).toHaveLength(0);
     } finally {
       await context.close();
     }

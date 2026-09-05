@@ -4,6 +4,7 @@ import {
   ACCEPTED_AUDIO_FORMATS,
   API_PREFIX,
   CORRELATION_ID_HEADER,
+  FIRST_PIPELINE_STEP,
   NOT_STARTED,
   PIPELINE_PATH,
   PIPELINE_STEPS,
@@ -46,9 +47,13 @@ import { logOffset, waitForLogLines } from '../support/log-reader';
  * 1. **A re-run has no precondition on the steps before it.** Running `generate_draft` for a
  *    recording whose `transcribe` failed is docs/project/prd.md 3.5.8's escape hatch — the admin
  *    read the low-confidence transcript and judged it usable — not a mistake to guard against.
- * 2. **A re-run of `transcribe` re-runs what follows it, on success.** 3.21.2.4's "without
+ * 2. **A re-run of the first step re-runs what follows it, on success.** 3.21.2.4's "without
  *    re-running the whole pipeline" is satisfied by being able to start anywhere, not by severing
- *    the chain: a fresh transcript makes the existing draft wrong.
+ *    the chain: fresh audio makes the existing transcript wrong, and a fresh transcript the draft.
+ *
+ * The first step is read off `FIRST_PIPELINE_STEP` rather than named, because it has moved once
+ * already — `process_audio` arrived ahead of `transcribe` with §3.4 — and a suite that spelled it
+ * out would be asserting a fact about the ordered list somewhere other than the list.
  * 3. **Pressing it twice is harmless.** The partial unique index refuses the second row, the
  *    enqueue reads the first one back, and both calls are answered with the same job.
  *
@@ -171,6 +176,19 @@ async function ledgerRows(
   `) as unknown as { step: string; status: string; attempt: number }[];
 }
 
+/**
+ * The recording's own first job — the one the upload enqueued — so a test can take it out of
+ * flight. A fresh recording has exactly one row, and it is this step's.
+ */
+async function firstJobId(recordingId: string): Promise<string> {
+  const rows = await sql<{ id: string }[]>`
+    select id from job where recording_id = ${recordingId} and step = ${FIRST_PIPELINE_STEP}
+  `;
+  const id = rows[0]?.id;
+  if (id === undefined) throw new Error(`no ${FIRST_PIPELINE_STEP} job for recording ${recordingId}`);
+  return id;
+}
+
 async function waitFor(what: string, predicate: () => Promise<boolean>): Promise<void> {
   const deadline = Date.now() + 20_000;
   while (Date.now() < deadline) {
@@ -238,16 +256,18 @@ describe('who may read the pipeline', () => {
 });
 
 describe('what the read answers with', () => {
-  it('reports a freshly finalised recording as transcribe waiting, generate_draft not started', async () => {
+  it('reports a freshly finalised recording as its first step waiting, the rest not started', async () => {
     const recording = await newRecording('Freshly finalised');
 
     const row = await pipelineOf(recording.id);
     expect(row.title).toBe('Freshly finalised');
     expect(row.steps.map((one) => one.step)).toEqual([...PIPELINE_STEPS]);
-    expect(stepOf(row, 'transcribe').status).toBe('pending');
-    expect(stepOf(row, 'transcribe').attempt).toBe(1);
-    expect(stepOf(row, 'transcribe').enqueuedAt).not.toBeNull();
-    // Not absent, and not a failure: the chain has not reached it yet.
+    expect(stepOf(row, FIRST_PIPELINE_STEP).status).toBe('pending');
+    expect(stepOf(row, FIRST_PIPELINE_STEP).attempt).toBe(1);
+    expect(stepOf(row, FIRST_PIPELINE_STEP).enqueuedAt).not.toBeNull();
+    // Not absent, and not a failure: the chain has not reached them yet.
+    expect(stepOf(row, 'transcribe').status).toBe(NOT_STARTED);
+    expect(stepOf(row, 'transcribe').attempt).toBeNull();
     expect(stepOf(row, 'generate_draft').status).toBe(NOT_STARTED);
     expect(stepOf(row, 'generate_draft').attempt).toBeNull();
   }, 90_000);
@@ -257,15 +277,12 @@ describe('what the read answers with', () => {
     const [waiting] = await ledgerRows(recording.id);
     expect(waiting?.status).toBe('pending');
 
-    const job = await sql<{ id: string }[]>`
-      select id from job where recording_id = ${recording.id} and step = 'transcribe'
-    `;
-    await failJob(job[0]?.id as string, 'Deepgram refused the audio with HTTP 415', handle);
+    await failJob(await firstJobId(recording.id), 'the processor refused the audio with HTTP 415', handle);
 
-    const step = stepOf(await pipelineOf(recording.id), 'transcribe');
+    const step = stepOf(await pipelineOf(recording.id), FIRST_PIPELINE_STEP);
     expect(step.status).toBe('failed');
     // The whole point of the screen: why, in the same place as that.
-    expect(step.error).toBe('Deepgram refused the audio with HTTP 415');
+    expect(step.error).toBe('the processor refused the audio with HTTP 415');
     expect(step.finishedAt).not.toBeNull();
   }, 90_000);
 
@@ -357,39 +374,37 @@ describe('what the read answers with', () => {
 
 describe('running one step again', () => {
   it('enqueues a fresh attempt of the step it names', async () => {
-    const recording = await newRecording('Re-run transcribe');
+    const recording = await newRecording('Re-run the first step');
     // Take the first attempt out of flight, so the re-run is a genuinely new row rather than the
     // no-op the partial unique index would otherwise make it.
-    const job = await sql<{ id: string }[]>`
-      select id from job where recording_id = ${recording.id} and step = 'transcribe'
-    `;
-    await failJob(job[0]?.id as string, 'the provider refused the audio', handle);
+    await failJob(await firstJobId(recording.id), 'the provider refused the audio', handle);
 
-    const answer = await rerun(recording.id, 'transcribe');
+    const answer = await rerun(recording.id, FIRST_PIPELINE_STEP);
     expect(answer.status).toBe(200);
-    expect(answer.body.step).toBe('transcribe');
+    expect(answer.body.step).toBe(FIRST_PIPELINE_STEP);
     expect(answer.body.attempt).toBe(2);
 
     // The ledger is append-only, so the failure is still readable and the screen shows the new
     // attempt — a re-run is a number going up, not a status reset.
     const rows = await ledgerRows(recording.id);
     expect(rows.map((row) => [row.step, row.status, row.attempt])).toEqual([
-      ['transcribe', 'failed', 1],
-      ['transcribe', 'pending', 2],
+      [FIRST_PIPELINE_STEP, 'failed', 1],
+      [FIRST_PIPELINE_STEP, 'pending', 2],
     ]);
-    const step = stepOf(await pipelineOf(recording.id), 'transcribe');
+    const step = stepOf(await pipelineOf(recording.id), FIRST_PIPELINE_STEP);
     expect(step.status).toBe('pending');
     expect(step.attempt).toBe(2);
   }, 90_000);
 
   it('has no precondition on the steps before it', async () => {
     const recording = await newRecording('Generate from a failed transcript');
-    const job = await sql<{ id: string }[]>`
-      select id from job where recording_id = ${recording.id} and step = 'transcribe'
-    `;
-    // The confidence gate's failure: the transcript was written, and the job failed on purpose.
+    // A fresh recording's only row is the first step's, so the transcript attempt is queued here
+    // the way an admin would queue one, and then taken out of flight with the confidence gate's
+    // failure: the transcript was written, and the job failed on purpose.
+    const attempt = await rerun(recording.id, 'transcribe');
+    expect(attempt.status).toBe(200);
     await failJob(
-      job[0]?.id as string,
+      attempt.body.jobId,
       'the transcript was written, but its confidence of 0.41 is below the threshold of 0.6',
       handle,
     );
@@ -409,8 +424,8 @@ describe('running one step again', () => {
     const recording = await newRecording('Pressed twice');
 
     // Both calls name a step already unfinished — the first is the recording's own first job.
-    const first = await rerun(recording.id, 'transcribe');
-    const second = await rerun(recording.id, 'transcribe');
+    const first = await rerun(recording.id, FIRST_PIPELINE_STEP);
+    const second = await rerun(recording.id, FIRST_PIPELINE_STEP);
 
     expect(first.status).toBe(200);
     expect(second.status).toBe(200);
@@ -425,12 +440,9 @@ describe('running one step again', () => {
 
   it('re-runs what follows it, on success', async () => {
     const recording = await newRecording('Chain after a re-run', '2026-04-21');
-    const job = await sql<{ id: string }[]>`
-      select id from job where recording_id = ${recording.id} and step = 'transcribe'
-    `;
-    await failJob(job[0]?.id as string, 'the provider refused the audio', handle);
+    await failJob(await firstJobId(recording.id), 'the provider refused the audio', handle);
 
-    const answer = await rerun(recording.id, 'transcribe');
+    const answer = await rerun(recording.id, FIRST_PIPELINE_STEP);
     expect(answer.status).toBe(200);
     expect(answer.body.attempt).toBe(2);
 
@@ -461,12 +473,13 @@ describe('running one step again', () => {
     // pipeline" is satisfied by being able to start *anywhere*, not by severing the chain — a
     // fresh transcript makes the existing draft wrong.
     const rows = await ledgerRows(recording.id);
-    // Every step behind it, not only the next one: the chain runs forward to its end, so a fresh
-    // transcript regenerates the chapters cut from the old words too
-    // ([3.22.1](docs/project/prd.md)).
+    // Every step behind it, not only the next one: the chain runs forward to its end, so fresh
+    // audio is transcribed again and a fresh transcript regenerates the draft and the chapters cut
+    // from the old words too ([3.22.1](docs/project/prd.md)).
     expect(rows.map((row) => [row.step, row.status, row.attempt])).toEqual([
-      ['transcribe', 'failed', 1],
-      ['transcribe', 'succeeded', 2],
+      [FIRST_PIPELINE_STEP, 'failed', 1],
+      [FIRST_PIPELINE_STEP, 'succeeded', 2],
+      ['transcribe', 'succeeded', 1],
       ['generate_draft', 'succeeded', 1],
       ['generate_chapters', 'succeeded', 1],
     ]);
@@ -474,10 +487,7 @@ describe('running one step again', () => {
 
   it('runs only the step it names when that step is last in the chain', async () => {
     const recording = await newRecording('Generate only', '2026-04-22');
-    const job = await sql<{ id: string }[]>`
-      select id from job where recording_id = ${recording.id} and step = 'transcribe'
-    `;
-    await failJob(job[0]?.id as string, 'below the confidence threshold', handle);
+    await failJob(await firstJobId(recording.id), 'below the confidence threshold', handle);
 
     // `generate_chapters` is the last step of the chain ([3.22.1](docs/project/prd.md)), which is
     // why it is the one asked for by name here. Nothing runs it: what is under test is the enqueue.
@@ -486,8 +496,9 @@ describe('running one step again', () => {
     // Re-running the last step queues that step and nothing else — nothing before it is re-queued
     // behind it, because the chain runs forward and never back.
     const rows = await ledgerRows(recording.id);
-    expect(rows.filter((row) => row.step === 'transcribe')).toHaveLength(1);
+    expect(rows.filter((row) => row.step === FIRST_PIPELINE_STEP)).toHaveLength(1);
     expect(rows.filter((row) => row.step === 'generate_chapters')).toHaveLength(1);
+    expect(rows.filter((row) => row.step === 'transcribe')).toHaveLength(0);
     expect(rows.filter((row) => row.step === 'generate_draft')).toHaveLength(0);
   }, 120_000);
 
@@ -497,7 +508,7 @@ describe('running one step again', () => {
     expect(missing.code).toBe('not_found');
 
     const recording = await newRecording('Bad step');
-    for (const value of ['process_audio', '', 'TRANSCRIBE']) {
+    for (const value of ['generate_video', '', 'TRANSCRIBE']) {
       const refused = await rerun(recording.id, value);
       expect(refused.status, value).toBe(400);
       expect(refused.code, value).toBe('invalid_input');
@@ -536,13 +547,10 @@ describe('running one step again', () => {
 
   it('carries the request’s correlation id onto the job it queued', async () => {
     const recording = await newRecording('Traceable re-run');
-    const job = await sql<{ id: string }[]>`
-      select id from job where recording_id = ${recording.id} and step = 'transcribe'
-    `;
-    await failJob(job[0]?.id as string, 'refused', handle);
+    await failJob(await firstJobId(recording.id), 'refused', handle);
 
     const correlationId = `rerun-trace-${Date.now().toString(36)}`;
-    const answer = await rerun(recording.id, 'transcribe', { correlationId });
+    const answer = await rerun(recording.id, FIRST_PIPELINE_STEP, { correlationId });
 
     // The re-run goes through the queue port like every other enqueue, so the row carries the id
     // of the request that caused it across the process boundary.

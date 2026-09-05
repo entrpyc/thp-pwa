@@ -2107,8 +2107,12 @@ describe('the chapter table, and nothing beside it', () => {
       where pg_type.typname = 'pipeline_step' order by pg_enum.enumsortorder
     `;
     // Derived from the one declaration rather than restated beside it, exactly as every other enum
-    // in this file is.
-    expect(steps.map((row) => row.enumlabel)).toEqual([...PIPELINE_STEPS]);
+    // in this file is — less `process_audio`, which `0021_process_audio` adds ahead of `transcribe`
+    // two migrations later and which this database, migrated only as far as chapters, does not
+    // yet admit.
+    expect(steps.map((row) => row.enumlabel)).toEqual(
+      PIPELINE_STEPS.filter((step) => step !== 'process_audio'),
+    );
     expect(steps.map((row) => row.enumlabel)).toContain('generate_chapters');
 
     // The job written before the widening is still readable and still says what it said.
