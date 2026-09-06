@@ -28,6 +28,7 @@ import {
   type UploadGrantPayload,
   type UploadGrantRequest,
 } from '@thp/shared';
+import { actorGuard } from '@/server/api/actor-limits';
 import { ApiError } from '@/server/api/errors';
 import { can, type Actor } from '@/server/auth/policy';
 import { audit } from '@/server/observability/audit';
@@ -100,6 +101,9 @@ export function describeRecording(row: RecordingRow): RecordingSummary {
  */
 export async function grantUpload(actor: Actor, body: unknown): Promise<UploadGrantPayload> {
   const requested = parseGrantRequest(body);
+  // After the body is checked and before anything is signed: the budget is on URLs that leave
+  // the server, and a refused body leaves none (docs/project/prd.md, 3.1.22).
+  actorGuard().spend('recording-grant', actor);
 
   const key = mintOriginalKey(requested.contentType);
   const expiresAt = new Date(Date.now() + UPLOAD_GRANT_SECONDS * 1000);

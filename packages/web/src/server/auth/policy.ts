@@ -97,6 +97,13 @@ export const POLICY_ACTIONS = [
   'pipeline.read',
   'pipeline.rerun',
   /**
+   * Raising today's spend ceiling ([3.19.16](docs/project/prd.md)). Its own action rather than a
+   * widening of `pipeline.rerun`, because pressing "run again" spends up to the ceiling and this
+   * moves the ceiling — the day a Contributor may re-run a step without being able to decide how
+   * much the day may cost is the day that split stops being decoration.
+   */
+  'spend.raise',
+  /**
    * The three review-gate actions (Story 3 Tickets 02–03), split for the reason every group above
    * is: reading the queue, acting on an item, and spending a provider call to draft it again are
    * the same question only while there are two roles. The day a Contributor may read what is
@@ -345,6 +352,8 @@ const RULES: PolicyRules = {
   // epic; a member has nothing to see here and nothing to press.
   'pipeline.read': { roles: { admin: true, member: false } },
   'pipeline.rerun': { roles: { admin: true, member: false } },
+  // Deciding how much today may cost is the operator's call and nobody else's.
+  'spend.raise': { roles: { admin: true, member: false } },
   // The review gate is operator work whole: a member has nothing waiting on them, and a draft they
   // could read would be a draft nobody approved.
   'review.list': { roles: { admin: true, member: false } },

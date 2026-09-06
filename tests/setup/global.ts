@@ -127,6 +127,18 @@ const TIGHT_PASSWORD_RESET = {
   RESET_RATE_LIMIT_TOTAL: '1000',
 } as const;
 
+/**
+ * **A spend ceiling one job can reach, on the server that has one.**
+ *
+ * The ledger is the shared database, so a cost written by the spend-ceiling suite is read by
+ * every server; what differs per server is the ceiling, which is environment. A cent here means
+ * one two-cent job reaches it, while the primary at the shipped two dollars never notices —
+ * the fake providers cost nothing, so nothing else in the run moves the ledger.
+ */
+const TIGHT_SPEND_CEILING = {
+  SPEND_CEILING_USD_PER_DAY: '0.01',
+} as const;
+
 function captureMail(name: string): Record<string, string> {
   return {
     MAIL_TRANSPORT: 'capture',
@@ -210,6 +222,7 @@ export default async function setup(project: TestProject): Promise<() => Promise
         ...TIGHT_SIGN_UP,
         ...TIGHT_SIGN_IN,
         ...TIGHT_PASSWORD_RESET,
+        ...TIGHT_SPEND_CEILING,
         ...captureMail('rate-limited'),
       },
     });
@@ -234,6 +247,10 @@ export default async function setup(project: TestProject): Promise<() => Promise
       windowSeconds: Number(TIGHT_PASSWORD_RESET.RESET_RATE_LIMIT_WINDOW_SECONDS),
     });
     project.provide('rateLimitedMailCapturePath', resolve(MAIL_DIR, 'rate-limited.jsonl'));
+    project.provide(
+      'rateLimitedSpendCeilingUsd',
+      Number(TIGHT_SPEND_CEILING.SPEND_CEILING_USD_PER_DAY),
+    );
     project.provide('mailCapturePath', resolve(MAIL_DIR, 'primary.jsonl'));
     project.provide('databaseUrl', appDatabase.url);
     project.provide('mediaSettings', media);
@@ -268,6 +285,8 @@ declare module 'vitest' {
     rateLimitedPasswordReset: { readonly perAddress: number; readonly windowSeconds: number };
     /** JSON-lines file the rate-limited server appends every outgoing message to. */
     rateLimitedMailCapturePath: string;
+    /** That server's daily spend ceiling in dollars — a cent, so one job reaches it. */
+    rateLimitedSpendCeilingUsd: number;
     /** JSON-lines file the primary server appends every outgoing message to. */
     mailCapturePath: string;
     /** The suite's own database, not the one in `.env`. Dropped when the run ends. */

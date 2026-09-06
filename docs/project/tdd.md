@@ -306,6 +306,19 @@ Conceptual only — project prd 4 already defines the fields; this is how the en
   deliberately: recommendation quality cannot improve across runs, because there is nothing kept to
   improve it from. This sits under 6.3, and it is the strictest reading of project prd 3.14.8.
 
+- **6.10 Budgets.** Two mechanisms, split by what they protect. **Request budgets** — registration,
+  sign-in, the reset request, and the per-account budgets on feedback and upload grants (project
+  prd 3.1.18–3.1.22) — are in-memory sliding windows in the API process, correct because the API
+  runs as one forked instance (8.1) and deliberately not durable: they guard the server's own CPU,
+  mail transport and store against repetition, and a restart forgetting them costs nothing. **The
+  daily spend ceiling** (project prd 3.21.2.8, 3.19.16) is durable, because the worker makes the
+  paid calls in a separate process, the automatic upload pipeline spends without anybody pressing a
+  button, and a count that reset on restart would be a ceiling that a restart lifted. It is not a
+  second ledger: the per-job cost each step already records (3.19.13) is summed over the UTC day
+  in the database, which is the one clock both processes share. The worker refuses a paid step
+  before calling the provider; the API refuses a re-run or regenerate before enqueueing one; an
+  admin's raise is one row per day. The full account is `docs/project/rate-limits.md`.
+
 ## 7. Scalability & growth posture
 
 - **7.1 Content volume, not member count, is the growth axis.** project prd 6.1 says content grows
@@ -363,8 +376,8 @@ the video output. Excludes the one-time back-catalogue run, listed at 8.3.
   | Database backups | `pgBackRest` nightly base + WAL archive to the object store | $1 | $3 |
   | Object storage | ~95 GB after back catalogue, +~1.4 GB/month; zero-egress tier | $2 | $6 |
   | Media egress | ~11 GB/month launch → ~130 GB/month target (streaming + downloads) | $0 | $0 |
-  | Transcription | 6.5 hrs of audio/month @ ~$0.26/hr | $2 | $2 |
-  | LLM generation | 4.3 recordings/month × ~80k input tokens across 6 passes; the transcript is cached once per recording and read by the remaining five | $2 | $3 |
+  | Transcription | 6.5 hrs of audio/month @ ~$0.26/hr. Capped with LLM generation by the daily spend ceiling (6.10): $2/day by default, raised per day by an admin | $2 | $2 |
+  | LLM generation | 4.3 recordings/month × ~80k input tokens across 6 passes; the transcript is cached once per recording and read by the remaining five. Under the same daily ceiling | $2 | $3 |
   | Embeddings | 4.3 recordings/month × ~16k tokens, plus query embeddings | <$1 | $1 |
   | **Video generation — template path** | 10 videos/month launch, 40 target; render compute absorbed by the host, TTS billed | **$1** | **$4** |
   | **Video generation — generative path** | 10 videos/month × 45s, ~2 takes each at $0.10–0.50/generated second | **$80–360** | **$320–1,440** |

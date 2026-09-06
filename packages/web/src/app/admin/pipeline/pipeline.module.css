@@ -232,3 +232,60 @@
 .actionStrong {
   composes: actionStrong from '../admin.module.css';
 }
+
+/* ----------------------------------------------------------------------- today's paid work */
+
+/*
+ * The spend card sits above the rows because it is the one fact that explains a whole column of
+ * failures at once: a `transcribe` that failed naming the ceiling is not a broken teaching, it is
+ * a spent day. Same card recipe as a step cell, one tone above the section, so it reads as a unit.
+ */
+.spend {
+  composes: step;
+  gap: var(--space-3);
+}
+
+.spendHeading {
+  composes: stepName;
+}
+
+.spendFigure {
+  margin: 0;
+  font-size: var(--font-size-xl);
+  font-weight: var(--font-weight-semibold);
+  color: var(--color-text);
+  font-variant-numeric: tabular-nums;
+}
+
+.spendFigure[data-reached='true'] {
+  color: var(--color-text-strong, var(--color-text));
+}
+
+.spendSplit {
+  composes: rowMeta;
+  font-variant-numeric: tabular-nums;
+}
+
+.spendRaise {
+  composes: inviteRow from '../admin.module.css';
+}
+
+.spendField {
+  composes: field from '../admin.module.css';
+}
+
+.spendFieldTight {
+  composes: fieldTight from '../admin.module.css';
+}
+
+.spendLabel {
+  composes: label from '../admin.module.css';
+}
+
+.spendInput {
+  composes: input from '../admin.module.css';
+}
+
+.spendSubmit {
+  composes: submit from '../admin.module.css';
+}

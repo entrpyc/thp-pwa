@@ -195,6 +195,7 @@ export function createGenerateDraftHandler(deps: GenerateDraftDependencies = {})
     await replaceOpenDrafts(job.recordingId, items, deps.executor);
 
     const providerMeta: ProviderMeta = {
+      provider: model.name,
       model: result.spend.model,
       modelVersion: result.spend.modelVersion,
       promptVersion: result.promptVersion,

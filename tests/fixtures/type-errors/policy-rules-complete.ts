@@ -37,6 +37,7 @@ export const rules: PolicyRules = {
   'recording.edit': { roles: { admin: true, member: false } },
   'pipeline.read': { roles: { admin: true, member: false } },
   'pipeline.rerun': { roles: { admin: true, member: false } },
+  'spend.raise': { roles: { admin: true, member: false } },
   'review.list': { roles: { admin: true, member: false } },
   'review.resolve': { roles: { admin: true, member: false } },
   'review.regenerate': { roles: { admin: true, member: false } },

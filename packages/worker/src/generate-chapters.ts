@@ -132,6 +132,7 @@ export function createGenerateChaptersHandler(
     await replaceChapters(job.recordingId, chapters, generatedBy, deps.executor);
 
     const providerMeta: ProviderMeta = {
+      provider: model.name,
       ...generatedBy,
       inputTokens: result.spend.inputTokens,
       outputTokens: result.spend.outputTokens,

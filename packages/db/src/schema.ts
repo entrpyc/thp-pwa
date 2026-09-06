@@ -7,6 +7,7 @@ import {
   index,
   integer,
   jsonb,
+  numeric,
   pgEnum,
   pgTable,
   primaryKey,
@@ -1316,5 +1317,34 @@ export const notification = pgTable(
     index('notification_user_unread_idx')
       .on(table.userId)
       .where(sql`${table.readAt} is null`),
+  ],
+);
+
+/**
+ * **A raise of one day's spend ceiling** (docs/project/prd.md, 3.21.2.8 and 3.19.16).
+ *
+ * Keyed by the UTC day it applies to, so tomorrow has no row and starts back at the configured
+ * default with nothing to clean up. Upserted rather than appended: what the pipeline view needs
+ * is "what is today's ceiling and who set it", and two admins raising in the same hour should end
+ * with the higher number, never with a race.
+ *
+ * `ceiling_usd` is the whole ceiling for the day, not an increment — the number an admin typed is
+ * the number the ledger enforces, which is the only reading that survives being looked at later.
+ * The floor (the configured default) and the cap are enforced where the number is accepted, at
+ * the API; the check here only refuses what could never be a ceiling at all.
+ */
+export const spendCeilingRaise = pgTable(
+  'spend_ceiling_raise',
+  {
+    day: date('day').primaryKey(),
+    ceilingUsd: numeric('ceiling_usd', { precision: 10, scale: 2 }).notNull(),
+    raisedBy: uuid('raised_by').references(() => user.id, { onDelete: 'set null' }),
+    raisedAt: timestamp('raised_at', { withTimezone: true }).notNull().defaultNow(),
+    /** Optional, and shown beside the raise so the next admin knows why it was made. */
+    reason: text('reason'),
+  },
+  (table) => [
+    check('spend_ceiling_raise_positive', sql`${table.ceilingUsd} > 0`),
+    check('spend_ceiling_raise_reason_length', sql`char_length(${table.reason}) <= 200`),
   ],
 );

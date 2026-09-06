@@ -147,7 +147,8 @@ could not be read), `weak_password` (it could, and the password was refused on i
 One more, `rate_limited` (`429`, with `Retry-After`), is the answer from a route whose budget a
 caller has spent. Registration, sign-in and the reset request carry one; sign-in's is per caller
 *and* per account, spent before any password is verified, with no lockout and nothing for an admin
-to clear. Every budget, its keys and its numbers are in
+to clear. Feedback and the three upload grants carry one per signed-in account, spent only on what
+would have left the server. Every budget, its keys and its numbers are in
 [docs/project/rate-limits.md](docs/project/rate-limits.md).
 
 ### Sessions

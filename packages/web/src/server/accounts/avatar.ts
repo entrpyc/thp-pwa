@@ -11,6 +11,7 @@ import {
   type UploadGrantPayload,
 } from '@thp/shared';
 import { UPLOAD_GRANT_SECONDS, mediaStore, mintAvatarKey } from '@thp/media';
+import { actorGuard } from '@/server/api/actor-limits';
 import { ApiError } from '@/server/api/errors';
 import { toActor, type Actor } from '@/server/auth/policy';
 import { logger } from '@/server/observability/logger';
@@ -44,6 +45,9 @@ const MAX_FIELD_LENGTH = 512;
  */
 export async function grantAvatarUpload(actor: Actor, body: unknown): Promise<UploadGrantPayload> {
   const requested = parseGrantRequest(body);
+  // After the body is checked and before anything is signed: the budget is on URLs that leave
+  // the server, and a refused body leaves none (docs/project/prd.md, 3.1.22).
+  actorGuard().spend('avatar-grant', actor);
 
   const key = mintAvatarKey(requested.contentType);
   const expiresAt = new Date(Date.now() + UPLOAD_GRANT_SECONDS * 1000);

@@ -2,12 +2,21 @@ import {
   completeJob,
   enqueueJob,
   failJob,
+  formatUsd,
+  readSpendCeilingUsdPerDay,
+  readSpendLedger,
+  spendCeilingReached,
   withTransaction,
   type Executor,
   type JobRow,
   type ProviderMeta,
 } from '@thp/db';
-import { PIPELINE_STEPS, nextPipelineStep, type PipelineStep } from '@thp/shared';
+import {
+  PIPELINE_STEPS,
+  isSpendingStep,
+  nextPipelineStep,
+  type PipelineStep,
+} from '@thp/shared';
 import { withCorrelationId } from '@thp/shared/observability/correlation';
 import { logger } from '@thp/shared/observability/logger';
 import type { HandlerRegistry } from './handlers';
@@ -20,7 +29,19 @@ export interface RunJobOptions {
    * nowhere else**, which is what makes inserting a step an edit to one array.
    */
   readonly steps?: readonly PipelineStep[];
+  /**
+   * The configured daily ceiling on provider spend, in dollars. Read from the environment when
+   * absent; handed in by tests so a ceiling of one dollar can be driven against a ledger of two.
+   */
+  readonly spendCeilingUsd?: number;
 }
+
+/**
+ * The UTC day the ceiling was last logged as reached, so the operator-facing line is written once
+ * a day per process rather than once per refused job. The per-job `job.failed` line still carries
+ * the reason, so nothing is lost — this is the one an alert should key on.
+ */
+let ceilingLoggedForDay: string | null = null;
 
 /**
  * Run one claimed job to a terminal status, and chain forward if it succeeded.
@@ -64,6 +85,46 @@ export async function runJob(
       const row = await failJob(job.id, reason, executor);
       logger.error('job.failed', { ...fields, reason });
       return row;
+    }
+
+    // **The ceiling, before the provider is called** (docs/project/prd.md, 3.21.2.8). Asked of the
+    // running total *before* this job, so a job that starts under the ceiling is allowed to finish
+    // over it — a ceiling that could refuse a call mid-flight would still be billed for it. The true
+    // cap is therefore the ceiling plus one job, and that is stated rather than hidden. A free step
+    // never asks: nothing about it is a number the ledger could count.
+    if (isSpendingStep(job.step)) {
+      const ledger = await readSpendLedger(
+        options.spendCeilingUsd ?? readSpendCeilingUsdPerDay(),
+        executor,
+      );
+      if (spendCeilingReached(ledger)) {
+        const spent = formatUsd(ledger.todayUsd);
+        const ceiling = formatUsd(ledger.ceilingUsd);
+        const reason = `spend ceiling reached: ${spent} of ${ceiling} today`;
+        const row = await failJob(job.id, reason, executor);
+        // The chain stops here exactly as it does for any other failure (3.21.2.3), and nothing
+        // retries by itself (3.21.2.5): an admin raises the ceiling or waits for the day to end,
+        // then re-runs the step.
+        logger.error('job.failed', {
+          ...fields,
+          reason: 'spend-ceiling-reached',
+          spentUsd: ledger.todayUsd,
+          ceilingUsd: ledger.ceilingUsd,
+        });
+        const today = ledger.dayEndsAt.toISOString().slice(0, 10);
+        if (ceilingLoggedForDay !== today) {
+          ceilingLoggedForDay = today;
+          logger.error('spend.ceiling.reached', {
+            spentUsd: ledger.todayUsd,
+            ceilingUsd: ledger.ceilingUsd,
+            dayEndsAt: ledger.dayEndsAt.toISOString(),
+            reason:
+              'Paid steps fail until the ceiling is raised from the pipeline view or the UTC day ' +
+              'ends. See docs/project/rate-limits.md § 3.',
+          });
+        }
+        return row;
+      }
     }
 
     let providerMeta: ProviderMeta | null;

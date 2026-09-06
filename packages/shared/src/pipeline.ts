@@ -44,6 +44,25 @@ export type PipelineStep = (typeof PIPELINE_STEPS)[number];
  */
 export const FIRST_PIPELINE_STEP: PipelineStep = PIPELINE_STEPS[0];
 
+/**
+ * The steps that spend money at a provider (docs/project/prd.md, 3.21.2.8).
+ *
+ * `process_audio` is ffmpeg on our own box and costs nothing that a budget could count. The other
+ * three each make one billed call, and each records what it cost on the job row it ran as
+ * (3.19.13) — which is what the daily spend ceiling reads. Listed here beside the steps rather
+ * than inferred from a provider name so the worker and the API agree on which jobs the ceiling
+ * applies to without either having to know how a step is implemented.
+ */
+export const SPENDING_STEPS: readonly PipelineStep[] = [
+  'transcribe',
+  'generate_draft',
+  'generate_chapters',
+];
+
+export function isSpendingStep(step: PipelineStep): boolean {
+  return SPENDING_STEPS.includes(step);
+}
+
 export function isPipelineStep(value: unknown): value is PipelineStep {
   return typeof value === 'string' && (PIPELINE_STEPS as readonly string[]).includes(value);
 }
@@ -181,6 +200,8 @@ export interface RecordingPipeline {
 /** Payload of `GET /api/v1/pipeline`. */
 export interface PipelineListPayload {
   readonly recordings: readonly RecordingPipeline[];
+  /** Today's paid work against today's ceiling — see {@link SpendView}. */
+  readonly spend: SpendView;
 }
 
 /** Body of `POST /api/v1/recordings/{id}/rerun`. */
@@ -210,4 +231,62 @@ export function isPipelineInFlight(recordings: readonly RecordingPipeline[]): bo
       (step) => step.status !== NOT_STARTED && isUnfinishedJobStatus(step.status),
     ),
   );
+}
+
+// =================================================================================================
+// The daily spend ceiling on the pipeline view (docs/project/prd.md, 3.19.16 and 3.21.2.8).
+// =================================================================================================
+
+/** Where today's ceiling is raised, relative to the `/api/v1` prefix. `PUT`, admin only. */
+export const SPEND_CEILING_PATH = `${PIPELINE_PATH}/spend-ceiling`;
+
+/**
+ * The most a day's ceiling may be raised to, in dollars. A typo of 500 should not be a valid
+ * instruction: a hundred dollars is a quarter's worth of teachings in one day, which is a deliberate
+ * backfill and not something the product should accept on one keystroke more than that.
+ */
+export const MAX_SPEND_CEILING_RAISE_USD = 100;
+
+/** The most a raise's reason may be. A sentence, not a memo. */
+export const MAX_SPEND_RAISE_REASON_LENGTH = 200;
+
+export interface SpendRaiseView {
+  readonly ceilingUsd: number;
+  readonly raisedBy: string | null;
+  /** The admin's display name at the time of reading, or `null` for an account since removed. */
+  readonly raisedByName: string | null;
+  readonly raisedAt: string;
+  readonly reason: string | null;
+}
+
+/**
+ * Today's paid work against today's ceiling, on the same payload as the recordings so the panel
+ * sees the failure and the fix in one refresh.
+ */
+export interface SpendView {
+  readonly todayUsd: number;
+  /** The same, by the step that spent it. Every step is present; the free one is always zero. */
+  readonly byStep: Readonly<Record<PipelineStep, number>>;
+  /** The ceiling in force today: the configured default, or today's raise if it is higher. */
+  readonly ceilingUsd: number;
+  /** The configured default — the floor a raise may not go under. */
+  readonly defaultUsd: number;
+  readonly raise: SpendRaiseView | null;
+  /** When the UTC day ends and the budget starts again. */
+  readonly dayEndsAt: string;
+}
+
+export interface RaiseSpendCeilingRequest {
+  /** The whole ceiling for the rest of today, not an increment. */
+  readonly ceilingUsd: number;
+  readonly reason?: string | null;
+}
+
+export interface SpendPayload {
+  readonly spend: SpendView;
+}
+
+/** Whether today's paid work may still start: it may while the spend is under the ceiling. */
+export function isSpendCeilingReached(spend: Pick<SpendView, 'todayUsd' | 'ceilingUsd'>): boolean {
+  return spend.todayUsd >= spend.ceilingUsd;
 }

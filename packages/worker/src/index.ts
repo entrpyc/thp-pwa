@@ -1,5 +1,10 @@
 import { pathToFileURL } from 'node:url';
-import { closeDatabase, requireDatabaseUrl, type EnvSource } from '@thp/db';
+import {
+  closeDatabase,
+  readSpendCeilingUsdPerDay,
+  requireDatabaseUrl,
+  type EnvSource,
+} from '@thp/db';
 import { logger } from '@thp/shared/observability/logger';
 import { createHandlers } from './handlers';
 import { startWorkerLoop } from './loop';
@@ -34,6 +39,9 @@ export type SignalRegistrar = (signal: NodeJS.Signals, handler: () => void) => v
  */
 export function checkEnvironment(env: EnvSource = process.env): void {
   requireDatabaseUrl(env);
+  // Read at boot so a mistyped ceiling fails the worker with one sentence, rather than failing the
+  // first paid job of the day with a stack trace.
+  readSpendCeilingUsdPerDay(env);
 }
 
 /**

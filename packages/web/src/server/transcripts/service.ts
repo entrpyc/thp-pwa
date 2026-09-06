@@ -20,6 +20,7 @@ import { ApiError } from '@/server/api/errors';
 import type { Actor } from '@/server/auth/policy';
 import { requireChapterScope } from '@/server/chapters/service';
 import { queue } from '@/server/jobs/queue';
+import { requireSpendHeadroom } from '@/server/pipeline/spend';
 import { logger } from '@/server/observability/logger';
 
 /**
@@ -208,6 +209,8 @@ export async function regenerateSummary(
       'A draft for this recording is already being generated. Wait for it to finish, then try again.',
     );
   }
+  // Refused now rather than as a failed row later (docs/project/prd.md, 3.21.2.8).
+  await requireSpendHeadroom('generate_draft');
 
   const enqueued = await queue().enqueue({
     recordingId,

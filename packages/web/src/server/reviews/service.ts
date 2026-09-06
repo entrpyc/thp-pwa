@@ -35,6 +35,7 @@ import {
 import { ApiError } from '@/server/api/errors';
 import type { Actor } from '@/server/auth/policy';
 import { queue } from '@/server/jobs/queue';
+import { requireSpendHeadroom } from '@/server/pipeline/spend';
 import { logger } from '@/server/observability/logger';
 
 /**
@@ -366,6 +367,9 @@ export async function regenerateReview(
       'A draft for this recording is already being generated. Wait for it to finish, then try again.',
     );
   }
+  // Asked before the discard, so a refusal by the day's ceiling (docs/project/prd.md, 3.21.2.8)
+  // leaves the current draft exactly where it was.
+  await requireSpendHeadroom('generate_draft');
 
   const enqueued = await withTransaction(async (tx) => {
     const closed = await closeReviewItem({ id, status: 'discarded', reviewedBy: actor.id }, tx);

@@ -134,6 +134,7 @@ export function createTranscribeHandler(deps: TranscribeDependencies = {}): JobH
     );
 
     const providerMeta: ProviderMeta = {
+      provider: asr.name,
       model: result.spend.model,
       modelVersion: result.spend.modelVersion,
       durationSeconds: result.spend.durationSeconds,

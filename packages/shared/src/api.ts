@@ -97,6 +97,10 @@ export const CORRELATION_ID_HEADER = 'x-correlation-id';
  *   caller was wrong: the screen has to say "wait and try again" rather than "fix this", and a
  *   client cannot tell those apart from a status alone. The response carries `Retry-After`, so
  *   the wait is a number the screen prints rather than a guess it makes.
+ * - `spend_ceiling_reached` — today's paid work has reached the daily ceiling (project prd
+ *   3.21.2.8), so a re-run or a regenerate that would spend at a provider is refused before it is
+ *   queued. `409` rather than `429`: the caller is not asking too often, the day's budget is
+ *   spent, and the fix is a raise from the pipeline view (3.19.16) or waiting for the day to end.
  *
  * Tags add one, on the same argument `email_taken` was made on:
  *
@@ -125,6 +129,7 @@ export const API_ERROR_CODES = [
   'generation_in_flight',
   'note_removed',
   'rate_limited',
+  'spend_ceiling_reached',
   'tag_exists',
   'not_found',
   'internal_error',

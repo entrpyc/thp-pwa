@@ -1,17 +1,23 @@
 'use client';
 
-import { useCallback, useEffect, useRef, useState } from 'react';
+import { useCallback, useEffect, useRef, useState, type FormEvent } from 'react';
 import {
+  MAX_SPEND_CEILING_RAISE_USD,
+  MAX_SPEND_RAISE_REASON_LENGTH,
   NOT_STARTED,
   PIPELINE_PATH,
   PIPELINE_POLL_INTERVAL_MS,
+  SPEND_CEILING_PATH,
   isPipelineInFlight,
+  isSpendCeilingReached,
   recordingRerunPath,
   type PipelineListPayload,
   type PipelineStep,
   type PipelineStepStatus,
   type PipelineStepView,
   type RecordingPipeline,
+  type SpendPayload,
+  type SpendView,
 } from '@thp/shared';
 import { ApiClientError, apiFetch } from '@/client/api-client';
 import styles from './pipeline.module.css';
@@ -171,8 +177,22 @@ function describeFailure(caught: unknown): string {
     : 'Could not reach the server. Check your connection and try again.';
 }
 
+/** `$2.14` — the one way an amount is spelled here, matching the worker's failure reason. */
+function usd(amount: number): string {
+  return `$${amount.toFixed(2)}`;
+}
+
+/** "6 h 12 m" — how long until the UTC day ends and the budget starts again. */
+function describeTimeLeft(untilIso: string, now: number = Date.now()): string {
+  const left = Math.max(0, new Date(untilIso).getTime() - now);
+  const hours = Math.floor(left / 3_600_000);
+  const minutes = Math.floor((left % 3_600_000) / 60_000);
+  return hours > 0 ? `${hours} h ${minutes} m` : `${minutes} m`;
+}
+
 export function PipelinePanel() {
   const [recordings, setRecordings] = useState<readonly RecordingPipeline[] | null>(null);
+  const [spend, setSpend] = useState<SpendView | null>(null);
   const [listError, setListError] = useState<string | null>(null);
   const [busy, setBusy] = useState<string | null>(null);
   const [notes, setNotes] = useState<Record<string, string>>({});
@@ -194,10 +214,12 @@ export function PipelinePanel() {
       // Rendered in the order the API sent, never re-sorted here: the query orders by the date
       // recorded, and a second ordering in the client is a second answer to "what is most recent".
       setRecordings(payload.recordings);
+      setSpend(payload.spend);
       inFlight.current = isPipelineInFlight(payload.recordings);
       setListError(null);
     } catch (caught) {
       setRecordings(null);
+      setSpend(null);
       inFlight.current = false;
       setListError(describeFailure(caught));
     }
@@ -273,6 +295,8 @@ export function PipelinePanel() {
           </p>
         </div>
 
+        {spend === null ? null : <SpendCard spend={spend} onRaised={setSpend} />}
+
         {listError !== null ? (
           <p className={styles.failure} role="alert">
             {listError}
@@ -317,6 +341,137 @@ export function PipelinePanel() {
         )}
       </section>
     </div>
+  );
+}
+
+/**
+ * Today's paid work against today's ceiling, and the one control that moves the ceiling
+ * ([3.19.16](docs/project/prd.md)).
+ *
+ * Above the rows because it explains a whole column of them at once: a `transcribe` that failed
+ * naming the ceiling is not a broken teaching, it is a spent day, and the fix is on this card. The
+ * figure is always shown — a number worth seeing before it is a problem — and the "reached" line
+ * only when it is. The split is by what did the spending, in the operator's words rather than the
+ * step's: transcription is one provider, generation is the other.
+ *
+ * The raise is the **whole ceiling for the rest of today**, never an increment, because that is
+ * the number the ledger enforces and the only reading that survives being looked at tomorrow. The
+ * field is floored at the configured default and capped by the contract, and the API refuses both
+ * ends independently of what the field allows.
+ */
+function SpendCard({
+  spend,
+  onRaised,
+}: {
+  spend: SpendView;
+  onRaised: (spend: SpendView) => void;
+}) {
+  const [ceiling, setCeiling] = useState('');
+  const [reason, setReason] = useState('');
+  const [raising, setRaising] = useState(false);
+  const [note, setNote] = useState<string | null>(null);
+
+  const reached = isSpendCeilingReached(spend);
+  const generationUsd = spend.byStep.generate_draft + spend.byStep.generate_chapters;
+
+  async function raise(event: FormEvent<HTMLFormElement>): Promise<void> {
+    event.preventDefault();
+    if (raising) return;
+    setRaising(true);
+    setNote(null);
+    try {
+      const payload = await apiFetch<SpendPayload>(SPEND_CEILING_PATH, {
+        method: 'PUT',
+        credentials: 'include',
+        headers: { 'content-type': 'application/json' },
+        body: JSON.stringify({
+          ceilingUsd: Number(ceiling),
+          reason: reason.trim() === '' ? null : reason.trim(),
+        }),
+      });
+      onRaised(payload.spend);
+      setCeiling('');
+      setReason('');
+      setNote(`Today's ceiling is now ${usd(payload.spend.ceilingUsd)}.`);
+    } catch (caught) {
+      setNote(describeFailure(caught));
+    } finally {
+      setRaising(false);
+    }
+  }
+
+  return (
+    <section className={styles.spend} aria-labelledby="spend-heading">
+      <p className={styles.spendHeading} id="spend-heading">
+        Spend today
+      </p>
+      <p className={styles.spendFigure} data-reached={reached}>
+        {usd(spend.todayUsd)} of {usd(spend.ceilingUsd)}
+      </p>
+      <p className={styles.spendSplit}>
+        Transcription {usd(spend.byStep.transcribe)} · Generation {usd(generationUsd)} · Day ends
+        in {describeTimeLeft(spend.dayEndsAt)} (UTC)
+      </p>
+
+      {reached ? (
+        <p className={styles.reason} role="alert">
+          Ceiling reached. Paid steps fail until it is raised or the day ends.
+        </p>
+      ) : null}
+
+      {spend.raise === null ? null : (
+        <p className={styles.stepNote}>
+          Raised to {usd(spend.raise.ceilingUsd)} by {spend.raise.raisedByName ?? 'a removed account'}{' '}
+          at {formatMoment(spend.raise.raisedAt)}
+          {spend.raise.reason === null ? '' : ` — ${spend.raise.reason}`}. Back to{' '}
+          {usd(spend.defaultUsd)} tomorrow.
+        </p>
+      )}
+
+      <form className={styles.spendRaise} onSubmit={raise} noValidate>
+        <div className={styles.spendFieldTight}>
+          <label className={styles.spendLabel} htmlFor="spend-ceiling">
+            Raise today&apos;s ceiling to (USD)
+          </label>
+          <input
+            className={styles.spendInput}
+            id="spend-ceiling"
+            name="ceilingUsd"
+            type="number"
+            inputMode="decimal"
+            min={spend.defaultUsd}
+            max={MAX_SPEND_CEILING_RAISE_USD}
+            step="0.01"
+            value={ceiling}
+            onChange={(event) => setCeiling(event.target.value)}
+            required
+          />
+        </div>
+        <div className={styles.spendField}>
+          <label className={styles.spendLabel} htmlFor="spend-reason">
+            Reason (optional)
+          </label>
+          <input
+            className={styles.spendInput}
+            id="spend-reason"
+            name="reason"
+            type="text"
+            maxLength={MAX_SPEND_RAISE_REASON_LENGTH}
+            value={reason}
+            onChange={(event) => setReason(event.target.value)}
+          />
+        </div>
+        <button className={styles.spendSubmit} type="submit" disabled={raising || ceiling === ''}>
+          {raising ? 'Raising…' : 'Raise'}
+        </button>
+      </form>
+
+      {note === null ? null : (
+        <p className={styles.reason} role="status">
+          {note}
+        </p>
+      )}
+    </section>
   );
 }
 

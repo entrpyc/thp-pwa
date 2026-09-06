@@ -17,6 +17,7 @@ import { ApiError } from '@/server/api/errors';
 import type { Actor } from '@/server/auth/policy';
 import { queue } from '@/server/jobs/queue';
 import { logger } from '@/server/observability/logger';
+import { readSpendView, requireSpendHeadroom } from './spend';
 
 /**
  * **What the pipeline is doing, and the one control over it.**
@@ -51,7 +52,11 @@ export async function readPipelineStatus(actor: Actor): Promise<PipelineListPayl
    * teaching — the confirmation needs a number per row, and asking per row would be a query per
    * teaching for a sentence nobody has pressed towards yet.
    */
-  const [rows, edited] = await Promise.all([readPipeline(), countEditedChaptersByRecording()]);
+  const [rows, edited, spend] = await Promise.all([
+    readPipeline(),
+    countEditedChaptersByRecording(),
+    readSpendView(),
+  ]);
 
   logger.info('pipeline.read', {
     actorId: actor.id,
@@ -70,6 +75,7 @@ export async function readPipelineStatus(actor: Actor): Promise<PipelineListPayl
       // — which is what it is.
       editedChapters: edited.get(row.recordingId) ?? 0,
     })),
+    spend,
   };
 }
 
@@ -94,6 +100,10 @@ export async function rerunStep(
   if (recording === null) {
     throw ApiError.notFound('There is no recording with that id.');
   }
+
+  // What the worker would refuse a minute from now, refused here with the same numbers
+  // (docs/project/prd.md, 3.21.2.8). A free step never asks.
+  await requireSpendHeadroom(step);
 
   const enqueued = await queue().enqueue({ recordingId, step });
 

@@ -156,6 +156,16 @@ export class ApiError extends Error {
   }
 
   /**
+   * Today's paid work has reached the daily ceiling (docs/project/prd.md, 3.21.2.8), so a step
+   * that would spend at a provider is refused before it is queued. `409` rather than `429`: the
+   * caller is not asking too often, the day's budget is spent, and the fix is a raise from the
+   * pipeline view (3.19.16) or waiting for the day to end — both of which the message says.
+   */
+  static spendCeilingReached(message: string): ApiError {
+    return new ApiError('spend_ceiling_reached', 409, message);
+  }
+
+  /**
    * Refused because it would leave the product with no active admin (docs/project/prd.md, 3.1.11).
    *
    * Its own code rather than `forbidden`, because the caller *was* permitted: what refused is an

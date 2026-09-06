@@ -176,6 +176,13 @@
       "when": 1788632387509,
       "tag": "0024_notifications",
       "breakpoints": true
+    },
+    {
+      "idx": 25,
+      "version": "7",
+      "when": 1788690729365,
+      "tag": "0025_spend_ceiling_raise",
+      "breakpoints": true
     }
   ]
 }

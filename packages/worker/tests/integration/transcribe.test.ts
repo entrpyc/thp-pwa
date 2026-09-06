@@ -204,6 +204,9 @@ describe('a recording that transcribes', () => {
       'durationSeconds',
       'model',
       'modelVersion',
+      // Which provider did the work, so the day's ledger can be split without inferring it from
+      // the step (docs/project/prd.md, 3.19.16).
+      'provider',
       'requestId',
     ]);
     expect(meta['durationSeconds']).toBe(SCRIPT.durationSeconds);

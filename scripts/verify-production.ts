@@ -433,6 +433,28 @@ const CHECKS: readonly Check[] = [
     },
   },
   {
+    name: 'spend-ceiling',
+    reach: 'box',
+    async run() {
+      // The number both processes refuse from (project prd 3.21.2.8), parsed the way they parse
+      // it, and the table a raise is written to. A box that passes `migrations` and fails here has
+      // a ceiling set to something that is not an amount.
+      const raw = process.env['SPEND_CEILING_USD_PER_DAY']?.trim() ?? '';
+      const ceiling = raw === '' ? 2 : Number(raw);
+      if (!Number.isFinite(ceiling) || ceiling <= 0) {
+        return bad(`SPEND_CEILING_USD_PER_DAY is "${raw}", not a positive amount`);
+      }
+      const table = await query("select to_regclass('public.spend_ceiling_raise') is not null");
+      if (table !== 't') return bad('spend_ceiling_raise table is missing — run `npm run migrate`');
+      const today = await query(
+        "select coalesce(sum((provider_meta->>'costUsd')::numeric), 0)::text from job " +
+          "where status = 'succeeded' and jsonb_typeof(provider_meta->'costUsd') = 'number' " +
+          "and finished_at >= (date_trunc('day', now() at time zone 'utc') at time zone 'utc')",
+      );
+      return ok(`$${Number(today).toFixed(2)} of $${ceiling.toFixed(2)} today${raw === '' ? ' (default)' : ''}`);
+    },
+  },
+  {
     name: 'origin',
     reach: 'remote',
     async run() {

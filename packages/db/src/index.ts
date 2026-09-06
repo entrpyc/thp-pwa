@@ -44,7 +44,20 @@ export {
   type ChapterRow,
   type NewChapter,
 } from './chapters';
-export { requireDatabaseUrl, type EnvSource } from './env';
+export {
+  DEFAULT_SPEND_CEILING_USD_PER_DAY,
+  readSpendCeilingUsdPerDay,
+  requireDatabaseUrl,
+  type EnvSource,
+} from './env';
+export {
+  formatUsd,
+  raiseSpendCeilingToday,
+  readSpendLedger,
+  spendCeilingReached,
+  type SpendCeilingRaise,
+  type SpendLedger,
+} from './spend';
 export {
   acceptInvitation,
   findInvitationById,

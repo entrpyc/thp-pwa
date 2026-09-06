@@ -5,6 +5,7 @@ import {
   type FeedbackKind,
   type FeedbackSubmittedPayload,
 } from '@thp/shared';
+import { actorGuard } from '@/server/api/actor-limits';
 import { ApiError } from '@/server/api/errors';
 import type { Actor } from '@/server/auth/policy';
 import { readFeedbackRecipient } from '@/server/mail/env';
@@ -64,6 +65,10 @@ export async function submitFeedback(
   );
 
   const to = readFeedbackRecipient();
+
+  // After every field is checked and before the message exists: the budget is on mail that leaves
+  // the server, and a refused body sends none (docs/project/prd.md, 3.1.22).
+  actorGuard().spend('feedback', actor);
 
   await sendMail(
     feedbackMessage({

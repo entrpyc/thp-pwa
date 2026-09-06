@@ -28,6 +28,7 @@ import {
   type UploadGrantPayload,
 } from '@thp/shared';
 import { UPLOAD_GRANT_SECONDS, mediaStore, mintArtworkKey } from '@thp/media';
+import { actorGuard } from '@/server/api/actor-limits';
 import { ApiError } from '@/server/api/errors';
 import { can, type Actor } from '@/server/auth/policy';
 import { audit } from '@/server/observability/audit';
@@ -289,6 +290,9 @@ export async function grantArtworkUpload(
   const requested = parseArtworkGrantRequest(body);
 
   if ((await findSeriesById(seriesId)) === null) throw notFound();
+  // After the body and the series are checked and before anything is signed: the budget is on
+  // URLs that leave the server, and a refused request leaves none (docs/project/prd.md, 3.1.22).
+  actorGuard().spend('artwork-grant', actor);
 
   const key = mintArtworkKey(requested.contentType);
   const expiresAt = new Date(Date.now() + UPLOAD_GRANT_SECONDS * 1000);

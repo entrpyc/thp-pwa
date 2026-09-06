@@ -169,12 +169,14 @@ describe('migrations apply to an empty database by one command', () => {
         select tablename from pg_tables where schemaname = 'public' order by tablename
       `;
       expect(tables.map((row) => row.tablename)).toEqual([
+        'announcement',
         'chapter',
         'invitation',
         'job',
         'note',
         'note_pin',
         'note_reaction',
+        'notification',
         'password_reset',
         'playback_progress',
         'recording',
@@ -185,6 +187,7 @@ describe('migrations apply to an empty database by one command', () => {
         'series',
         'series_tag',
         'session',
+        'spend_ceiling_raise',
         'summary',
         'tag',
         'transcript',
