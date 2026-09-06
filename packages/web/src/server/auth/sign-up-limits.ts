@@ -1,4 +1,10 @@
 import { ApiError } from '@/server/api/errors';
+import {
+  describeWait,
+  readBudgetCount,
+  retryAfterSeconds,
+  type EnvSource,
+} from '@/server/api/budgets';
 import { clientAddress } from '@/server/api/client-address';
 import { createRateLimiter, type RateLimiter } from '@/server/api/rate-limit';
 import { logger } from '@/server/observability/logger';
@@ -35,8 +41,6 @@ import { logger } from '@/server/observability/logger';
  * instance, which is what makes an in-memory count the true count. Cluster mode would multiply
  * every number here by the instance count without changing a line of this file.
  */
-
-export type EnvSource = Readonly<Record<string, string | undefined>>;
 
 export interface SignUpLimits {
   readonly windowMs: number;
@@ -75,16 +79,6 @@ export const UNKNOWN_ADDRESS_KEY = 'unknown';
 /** The single bucket the whole-route ceiling counts in. Not an address, and cannot collide with one. */
 const TOTAL_KEY = 'all';
 
-function readCount(env: EnvSource, name: string, fallback: number): number {
-  const raw = env[name];
-  if (raw === undefined || raw.trim() === '') return fallback;
-  const parsed = Number.parseInt(raw.trim(), 10);
-  if (!Number.isInteger(parsed) || parsed < 1) {
-    throw new Error(`${name} is "${raw}", which is not a positive whole number. See .env.example.`);
-  }
-  return parsed;
-}
-
 /**
  * The limits in force, from configuration, defaulting to {@link DEFAULT_SIGN_UP_LIMITS}.
  *
@@ -94,13 +88,17 @@ function readCount(env: EnvSource, name: string, fallback: number): number {
  * budget of three and drive the refusal for real, instead of asserting that a constant exists.
  */
 export function readSignUpLimits(env: EnvSource = process.env): SignUpLimits {
-  const windowSeconds = readCount(
+  const windowSeconds = readBudgetCount(
     env,
     'SIGNUP_RATE_LIMIT_WINDOW_SECONDS',
     DEFAULT_SIGN_UP_LIMITS.windowMs / 1000,
   );
-  const perAddress = readCount(env, 'SIGNUP_RATE_LIMIT_PER_IP', DEFAULT_SIGN_UP_LIMITS.perAddress);
-  const total = readCount(env, 'SIGNUP_RATE_LIMIT_TOTAL', DEFAULT_SIGN_UP_LIMITS.total);
+  const perAddress = readBudgetCount(
+    env,
+    'SIGNUP_RATE_LIMIT_PER_IP',
+    DEFAULT_SIGN_UP_LIMITS.perAddress,
+  );
+  const total = readBudgetCount(env, 'SIGNUP_RATE_LIMIT_TOTAL', DEFAULT_SIGN_UP_LIMITS.total);
 
   if (total < perAddress) {
     throw new Error(
@@ -188,18 +186,11 @@ export function createSignUpGuard(limits: SignUpLimits = readSignUpLimits()): Si
  * "everyone is" is a reconnaissance signal worth more than it is worth spending a sentence on.
  */
 function refusal(retryAfterMs: number): ApiError {
-  const seconds = Math.max(1, Math.ceil(retryAfterMs / 1000));
+  const seconds = retryAfterSeconds(retryAfterMs);
   return ApiError.rateLimited(
     seconds,
     `Too many sign-up attempts. Try again in ${describeWait(seconds)}.`,
   );
-}
-
-/** A wait a person can act on. Nobody reads "in 437 seconds" and does anything different. */
-export function describeWait(seconds: number): string {
-  if (seconds < 60) return `${seconds} second${seconds === 1 ? '' : 's'}`;
-  const minutes = Math.ceil(seconds / 60);
-  return `${minutes} minute${minutes === 1 ? '' : 's'}`;
 }
 
 /**

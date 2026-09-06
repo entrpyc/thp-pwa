@@ -18,11 +18,12 @@ export const dynamic = 'force-dynamic';
  * one motion rather than handing them an account and then a sign-in form — the same shape
  * invitation-accept takes, and the same payload, so the client has one response to understand.
  *
- * **Rate-limited, and this is the only route in the product that is** (docs/project/prd.md, 3.1.18).
- * It is the only unauthenticated route that writes, and the only one that tells an anonymous caller
+ * **Rate-limited** (docs/project/prd.md, 3.1.18), and the first route in the product that was. It
+ * is the only unauthenticated route that writes, and the only one that tells an anonymous caller
  * a fact about an account it does not hold — see `sign-up-limits.ts` for the two budgets and the
- * argument for each. The check is the first thing that happens, before the body is even read: work
- * a refused caller can make the server do is work the limit did not prevent.
+ * argument for each, and docs/project/rate-limits.md for the budgets that followed. The check is
+ * the first thing that happens, before the body is even read: work a refused caller can make the
+ * server do is work the limit did not prevent.
  */
 export const POST = apiRoute(PUBLIC, async (request) => {
   signUpGuard().enforce(request);

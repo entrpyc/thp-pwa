@@ -9,6 +9,7 @@ import {
   sessionCookieHeader,
 } from '@/server/auth/session';
 import { signIn } from '@/server/auth/sign-in';
+import { emailNamedBy, signInGuard } from '@/server/auth/sign-in-limits';
 
 export const runtime = 'nodejs';
 export const dynamic = 'force-dynamic';
@@ -22,9 +23,18 @@ export const dynamic = 'force-dynamic';
  * show.
  */
 
-/** Sign in. Answers `201` — a session is a resource, and this is the request that created it. */
+/**
+ * Sign in. Answers `201` — a session is a resource, and this is the request that created it.
+ *
+ * **Rate-limited, per caller and per account** (docs/project/prd.md, 3.1.20), and the budget is
+ * spent before `signIn` does any work, because the work is the point: a refused attempt costs no
+ * password verification. The body is read first only because the account budget needs the address
+ * it names; reading JSON is not the cost the budget exists to refuse.
+ */
 export const POST = apiRoute(PUBLIC, async (request) => {
   const body: unknown = await request.json().catch(() => null);
+  signInGuard().enforce(request, emailNamedBy(body));
+
   const { actor, session } = await signIn(body);
   const payload: SessionPayload = { user: await describeSessionUser(actor) };
   return new ApiSuccess(payload, 201, {

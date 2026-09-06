@@ -1,11 +1,11 @@
 import { describe, expect, it } from 'vitest';
 import { clientAddress } from '@/server/api/client-address';
 import { createRateLimiter } from '@/server/api/rate-limit';
+import { describeWait } from '@/server/api/budgets';
 import {
   DEFAULT_SIGN_UP_LIMITS,
   UNKNOWN_ADDRESS_KEY,
   createSignUpGuard,
-  describeWait,
   readSignUpLimits,
 } from '@/server/auth/sign-up-limits';
 import { ApiError } from '@/server/api/errors';

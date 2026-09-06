@@ -88,6 +88,31 @@ const TIGHT_SIGN_UP = {
   SIGNUP_RATE_LIMIT_TOTAL: '1000',
 } as const;
 
+/**
+ * **The sign-in budget, lifted for every server but one** — the same argument as
+ * {@link UNLIMITED_SIGN_UP}, and more pressing: the suite signs in far more often than it
+ * registers, always from 127.0.0.1, so the shipped fifty-per-caller would be spent a few files in.
+ */
+const UNLIMITED_SIGN_IN = {
+  SIGNIN_RATE_LIMIT_WINDOW_SECONDS: '900',
+  SIGNIN_RATE_LIMIT_PER_IP: '100000',
+  SIGNIN_RATE_LIMIT_PER_ACCOUNT: '100000',
+} as const;
+
+/**
+ * **The sign-in budget on the server that has one.**
+ *
+ * Three per account, so a fourth attempt at one address is a refusal a test can drive in four
+ * lines. Six per caller — tight enough to drive the address budget too, and wide enough that a test
+ * about the account budget (three attempts, one refusal, one success on another account) never
+ * brushes it. Each test uses a client address of its own, as the sign-up tests do.
+ */
+const TIGHT_SIGN_IN = {
+  SIGNIN_RATE_LIMIT_WINDOW_SECONDS: '300',
+  SIGNIN_RATE_LIMIT_PER_IP: '6',
+  SIGNIN_RATE_LIMIT_PER_ACCOUNT: '3',
+} as const;
+
 function captureMail(name: string): Record<string, string> {
   return {
     MAIL_TRANSPORT: 'capture',
@@ -140,14 +165,14 @@ export default async function setup(project: TestProject): Promise<() => Promise
       name: 'primary',
       databaseUrl: appDatabase.url,
       port: primaryPort,
-      env: { ...media, ...TEST_BIBLE, ...UNLIMITED_SIGN_UP, ...captureMail('primary') },
+      env: { ...media, ...TEST_BIBLE, ...UNLIMITED_SIGN_UP, ...UNLIMITED_SIGN_IN,...captureMail('primary') },
     });
     servers.push(primary);
 
     const broken = await startNextServer({
       name: 'broken-db',
       databaseUrl: UNREACHABLE_DATABASE_URL,
-      env: { ...media, ...TEST_BIBLE, ...UNLIMITED_SIGN_UP, ...captureMail('broken-db') },
+      env: { ...media, ...TEST_BIBLE, ...UNLIMITED_SIGN_UP, ...UNLIMITED_SIGN_IN,...captureMail('broken-db') },
     });
     servers.push(broken);
 
@@ -156,7 +181,7 @@ export default async function setup(project: TestProject): Promise<() => Promise
     const mailDown = await startNextServer({
       name: 'mail-down',
       databaseUrl: appDatabase.url,
-      env: { ...media, ...TEST_BIBLE, ...UNLIMITED_SIGN_UP, ...FAILING_MAIL },
+      env: { ...media, ...TEST_BIBLE, ...UNLIMITED_SIGN_UP, ...UNLIMITED_SIGN_IN,...FAILING_MAIL },
     });
     servers.push(mailDown);
 
@@ -165,7 +190,13 @@ export default async function setup(project: TestProject): Promise<() => Promise
     const rateLimited = await startNextServer({
       name: 'rate-limited',
       databaseUrl: appDatabase.url,
-      env: { ...media, ...TEST_BIBLE, ...TIGHT_SIGN_UP, ...captureMail('rate-limited') },
+      env: {
+        ...media,
+        ...TEST_BIBLE,
+        ...TIGHT_SIGN_UP,
+        ...TIGHT_SIGN_IN,
+        ...captureMail('rate-limited'),
+      },
     });
     servers.push(rateLimited);
 
@@ -177,6 +208,11 @@ export default async function setup(project: TestProject): Promise<() => Promise
     project.provide('rateLimitedSignUp', {
       perAddress: Number(TIGHT_SIGN_UP.SIGNUP_RATE_LIMIT_PER_IP),
       windowSeconds: Number(TIGHT_SIGN_UP.SIGNUP_RATE_LIMIT_WINDOW_SECONDS),
+    });
+    project.provide('rateLimitedSignIn', {
+      perAddress: Number(TIGHT_SIGN_IN.SIGNIN_RATE_LIMIT_PER_IP),
+      perAccount: Number(TIGHT_SIGN_IN.SIGNIN_RATE_LIMIT_PER_ACCOUNT),
+      windowSeconds: Number(TIGHT_SIGN_IN.SIGNIN_RATE_LIMIT_WINDOW_SECONDS),
     });
     project.provide('mailCapturePath', resolve(MAIL_DIR, 'primary.jsonl'));
     project.provide('databaseUrl', appDatabase.url);
@@ -197,12 +233,18 @@ declare module 'vitest' {
     /** A server whose mail transport refuses everything. Shares the primary's database. */
     mailDownBaseUrl: string;
     /**
-     * A server with a real sign-up budget — three per caller. Every other server has the limit
-     * lifted out of the way, because the suite is one caller as far as a limiter can tell.
+     * A server with real sign-up and sign-in budgets — three registrations per caller, three
+     * sign-in attempts per account and six per caller. Every other server has both limits lifted
+     * out of the way, because the suite is one caller as far as a limiter can tell.
      */
     rateLimitedBaseUrl: string;
     /** What that server was configured with, so no test restates a number the harness chose. */
     rateLimitedSignUp: { readonly perAddress: number; readonly windowSeconds: number };
+    rateLimitedSignIn: {
+      readonly perAddress: number;
+      readonly perAccount: number;
+      readonly windowSeconds: number;
+    };
     /** JSON-lines file the primary server appends every outgoing message to. */
     mailCapturePath: string;
     /** The suite's own database, not the one in `.env`. Dropped when the run ends. */
