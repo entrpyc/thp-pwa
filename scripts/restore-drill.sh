@@ -77,19 +77,26 @@ sudo rm -rf "$SCRATCH_DIR"
 sudo install -d -o postgres -g postgres -m 700 "$SCRATCH_DIR"
 sudo -u postgres pgbackrest --stanza="$STANZA" --pg1-path="$SCRATCH_DIR" --type=default restore
 
+# From here on there is something to clean up, whether or not the scratch cluster ever starts.
+cleanup() {
+  sudo -u postgres "$PG_BIN/pg_ctl" -D "$SCRATCH_DIR" -m immediate stop > /dev/null 2>&1 || true
+  sudo rm -rf "$SCRATCH_DIR"
+}
+trap cleanup EXIT
+
 # Ubuntu keeps postgresql.conf, pg_hba.conf and pg_ident.conf under /etc/postgresql rather than in
 # the data directory, so the backup does not contain them and the restored directory has none.
 # Postgres refuses to start without the first two. Minimal ones are written here — **not copied from
 # /etc**, whose postgresql.conf pins `data_directory` to the live cluster and would start production
 # instead of the scratch copy. On a layout that does keep them in the data directory, the restored
 # files are left alone.
-if ! sudo test -f "$SCRATCH_DIR/postgresql.conf"; then
+if ! sudo -u postgres test -f "$SCRATCH_DIR/postgresql.conf"; then
   sudo -u postgres tee "$SCRATCH_DIR/postgresql.conf" > /dev/null <<CONF
 # Written by scripts/restore-drill.sh for the scratch cluster. Everything else is the default.
 listen_addresses = ''
 CONF
 fi
-if ! sudo test -f "$SCRATCH_DIR/pg_hba.conf"; then
+if ! sudo -u postgres test -f "$SCRATCH_DIR/pg_hba.conf"; then
   sudo -u postgres tee "$SCRATCH_DIR/pg_hba.conf" > /dev/null <<CONF
 local all postgres peer
 CONF
@@ -105,12 +112,6 @@ CONF
 
 echo "==> Starting the scratch cluster on port $SCRATCH_PORT"
 sudo -u postgres "$PG_BIN/pg_ctl" -D "$SCRATCH_DIR" -o "-p $SCRATCH_PORT" -w -t 120 start
-
-cleanup() {
-  sudo -u postgres "$PG_BIN/pg_ctl" -D "$SCRATCH_DIR" -m immediate stop > /dev/null 2>&1 || true
-  sudo rm -rf "$SCRATCH_DIR"
-}
-trap cleanup EXIT
 
 # The restored cluster carries production's databases, so the database name is the one in
 # DATABASE_URL rather than a guess.
