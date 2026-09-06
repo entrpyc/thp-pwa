@@ -113,6 +113,23 @@ CONF
 echo "==> Starting the scratch cluster on port $SCRATCH_PORT"
 sudo -u postgres "$PG_BIN/pg_ctl" -D "$SCRATCH_DIR" -o "-p $SCRATCH_PORT" -w -t 120 start
 
+# `pg_ctl -w` returns as soon as the server takes connections, and a recovering cluster does that at
+# the first consistent point — before it has replayed the WAL that followed the backup. Counting
+# then compares production against a copy that is still catching up, and the shortfall looks like a
+# broken backup when it is only an early reading. With no recovery target, Postgres promotes itself
+# once the archive is exhausted; wait for that.
+echo "==> Waiting for WAL replay to finish"
+for _ in $(seq 1 300); do
+  if [[ "$(sudo -u postgres psql -p "$SCRATCH_PORT" -Atc 'select pg_is_in_recovery()')" == "f" ]]; then
+    break
+  fi
+  sleep 1
+done
+if [[ "$(sudo -u postgres psql -p "$SCRATCH_PORT" -Atc 'select pg_is_in_recovery()')" != "f" ]]; then
+  echo "The scratch cluster is still replaying WAL after five minutes." >&2
+  exit 1
+fi
+
 # The restored cluster carries production's databases, so the database name is the one in
 # DATABASE_URL rather than a guess.
 SCRATCH_DB=$(basename "${DATABASE_URL%%\?*}")
