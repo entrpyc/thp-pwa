@@ -113,6 +113,20 @@ const TIGHT_SIGN_IN = {
   SIGNIN_RATE_LIMIT_PER_ACCOUNT: '3',
 } as const;
 
+/** **The reset-request budget, lifted for every server but one.** Same argument as sign-up's. */
+const UNLIMITED_PASSWORD_RESET = {
+  RESET_RATE_LIMIT_WINDOW_SECONDS: '900',
+  RESET_RATE_LIMIT_PER_IP: '100000',
+  RESET_RATE_LIMIT_TOTAL: '100000',
+} as const;
+
+/** **The reset-request budget on the server that has one.** Three per caller, as sign-up's. */
+const TIGHT_PASSWORD_RESET = {
+  RESET_RATE_LIMIT_WINDOW_SECONDS: '300',
+  RESET_RATE_LIMIT_PER_IP: '3',
+  RESET_RATE_LIMIT_TOTAL: '1000',
+} as const;
+
 function captureMail(name: string): Record<string, string> {
   return {
     MAIL_TRANSPORT: 'capture',
@@ -165,14 +179,14 @@ export default async function setup(project: TestProject): Promise<() => Promise
       name: 'primary',
       databaseUrl: appDatabase.url,
       port: primaryPort,
-      env: { ...media, ...TEST_BIBLE, ...UNLIMITED_SIGN_UP, ...UNLIMITED_SIGN_IN,...captureMail('primary') },
+      env: { ...media, ...TEST_BIBLE, ...UNLIMITED_SIGN_UP, ...UNLIMITED_SIGN_IN, ...UNLIMITED_PASSWORD_RESET,...captureMail('primary') },
     });
     servers.push(primary);
 
     const broken = await startNextServer({
       name: 'broken-db',
       databaseUrl: UNREACHABLE_DATABASE_URL,
-      env: { ...media, ...TEST_BIBLE, ...UNLIMITED_SIGN_UP, ...UNLIMITED_SIGN_IN,...captureMail('broken-db') },
+      env: { ...media, ...TEST_BIBLE, ...UNLIMITED_SIGN_UP, ...UNLIMITED_SIGN_IN, ...UNLIMITED_PASSWORD_RESET,...captureMail('broken-db') },
     });
     servers.push(broken);
 
@@ -181,7 +195,7 @@ export default async function setup(project: TestProject): Promise<() => Promise
     const mailDown = await startNextServer({
       name: 'mail-down',
       databaseUrl: appDatabase.url,
-      env: { ...media, ...TEST_BIBLE, ...UNLIMITED_SIGN_UP, ...UNLIMITED_SIGN_IN,...FAILING_MAIL },
+      env: { ...media, ...TEST_BIBLE, ...UNLIMITED_SIGN_UP, ...UNLIMITED_SIGN_IN, ...UNLIMITED_PASSWORD_RESET,...FAILING_MAIL },
     });
     servers.push(mailDown);
 
@@ -195,6 +209,7 @@ export default async function setup(project: TestProject): Promise<() => Promise
         ...TEST_BIBLE,
         ...TIGHT_SIGN_UP,
         ...TIGHT_SIGN_IN,
+        ...TIGHT_PASSWORD_RESET,
         ...captureMail('rate-limited'),
       },
     });
@@ -214,6 +229,11 @@ export default async function setup(project: TestProject): Promise<() => Promise
       perAccount: Number(TIGHT_SIGN_IN.SIGNIN_RATE_LIMIT_PER_ACCOUNT),
       windowSeconds: Number(TIGHT_SIGN_IN.SIGNIN_RATE_LIMIT_WINDOW_SECONDS),
     });
+    project.provide('rateLimitedPasswordReset', {
+      perAddress: Number(TIGHT_PASSWORD_RESET.RESET_RATE_LIMIT_PER_IP),
+      windowSeconds: Number(TIGHT_PASSWORD_RESET.RESET_RATE_LIMIT_WINDOW_SECONDS),
+    });
+    project.provide('rateLimitedMailCapturePath', resolve(MAIL_DIR, 'rate-limited.jsonl'));
     project.provide('mailCapturePath', resolve(MAIL_DIR, 'primary.jsonl'));
     project.provide('databaseUrl', appDatabase.url);
     project.provide('mediaSettings', media);
@@ -245,6 +265,9 @@ declare module 'vitest' {
       readonly perAccount: number;
       readonly windowSeconds: number;
     };
+    rateLimitedPasswordReset: { readonly perAddress: number; readonly windowSeconds: number };
+    /** JSON-lines file the rate-limited server appends every outgoing message to. */
+    rateLimitedMailCapturePath: string;
     /** JSON-lines file the primary server appends every outgoing message to. */
     mailCapturePath: string;
     /** The suite's own database, not the one in `.env`. Dropped when the run ends. */

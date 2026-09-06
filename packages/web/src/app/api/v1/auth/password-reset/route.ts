@@ -5,6 +5,7 @@ import {
 } from '@thp/shared';
 import { PUBLIC } from '@/server/api/access';
 import { apiRoute } from '@/server/api/route';
+import { passwordResetGuard } from '@/server/password-reset/limits';
 import {
   previewPasswordReset,
   requestPasswordReset,
@@ -26,8 +27,15 @@ export const dynamic = 'force-dynamic';
  * deactivated account, malformed input, transport down — because a response that told the
  * difference would tell an anonymous caller which addresses have accounts. It is the enumeration
  * rule sign-in already holds, and it is why this route cannot report success or failure honestly.
+ *
+ * **Rate-limited, per caller and across the route** (docs/project/prd.md, 3.1.21), and the check
+ * is the first thing that happens, before the body is read. A `429` is the one answer this route
+ * gives that is not the fixed payload, and it is allowed because it is an answer about the caller's
+ * request count and not about the address in the body — see `limits.ts`.
  */
 export const POST = apiRoute(PUBLIC, async (request): Promise<PasswordResetRequestedPayload> => {
+  passwordResetGuard().enforce(request);
+
   const body: unknown = await request.json().catch(() => null);
   return requestPasswordReset(body);
 });

@@ -3,7 +3,7 @@
 import Link from 'next/link';
 import { useId, useState, type FormEvent } from 'react';
 import { PASSWORD_RESET_PATH } from '@thp/shared';
-import { apiFetch } from '@/client/api-client';
+import { ApiClientError, apiFetch } from '@/client/api-client';
 import styles from './forgot-password.module.css';
 
 /**
@@ -20,8 +20,10 @@ import styles from './forgot-password.module.css';
  *
  * 1. **Every submission lands on the same confirmation.** There is no branch, because there is
  *    nothing to branch on: the client is told the same thing the server tells everybody.
- * 2. **A failure to reach the server is the only error this screen can show.** Anything the API
- *    answers is a success by construction.
+ * 2. **The API refuses this request for one reason only — the caller's budget** (docs/project/prd.md,
+ *    3.1.21) — and that refusal names a wait, not the address. Anything else the API answers is a
+ *    success by construction, so the only other error this screen can show is failing to reach
+ *    the server at all.
  */
 export function ForgotPasswordForm() {
   const emailId = useId();
@@ -45,10 +47,15 @@ export function ForgotPasswordForm() {
         body: JSON.stringify({ email }),
       });
       setSent(true);
-    } catch {
+    } catch (caught) {
       // The API cannot fail this request on its merits — it answers the same payload for every
-      // outcome — so anything caught here is the network, and saying so is honest.
-      setError('Could not reach the server. Check your connection and try again.');
+      // outcome. What it can do is refuse the caller for asking too often, and that message names
+      // the wait; anything else caught here is the network, and saying so is honest.
+      setError(
+        caught instanceof ApiClientError
+          ? caught.message
+          : 'Could not reach the server. Check your connection and try again.',
+      );
       setSubmitting(false);
     }
   }

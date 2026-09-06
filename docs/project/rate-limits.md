@@ -327,8 +327,9 @@ In order. Each is one PR with its tests and its docs, and each leaves the produc
    from the environment, describing a wait — moved to `server/api/budgets.ts`. Env,
    `.env.example`, PRD 3.1.18 and 3.1.20, README. The sign-in screen already printed the API's
    message for any refusal, so it needed no change to show the wait.
-2. **Reset budgets.** `server/password-reset/limits.ts`, same shape. Reset screen handles `429`.
-   PRD 3.1.21.
+2. **Reset budgets.** ✅ Landed 2026-09-06. `server/password-reset/limits.ts`, same shape as
+   registration's. The forgot-password screen now prints the API's message when the API refuses,
+   where before it treated every failure as the network. PRD 3.1.21.
 3. **Per-actor budgets.** One `server/api/actor-limits.ts` holding the four constants and a
    `spendFor(kind, actorId)` guard, wired into feedback and the three grant services. PRD 3.1.22.
 4. **Spend ledger and worker ceiling.** Migration `0025_spend_ceiling_raise.sql`, `db/src/spend.ts`,
