@@ -410,14 +410,24 @@ Nothing reaches the box by `git pull`. A deploy is a **release tag**, cut and sh
 
 1. **Actions → Deploy → Run workflow**, on `main`, choosing `patch`, `minor` or `major`.
 2. The `gate` job refuses unless CI has passed on that exact commit (ticking **skip_ci_gate** on the
-   form gets past it, and marks the run summary and the release notes), then shows the next tag in the
-   run summary (`v0.1.0` when there is none yet).
+   form gets past it, and marks the run summary and the release notes), then shows the next tag and
+   the release notes in the run summary (`v0.1.0` when there is no tag yet).
 3. The run pauses at the **production** environment. Approving it is the deploy decision.
-4. `release` tags the commit, pushes the tag and publishes a GitHub Release with generated notes.
+4. `release` writes the release notes, tags the commit with them, pushes the tag and publishes a
+   GitHub Release carrying the same notes.
 5. `deploy` connects to the box over SSH and sends just the tag. The deploy key is bound to
    [scripts/deploy-ssh-entry.sh](scripts/deploy-ssh-entry.sh), which accepts nothing but a release
    tag and runs `scripts/deploy.sh` with it — so the key can deploy a published release and do
    nothing else.
+
+The release notes are the commit messages since the previous tag, which is why **every commit
+message must start with `feat: `, `fix: ` or `chore: `** — CI's `commits` job refuses a push or pull
+request that adds one which does not ([scripts/check-commits.sh](scripts/check-commits.sh); merge
+commits are exempt, and a squash merge takes the pull request title, so title it the same way).
+[scripts/release-notes.sh](scripts/release-notes.sh) puts `feat:` commits under **Features** and
+`fix:` commits under **Bug fixes**; `chore:` commits are for maintainers and stay out of the notes.
+To be told before the push rather than by CI, `git config core.hooksPath .githooks` installs the
+same check as a local `commit-msg` hook.
 
 The box ends detached at the tag, and `verify:production`'s `release` check fails the deploy if it
 is anywhere else. Deploying by hand is the same command over an ordinary SSH session:

@@ -4,8 +4,10 @@
 #
 #   gate     Refuses unless this is `main` and CI has passed on this exact commit, then works out
 #            the next tag so the approver can see it before approving.
-#   release  Waits at the `production` environment for approval. Then tags the commit, pushes the
-#            tag and publishes a GitHub Release with generated notes.
+#   release  Waits at the `production` environment for approval. Then writes the release notes from
+#            the commit messages since the previous tag (`feat:` → Features, `fix:` → Bug fixes;
+#            scripts/release-notes.sh), tags the commit with them, pushes the tag and publishes a
+#            GitHub Release carrying the same notes.
 #   deploy   SSHes to the box as the deploy key and hands it the tag. The key is bound to
 #            scripts/deploy-ssh-entry.sh on the box, so the only thing it can do is deploy a tag.
 #
@@ -46,6 +48,7 @@ jobs:
     timeout-minutes: 5
     outputs:
       tag: ${{ steps.next.outputs.tag }}
+      previous: ${{ steps.next.outputs.previous }}
     steps:
       - name: Only main deploys
         if: github.ref != 'refs/heads/main'
@@ -102,12 +105,17 @@ jobs:
             echo "::error::$tag already exists."; exit 1
           fi
           echo "tag=$tag" >> "$GITHUB_OUTPUT"
+          echo "previous=$latest" >> "$GITHUB_OUTPUT"
           {
             echo "## Ready to release \`$tag\`"
             echo
             echo "- previous: \`${latest:-none}\`"
             echo "- commit: \`${{ github.sha }}\`"
             echo "- approve the **production** environment to tag, publish and deploy"
+            echo
+            # The approver sees what they are approving: the same notes the release will carry.
+            REPO_URL="${{ github.server_url }}/${{ github.repository }}" \
+              scripts/release-notes.sh "$latest" "${{ github.sha }}" | sed 's/^## /### /'
           } >> "$GITHUB_STEP_SUMMARY"
 
   release:
@@ -127,29 +135,43 @@ jobs:
         with:
           fetch-depth: 0
 
+      # What changed, from the commit messages since the previous tag: `feat:` commits under
+      # Features, `fix:` commits under Bug fixes, `chore:` commits left out. The same text goes on
+      # the tag and on the release, so the tag alone says what it shipped.
+      - name: Release notes
+        env:
+          PREVIOUS: ${{ needs.gate.outputs.previous }}
+          SKIPPED_CI: ${{ inputs.skip_ci_gate }}
+          REPO_URL: ${{ github.server_url }}/${{ github.repository }}
+        run: |
+          {
+            if [ "$SKIPPED_CI" = "true" ]; then
+              echo "> ⚠️ **Released with the CI gate skipped** by ${{ github.actor }}. CI had not passed on this commit."
+              echo
+            fi
+            scripts/release-notes.sh "$PREVIOUS" "${{ github.sha }}"
+          } > "$RUNNER_TEMP/notes.md"
+          cat "$RUNNER_TEMP/notes.md"
+
       # The tag is created at the commit the run was started from, not whatever main is by the time
-      # someone approved — the approver approved that commit.
+      # someone approved — the approver approved that commit. `--cleanup=verbatim` keeps the notes'
+      # `## ` headings, which git would otherwise strip as comments.
       - name: Tag
         env:
           TAG: ${{ needs.gate.outputs.tag }}
         run: |
           git config user.name "github-actions[bot]"
           git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
-          git tag -a "$TAG" "${{ github.sha }}" -m "Release $TAG"
+          { echo "Release $TAG"; echo; cat "$RUNNER_TEMP/notes.md"; } > "$RUNNER_TEMP/tag.md"
+          git tag -a "$TAG" "${{ github.sha }}" --cleanup=verbatim -F "$RUNNER_TEMP/tag.md"
           git push origin "refs/tags/$TAG"
 
       - name: Publish the release
         env:
           GH_TOKEN: ${{ github.token }}
           TAG: ${{ needs.gate.outputs.tag }}
-          SKIPPED_CI: ${{ inputs.skip_ci_gate }}
         run: |
-          if [ "$SKIPPED_CI" = "true" ]; then
-            gh release create "$TAG" --verify-tag --generate-notes --title "$TAG" \
-              --notes "> ⚠️ **Released with the CI gate skipped** by ${{ github.actor }}. CI had not passed on this commit."
-          else
-            gh release create "$TAG" --verify-tag --generate-notes --title "$TAG"
-          fi
+          gh release create "$TAG" --verify-tag --title "$TAG" --notes-file "$RUNNER_TEMP/notes.md"
 
   deploy:
     name: Deploy ${{ needs.gate.outputs.tag }} to the box

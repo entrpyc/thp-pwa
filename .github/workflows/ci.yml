@@ -11,6 +11,35 @@ concurrency:
   cancel-in-progress: true
 
 jobs:
+  commits:
+    name: "commit messages start with feat:, fix: or chore:"
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - uses: actions/checkout@v5
+        with:
+          fetch-depth: 0
+
+      # Only the commits this push or pull request adds are checked, so history from before the
+      # rule is left alone. The Deploy workflow reads these prefixes to write the release notes —
+      # see scripts/check-commits.sh. A failure here fails CI, and the Deploy gate refuses a commit
+      # CI has not passed on.
+      - name: Check
+        env:
+          EVENT: ${{ github.event_name }}
+          BEFORE: ${{ github.event.before }}
+          BASE: ${{ github.event.pull_request.base.sha }}
+          HEAD_SHA: ${{ github.event.pull_request.head.sha || github.sha }}
+        run: |
+          if [ "$EVENT" = "pull_request" ]; then
+            from="$BASE"
+          elif [ -n "$BEFORE" ] && ! [[ "$BEFORE" =~ ^0+$ ]] && git cat-file -e "$BEFORE^{commit}" 2>/dev/null; then
+            from="$BEFORE"
+          else
+            from="$HEAD_SHA~1"   # first push of a branch, or a force-push whose old tip is gone
+          fi
+          scripts/check-commits.sh "$from..$HEAD_SHA"
+
   verify:
     name: install, typecheck, migrate, test
     runs-on: ubuntu-latest
