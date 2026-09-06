@@ -59,8 +59,9 @@ if [[ "$SCRATCH_PORT" == "$LIVE_PORT" ]]; then
   exit 1
 fi
 
+# `user` is a reserved word, hence the quoting — the table really is called that.
 COUNTS_SQL="
-  select 'account=' || (select count(*) from account)
+  select 'user=' || (select count(*) from \"user\")
       || ' recording=' || (select count(*) from recording)
       || ' transcript=' || (select count(*) from transcript)
       || ' segment=' || (select count(*) from segment)
@@ -75,6 +76,25 @@ echo "==> Restoring the latest backup into $SCRATCH_DIR"
 sudo rm -rf "$SCRATCH_DIR"
 sudo install -d -o postgres -g postgres -m 700 "$SCRATCH_DIR"
 sudo -u postgres pgbackrest --stanza="$STANZA" --pg1-path="$SCRATCH_DIR" --type=default restore
+
+# Ubuntu keeps postgresql.conf, pg_hba.conf and pg_ident.conf under /etc/postgresql rather than in
+# the data directory, so the backup does not contain them and the restored directory has none.
+# Postgres refuses to start without the first two. Minimal ones are written here — **not copied from
+# /etc**, whose postgresql.conf pins `data_directory` to the live cluster and would start production
+# instead of the scratch copy. On a layout that does keep them in the data directory, the restored
+# files are left alone.
+if ! sudo test -f "$SCRATCH_DIR/postgresql.conf"; then
+  sudo -u postgres tee "$SCRATCH_DIR/postgresql.conf" > /dev/null <<CONF
+# Written by scripts/restore-drill.sh for the scratch cluster. Everything else is the default.
+listen_addresses = ''
+CONF
+fi
+if ! sudo test -f "$SCRATCH_DIR/pg_hba.conf"; then
+  sudo -u postgres tee "$SCRATCH_DIR/pg_hba.conf" > /dev/null <<CONF
+local all postgres peer
+CONF
+fi
+sudo -u postgres touch "$SCRATCH_DIR/pg_ident.conf"
 
 # The scratch cluster must not archive its own WAL back into the repository, and must not take the
 # live port. Both are set after the restore, because restore lays down the configuration files.

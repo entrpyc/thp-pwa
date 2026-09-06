@@ -606,7 +606,7 @@ sudo cp deploy/systemd/thp-backup-check.service deploy/systemd/thp-backup-check.
 sudo systemctl daemon-reload
 sudo systemctl enable --now thp-backup.timer thp-backup-check.timer
 sudo -u postgres pgbackrest --stanza=thp --type=full backup   # don't wait for 02:00
-sudo ./scripts/restore-drill.sh
+./scripts/restore-drill.sh   # as the service user, not root — it escalates per command
 ```
 
 **An unverified backup is not a backup.** [scripts/restore-drill.sh](scripts/restore-drill.sh)
