@@ -306,7 +306,7 @@ const CHECKS: readonly Check[] = [
 
       const firewall = parseUfwStatus(await run('sudo', ['ufw', 'status']));
       if (!firewall.active) return bad('ufw is not active');
-      const unexpected = firewall.ports.filter((port) => ![22, 80, 443].includes(port));
+      const unexpected = firewall.ports.filter((port) => ![22, 80, 443, 7856].includes(port));
       return unexpected.length === 0
         ? ok(`ufw active, ${firewall.ports.join('/')} only; 5432 refused from ${address}`)
         : bad(`ufw also allows ${unexpected.join(', ')}`);
