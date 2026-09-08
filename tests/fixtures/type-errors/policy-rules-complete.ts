@@ -38,6 +38,8 @@ export const rules: PolicyRules = {
   'pipeline.read': { roles: { admin: true, member: false } },
   'pipeline.rerun': { roles: { admin: true, member: false } },
   'spend.raise': { roles: { admin: true, member: false } },
+  'sound-profile.read': { roles: { admin: true, member: false } },
+  'sound-profile.update': { roles: { admin: true, member: false } },
   'review.list': { roles: { admin: true, member: false } },
   'review.resolve': { roles: { admin: true, member: false } },
   'review.regenerate': { roles: { admin: true, member: false } },

@@ -5,12 +5,15 @@ import { afterAll, beforeAll, describe, expect, it, inject } from 'vitest';
 import postgres from 'postgres';
 import { MIGRATIONS_DIR, runMigrations } from '@thp/db';
 import {
+  DEFAULT_SOUND_PROFILE,
   JOB_STATUSES,
+  JOB_STEPS,
   PIPELINE_STEPS,
   PLAYBACK_SPEEDS,
   REVIEW_KINDS,
   REVIEW_STATUSES,
   SCRIPTURE_ORIGINS,
+  SOUND_PROFILE_BOUNDS,
 } from '@thp/shared';
 import { createThrowawayDatabase, type ThrowawayDatabase } from '../../../../tests/setup/throwaway-db';
 
@@ -187,6 +190,7 @@ describe('migrations apply to an empty database by one command', () => {
         'series',
         'series_tag',
         'session',
+        'sound_profile',
         'spend_ceiling_raise',
         'summary',
         'tag',
@@ -2209,5 +2213,129 @@ describe('the avatar pointer, and nothing beside it', () => {
     expect(rows).toHaveLength(1);
     expect(rows[0]?.avatar_key).toBeNull();
     expect(rows[0]?.display_name).toBe('From Before Pictures');
+  });
+});
+
+/**
+ * `sound_profile`, the version pointer on `recording`, and two enum values — one migration
+ * ([3.4.5](docs/project/prd.md), [3.4.7](docs/project/prd.md)).
+ *
+ * Asserted before and after like every migration since `recording`, with the three properties
+ * that are the database's rather than the query layer's: **version 1 exists the moment the table
+ * does**, so nothing is ever processed under no profile; **a recording processed before the
+ * profile existed says so** — its pointer is null, not defaulted to 1, because "made under
+ * version 1" would be a claim about bytes nobody made; and the knobs are refused out of range by
+ * the table itself, so a value the API missed cannot become a row.
+ */
+describe('the sound profile, and nothing beside it', () => {
+  let target: ThrowawayDatabase;
+  let before: Map<string, string[]>;
+  let after: Map<string, string[]>;
+  let sql: ReturnType<typeof postgres>;
+  /** A recording written before the column existed, to read back afterwards. */
+  let existingRecordingId: string;
+
+  beforeAll(async () => {
+    target = await createThrowawayDatabase(inject('databaseUrl'), 'sound_profile_migration');
+
+    const priorCount = journalCountBefore('0026_sound_profile');
+    await runMigrations({ url: target.url, migrationsFolder: migrationsFolderUpTo(priorCount) });
+    before = await readColumnSets(target.url);
+
+    sql = postgres(target.url, { max: 2, onnotice: () => {} });
+    const [written] = await sql<{ id: string }[]>`
+      insert into recording (original_media_key, playback_media_key, title, recorded_at)
+      values ('originals/before-profiles.mp3', 'playback/before-profiles.m4a', 'From Before Profiles', '2026-01-04')
+      returning id
+    `;
+    existingRecordingId = written?.id as string;
+
+    await runMigrations({ url: target.url, migrationsFolder: migrationsFolderUpTo(priorCount + 1) });
+    after = await readColumnSets(target.url);
+  }, 120_000);
+
+  afterAll(async () => {
+    await sql?.end({ timeout: 5 });
+    await target?.drop();
+  }, 60_000);
+
+  it('did not exist before this migration and does after — otherwise the comparison is vacuous', () => {
+    expect(before.has('sound_profile')).toBe(false);
+    expect(after.has('sound_profile')).toBe(true);
+    expect(before.get('recording')).not.toContain('sound_profile_version');
+    expect(after.get('recording')).toContain('sound_profile_version');
+  });
+
+  it('adds one table, one column to recording, and nothing anywhere else', () => {
+    for (const [table, columns] of before) {
+      const expected =
+        table === 'recording' ? [...columns, 'sound_profile_version'].sort() : columns;
+      expect(after.get(table), `${table} changed`).toEqual(expected);
+    }
+    expect([...after.keys()].sort()).toEqual([...before.keys(), 'sound_profile'].sort());
+    expect(after.get('sound_profile')).toEqual([
+      'created_at',
+      'created_by',
+      'id',
+      'loudness_target_lufs',
+      'noise_reduction_db',
+      'note',
+      'version',
+      'voice_clarity_db',
+    ]);
+  });
+
+  it('holds the two standalone steps at the end of the enum, after the chain', async () => {
+    const steps = await sql<{ enumlabel: string }[]>`
+      select enumlabel from pg_enum
+      join pg_type on pg_type.oid = pg_enum.enumtypid
+      where pg_type.typname = 'pipeline_step' order by pg_enum.enumsortorder
+    `;
+    expect(steps.map((row) => row.enumlabel)).toEqual([...JOB_STEPS]);
+  });
+
+  it('seeds version 1 with the shared defaults, saved by nobody', async () => {
+    const rows = await sql<
+      {
+        version: number;
+        noise_reduction_db: number;
+        voice_clarity_db: number;
+        loudness_target_lufs: number;
+        created_by: string | null;
+      }[]
+    >`select version, noise_reduction_db, voice_clarity_db, loudness_target_lufs, created_by from sound_profile`;
+    expect(rows).toEqual([
+      {
+        version: 1,
+        noise_reduction_db: DEFAULT_SOUND_PROFILE.noiseReductionDb,
+        voice_clarity_db: DEFAULT_SOUND_PROFILE.voiceClarityDb,
+        loudness_target_lufs: DEFAULT_SOUND_PROFILE.loudnessTargetLufs,
+        created_by: null,
+      },
+    ]);
+  });
+
+  it('leaves a recording processed before the profile with no version rather than version 1', async () => {
+    const rows = await sql<{ sound_profile_version: number | null; playback_media_key: string }[]>`
+      select sound_profile_version, playback_media_key from recording where id = ${existingRecordingId}
+    `;
+    expect(rows).toEqual([
+      { sound_profile_version: null, playback_media_key: 'playback/before-profiles.m4a' },
+    ]);
+  });
+
+  it('refuses a knob outside the shared bounds, and a second row with the same version', async () => {
+    await expect(sql`
+      insert into sound_profile (version, noise_reduction_db, voice_clarity_db, loudness_target_lufs)
+      values (2, ${SOUND_PROFILE_BOUNDS.noiseReductionDb.max + 1}, 0, -16)
+    `).rejects.toThrow(/sound_profile_noise_reduction_range/);
+    await expect(sql`
+      insert into sound_profile (version, noise_reduction_db, voice_clarity_db, loudness_target_lufs)
+      values (2, 0, 0, ${SOUND_PROFILE_BOUNDS.loudnessTargetLufs.min - 1})
+    `).rejects.toThrow(/sound_profile_loudness_target_range/);
+    await expect(sql`
+      insert into sound_profile (version, noise_reduction_db, voice_clarity_db, loudness_target_lufs)
+      values (1, 0, 0, -16)
+    `).rejects.toThrow(/sound_profile_version_unique/);
   });
 });

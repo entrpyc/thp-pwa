@@ -11,10 +11,22 @@ export {
   type EnvSource,
   type ProcessAudioProviderName,
 } from './env';
-export { FFMPEG_TIMEOUT_MS, PLAYBACK_BITRATE, ffmpegProcessor } from './ffmpeg';
+export {
+  FFMPEG_TIMEOUT_MS,
+  MIN_RENDITION_BYTES,
+  OUTPUT_SAMPLE_RATE,
+  PLAYBACK_BITRATE,
+  buildFilterGraph,
+  encodeArguments,
+  ffmpegProcessor,
+  measureArguments,
+  parseLoudnormMeasurement,
+  type LoudnessMeasurement,
+} from './ffmpeg';
 export { fakeProcessor } from './fake';
 export {
   AudioProcessingError,
+  type AudioExcerpt,
   type AudioProcessRequest,
   type AudioProcessor,
   type ProcessedRendition,

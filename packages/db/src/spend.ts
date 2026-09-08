@@ -79,8 +79,12 @@ export async function readSpendLedger(
   >;
   let todayUsd = 0;
   for (const row of spent) {
+    // The split is by the chain's steps. A standalone step (`reprocess_audio`, `preview_audio`)
+    // is local tooling that records a cost of nothing; it is not a column of the split, and a
+    // key for it here would be a key the panel never asked for.
+    if (!(row.step in byStep)) continue;
     const amount = Number(row.total);
-    byStep[row.step] = amount;
+    byStep[row.step as PipelineStep] = amount;
     todayUsd += amount;
   }
 

@@ -1,10 +1,11 @@
 import type { JobRow, ProviderMeta } from '@thp/db';
-import type { PipelineStep } from '@thp/shared';
+import type { JobStep } from '@thp/shared';
 import {
   createGenerateChaptersHandler,
   type GenerateChaptersDependencies,
 } from './generate-chapters';
 import { createGenerateDraftHandler, type GenerateDraftDependencies } from './generate-draft';
+import { createPreviewAudioHandler } from './preview-audio';
 import { createProcessAudioHandler, type ProcessAudioDependencies } from './process-audio';
 import { createTranscribeHandler, type TranscribeDependencies } from './transcribe';
 
@@ -35,8 +36,12 @@ export type JobHandler = (
  * its own and drives the loop with a handler it can make succeed, throw or hang. Partial on
  * purpose: a step with no handler is a job that fails naming the step, which is a far better
  * failure than a worker that silently ignores work it was given.
+ *
+ * Keyed by `JobStep` rather than `PipelineStep`: the ledger holds the standalone steps too
+ * ([§3.4](docs/project/prd.md)), and a worker that could not be handed a handler for one would be
+ * a worker that fails every preview naming the step.
  */
-export type HandlerRegistry = Readonly<Partial<Record<PipelineStep, JobHandler>>>;
+export type HandlerRegistry = Readonly<Partial<Record<JobStep, JobHandler>>>;
 
 /**
  * What this worker is built with. Two steps, two sets of dependencies, kept apart so a test can
@@ -49,7 +54,7 @@ export interface WorkerDependencies
     GenerateChaptersDependencies {}
 
 /**
- * The steps this worker runs — **both of them for real.**
+ * The steps this worker runs — **all of them for real.**
  *
  * Ticket 03 of Story 2 replaced the `transcribe` stub; Story 3 Ticket 01 replaces
  * `generate_draft`, and with it goes `STUB_PROVIDER_META` and the last reason `/admin/pipeline` had
@@ -62,15 +67,20 @@ export interface WorkerDependencies
  * nothing but drafts to run would refuse to start over an ASR key it never uses, and every test
  * importing this module would need one.
  *
- * Listed one by one rather than generated from `PIPELINE_STEPS`, because a step silently acquiring
- * a handler the day it is added to the list is exactly the failure the "no handler" case exists to
- * make loud.
+ * Listed one by one rather than generated from `JOB_STEPS`, because a step silently acquiring a
+ * handler the day it is added to the list is exactly the failure the "no handler" case exists to
+ * make loud. `reprocess_audio` is `process_audio`'s handler under a second name on purpose: the
+ * work is identical, and whether `transcribe` follows is the chain rule's decision, made from the
+ * step name and never from inside the handler.
  */
 export function createHandlers(deps: WorkerDependencies = {}): HandlerRegistry {
+  const processAudio = createProcessAudioHandler(deps);
   return {
-    process_audio: createProcessAudioHandler(deps),
+    process_audio: processAudio,
     transcribe: createTranscribeHandler(deps),
     generate_draft: createGenerateDraftHandler(deps),
     generate_chapters: createGenerateChaptersHandler(deps),
+    reprocess_audio: processAudio,
+    preview_audio: createPreviewAudioHandler(deps),
   };
 }

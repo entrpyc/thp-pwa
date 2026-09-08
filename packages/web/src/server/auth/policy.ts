@@ -104,6 +104,15 @@ export const POLICY_ACTIONS = [
    */
   'spend.raise',
   /**
+   * The sound profile ([3.4.5](docs/project/prd.md)–[3.4.7](docs/project/prd.md)): reading the
+   * version in force and which version processed each teaching, and saving a version — which
+   * covers previewing one, because a preview is a save being decided. Two actions rather than
+   * one for the reason every pair above is: the day a Contributor may read the profile without
+   * being able to change what every upload sounds like, the split stops being decoration.
+   */
+  'sound-profile.read',
+  'sound-profile.update',
+  /**
    * The three review-gate actions (Story 3 Tickets 02–03), split for the reason every group above
    * is: reading the queue, acting on an item, and spending a provider call to draft it again are
    * the same question only while there are two roles. The day a Contributor may read what is
@@ -354,6 +363,10 @@ const RULES: PolicyRules = {
   'pipeline.rerun': { roles: { admin: true, member: false } },
   // Deciding how much today may cost is the operator's call and nobody else's.
   'spend.raise': { roles: { admin: true, member: false } },
+  // What every upload sounds like is the operator's call. A member hears the result and never
+  // sees the knobs.
+  'sound-profile.read': { roles: { admin: true, member: false } },
+  'sound-profile.update': { roles: { admin: true, member: false } },
   // The review gate is operator work whole: a member has nothing waiting on them, and a draft they
   // could read would be a draft nobody approved.
   'review.list': { roles: { admin: true, member: false } },

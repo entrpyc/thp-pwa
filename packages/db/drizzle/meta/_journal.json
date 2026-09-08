@@ -183,6 +183,13 @@
       "when": 1788690729365,
       "tag": "0025_spend_ceiling_raise",
       "breakpoints": true
+    },
+    {
+      "idx": 26,
+      "version": "7",
+      "when": 1788855089804,
+      "tag": "0026_sound_profile",
+      "breakpoints": true
     }
   ]
 }

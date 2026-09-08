@@ -149,7 +149,7 @@ function confirmationFor(step: PipelineStep, title: string, editedChapters: numb
       return (
         `Process the audio of “${title}” again? The playback rendition is replaced, and the whole pipeline ` +
         'runs on from it: the teaching is transcribed again (replacing the transcript and any corrections), ' +
-        'and the drafts and chapters are regenerated. To refresh only the rendition, use the backfill command instead.'
+        'and the drafts and chapters are regenerated. To refresh only the rendition under the current sound profile, use Re-process on the Sound profile panel instead.'
       );
   }
 }

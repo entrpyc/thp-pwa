@@ -1,6 +1,8 @@
 import {
   findRecordingById,
+  readCurrentSoundProfile,
   setRecordingPlaybackKey,
+  settingsOf,
   type Executor,
   type JobRow,
   type ProviderMeta,
@@ -12,13 +14,15 @@ import type { JobHandler } from './handlers';
 
 /**
  * **The `process_audio` step** — the first in the chain, in the slot
- * [§3.4](docs/project/prd.md) reserved for it.
+ * [§3.4](docs/project/prd.md) reserved for it — and **`reprocess_audio`**, the same work asked
+ * for outside the chain ([3.4.7](docs/project/prd.md)).
  *
- * It turns the uploaded original into a playback rendition browsers can seek exactly, and points
- * the recording at it. The step exists because a VBR MP3's `currentTime` after a seek is an
- * estimate — measured up to nine seconds wrong on a real teaching — and everything anchored to the
- * clock (captions, notes, chapters) inherited the error while the transcript's own timings were
- * right to within a frame.
+ * It turns the uploaded original into a playback rendition browsers can seek exactly, **under the
+ * sound profile in force** ([3.4.5](docs/project/prd.md)), and points the recording at it,
+ * recording which version did the processing. The step exists because a VBR MP3's `currentTime`
+ * after a seek is an estimate — measured up to nine seconds wrong on a real teaching — and
+ * everything anchored to the clock (captions, notes, chapters) inherited the error while the
+ * transcript's own timings were right to within a frame.
  *
  * The transcribe handler's four properties, inherited whole:
  *
@@ -31,10 +35,17 @@ import type { JobHandler } from './handlers';
  * 4. **The upload is verified before the row is pointed at it** — a rendition the store cannot
  *    `head` is a failure here, not a silent 404 in somebody's player next Sunday.
  *
+ * And one the profile adds:
+ *
+ * 5. **The version is read once, before the encode, and is the version written.** A profile
+ *    saved while a 90-minute encode runs does not change what that encode was, and the row says
+ *    which version it actually was rather than whichever was current when it finished.
+ *
  * The work itself is {@link producePlaybackRendition}, and it is exported deliberately: the
- * backfill CLI runs it **outside the job ledger**, because a succeeded job enqueues its successor
- * and a backfill that chained into `transcribe` would replace every transcript — and its
- * corrections — in the library.
+ * backfill CLI runs it **outside the job ledger**, because a succeeded `process_audio` job
+ * enqueues its successor and a backfill that chained into `transcribe` would replace every
+ * transcript — and its corrections — in the library. `reprocess_audio` is the same function
+ * inside the ledger, made safe by being a step the chain does not contain.
  */
 
 /**
@@ -56,6 +67,8 @@ export interface RenditionResult {
   readonly renditionKey: string;
   readonly renditionBytes: number;
   readonly sourceBytes: number;
+  /** The profile version the rendition was made under, and the one written on the row. */
+  readonly soundProfileVersion: number;
 }
 
 /**
@@ -74,6 +87,9 @@ export async function producePlaybackRendition(
   const recording = await findRecordingById(recordingId, deps.executor);
   if (!recording) throw new Error(`no recording ${recordingId}`);
 
+  // Property 5: read before the encode, written after it, and the same number both times.
+  const profile = await readCurrentSoundProfile(deps.executor);
+
   const sourceKey = recording.originalMediaKey;
   const source = await media.head(sourceKey);
   if (source === null) throw new Error(`no object at key "${sourceKey}"`);
@@ -91,7 +107,12 @@ export async function producePlaybackRendition(
     expiresInSeconds: PROCESS_AUDIO_GRANT_SECONDS,
   });
 
-  await processor.process({ sourceUrl, uploadUrl, contentType: rendition.contentType });
+  await processor.process({
+    sourceUrl,
+    uploadUrl,
+    contentType: rendition.contentType,
+    profile: settingsOf(profile),
+  });
 
   // Property 4: the row points only at an object the store confirms is there.
   const stored = await media.head(renditionKey);
@@ -99,7 +120,12 @@ export async function producePlaybackRendition(
     throw new Error(`${processor.name} reported success but nothing is at "${renditionKey}"`);
   }
 
-  const updated = await setRecordingPlaybackKey(recordingId, renditionKey, deps.executor);
+  const updated = await setRecordingPlaybackKey(
+    recordingId,
+    renditionKey,
+    profile.version,
+    deps.executor,
+  );
   if (updated === null) throw new Error(`no recording ${recordingId} to point at the rendition`);
 
   return {
@@ -107,16 +133,21 @@ export async function producePlaybackRendition(
     renditionKey,
     renditionBytes: stored.size,
     sourceBytes: source.size,
+    soundProfileVersion: profile.version,
   };
 }
 
 /**
  * Build the handler. A factory for the transcribe handler's reasons: a test supplies a fake
  * processor and store, and nothing reads the environment until a job actually arrives.
+ *
+ * Registered under both `process_audio` and `reprocess_audio`: the work is identical, and what
+ * differs — whether `transcribe` follows — is the chain rule's decision, made from the step name
+ * and never from anything in here.
  */
 export function createProcessAudioHandler(deps: ProcessAudioDependencies = {}): JobHandler {
   return async function processAudio(job: JobRow): Promise<ProviderMeta> {
-    const fields = { jobId: job.id, recordingId: job.recordingId };
+    const fields = { jobId: job.id, step: job.step, recordingId: job.recordingId };
     logger.info('process_audio.started', fields);
 
     let result: RenditionResult;
@@ -133,7 +164,8 @@ export function createProcessAudioHandler(deps: ProcessAudioDependencies = {}): 
     }
 
     // Evidence, not spend: the tool is local and costs nothing, but which adapter produced which
-    // object at what size is what an operator reads when a rendition sounds wrong.
+    // object at what size under which profile is what an operator reads when a rendition sounds
+    // wrong.
     const providerMeta: ProviderMeta = { ...result, costUsd: 0 };
     logger.info('process_audio.succeeded', { ...fields, ...providerMeta });
     return providerMeta;
@@ -141,7 +173,7 @@ export function createProcessAudioHandler(deps: ProcessAudioDependencies = {}): 
 }
 
 /** The extension the key carries, or `bin` for a key with none; the fake echoes it back. */
-function extensionOf(key: string): string {
+export function extensionOf(key: string): string {
   const at = key.lastIndexOf('.');
   return at < 0 ? 'bin' : key.slice(at + 1);
 }

@@ -28,7 +28,10 @@ async function main(): Promise<void> {
     process.stdout.write(`  ${label} ... `);
     const result = await producePlaybackRendition(recording.id);
     const megabytes = (result.renditionBytes / (1024 * 1024)).toFixed(1);
-    console.log(`done — ${result.renditionKey} (${megabytes} MB, via ${result.tool})`);
+    console.log(
+      `done — ${result.renditionKey} (${megabytes} MB, via ${result.tool}, ` +
+        `sound profile v${result.soundProfileVersion})`,
+    );
   }
 
   console.log('Backfill complete.');

@@ -36,6 +36,44 @@ export const PIPELINE_STEPS = [
 export type PipelineStep = (typeof PIPELINE_STEPS)[number];
 
 /**
+ * **Steps the ledger runs that are not links in the chain** ([§3.4](docs/project/prd.md)).
+ *
+ * Both exist because of one property of the chain rule: a step that succeeds enqueues its
+ * successor, and the successor of `process_audio` is `transcribe`. Two things the sound profile
+ * needs must produce a rendition *without* that cascade, and the only honest way to say so in a
+ * ledger whose chain is a list is a step that is not in the list — `nextPipelineStep` answers
+ * `null` for it, which is the same answer the last step of the chain gets.
+ *
+ * - `reprocess_audio` — the rendition again, under the profile in force
+ *   ([3.4.7](docs/project/prd.md)). What an admin presses after saving a new version; it repoints
+ *   the recording and touches nothing downstream, because the transcript's timings describe the
+ *   original and the original is unchanged.
+ * - `preview_audio` — thirty seconds of one teaching, plain and under a candidate profile
+ *   ([3.4.6](docs/project/prd.md)). It repoints nothing at all; what it leaves is two objects a
+ *   signed URL can be minted for.
+ *
+ * They ride the ledger rather than a second queue because the ledger *is* the queue
+ * (project tdd 4.7): the worker claims them the way it claims anything, the sweep reclaims them,
+ * and every attempt is a row an operator can read. They are simply absent from the pipeline
+ * view's columns, which are `PIPELINE_STEPS` and nothing wider.
+ */
+export const STANDALONE_STEPS = ['reprocess_audio', 'preview_audio'] as const;
+
+export type StandaloneStep = (typeof STANDALONE_STEPS)[number];
+
+/**
+ * Everything the `job.step` column can hold — the chain, then the standalone steps. The database
+ * enum derives from this list; the chain rule reads `PIPELINE_STEPS` and never this.
+ */
+export const JOB_STEPS = [...PIPELINE_STEPS, ...STANDALONE_STEPS] as const;
+
+export type JobStep = (typeof JOB_STEPS)[number];
+
+export function isJobStep(value: unknown): value is JobStep {
+  return typeof value === 'string' && (JOB_STEPS as readonly string[]).includes(value);
+}
+
+/**
  * Where a recording's pipeline starts.
  *
  * Read from the list rather than named, for the same reason the successor is: inserting
@@ -59,8 +97,8 @@ export const SPENDING_STEPS: readonly PipelineStep[] = [
   'generate_chapters',
 ];
 
-export function isSpendingStep(step: PipelineStep): boolean {
-  return SPENDING_STEPS.includes(step);
+export function isSpendingStep(step: JobStep): boolean {
+  return (SPENDING_STEPS as readonly string[]).includes(step);
 }
 
 export function isPipelineStep(value: unknown): value is PipelineStep {
@@ -81,10 +119,10 @@ export function isPipelineStep(value: unknown): value is PipelineStep {
  * not contain.
  */
 export function nextPipelineStep(
-  step: PipelineStep,
+  step: JobStep,
   steps: readonly PipelineStep[] = PIPELINE_STEPS,
 ): PipelineStep | null {
-  const index = steps.indexOf(step);
+  const index = (steps as readonly string[]).indexOf(step);
   if (index < 0) return null;
   return steps[index + 1] ?? null;
 }

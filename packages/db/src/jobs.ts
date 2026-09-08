@@ -1,5 +1,5 @@
 import { and, asc, eq, inArray, sql } from 'drizzle-orm';
-import { UNFINISHED_JOB_STATUSES, type JobStatus, type PipelineStep } from '@thp/shared';
+import { UNFINISHED_JOB_STATUSES, type JobStatus, type JobStep } from '@thp/shared';
 import { getDatabase, queryable, withTransaction, type Executor } from './client';
 import { job } from './schema';
 
@@ -19,7 +19,7 @@ import { job } from './schema';
 export interface JobRow {
   readonly id: string;
   readonly recordingId: string;
-  readonly step: PipelineStep;
+  readonly step: JobStep;
   readonly status: JobStatus;
   /** 1 for the first run of this `(recording_id, step)` pair, one higher for each run after. */
   readonly attempt: number;
@@ -36,7 +36,7 @@ export interface JobRow {
 
 export interface NewJob {
   readonly recordingId: string;
-  readonly step: PipelineStep;
+  readonly step: JobStep;
   readonly correlationId: string;
   /**
    * Optional, and absent everywhere but a steered regeneration (Story 3 Ticket 03). The chain
@@ -101,7 +101,7 @@ export async function enqueueJob(
 /** The pending or running job for this pair, if there is one. There can never be two. */
 export async function findUnfinishedJob(
   recordingId: string,
-  step: PipelineStep,
+  step: JobStep,
   executor: Executor = getDatabase(),
 ): Promise<JobRow | null> {
   const rows = await queryable(executor)
