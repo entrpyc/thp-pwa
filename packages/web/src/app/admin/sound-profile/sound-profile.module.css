@@ -1,0 +1,212 @@
+/*
+ * The sound profile panel.
+ *
+ * There is no `pages/admin.png`; this panel takes the same carve-out every other admin screen has,
+ * so it is composed from docs/design-references/style-guide.md and the token layer. Everything a
+ * section, a row, a field or a message needs `composes` from `admin.module.css`, so the
+ * extrapolations documented there are stated once and the eight panels cannot drift.
+ *
+ * Three things this panel needs that no other does, and each is one rule:
+ *
+ * 1. `.knobs` — three sliders in a row that becomes a column on a phone. A grid with `auto-fit`
+ *    and a minimum column, the pipeline panel's step-cell recipe, so a fourth knob one day lays
+ *    itself out.
+ * 2. `.slider` — a range input on the token layer. The accent is the one place colour is spent,
+ *    as principle 1 allows, because the thumb is the thing the hand is looking for.
+ * 3. `.players` — two audio elements side by side, labelled, so "as uploaded" and "with these
+ *    settings" are read as one comparison rather than two controls.
+ */
+
+.panel {
+  composes: panel from '../admin.module.css';
+}
+
+.section {
+  composes: section from '../admin.module.css';
+}
+
+.sectionTitle {
+  composes: sectionTitle from '../admin.module.css';
+}
+
+.sectionNote {
+  composes: sectionNote from '../admin.module.css';
+}
+
+.empty {
+  composes: empty from '../admin.module.css';
+}
+
+.failure {
+  composes: failure from '../admin.module.css';
+}
+
+.done {
+  composes: done from '../admin.module.css';
+}
+
+.field {
+  composes: field from '../admin.module.css';
+}
+
+.fieldTight {
+  composes: fieldTight from '../admin.module.css';
+}
+
+.label {
+  composes: label from '../admin.module.css';
+}
+
+.input {
+  composes: input from '../admin.module.css';
+}
+
+.submit {
+  composes: submit from '../admin.module.css';
+}
+
+.action {
+  composes: action from '../admin.module.css';
+}
+
+.list {
+  composes: list from '../admin.module.css';
+}
+
+.listRow {
+  composes: row from '../admin.module.css';
+}
+
+.rowIdentity {
+  composes: rowIdentity from '../admin.module.css';
+}
+
+.rowName {
+  composes: rowName from '../admin.module.css';
+}
+
+.rowMeta {
+  composes: rowMeta from '../admin.module.css';
+}
+
+.rowControls {
+  composes: rowControls from '../admin.module.css';
+}
+
+/* ------------------------------------------------------------------------------ the profile */
+
+.version {
+  margin: 0;
+  font-size: var(--fs-body);
+  color: var(--color-text-muted);
+}
+
+.form {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-4);
+}
+
+.knobs {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(14rem, 1fr));
+  gap: var(--space-4);
+}
+
+.knob {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-2);
+  padding: var(--space-3);
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-md);
+  background: var(--color-surface-raised);
+  min-width: 0;
+}
+
+.knobControls {
+  display: flex;
+  align-items: center;
+  gap: var(--space-3);
+}
+
+.slider {
+  flex: 1 1 auto;
+  min-width: 0;
+  accent-color: var(--color-primary);
+  /* A thumb a thumb can find. */
+  min-height: calc(var(--space-8) + var(--space-3));
+}
+
+.knobValue {
+  flex: 0 0 3ch;
+  text-align: right;
+  font-variant-numeric: tabular-nums;
+  font-size: var(--fs-body);
+  color: var(--color-text);
+}
+
+.hint {
+  margin: 0;
+  font-size: var(--fs-meta);
+  color: var(--color-text-dim);
+}
+
+.formActions {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: var(--space-3);
+}
+
+/* ------------------------------------------------------------------------------ the preview */
+
+.preview {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-3);
+  padding-top: var(--space-4);
+  border-top: 1px solid var(--color-border);
+}
+
+.previewHeading {
+  margin: 0;
+  font-size: var(--fs-body);
+  font-weight: 600;
+  color: var(--color-text);
+}
+
+.previewForm {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: flex-end;
+  gap: var(--space-3);
+}
+
+.players {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(16rem, 1fr));
+  gap: var(--space-3);
+}
+
+.players .hint {
+  grid-column: 1 / -1;
+}
+
+.player {
+  margin: 0;
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-2);
+  min-width: 0;
+}
+
+.playerLabel {
+  font-size: var(--fs-meta);
+  color: var(--color-text-muted);
+}
+
+.audio {
+  width: 100%;
+  min-width: 0;
+}

@@ -14,6 +14,11 @@ export interface RecordingRow {
   readonly originalMediaKey: string;
   /** The playback rendition `process_audio` wrote, or `null` while none exists. */
   readonly playbackMediaKey: string | null;
+  /**
+   * The sound profile version that produced the rendition ([3.4.7](docs/project/prd.md)), or
+   * `null` — no rendition, or one made before the profile existed.
+   */
+  readonly soundProfileVersion: number | null;
   readonly title: string;
   /** `YYYY-MM-DD`. A SQL `date`, so it comes back as the string it was written as. */
   readonly recordedAt: string;
@@ -140,20 +145,25 @@ export async function listRecordingsMissingPlayback(
 }
 
 /**
- * Point a recording at the playback rendition `process_audio` wrote.
+ * Point a recording at the playback rendition `process_audio` wrote, and record which version of
+ * the sound profile produced it ([3.4.7](docs/project/prd.md)).
  *
  * A plain overwrite, which is what makes the step idempotent end to end: a re-run writes a new
  * object under a new key and repoints the row, and the superseded object stays where it is,
  * unreferenced and invisible — the same accepted price replaced artwork already pays.
+ *
+ * The key and the version travel in **one statement**, so no reader can see a rendition without
+ * the version that made it or a version beside the rendition it did not make.
  */
 export async function setRecordingPlaybackKey(
   id: string,
   playbackMediaKey: string,
+  soundProfileVersion: number,
   executor: Executor = getDatabase(),
 ): Promise<RecordingRow | null> {
   const rows = await queryable(executor)
     .update(recording)
-    .set({ playbackMediaKey })
+    .set({ playbackMediaKey, soundProfileVersion })
     .where(eq(recording.id, id))
     .returning();
   return (rows[0] as RecordingRow | undefined) ?? null;

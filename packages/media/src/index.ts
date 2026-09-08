@@ -6,7 +6,9 @@ export {
   mintAvatarKey,
   mintOriginalKey,
   mintPlaybackKey,
+  mintPreviewKey,
   type MediaStore,
   type PresignedPut,
+  type PreviewSide,
   type StoredObject,
 } from './store';

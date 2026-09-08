@@ -1,5 +1,5 @@
 import { desc, eq } from 'drizzle-orm';
-import { PIPELINE_STEPS, type JobStatus, type PipelineStep } from '@thp/shared';
+import { PIPELINE_STEPS, type JobStatus, type JobStep, type PipelineStep } from '@thp/shared';
 import { getDatabase, queryable, type Executor } from './client';
 import { job, recording } from './schema';
 
@@ -50,7 +50,8 @@ interface JoinedRow {
   readonly recordingId: string;
   readonly title: string;
   readonly recordedAt: string;
-  readonly step: PipelineStep | null;
+  /** Any step the ledger holds. The fold below keeps the chain's and drops the standalone ones. */
+  readonly step: JobStep | null;
   readonly status: JobStatus | null;
   readonly attempt: number | null;
   readonly error: string | null;
@@ -127,10 +128,12 @@ export async function readPipeline(
  * something to be true of.
  */
 function assemble(rows: readonly JoinedRow[]): RecordingPipelineRow[] {
-  const byRecording = new Map<string, { row: JoinedRow; jobs: Map<PipelineStep, JoinedRow> }>();
+  const byRecording = new Map<string, { row: JoinedRow; jobs: Map<JobStep, JoinedRow> }>();
 
   for (const row of rows) {
     const found = byRecording.get(row.recordingId) ?? { row, jobs: new Map() };
+    // A standalone step's row is kept here and never read below: the columns are the chain's,
+    // and `jobs.get(step)` is only ever asked about a chain step.
     if (row.step !== null) found.jobs.set(row.step, row);
     byRecording.set(row.recordingId, found);
   }

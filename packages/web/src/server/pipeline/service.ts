@@ -120,7 +120,9 @@ export async function rerunStep(
   return {
     jobId: enqueued.id,
     recordingId: enqueued.recordingId,
-    step: enqueued.step,
+    // The step that was asked for, which is a chain step by construction; the row's own `step`
+    // is typed over everything the ledger holds.
+    step,
     attempt: enqueued.attempt,
   };
 }

@@ -22,18 +22,20 @@ import {
   ANNOUNCEMENT_KINDS,
   DEFAULT_PLAYBACK_SPEED,
   JOB_STATUSES,
+  JOB_STEPS,
   MAX_ANNOUNCEMENT_BODY_LENGTH,
   MAX_ANNOUNCEMENT_TITLE_LENGTH,
   MAX_NOTE_LENGTH,
+  MAX_SOUND_PROFILE_NOTE_LENGTH,
   MAX_TAG_LENGTH,
   NOTE_VISIBILITIES,
   NOTIFICATION_KINDS,
-  PIPELINE_STEPS,
   PLAYBACK_SPEEDS,
   REVIEW_KINDS,
   REVIEW_STATUSES,
   ROLES,
   SCRIPTURE_ORIGINS,
+  SOUND_PROFILE_BOUNDS,
   UNFINISHED_JOB_STATUSES,
 } from '@thp/shared';
 
@@ -54,7 +56,12 @@ import {
  */
 export const userRole = pgEnum('user_role', ROLES);
 
-export const pipelineStep = pgEnum('pipeline_step', PIPELINE_STEPS);
+/**
+ * Every step the ledger can hold: the chain, then the standalone steps the sound profile added
+ * ([§3.4](docs/project/prd.md)). Derived from `JOB_STEPS` rather than from `PIPELINE_STEPS` because
+ * the column holds both, and the chain rule reads the narrower list on its own.
+ */
+export const pipelineStep = pgEnum('pipeline_step', JOB_STEPS);
 
 export const jobStatus = pgEnum('job_status', JOB_STATUSES);
 
@@ -338,6 +345,20 @@ export const recording = pgTable(
      * reads, not a state to disguise.
      */
     playbackMediaKey: text('playback_media_key'),
+    /**
+     * **Which version of the sound profile produced the rendition** ([3.4.7](docs/project/prd.md)),
+     * or `null` — for a recording with no rendition, and for one whose rendition was made before
+     * the profile existed. Written beside `playback_media_key` and by the same statement, so the
+     * two cannot say different things about the same object.
+     *
+     * Referencing the version number rather than the row id, because the number is what a person
+     * reads on the console and compares with the version in force; `set null` on delete only
+     * because no delete route exists and a hand at the database must not take renditions with it.
+     */
+    soundProfileVersion: integer('sound_profile_version').references(
+      () => soundProfile.version,
+      { onDelete: 'set null' },
+    ),
     title: text('title').notNull(),
     recordedAt: date('recorded_at').notNull(),
     /** `null` until Story 3 Ticket 04 publishes it. Nothing in this ticket writes it. */
@@ -1346,5 +1367,59 @@ export const spendCeilingRaise = pgTable(
   (table) => [
     check('spend_ceiling_raise_positive', sql`${table.ceilingUsd} > 0`),
     check('spend_ceiling_raise_reason_length', sql`char_length(${table.reason}) <= 200`),
+  ],
+);
+
+/**
+ * **The sound profile, one row per version** ([3.4.5](docs/project/prd.md),
+ * [3.4.7](docs/project/prd.md); project tdd 6.8).
+ *
+ * **Append-only.** Saving the profile inserts the next version and never updates an earlier one,
+ * because a recording records the version that processed it and the number on that row has to
+ * keep meaning what it meant. There is no `current` flag: the version in force is the highest
+ * one, which is a `max` rather than a column two writers could disagree about. `version` is
+ * unique so the same number cannot be written twice, and it is what `recording` references.
+ *
+ * The three knobs are integers with the shared bounds as check constraints, so a value the API
+ * did not refuse is refused here — the same double hold the tag length has. The two loudness
+ * parameters that are not knobs (true peak, loudness range) are constants in `@thp/shared` and
+ * deliberately not columns: a column nothing writes is a column somebody eventually reads as
+ * meaningful.
+ *
+ * The migration seeds version 1 with the shared defaults, so there is never a moment when a
+ * recording could be processed under no profile at all.
+ */
+export const soundProfile = pgTable(
+  'sound_profile',
+  {
+    id: uuid('id').primaryKey().defaultRandom(),
+    version: integer('version').notNull().unique(),
+    noiseReductionDb: integer('noise_reduction_db').notNull(),
+    voiceClarityDb: integer('voice_clarity_db').notNull(),
+    loudnessTargetLufs: integer('loudness_target_lufs').notNull(),
+    /** Why this version was saved, in a sentence. Shown beside it on the console. */
+    note: text('note'),
+    /** `null` for the seeded first version, and for an account since removed. */
+    createdBy: uuid('created_by').references(() => user.id, { onDelete: 'set null' }),
+    createdAt: timestamp('created_at', { withTimezone: true }).notNull().defaultNow(),
+  },
+  (table) => [
+    check('sound_profile_version_positive', sql`${table.version} > 0`),
+    check(
+      'sound_profile_noise_reduction_range',
+      sql`${table.noiseReductionDb} between ${sql.raw(String(SOUND_PROFILE_BOUNDS.noiseReductionDb.min))} and ${sql.raw(String(SOUND_PROFILE_BOUNDS.noiseReductionDb.max))}`,
+    ),
+    check(
+      'sound_profile_voice_clarity_range',
+      sql`${table.voiceClarityDb} between ${sql.raw(String(SOUND_PROFILE_BOUNDS.voiceClarityDb.min))} and ${sql.raw(String(SOUND_PROFILE_BOUNDS.voiceClarityDb.max))}`,
+    ),
+    check(
+      'sound_profile_loudness_target_range',
+      sql`${table.loudnessTargetLufs} between ${sql.raw(String(SOUND_PROFILE_BOUNDS.loudnessTargetLufs.min))} and ${sql.raw(String(SOUND_PROFILE_BOUNDS.loudnessTargetLufs.max))}`,
+    ),
+    check(
+      'sound_profile_note_length',
+      sql`char_length(${table.note}) <= ${sql.raw(String(MAX_SOUND_PROFILE_NOTE_LENGTH))}`,
+    ),
   ],
 );

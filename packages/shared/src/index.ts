@@ -20,5 +20,6 @@ export * from './roles';
 export * from './scripture';
 export * from './segment';
 export * from './series';
+export * from './sound-profile';
 export * from './tags';
 export * from './transcripts';

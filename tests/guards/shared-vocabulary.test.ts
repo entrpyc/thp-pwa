@@ -24,6 +24,8 @@ describe('the shared package is the vocabulary all three consumers read', () => 
   it('the database schema derives its enums rather than restating them', () => {
     const schema = readFileSync(resolve(REPO_ROOT, 'packages/db/src/schema.ts'), 'utf8');
     expect(schema).toMatch(/pgEnum\(\s*'user_role',\s*ROLES\s*\)/);
-    expect(schema).toMatch(/pgEnum\(\s*'pipeline_step',\s*PIPELINE_STEPS\s*\)/);
+    // `JOB_STEPS` rather than `PIPELINE_STEPS`: the column holds the standalone steps too, and
+    // the list it derives from is the one that says so.
+    expect(schema).toMatch(/pgEnum\(\s*'pipeline_step',\s*JOB_STEPS\s*\)/);
   });
 });

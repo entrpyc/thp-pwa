@@ -1,5 +1,5 @@
 import type { Executor } from '@thp/db';
-import type { PipelineStep } from '@thp/shared';
+import type { JobStep } from '@thp/shared';
 import { currentCorrelationId, resolveCorrelationId } from '@/server/observability/correlation';
 import { buildQueue } from './postgres-queue';
 
@@ -25,7 +25,7 @@ import { buildQueue } from './postgres-queue';
 export interface EnqueuedJob {
   readonly id: string;
   readonly recordingId: string;
-  readonly step: PipelineStep;
+  readonly step: JobStep;
   /** 1 for the first run of this step, higher for a re-run. */
   readonly attempt: number;
   readonly correlationId: string;
@@ -33,7 +33,7 @@ export interface EnqueuedJob {
 
 export interface EnqueueRequest {
   readonly recordingId: string;
-  readonly step: PipelineStep;
+  readonly step: JobStep;
   /**
    * Defaults to the correlation id of the request in flight, which is what a caller inside a route
    * always wants — the id is read from the same store the logger reads it from, so a job and the
@@ -80,7 +80,7 @@ export interface Queue {
    * satisfied and keeps the one-door property true — a broker adapter answers this from whatever it
    * uses for in-flight work.
    */
-  findUnfinished(recordingId: string, step: PipelineStep): Promise<EnqueuedJob | null>;
+  findUnfinished(recordingId: string, step: JobStep): Promise<EnqueuedJob | null>;
 }
 
 /**

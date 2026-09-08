@@ -13,6 +13,10 @@ import {
  * grant prefers it. Copying the original does all of that honestly; the only thing it does not do
  * is change the bytes, which is exactly the part the fake exists to skip. Its output *is* the
  * source's format, so the key it is stored under never names a format the object is not.
+ *
+ * It applies no profile and cuts no excerpt, for the same reason: both are things done to the
+ * bytes. A preview through the fake is two copies of the whole original, which is still two
+ * objects under two keys — the whole of what the preview's plumbing depends on.
  */
 export function fakeProcessor(): AudioProcessor {
   return {

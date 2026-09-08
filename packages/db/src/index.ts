@@ -59,6 +59,18 @@ export {
   type SpendLedger,
 } from './spend';
 export {
+  findPreviewJob,
+  hasRenditionWorkInFlight,
+  insertSoundProfileVersion,
+  listRecordingsForSoundProfile,
+  readCurrentSoundProfile,
+  settingsOf,
+  type NewSoundProfileVersion,
+  type PreviewJobRow,
+  type SoundProfileRecordingRow,
+  type SoundProfileRow,
+} from './sound-profile';
+export {
   acceptInvitation,
   findInvitationById,
   findInvitationByTokenHash,

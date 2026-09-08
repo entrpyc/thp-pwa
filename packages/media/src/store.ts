@@ -144,6 +144,23 @@ export function mintPlaybackKey(extension: string): string {
   return `playback/${randomUUID()}.${extension}`;
 }
 
+/** Which of a preview's two excerpts an object is: the original plain, or under the profile. */
+export type PreviewSide = 'before' | 'after';
+
+/**
+ * `preview/<uuid>-before.<ext>` and `preview/<uuid>-after.<ext>` — **`mintPlaybackKey`'s rule,
+ * one prefix over**, for the two excerpts a sound-profile preview leaves
+ * ([3.4.6](docs/project/prd.md)).
+ *
+ * A prefix of its own so a reader of the bucket can tell thirty seconds nobody will play twice
+ * from the rendition members hear, and so that the day a lifecycle rule expires previews it has
+ * one prefix to name. **It brings no delete with it**, as nothing on this port does; the objects
+ * stay, unreferenced once the console moves on.
+ */
+export function mintPreviewKey(side: PreviewSide, extension: string): string {
+  return `preview/${randomUUID()}-${side}.${extension}`;
+}
+
 let store: MediaStore | undefined;
 
 /**

@@ -1,11 +1,19 @@
+import type { SoundProfileSettings } from '@thp/shared';
+
 /**
  * **What an audio processor is, as far as the `process_audio` step is concerned.**
  *
  * The step's job is one sentence: turn the uploaded original into a rendition browsers can seek
- * exactly, and put it in the store. The port carries that sentence and nothing vendor- or
- * tool-shaped: the handler decides keys and grants, the processor decides bytes. The same seam the
- * transcriber port cuts for ASR, for the same reason — the suite must be able to run the step
- * without a binary on the machine, and the day the tool changes, one adapter changes.
+ * exactly, under the sound profile in force, and put it in the store. The port carries that
+ * sentence and nothing vendor- or tool-shaped: the handler decides keys and grants, the processor
+ * decides bytes. The same seam the transcriber port cuts for ASR, for the same reason — the suite
+ * must be able to run the step without a binary on the machine, and the day the tool changes, one
+ * adapter changes.
+ *
+ * The profile arrived with [3.4.2](docs/project/prd.md)–[3.4.5](docs/project/prd.md) and it is a
+ * parameter of every request rather than of the processor, because the same processor renders a
+ * preview under settings nobody has saved ([3.4.6](docs/project/prd.md)) and a "before" excerpt
+ * under no profile at all.
  */
 
 /** What the processor will produce, asked before any grant is minted so the key can be named. */
@@ -16,6 +24,12 @@ export interface ProcessedRendition {
   readonly contentType: string;
 }
 
+/** A slice of the source, for a preview. Absent means the whole recording. */
+export interface AudioExcerpt {
+  readonly startSeconds: number;
+  readonly durationSeconds: number;
+}
+
 export interface AudioProcessRequest {
   /** A signed `GET` for the original. The processor fetches it; the bytes never sit in a queue. */
   readonly sourceUrl: string;
@@ -23,6 +37,13 @@ export interface AudioProcessRequest {
   readonly uploadUrl: string;
   /** The content type the `PUT` was signed for — sent verbatim, or the signature refuses. */
   readonly contentType: string;
+  /**
+   * The sound profile to apply, or `null` for a plain transcode — what a preview's "before"
+   * excerpt is, so that the two sides of the comparison differ by the profile and nothing else.
+   */
+  readonly profile: SoundProfileSettings | null;
+  /** Only this much of the source, when set. */
+  readonly excerpt?: AudioExcerpt;
 }
 
 export interface AudioProcessor {

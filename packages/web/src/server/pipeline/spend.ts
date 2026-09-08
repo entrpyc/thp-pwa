@@ -11,7 +11,7 @@ import {
   MAX_SPEND_CEILING_RAISE_USD,
   MAX_SPEND_RAISE_REASON_LENGTH,
   isSpendingStep,
-  type PipelineStep,
+  type JobStep,
   type RaiseSpendCeilingRequest,
   type SpendPayload,
   type SpendView,
@@ -50,7 +50,7 @@ export async function readSpendView(): Promise<SpendView> {
  * Read fresh each time rather than cached: the ledger moves whenever a job finishes, and an admin
  * who has just raised the ceiling should find the very next press allowed.
  */
-export async function requireSpendHeadroom(step: PipelineStep): Promise<void> {
+export async function requireSpendHeadroom(step: JobStep): Promise<void> {
   if (!isSpendingStep(step)) return;
   const ledger = await readSpendLedger(readSpendCeilingUsdPerDay());
   if (!spendCeilingReached(ledger)) return;

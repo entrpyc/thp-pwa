@@ -6,6 +6,7 @@ import {
   ADMIN_RECORDINGS_PAGE_PATH,
   ADMIN_REVIEWS_PAGE_PATH,
   ADMIN_SERIES_PAGE_PATH,
+  ADMIN_SOUND_PROFILE_PAGE_PATH,
   ADMIN_TAGS_PAGE_PATH,
   DASHBOARD_PAGE_PATH,
 } from '@thp/shared';
@@ -26,11 +27,12 @@ import styles from './admin.module.css';
  * independently.
  */
 
-/** The panels, in the order they are read. The seventh is one entry — as the sixth was. */
+/** The panels, in the order they are read. The eighth is one entry — as the seventh was. */
 const PANELS = [
   { id: 'users', href: ADMIN_PAGE_PATH, label: 'User management' },
   { id: 'recordings', href: ADMIN_RECORDINGS_PAGE_PATH, label: 'Recordings' },
   { id: 'pipeline', href: ADMIN_PIPELINE_PAGE_PATH, label: 'Pipeline' },
+  { id: 'sound-profile', href: ADMIN_SOUND_PROFILE_PAGE_PATH, label: 'Sound profile' },
   { id: 'reviews', href: ADMIN_REVIEWS_PAGE_PATH, label: 'Pending Reviews' },
   { id: 'series', href: ADMIN_SERIES_PAGE_PATH, label: 'Series' },
   { id: 'tags', href: ADMIN_TAGS_PAGE_PATH, label: 'Tags' },

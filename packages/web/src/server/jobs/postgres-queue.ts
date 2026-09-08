@@ -1,5 +1,5 @@
 import { enqueueJob, findUnfinishedJob, type Executor } from '@thp/db';
-import type { PipelineStep } from '@thp/shared';
+import type { JobStep } from '@thp/shared';
 import { correlationIdForJob, type EnqueueRequest, type EnqueuedJob, type Queue } from './queue';
 
 /**
@@ -36,7 +36,7 @@ export function buildQueue(): Queue {
 
     async findUnfinished(
       recordingId: string,
-      step: PipelineStep,
+      step: JobStep,
     ): Promise<EnqueuedJob | null> {
       const row = await findUnfinishedJob(recordingId, step);
       return row === null ? null : narrow(row);
@@ -48,7 +48,7 @@ export function buildQueue(): Queue {
 function narrow(row: {
   readonly id: string;
   readonly recordingId: string;
-  readonly step: PipelineStep;
+  readonly step: JobStep;
   readonly attempt: number;
   readonly correlationId: string;
 }): EnqueuedJob {
