@@ -62,6 +62,14 @@ describe('a cover is handed out as a grant a browser may keep for the day', () =
     expect(asked).toHaveLength(0);
   });
 
+  it('answers null for no cover without building the real store', async () => {
+    // The default store reads the five MEDIA_ variables and has no fallback, and every sign-in
+    // mints the session's avatar through here. The unit project loads no `.env`, so a store
+    // built on the way to this `null` would throw naming MEDIA_ENDPOINT — which is what a server
+    // with no bucket configured did to every sign-in until the default was made lazy.
+    expect(await mintArtworkGrant(null)).toBeNull();
+  });
+
   it('answers a URL that carries the signature, never the bare key', async () => {
     const { store } = recordingStore();
     const url = await mintArtworkGrant('artwork/abc.webp', store);

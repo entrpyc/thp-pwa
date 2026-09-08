@@ -3,6 +3,7 @@ import { defineConfig } from 'vitest/config';
 // Imported with its extension because Vite’s coming native config loader is Node’s own TypeScript
 // support, which resolves no specifier a runtime would not — `allowImportingTsExtensions` in
 // tsconfig.base.json is what lets `tsc` read the same line.
+import { TEST_AUDIO_PROCESSOR } from './tests/setup/audio-processor.ts';
 import { TEST_BIBLE } from './tests/setup/bible.ts';
 
 const webSrc = resolve(import.meta.dirname, 'packages/web/src');
@@ -34,7 +35,10 @@ export default defineConfig({
           // reach it here as well as reach the servers tests/setup/global.ts starts. Without them a
           // machine with no `.env` — CI — runs the draft step with no translation to hold a verse
           // under, and “the passage is held before the item is opened” quietly resolves nothing.
-          env: { ...TEST_BIBLE },
+          // The audio processor is named for the same reason: the worker’s `process_audio` step runs
+          // here too, and its default is a binary — ffmpeg — that CI does not have and the suite’s
+          // 256-byte uploads could not feed anyway.
+          env: { ...TEST_BIBLE, ...TEST_AUDIO_PROCESSOR },
           globalSetup: ['./tests/setup/global.ts'],
           testTimeout: 60_000,
           hookTimeout: 240_000,

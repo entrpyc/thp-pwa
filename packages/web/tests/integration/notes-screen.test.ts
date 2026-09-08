@@ -176,6 +176,12 @@ async function openNotes(page: Page): Promise<void> {
   await expect
     .poll(() => page.getByRole('form', { name: 'Write a note' }).count(), { timeout: 30_000 })
     .toBe(1);
+  // The composer paints before the notes arrive — the panel says so under it until they do — so
+  // a list read the moment the form appeared is an empty one on a slow machine. Wait for the
+  // placeholder to go; a failed load shows its own sentence rather than this one.
+  await expect
+    .poll(() => page.getByText('Loading the notes…', { exact: true }).count(), { timeout: 30_000 })
+    .toBe(0);
 }
 
 /** The visible note cards' text, in the order they are rendered. */

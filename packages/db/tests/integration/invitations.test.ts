@@ -95,6 +95,7 @@ describe('the invitation schema', () => {
     expect(enums.map((row) => row.typname)).toEqual([
       'job_status',
       'note_visibility',
+      'notification_kind',
       'pipeline_step',
       'review_kind',
       'review_status',

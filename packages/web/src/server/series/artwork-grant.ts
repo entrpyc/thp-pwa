@@ -43,12 +43,17 @@ export const ARTWORK_GRANT_SECONDS = ARTWORK_CACHE_WINDOW_SECONDS * 2;
 
 export async function mintArtworkGrant(
   key: string | null,
-  store: MediaStore = mediaStore(),
+  store?: MediaStore,
 ): Promise<string | null> {
   // No cover is the ordinary state (scope prd 3.1.7), and it costs no signature: the store is not
   // asked, and what the surface gets is `null` rather than a URL to nothing.
+  //
+  // Not built, either. The default is resolved *after* this check rather than as a default
+  // argument, because building the store reads the five MEDIA_ variables with no fallback — and
+  // every sign-in comes through here for the avatar. A server with no bucket configured would
+  // otherwise fail to sign anybody in over a picture nobody has.
   if (key === null) return null;
-  return store.presignGet({
+  return (store ?? mediaStore()).presignGet({
     key,
     expiresInSeconds: ARTWORK_GRANT_SECONDS,
     cache: { windowSeconds: ARTWORK_CACHE_WINDOW_SECONDS },
