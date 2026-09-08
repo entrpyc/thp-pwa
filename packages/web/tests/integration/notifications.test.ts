@@ -210,9 +210,8 @@ describe('a reaction to a public note', () => {
 
     const notices = ours(await inbox(author), text).filter((one) => one.kind === 'note_reaction');
     expect(notices.length).toBe(1);
-    expect(notices[0]?.title).toContain(REACTIONS[2].emoji);
-    expect(notices[0]?.title).toContain(REACTIONS[2].name);
-    expect(notices[0]?.title.startsWith(other.displayName)).toBe(true);
+    // The glyph is not in the sentence: the note itself is where the author sees which.
+    expect(notices[0]?.title).toBe(`${other.displayName} reacted to your note`);
   });
 });
 

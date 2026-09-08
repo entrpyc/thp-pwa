@@ -253,7 +253,6 @@ export async function setReaction(
     recordingId: existing.recordingId,
     noteId,
     reactor: actor,
-    emoji,
     noteText: existing.text ?? '',
   });
 

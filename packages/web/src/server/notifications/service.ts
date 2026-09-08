@@ -21,7 +21,6 @@ import {
   isAnnouncementKind,
   isOnboardingId,
   onboardingPagePath,
-  reactionName,
   recordingPagePath,
   type AnnouncementListPayload,
   type AnnouncementView,
@@ -106,15 +105,14 @@ export async function notifyNoteReply(input: {
 
 /**
  * Somebody reacted to a public note ([3.17.16](docs/project/prd.md)). The author is told, once
- * per reactor: a member who picks 🙏, then ❤️, then 🔥 leaves the author one notice that says the
- * last of those, not three.
+ * per reactor: a member who picks 🙏, then ❤️, then 🔥 leaves the author one notice, not three.
+ * The notice does not say which glyph — the note itself is where the author sees that.
  */
 export async function notifyNoteReaction(input: {
   readonly authorId: string;
   readonly recordingId: string;
   readonly noteId: string;
   readonly reactor: Actor;
-  readonly emoji: string;
   readonly noteText: string;
 }): Promise<void> {
   if (input.authorId === input.reactor.id) return;
@@ -128,7 +126,7 @@ export async function notifyNoteReaction(input: {
         input.authorId,
         {
           kind: 'note_reaction',
-          title: `${input.reactor.displayName} reacted ${input.emoji} (${reactionName(input.emoji)}) to your note`,
+          title: `${input.reactor.displayName} reacted to your note`,
           body: excerptForNotification(input.noteText),
           href: recordingPagePath(input.recordingId),
           recordingId: input.recordingId,
