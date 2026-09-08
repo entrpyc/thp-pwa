@@ -13,13 +13,11 @@ import {
   type SoundProfileRecordingRow,
   type SoundProfileRow,
 } from '@thp/db';
-import { mediaStore } from '@thp/media';
 import {
   DEFAULT_PREVIEW_START_SECONDS,
   MAX_PREVIEW_START_SECONDS,
   MAX_SOUND_PROFILE_NOTE_LENGTH,
   PREVIEW_EXCERPT_SECONDS,
-  PREVIEW_GRANT_SECONDS,
   checkSoundProfileSettings,
   pickSoundProfileSettings,
   sameSoundProfileSettings,
@@ -39,6 +37,7 @@ import type { Actor } from '@/server/auth/policy';
 import { queue } from '@/server/jobs/queue';
 import { audit } from '@/server/observability/audit';
 import { logger } from '@/server/observability/logger';
+import { mintPreviewGrant } from './preview-grant';
 
 /**
  * **The sound profile, from the API's side** ([3.4.5](docs/project/prd.md)–
@@ -253,8 +252,8 @@ function describeRecording(row: SoundProfileRecordingRow): SoundProfileRecording
 
 /**
  * What the worker left, read back. The payload carries what was asked for, so a pending preview
- * already says which settings it is of; the meta carries the keys, and the URLs are minted here,
- * now, for this reader — never stored, exactly as playback's are.
+ * already says which settings it is of; the meta carries the keys, and the URLs are minted now,
+ * for this reader, by `mintPreviewGrant` — never stored, exactly as playback's are.
  */
 async function describePreview(row: PreviewJobRow): Promise<PreviewView> {
   const payload = (row.payload ?? {}) as { settings?: unknown; startSeconds?: unknown };
@@ -284,13 +283,11 @@ async function describePreview(row: PreviewJobRow): Promise<PreviewView> {
     return { ...base, before: null, after: null, expiresAt: null };
   }
 
-  const expiresAt = new Date(Date.now() + PREVIEW_GRANT_SECONDS * 1000);
-  const store = mediaStore();
-  const [before, after] = await Promise.all([
-    store.presignGet({ key: meta.beforeKey, expiresInSeconds: PREVIEW_GRANT_SECONDS }),
-    store.presignGet({ key: meta.afterKey, expiresInSeconds: PREVIEW_GRANT_SECONDS }),
-  ]);
-  return { ...base, before, after, expiresAt: expiresAt.toISOString() };
+  const { before, after, expiresAt } = await mintPreviewGrant({
+    beforeKey: meta.beforeKey,
+    afterKey: meta.afterKey,
+  });
+  return { ...base, before, after, expiresAt };
 }
 
 /**

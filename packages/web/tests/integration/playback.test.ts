@@ -178,14 +178,20 @@ describe('signed-URL minting for playback is one function', () => {
     // **Two entries rather than one since the artwork scope** (scope plan 1.3): a cover is signed
     // by `mintArtworkGrant` and audio by `mintPlaybackGrant`, and the property is unchanged in what
     // it protects — each kind of media is signed in exactly one place, so the day either grows an
-    // expiry, a rendition or a fallback there is one function to change. A *third* entry is what
-    // this still refuses.
+    // expiry, a rendition or a fallback there is one function to change.
+    //
+    // **Three since the sound-profile scope** ([3.4.6](docs/project/prd.md)): a preview excerpt is
+    // a third kind of media, two objects the worker leaves and the console hears once, and
+    // `mintPreviewGrant` is the one place its pair of URLs is signed. The property is still the
+    // same one: one function per kind of media, and a *fourth* entry, or a second caller for any
+    // kind, is what this refuses.
     const callers = sources
       .filter((source) => /presignGet\s*\(/.test(source.text))
       .map((source) => source.path);
     expect(callers.map((path) => path.slice(path.indexOf('packages/web'))).sort()).toEqual([
       'packages/web/src/server/playback/grant.ts',
       'packages/web/src/server/series/artwork-grant.ts',
+      'packages/web/src/server/sound-profile/preview-grant.ts',
     ]);
   });
 

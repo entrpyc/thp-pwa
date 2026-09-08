@@ -10,7 +10,7 @@ import {
   type JobRow,
 } from '@thp/db';
 import { setLogSink, type LogLine } from '@thp/shared/observability/logger';
-import { PIPELINE_STEPS, type PipelineStep } from '@thp/shared';
+import { JOB_STEPS, type PipelineStep } from '@thp/shared';
 import { createHandlers, type HandlerRegistry } from '../../src/handlers';
 import { runJob } from '../../src/run-job';
 import { createThrowawayDatabase, type ThrowawayDatabase } from '../../../../tests/setup/throwaway-db';
@@ -194,10 +194,13 @@ describe('running a claimed job', () => {
  * A succeeded row in the ledger means the step genuinely ran.
  */
 describe('the handlers this worker registers', () => {
-  it('registers every step of the pipeline', () => {
+  it('registers every step the ledger can hold', () => {
     // Against the ordered list rather than against two names typed out here — the successor rule
-    // reads that list too, and a step added to it with no handler is a job that fails.
-    expect(Object.keys(createHandlers()).sort()).toEqual([...PIPELINE_STEPS].sort());
+    // reads that list too, and a step added to it with no handler is a job that fails. The whole
+    // of `JOB_STEPS` and not only the chain: the standalone steps (`reprocess_audio`,
+    // `preview_audio`) are claimed by this same worker, and the database enum derives from the
+    // whole list.
+    expect(Object.keys(createHandlers()).sort()).toEqual([...JOB_STEPS].sort());
   });
 
   it('registers no stub — the last one went with Story 3 Ticket 01', async () => {

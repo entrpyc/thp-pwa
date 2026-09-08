@@ -110,11 +110,18 @@ function edit(
 
 /** A recording, seeded straight into the database — this suite is not about the upload flow. */
 async function newRecording(
-  title = `Untitled ${(seeded += 1)}`,
+  title?: string,
   recordedAt = '2026-04-12',
 ): Promise<{ readonly id: string; readonly key: string }> {
+  // Counted in the body rather than in the title's default, which only runs when no title is
+  // given: three rows seeded with titles in the same millisecond would otherwise share a key and
+  // trip the unique index.
+  seeded += 1;
   const key = `originals/details-${seeded}-${Date.now().toString(36)}.mp3`;
-  const row = await insertRecording({ originalMediaKey: key, title, recordedAt }, handle);
+  const row = await insertRecording(
+    { originalMediaKey: key, title: title ?? `Untitled ${seeded}`, recordedAt },
+    handle,
+  );
   return { id: row.id, key };
 }
 
