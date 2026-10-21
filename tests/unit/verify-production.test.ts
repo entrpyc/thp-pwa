@@ -6,6 +6,7 @@ import {
   parsePm2List,
   parseSshdConfig,
   lastHeartbeatAt,
+  lastLines,
   parseHealthchecksEnv,
   parseUfwStatus,
   unhealthyAlloyComponents,
@@ -234,5 +235,27 @@ describe('healthchecks wiring', () => {
     // The right line for the wrong job is still unwired for this one.
     expect(unitPingsHealthchecks(wired, 'HEALTHCHECK_BACKUP_URL')).toBe(false);
     expect(unitPingsHealthchecks('[Service]\nExecStart=/usr/bin/pgbackrest --stanza=thp check\n', 'HEALTHCHECK_BACKUP_CHECK_URL')).toBe(false);
+  });
+});
+
+describe('what a failed command said', () => {
+  it('carries certbot’s last lines rather than the generic command-failed message', () => {
+    const error = Object.assign(new Error('Command failed: sudo certbot renew --dry-run'), {
+      stdout: [
+        'The following simulated renewals failed:',
+        '  /etc/letsencrypt/live/gifts.example/fullchain.pem (failure)',
+        '- - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -',
+        '1 renew failure(s), 0 parse failure(s)',
+        '',
+      ].join('\n'),
+      stderr: '',
+    });
+    expect(lastLines(error, 2)).toBe(
+      '/etc/letsencrypt/live/gifts.example/fullchain.pem (failure) | 1 renew failure(s), 0 parse failure(s)',
+    );
+  });
+
+  it('falls back to the message when the command wrote nothing', () => {
+    expect(lastLines(new Error('sudo: a password is required'), 3)).toBe('sudo: a password is required');
   });
 });

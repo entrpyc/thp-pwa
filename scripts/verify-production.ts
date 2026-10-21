@@ -268,6 +268,24 @@ async function run(command: string, args: readonly string[]): Promise<string> {
   return stdout;
 }
 
+/**
+ * The last few non-empty lines a failed command wrote, on one line. `execFile`'s error carries
+ * the command's stdout and stderr; certbot in particular explains itself at the end of stdout.
+ */
+export function lastLines(error: unknown, count: number): string {
+  const { stdout, stderr, message } = (error ?? {}) as {
+    stdout?: string;
+    stderr?: string;
+    message?: string;
+  };
+  const text = `${stdout ?? ''}\n${stderr ?? ''}`.trim();
+  const lines = (text === '' ? (message ?? String(error)) : text)
+    .split('\n')
+    .map((line) => line.trim())
+    .filter((line) => line !== '' && !/^-( -)+ ?-?$/.test(line));
+  return lines.slice(-count).join(' | ');
+}
+
 function requireEnv(name: string): string {
   const value = process.env[name];
   if (!value || value.trim() === '') {
@@ -352,8 +370,15 @@ const CHECKS: readonly Check[] = [
     name: 'certbot-renewal',
     reach: 'box',
     async run() {
-      await run('sudo', ['certbot', 'renew', '--dry-run']);
       // A certificate that has never proven it renews is a 90-day outage with a start date.
+      try {
+        await run('sudo', ['certbot', 'renew', '--dry-run']);
+      } catch (error) {
+        // certbot says why on its last lines — a lock held by its own timer, a stale certificate
+        // for another site on this box, a challenge nginx did not serve — and the generic "command
+        // failed" the runner would print instead says nothing. Carry the reason.
+        return bad(`dry run failed: ${lastLines(error, 3)}`);
+      }
       return ok('dry run succeeded');
     },
   },
