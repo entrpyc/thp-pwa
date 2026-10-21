@@ -529,7 +529,10 @@ cp .env.example .env && chmod 600 .env      # then fill it in
 
 Production `.env` differs from the template in: `NEXT_PUBLIC_API_ORIGIN=https://thp.indepthwebsolutions.com`,
 `THP_MOCK_EXTERNAL=false`, `MEDIA_*` pointing at R2, real `ASR_API_KEY`, `GENERATE_API_KEY` and
-`MAIL_*`, and `SEED_ADMIN_*`. `ENABLE_DIAGNOSTIC_ROUTES` stays unset.
+`MAIL_*`, and `SEED_ADMIN_*`. `ENABLE_DIAGNOSTIC_ROUTES` stays unset. The analytics pair,
+`NEXT_PUBLIC_POSTHOG_KEY` and `POSTHOG_KEY` (the same public key, inlined for the client and read
+at runtime by the API), and the worker's `HEALTHCHECK_WORKER_URL` come from the accounts in
+[docs/project/observability.md](docs/project/observability.md) § 8 — see **Monitoring**.
 
 The service user has no password, and two things in this repository escalate from it:
 `verify:production` and the restore drill. [deploy/sudoers/thp](deploy/sudoers/thp) lets it run
