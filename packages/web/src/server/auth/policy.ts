@@ -1,4 +1,4 @@
-import type { Role, SessionIdentity } from '@thp/shared';
+import type { AnalyticsPerson, Role, SessionIdentity } from '@thp/shared';
 import type { UserRow } from '@thp/db';
 
 /**
@@ -273,6 +273,16 @@ export const POLICY_ACTIONS = [
 export type PolicyAction = (typeof POLICY_ACTIONS)[number];
 
 /** Who is asking. Built by {@link toActor} from a row the session module re-read this request. */
+/**
+ * What the analytics adapter is told about an actor, and all it is told
+ * (docs/project/observability.md § 5.2): the opaque id, and the role as the one person property.
+ * Built here rather than read at the call site, because this is the one module that reads the
+ * field (tools/role-usage.ts). The e-mail and the display name never leave through it.
+ */
+export function analyticsPerson(actor: Actor): AnalyticsPerson {
+  return { accountId: actor.id, properties: { role: actor.role } };
+}
+
 export interface Actor {
   readonly id: string;
   readonly email: string;

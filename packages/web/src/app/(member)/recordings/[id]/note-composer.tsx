@@ -10,6 +10,7 @@ import {
   type NoteVisibility,
 } from '@thp/shared';
 import { ApiClientError, apiFetch } from '@/client/api-client';
+import { track } from '@/client/observability/analytics';
 import { clearNoteDraft, readNoteDraft, writeNoteDraft } from '@/client/notes/draft';
 import { useRecordingContent } from './recording-content';
 import styles from './notes.module.css';
@@ -175,6 +176,8 @@ export function NoteComposer({
         })
           .then(() => {
             setText('');
+            // That a note was written, and whether it was private — never what it said.
+            track('note_created', { recording_id: recordingId, visibility, is_reply: false });
             // The draft is the note until the note exists; once it does, it is a second copy of one
             // the member can see in the list, and it would reopen the composer holding it again.
             setDraftAnchorMs(null);

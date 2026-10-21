@@ -111,6 +111,7 @@ export async function readResume(actor: Actor): Promise<ResumePayload> {
             // Signed here and nowhere lower: the key is a database fact and the grant is a response
             // this request minted, which is the same split every other artwork read takes.
             seriesTitle: row.seriesTitle,
+            seriesId: row.seriesId,
             artworkUrl: await mintArtworkGrant(row.seriesArtworkKey),
           },
   };

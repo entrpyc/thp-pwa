@@ -12,6 +12,7 @@ import {
   type RecordingView as Recording,
 } from '@thp/shared';
 import { ApiClientError, apiFetch } from '@/client/api-client';
+import { track } from '@/client/observability/analytics';
 import { useBreadcrumbTrail, usePlayer } from '../../player-context';
 import { ChaptersPanel } from './chapters-panel';
 import { CollapsibleProse } from './collapsible-prose';
@@ -129,6 +130,10 @@ export function RecordingScreen({
    */
   const chooseTab = (next: OpenTab) => {
     setFloorPx(panelRegion.current?.getBoundingClientRect().height ?? 0);
+    // An open is counted; the same press closing the tab is not (observability.md § 5.2).
+    if (next !== null && openTab !== next) {
+      track('tab_opened', { tab: next, surface: 'recording', recording_id: recordingId });
+    }
     setOpenTab((open) => (open === next ? null : next));
   };
 

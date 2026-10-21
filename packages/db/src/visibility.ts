@@ -208,6 +208,8 @@ export interface ResumeProgressRow {
    */
   readonly seriesTitle: string | null;
   readonly seriesArtworkKey: string | null;
+  /** The series' id, for the play the transport reports when this row resumes (observability.md § 5.2). */
+  readonly seriesId: string | null;
 }
 
 /**
@@ -237,6 +239,7 @@ export async function findResumeProgress(
       positionMs: playbackProgress.positionMs,
       seriesTitle: series.title,
       seriesArtworkKey: series.artworkKey,
+      seriesId: series.id,
     })
     .from(playbackProgress)
     .innerJoin(recording, eq(recording.id, playbackProgress.recordingId))

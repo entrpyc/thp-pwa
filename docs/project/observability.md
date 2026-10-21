@@ -386,6 +386,20 @@ stopping the worker for three minutes produces the process alert (A2) and starti
    call sites named in 6.1.
 4. The guard tests from 5.5.
 
+**As built (21 October 2026).** Four things the plan did not spell out and the code settled:
+
+- The vocabulary is a **runtime table** the types are derived from, so the guard test can walk it
+  and the adapter can sanitise against it: a property the table does not name, or a value that is
+  not what its kind says, is dropped before the SDK sees it. A note's text cannot leave even
+  through a mistaken call.
+- The one person property, `role`, is built by the policy module (`analyticsPerson`) and passed
+  through whole, because `tools/role-usage.ts` allows no other file to read an actor's role.
+- The mock switch reaches the client as `NEXT_PUBLIC_THP_MOCK_EXTERNAL`, mirrored by
+  `next.config.ts`, and `app_version` is `git describe` at build time. Neither is a variable the
+  operator sets.
+- The resume row carries the series id, so a play the transport reports on resume names the
+  series the way a play from the recording page does.
+
 **Proof:** the guard tests pass; a manual session shows every event in PostHog's live view with no
 string property that is not an id or an enum; pausing and resuming sends no second
 `playback_started`; navigating away and back does.

@@ -9,6 +9,7 @@ export * from './invitations';
 export * from './jobs';
 export * from './notes';
 export * from './notifications';
+export * from './observability/analytics';
 export * from './onboarding';
 export * from './passwords';
 export * from './playback';

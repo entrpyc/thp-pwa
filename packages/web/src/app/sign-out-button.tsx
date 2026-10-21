@@ -4,6 +4,7 @@ import { useRouter } from 'next/navigation';
 import { useState } from 'react';
 import { AUTH_SESSION_PATH } from '@thp/shared';
 import { apiFetch } from '@/client/api-client';
+import { resetAnalytics } from '@/client/observability/analytics';
 import styles from './sign-out.module.css';
 
 /**
@@ -28,6 +29,8 @@ export function SignOutButton({ className }: { className?: string | undefined })
     try {
       await apiFetch(AUTH_SESSION_PATH, { method: 'DELETE', credentials: 'include' });
     } finally {
+      // The next member on this browser starts anonymous rather than as this one.
+      resetAnalytics();
       router.replace('/sign-in');
       router.refresh();
     }

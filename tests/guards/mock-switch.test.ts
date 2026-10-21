@@ -4,6 +4,7 @@ import { readAsrProvider } from '../../packages/worker/src/asr/env';
 import { readGenerateProvider } from '../../packages/worker/src/generate/env';
 import { readBibleSource } from '../../packages/bible/src/env';
 import { readTransportName } from '../../packages/web/src/server/mail/env';
+import { readAnalyticsConfig } from '../../packages/web/src/client/observability/config';
 
 /**
  * **One switch, four adapters.**
@@ -81,5 +82,20 @@ describe('THP_MOCK_EXTERNAL', () => {
 
   it('accepts the value however it is spelled in a shell', () => {
     expect(isExternalMocked({ [MOCK_EXTERNAL_VARIABLE]: ' TRUE ' })).toBe(true);
+  });
+
+  it('silences the client analytics adapter too, which joined the promise in the observability scope', () => {
+    // The switch reaches the client as NEXT_PUBLIC_THP_MOCK_EXTERNAL (next.config.ts) and is read
+    // under its own name by the same function — so the shape of the promise is the same.
+    const configured = {
+      NEXT_PUBLIC_POSTHOG_KEY: 'phc_x',
+      NEXT_PUBLIC_POSTHOG_HOST: 'https://eu.i.posthog.com',
+    };
+    expect(readAnalyticsConfig({ ...configured, [MOCK_EXTERNAL_VARIABLE]: 'true' })).toBeNull();
+    expect(readAnalyticsConfig({ ...configured, [MOCK_EXTERNAL_VARIABLE]: '1' })).toBeNull();
+    expect(readAnalyticsConfig(configured)).not.toBeNull();
+    expect(() => readAnalyticsConfig({ ...configured, [MOCK_EXTERNAL_VARIABLE]: 'yes' })).toThrow(
+      MOCK_EXTERNAL_VARIABLE,
+    );
   });
 });

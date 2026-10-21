@@ -69,6 +69,7 @@ export function Landing() {
           description: resume?.recordingId === playing.id ? resume.description : null,
           positionMs: player.currentMs,
           seriesTitle: playing.seriesTitle,
+          seriesId: playing.seriesId,
           artworkUrl: playing.artworkUrl,
         };
 

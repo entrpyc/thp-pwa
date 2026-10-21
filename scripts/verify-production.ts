@@ -515,6 +515,24 @@ const CHECKS: readonly Check[] = [
     },
   },
   {
+    name: 'analytics',
+    reach: 'remote',
+    async run() {
+      // docs/project/observability.md § 6.6. Both values are inlined at build time, so the served
+      // bundle is the only honest witness: a key in `.env` that was added after the last build is
+      // not in it. The key is public by design and `phc_` is its prefix.
+      const scripts = await servedClientScripts();
+      if (scripts.trim() === '') return bad('the origin served no client scripts — is the app running?');
+      if (!/phc_[A-Za-z0-9]{20,}/.test(scripts)) {
+        return bad('no PostHog project key in the served bundle — NEXT_PUBLIC_POSTHOG_KEY unset at build');
+      }
+      if (!scripts.includes('eu.i.posthog.com')) {
+        return bad('the served bundle names no EU PostHog host — NEXT_PUBLIC_POSTHOG_HOST must be https://eu.i.posthog.com');
+      }
+      return ok('the served bundle carries a project key and the EU host');
+    },
+  },
+  {
     name: 'diagnostics',
     reach: 'remote',
     async run() {

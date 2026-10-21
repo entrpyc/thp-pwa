@@ -33,6 +33,7 @@ import {
   type TranscriptSegmentView,
 } from '@thp/shared';
 import { apiFetch } from '@/client/api-client';
+import { track } from '@/client/observability/analytics';
 import { shouldRenewGrant } from '@/client/playback/renewal';
 import { shouldWriteProgress, type ProgressEventKind } from '@/client/playback/cadence';
 
@@ -91,6 +92,8 @@ export interface LoadedRecording {
   readonly artworkUrl: string | null;
   /** The series' title, which is what labels the tile — it stands alone (scope prd 4.3). */
   readonly seriesTitle: string | null;
+  /** The series' id, which the play this teaching reports carries (observability.md § 5.2). */
+  readonly seriesId: string | null;
 }
 
 /**
@@ -367,6 +370,13 @@ export function PlayerProvider({
   const playOnLoad = useRef(false);
   const loadedRef = useRef<LoadedRecording | null>(null);
   const speedRef = useRef(initialSpeed);
+  /**
+   * Whether the loaded teaching has started playing since it was loaded. Cleared by `open` and set
+   * by the first `play` after it — which is the definition of a unique play
+   * (docs/project/observability.md § 5.2): pausing and resuming is the same play, loading afresh
+   * is a new one.
+   */
+  const playedSinceLoad = useRef(false);
   const lastWriteAt = useRef<number | null>(null);
   /** Guards a renewal already in flight, so an error storm makes one request rather than many. */
   const renewing = useRef(false);
@@ -466,6 +476,7 @@ export function PlayerProvider({
       // returning to a teaching that is playing must not re-point the element at a fresh grant.
       if (loadedRef.current?.id === recording.id) return;
       loadedRef.current = recording;
+      playedSinceLoad.current = false;
       setLoaded(recording);
       setCurrentMs(startAtMs ?? 0);
       setDurationMs(0);
@@ -631,7 +642,21 @@ export function PlayerProvider({
       setCurrentMs(Math.round(element.currentTime * 1000));
       pushProgress('tick');
     };
-    const onPlay = () => setPlaying(true);
+    const onPlay = () => {
+      setPlaying(true);
+      // The first `play` since this teaching was loaded is the unique play; every later one is a
+      // resume of the same visit and reports nothing.
+      const recording = loadedRef.current;
+      if (recording !== null && !playedSinceLoad.current) {
+        playedSinceLoad.current = true;
+        track('playback_started', {
+          recording_id: recording.id,
+          series_id: recording.seriesId,
+          resumed: positionRef.current > 0,
+          speed: speedRef.current,
+        });
+      }
+    };
     const onPause = () => {
       setPlaying(false);
       pushProgress('pause');
@@ -724,6 +749,7 @@ export function PlayerProvider({
             title: row.title,
             artworkUrl: row.artworkUrl,
             seriesTitle: row.seriesTitle,
+            seriesId: row.seriesId,
           },
           row.positionMs,
         );
@@ -810,6 +836,7 @@ export function PlayerProvider({
     if (!isPlaybackSpeed(next) || next === speedRef.current) return;
     speedRef.current = next;
     setSpeed(next);
+    track('speed_changed', { speed: next });
     if (audioRef.current !== null) audioRef.current.playbackRate = next;
     void apiFetch(PLAYBACK_SPEED_PATH, {
       method: 'PUT',

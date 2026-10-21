@@ -3,7 +3,8 @@ import { redirect } from 'next/navigation';
 import { onboardingPagePath } from '@thp/shared';
 import { currentActor } from '@/server/auth/current-actor';
 import { pendingOnboardingFor } from '@/server/onboarding/completion';
-import { can } from '@/server/auth/policy';
+import { analyticsPerson, can } from '@/server/auth/policy';
+import { AnalyticsProvider } from '@/client/observability/analytics-provider';
 import { NotificationsProvider } from './notifications-context';
 import { PlayerProvider } from './player-context';
 import { TopNavigation } from './top-navigation';
@@ -40,21 +41,26 @@ export default async function MemberLayout({ children }: { children: ReactNode }
   if (pendingOnboarding !== null) redirect(onboardingPagePath(pendingOnboarding));
 
   return (
-    <PlayerProvider initialSpeed={actor.preferredPlaybackSpeed}>
-      {/*
-        Inside the player rather than around it, because it is the smaller thing: the bell and the
-        centre read it, and nothing about playback does. It is here rather than in the navigation
-        so the centre — a page under this layout — reads the same list the bell counts from.
-      */}
-      <NotificationsProvider>
-        <div className={styles.screen}>
-          <div className={styles.shell}>
-            <TopNavigation canSeeConsole={can(actor, 'account.list')} />
-            <main className={styles.content}>{children}</main>
+    // Outermost, because the player underneath it reports plays and the pages report views, and
+    // the member surface is the only surface that reports anything (observability.md § 6.3). What
+    // crosses this line is what the policy module says analytics may know; the e-mail is not in it.
+    <AnalyticsProvider person={analyticsPerson(actor)}>
+      <PlayerProvider initialSpeed={actor.preferredPlaybackSpeed}>
+        {/*
+          Inside the player rather than around it, because it is the smaller thing: the bell and the
+          centre read it, and nothing about playback does. It is here rather than in the navigation
+          so the centre — a page under this layout — reads the same list the bell counts from.
+        */}
+        <NotificationsProvider>
+          <div className={styles.screen}>
+            <div className={styles.shell}>
+              <TopNavigation canSeeConsole={can(actor, 'account.list')} />
+              <main className={styles.content}>{children}</main>
+            </div>
+            <TransportBar />
           </div>
-          <TransportBar />
-        </div>
-      </NotificationsProvider>
-    </PlayerProvider>
+        </NotificationsProvider>
+      </PlayerProvider>
+    </AnalyticsProvider>
   );
 }

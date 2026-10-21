@@ -4,6 +4,7 @@ import Link from 'next/link';
 import { NOTIFICATION_KIND_LABEL, type NotificationView } from '@thp/shared';
 import { useNotifications } from '../notifications-context';
 import { useBreadcrumbTrail } from '../player-context';
+import { track } from '@/client/observability/analytics';
 import styles from './notifications.module.css';
 
 /**
@@ -110,6 +111,7 @@ function Row({
         className={className}
         href={entry.href}
         onClick={() => {
+          track('notification_opened', { kind: entry.kind, channel: 'in_app' });
           if (unread) void onRead(entry.id).catch(() => undefined);
         }}
       >

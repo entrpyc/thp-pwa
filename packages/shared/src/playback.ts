@@ -167,6 +167,8 @@ export interface ResumeView {
    * cold load would be a plainer bar than the same teaching opened from its own page.
    */
   readonly seriesTitle: string | null;
+  /** The series' id, so the play the transport reports on resume names it (observability.md § 5.2). */
+  readonly seriesId: string | null;
   readonly artworkUrl: string | null;
 }
 

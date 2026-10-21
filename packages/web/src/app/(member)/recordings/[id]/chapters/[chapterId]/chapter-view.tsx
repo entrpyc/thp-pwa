@@ -13,6 +13,7 @@ import {
   type RecordingView as Recording,
 } from '@thp/shared';
 import { ApiClientError, apiFetch } from '@/client/api-client';
+import { track } from '@/client/observability/analytics';
 import { useBreadcrumbTrail, usePlayer } from '../../../../player-context';
 import { NotesPanel } from '../../notes-panel';
 import {
@@ -78,6 +79,11 @@ export function ChapterScreen({
   const [recording, setRecording] = useState<Recording | null>(null);
   const [failure, setFailure] = useState<string | null>(null);
   const [openTab, setOpenTab] = useState<OpenTab>('notes');
+  /** The same press opens and closes; only the open is counted (observability.md § 5.2). */
+  const chooseTab = (next: Exclude<OpenTab, null>) => {
+    if (openTab !== next) track('tab_opened', { tab: next, surface: 'chapter', recording_id: recordingId });
+    setOpenTab((open) => (open === next ? null : next));
+  };
   /** The stored position, kept for the moment the play control hands the player over. */
   const [startAtMs, setStartAtMs] = useState<number | null>(null);
 
@@ -271,7 +277,7 @@ export function ChapterScreen({
               type="button"
               role="tab"
               aria-selected={openTab === 'notes'}
-              onClick={() => setOpenTab((open) => (open === 'notes' ? null : 'notes'))}
+              onClick={() => chooseTab('notes')}
             >
               <span className={styles.notesIcon} aria-hidden="true">
                 ✎
@@ -289,7 +295,7 @@ export function ChapterScreen({
               type="button"
               role="tab"
               aria-selected={openTab === 'scripture'}
-              onClick={() => setOpenTab((open) => (open === 'scripture' ? null : 'scripture'))}
+              onClick={() => chooseTab('scripture')}
             >
               Scripture
             </button>
@@ -304,7 +310,7 @@ export function ChapterScreen({
                 type="button"
                 role="tab"
                 aria-selected={openTab === 'transcript'}
-                onClick={() => setOpenTab((open) => (open === 'transcript' ? null : 'transcript'))}
+                onClick={() => chooseTab('transcript')}
               >
                 Transcript
               </button>

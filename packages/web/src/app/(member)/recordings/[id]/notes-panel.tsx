@@ -18,6 +18,7 @@ import {
   type NoteView,
 } from '@thp/shared';
 import { ApiClientError, apiFetch } from '@/client/api-client';
+import { track } from '@/client/observability/analytics';
 import { useRecordingContent } from './recording-content';
 import { CharacterCount, NoteComposer } from './note-composer';
 import styles from './notes.module.css';
@@ -714,6 +715,8 @@ function ReplyComposer({
         })
           .then(() => {
             setText('');
+            // A reply is always public (scope prd 3.3.3); what it said never travels.
+            track('note_created', { recording_id: recordingId, visibility: 'public', is_reply: true });
             onDone();
             content.refreshNotes();
           })

@@ -87,6 +87,7 @@ export function toLoaded(recording: Recording): LoadedRecording {
     // by the bar — the page is the one place that knows both (scope prd 3.2.4).
     artworkUrl: recording.series?.artworkUrl ?? null,
     seriesTitle: recording.series?.title ?? null,
+    seriesId: recording.series?.id ?? null,
   };
 }
 

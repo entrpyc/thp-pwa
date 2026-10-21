@@ -13,6 +13,7 @@ import {
   type ChapterWritePayload,
 } from '@thp/shared';
 import { ApiClientError, apiFetch } from '@/client/api-client';
+import { track } from '@/client/observability/analytics';
 import { useRecordingContent } from './recording-content';
 import styles from './chapters.module.css';
 
@@ -156,7 +157,14 @@ export function ChaptersPanel({
                   className={styles.play}
                   type="button"
                   aria-label={`Play from ${chapter.title}`}
-                  onClick={() => content.playFromMs(chapter.startMs)}
+                  onClick={() => {
+                    // The index in the teaching's own order, not in the filtered list on screen.
+                    track('chapter_jumped', {
+                      recording_id: recordingId,
+                      chapter_index: chapters.indexOf(chapter),
+                    });
+                    content.playFromMs(chapter.startMs);
+                  }}
                 >
                   <span aria-hidden="true">▶</span>
                 </button>
