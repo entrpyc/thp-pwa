@@ -13,7 +13,10 @@ concurrency:
 jobs:
   commits:
     name: "commit messages start with feat:, fix: or chore:"
-    runs-on: ubuntu-latest
+    # Pinned rather than `ubuntu-latest`: that label moved to Ubuntu 26 on 19 October 2026 and the
+    # MinIO step, a `docker run`, started failing with exit 125 on every push from 21 October — the
+    # image does not carry a working Docker yet. Nothing in this file needs the newer image.
+    runs-on: ubuntu-24.04
     timeout-minutes: 5
     steps:
       - uses: actions/checkout@v5
@@ -42,7 +45,7 @@ jobs:
 
   verify:
     name: install, typecheck, migrate, test
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-24.04
     timeout-minutes: 20
 
     # PostgreSQL 17 with the `vector` extension installed as a package but NOT enabled — the exact
