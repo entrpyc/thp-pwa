@@ -531,6 +531,15 @@ Production `.env` differs from the template in: `NEXT_PUBLIC_API_ORIGIN=https://
 `THP_MOCK_EXTERNAL=false`, `MEDIA_*` pointing at R2, real `ASR_API_KEY`, `GENERATE_API_KEY` and
 `MAIL_*`, and `SEED_ADMIN_*`. `ENABLE_DIAGNOSTIC_ROUTES` stays unset.
 
+The service user has no password, and two things in this repository escalate from it:
+`verify:production` and the restore drill. [deploy/sudoers/thp](deploy/sudoers/thp) lets it run
+exactly those commands without one, and nothing else:
+
+```bash
+sudo install -o root -g root -m 440 deploy/sudoers/thp /etc/sudoers.d/thp
+sudo visudo -cf /etc/sudoers.d/thp     # must print "parsed OK" — a broken file here breaks sudo for everyone
+```
+
 **6 — Build and supervise.**
 
 ```bash
@@ -667,21 +676,25 @@ The worker's own heartbeat is `HEALTHCHECK_WORKER_URL` in `.env`, not here, beca
 the one process that reads `.env`. `verify:production`'s `backup-pings` check confirms all three
 URLs are named and both *installed* units carry their `ExecStartPost`.
 
-**4 — The alerts, in Grafana Cloud.** Five rules, each with the operator's e-mail as the contact
-point and *No data* treated as alerting. The expressions, against the metrics Alloy sends:
+**4 — The alerts, in Grafana Cloud.** Six rules in a folder and evaluation group both named `thp`,
+evaluated every minute, each with the operator's e-mail as the contact point and both *No data*
+and *Error* set to Alerting. The rule editor takes the query and the comparison separately — the
+query is pasted in Code mode, the comparison goes in the "When query" condition beneath it:
 
-| Alert | Expression | For |
-| :--- | :--- | :--- |
-| A2 process down | `namedprocess_namegroup_num_procs{groupname=~"thp-web\|thp-worker"} < 1` | 2m |
-| A4 disk | `(1 - node_filesystem_avail_bytes{mountpoint="/"} / node_filesystem_size_bytes{mountpoint="/"}) > 0.85` | 5m |
-| A4 memory | `(1 - node_memory_MemAvailable_bytes / node_memory_MemTotal_bytes) > 0.9` | 10m |
-| A4 steal | `avg(rate(node_cpu_seconds_total{mode="steal"}[5m])) > 0.2` | 15m |
-| A5 connections | `sum(pg_stat_activity_count) / max(pg_settings_max_connections) > 0.8` | 5m |
-| A5 long transaction | `max(pg_stat_activity_max_tx_duration) > 300` | 5m |
+| Rule | Query | Condition | Pending |
+| :--- | :--- | :--- | :--- |
+| A2 process down | `namedprocess_namegroup_num_procs` | is below 1 | 2m |
+| A4 disk | `1 - node_filesystem_avail_bytes{mountpoint="/"} / node_filesystem_size_bytes{mountpoint="/"}` | is above 0.85 | 5m |
+| A4 memory | `1 - node_memory_MemAvailable_bytes / node_memory_MemTotal_bytes` | is above 0.9 | 10m |
+| A4 steal | `avg(rate(node_cpu_seconds_total{mode="steal"}[5m]))` | is above 0.2 | 15m |
+| A5 connections | `sum(pg_stat_activity_count) / max(pg_settings_max_connections)` | is above 0.8 | 5m |
+| A5 long transaction | `max(pg_stat_activity_max_tx_duration)` | is above 300 | 5m |
 
-For the dashboard, import the community *Node Exporter Full* (id 1860) and *PostgreSQL Database*
-(id 9628) dashboards against the stack's Prometheus data source; the committed copies under
-`deploy/observability/` are exported from there once the rules are proven.
+The `job` label on every series is the exporter's own (`integrations/unix`, `integrations/process`,
+…); nothing above filters on it. For the dashboard, import the community *Node Exporter Full*
+(id 1860) and *PostgreSQL Database* (id 9628) dashboards against the stack's Prometheus data
+source; the committed copies under `deploy/observability/` are exported from there once the rules
+are proven.
 
 **5 — Prove it.** `npm run verify:production` passes `alloy` and `backup-pings`. Then
 `pm2 stop thp-worker`, wait three minutes, confirm the A2 e-mail arrived, `pm2 start thp-worker`,

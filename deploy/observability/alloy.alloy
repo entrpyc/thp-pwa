@@ -50,24 +50,25 @@ prometheus.exporter.process "pm2" {
 // ---------------------------------------------------------------------------------------------
 // Scrapes — how often. One minute is enough for alerts whose shortest window is two minutes, and
 // it is what keeps the series budget comfortable.
+//
+// The `job` label on every series is stamped by the exporter itself — `integrations/unix`,
+// `integrations/postgres_exporter`, `integrations/process` — and a `job_name` here would be
+// overridden by it. Nothing in the alert rules filters on `job`.
 // ---------------------------------------------------------------------------------------------
 
 prometheus.scrape "host" {
-  job_name        = "node"
   targets         = prometheus.exporter.unix.host.targets
   scrape_interval = "60s"
   forward_to      = [prometheus.remote_write.grafana_cloud.receiver]
 }
 
 prometheus.scrape "db" {
-  job_name        = "postgres"
   targets         = prometheus.exporter.postgres.db.targets
   scrape_interval = "60s"
   forward_to      = [prometheus.remote_write.grafana_cloud.receiver]
 }
 
 prometheus.scrape "pm2" {
-  job_name        = "process"
   targets         = prometheus.exporter.process.pm2.targets
   scrape_interval = "60s"
   forward_to      = [prometheus.remote_write.grafana_cloud.receiver]

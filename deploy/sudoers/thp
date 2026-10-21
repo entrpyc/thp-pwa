@@ -1,0 +1,20 @@
+# /etc/sudoers.d/thp — **what the service user may run as root without a password, and nothing else.**
+#
+# The service user is created with no password (README.md "First setup"), and two scripts in this
+# repository escalate from it: `verify:production`'s `certbot-renewal`, `network`, `hardening` and
+# `backup` checks, and scripts/restore-drill.sh for the scratch cluster. This is exactly that list.
+# It is **not** `thp ALL=(ALL) NOPASSWD: ALL`, because the web and worker processes run as this user
+# and a code-execution bug in either would otherwise be a root shell.
+#
+#   sudo install -o root -g root -m 440 deploy/sudoers/thp /etc/sudoers.d/thp
+#   sudo visudo -cf /etc/sudoers.d/thp        # must print "parsed OK"; a broken file here breaks sudo for everyone
+#
+# `certbot renew --dry-run` covers every certificate on the box, not only this app's — a stale
+# certificate for another site fails the check until it is renewed or deleted.
+
+Cmnd_Alias THP_VERIFY = /usr/bin/certbot renew --dry-run, /usr/sbin/ufw status, /usr/sbin/sshd -T
+Cmnd_Alias THP_DRILL  = /usr/bin/rm -rf /var/lib/postgresql/restore-drill, /usr/bin/install -d -o postgres -g postgres -m 700 /var/lib/postgresql/restore-drill
+Cmnd_Alias THP_AS_PG  = /usr/bin/pgbackrest, /usr/bin/psql, /usr/lib/postgresql/17/bin/pg_ctl, /usr/bin/tee, /usr/bin/test, /usr/bin/touch
+
+thp ALL=(root) NOPASSWD: THP_VERIFY, THP_DRILL
+thp ALL=(postgres) NOPASSWD: THP_AS_PG
