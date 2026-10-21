@@ -1,0 +1,95 @@
+// Grafana Alloy — **the host, Postgres and the two pm2 processes, pushed to Grafana Cloud.**
+//
+// Goes to /etc/alloy/config.alloy (docs/project/observability.md § 6.2, README.md "Monitoring").
+//
+// This file is the whole of what the box tells Grafana, and it is deliberately small: three
+// exporters, three scrapes, one remote write. There is no OTLP receiver and no log tailing — the
+// application never talks to Alloy, and Alloy only pushes outward, so nothing here opens a port
+// beyond Alloy's own 127.0.0.1:12345, which `verify:production`'s `alloy` check reads.
+//
+// **No secret lives in this file.** The four values that differ per box come from the environment
+// the systemd unit gives Alloy — /etc/default/alloy, root-owned, see deploy/observability/alloy.default —
+// so this file can be committed and copied verbatim.
+//
+// Budget: about 1,750 active series at a 60-second interval, against Grafana Cloud Free's 10,000
+// (docs/project/observability.md § 4.3). Nothing here carries a per-user, per-recording or per-job
+// label, which is what keeps that number fixed as the product grows.
+
+// ---------------------------------------------------------------------------------------------
+// Exporters — what is measured.
+// ---------------------------------------------------------------------------------------------
+
+// The host: CPU including steal, memory, disk, inodes, load, network. Default collectors.
+prometheus.exporter.unix "host" {
+}
+
+// Postgres: connections, transactions, cache hit ratio, dead tuples, longest transaction. Reads
+// through the read-only `monitoring` role (`GRANT pg_monitor`), never through the app's user.
+prometheus.exporter.postgres "db" {
+  data_source_names = [sys.env("THP_MONITORING_DSN")]
+}
+
+// The two pm2 processes, found by what they run rather than by pid, because pm2 restarts change
+// the pid and a restart is exactly the moment this must keep working. Each matcher is a regular
+// expression over the full command line; `npm start` and `npm run worker` in ecosystem.config.cjs
+// resolve to the two commands in package.json, and these are the parts of them that no other
+// process on the box carries. `namedprocess_namegroup_num_procs{groupname="thp-web"}` drops to 0
+// when the process is gone — alert A2 reads exactly that.
+prometheus.exporter.process "pm2" {
+  matcher {
+    name    = "thp-web"
+    cmdline = ["next start packages/web"]
+  }
+
+  matcher {
+    name    = "thp-worker"
+    cmdline = ["packages/worker/src/index\\.ts"]
+  }
+}
+
+// ---------------------------------------------------------------------------------------------
+// Scrapes — how often. One minute is enough for alerts whose shortest window is two minutes, and
+// it is what keeps the series budget comfortable.
+// ---------------------------------------------------------------------------------------------
+
+prometheus.scrape "host" {
+  job_name        = "node"
+  targets         = prometheus.exporter.unix.host.targets
+  scrape_interval = "60s"
+  forward_to      = [prometheus.remote_write.grafana_cloud.receiver]
+}
+
+prometheus.scrape "db" {
+  job_name        = "postgres"
+  targets         = prometheus.exporter.postgres.db.targets
+  scrape_interval = "60s"
+  forward_to      = [prometheus.remote_write.grafana_cloud.receiver]
+}
+
+prometheus.scrape "pm2" {
+  job_name        = "process"
+  targets         = prometheus.exporter.process.pm2.targets
+  scrape_interval = "60s"
+  forward_to      = [prometheus.remote_write.grafana_cloud.receiver]
+}
+
+// ---------------------------------------------------------------------------------------------
+// Remote write — where it goes. The stack's Prometheus endpoint, the instance id as the user and
+// an access-policy token with `metrics:write` as the password. Off the box, so a dead box is seen
+// from somewhere that is not the dead box.
+// ---------------------------------------------------------------------------------------------
+
+prometheus.remote_write "grafana_cloud" {
+  endpoint {
+    url = sys.env("GRAFANA_CLOUD_PROM_URL")
+
+    basic_auth {
+      username = sys.env("GRAFANA_CLOUD_PROM_USER")
+      password = sys.env("GRAFANA_CLOUD_TOKEN")
+    }
+  }
+
+  external_labels = {
+    host = "thp",
+  }
+}

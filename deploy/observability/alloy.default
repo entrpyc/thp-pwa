@@ -1,0 +1,21 @@
+# /etc/default/alloy — **the environment Alloy's systemd unit runs with.**
+#
+# The Alloy apt package installs this file and its unit reads it. The first two lines are the
+# package's own; the four below them are what deploy/observability/alloy.alloy reads through
+# `sys.env()`, so that no secret ever sits in the committed config.
+#
+# Root-owned, mode 600. `sudo install -o root -g root -m 600 deploy/observability/alloy.default /etc/default/alloy`
+# then fill in the four values — README.md "Monitoring".
+
+CONFIG_FILE="/etc/alloy/config.alloy"
+CUSTOM_ARGS=""
+
+# From the Grafana Cloud stack page → Prometheus → "Remote write endpoint", the numeric
+# "Username / Instance ID", and an access-policy token with `metrics:write`.
+GRAFANA_CLOUD_PROM_URL=https://prometheus-prod-XX-prod-eu-west-X.grafana.net/api/prom/push
+GRAFANA_CLOUD_PROM_USER=000000
+GRAFANA_CLOUD_TOKEN=glc_...
+
+# The read-only monitoring role from README.md "Monitoring". Postgres listens on localhost only,
+# so there is nothing to encrypt between two processes on one box.
+THP_MONITORING_DSN=postgresql://monitoring:CHANGE_ME@127.0.0.1:5432/thp?sslmode=disable

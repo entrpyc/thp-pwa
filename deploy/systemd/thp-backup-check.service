@@ -14,6 +14,11 @@ After=postgresql.service network-online.target
 Type=oneshot
 User=postgres
 ExecStart=/usr/bin/pgbackrest --stanza=thp check
+# Tell Healthchecks.io the check passed (docs/project/observability.md § 2.4, alert A6). Runs only
+# after a successful ExecStart; a failed check pings nothing and the missing ping is the alert. The
+# URL comes from /etc/thp/healthchecks.env — deploy/observability/healthchecks.env.example.
+EnvironmentFile=-/etc/thp/healthchecks.env
+ExecStartPost=-/usr/bin/curl -fsS -m 10 --retry 3 -o /dev/null ${HEALTHCHECK_BACKUP_CHECK_URL}
 
 [Install]
 WantedBy=multi-user.target

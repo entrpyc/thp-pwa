@@ -157,6 +157,55 @@ export function daysUntil(when: number, now: number): number {
   return Math.floor((when - now) / 86_400_000);
 }
 
+interface RawAlloyComponent {
+  localID?: string;
+  health?: { state?: string; message?: string };
+}
+
+/**
+ * Alloy's `/api/v0/web/components` — every component that is not reporting itself healthy.
+ *
+ * A running Alloy with a wrong Postgres password or an expired Grafana token is still "active" to
+ * systemd and still answers `/-/ready`; the component that cannot do its job is the only thing that
+ * knows. An unexpected shape yields an empty list rather than a throw, because the readiness
+ * endpoint has already answered and this is the second, finer question.
+ */
+export function unhealthyAlloyComponents(json: string): { id: string; message: string }[] {
+  let parsed: unknown;
+  try {
+    parsed = JSON.parse(json);
+  } catch {
+    return [];
+  }
+  if (!Array.isArray(parsed)) return [];
+  return (parsed as RawAlloyComponent[])
+    .filter((component) => (component.health?.state ?? 'healthy') !== 'healthy')
+    .map((component) => ({
+      id: component.localID ?? 'unknown',
+      message: `${component.health?.state ?? 'unknown'}${component.health?.message ? `: ${component.health.message}` : ''}`,
+    }));
+}
+
+/**
+ * The Healthchecks.io ping wiring — which of the expected URLs the env file names, and which units
+ * carry the `ExecStartPost` that uses them.
+ *
+ * `systemctl cat` prints the unit *as installed*, which is what matters: the file in `deploy/` can
+ * gain the ping line and the copy in `/etc/systemd/system/` can be the one from before.
+ */
+export function parseHealthchecksEnv(text: string): string[] {
+  // `KEY=value` with nothing around the `=`: the one form both systemd's EnvironmentFile and the
+  // drill script's `source` read the same way.
+  return [...text.matchAll(/^[ \t]*(HEALTHCHECK_[A-Z_]+)=(\S+)/gm)]
+    .filter((match) => (match[2] ?? '').startsWith('https://'))
+    .map((match) => match[1] ?? '')
+    .sort();
+}
+
+export function unitPingsHealthchecks(unitText: string, variable: string): boolean {
+  return new RegExp(`^ExecStartPost=-?\\S*curl\\b.*\\$\\{${variable}\\}`, 'm').test(unitText);
+}
+
 // =================================================================================================
 // Small helpers the checks share.
 // =================================================================================================
@@ -521,6 +570,51 @@ const CHECKS: readonly Check[] = [
         return bad('backups use the media bucket credentials, which carry delete');
       }
       return ok(`separate bucket "${config.bucket}" under its own key`);
+    },
+  },
+  {
+    name: 'alloy',
+    reach: 'box',
+    async run() {
+      // docs/project/observability.md § 6.6. Three questions, finest last: is the unit up, is the
+      // process ready, and is every component inside it — the Postgres exporter with its role, the
+      // remote write with its token — actually able to do its job.
+      const active = (await run('systemctl', ['is-active', 'alloy']).catch(() => 'inactive')).trim();
+      if (active !== 'active') return bad(`the alloy unit is ${active} — README.md "Monitoring"`);
+      const base = 'http://127.0.0.1:12345';
+      const ready = await fetch(`${base}/-/ready`).catch(() => null);
+      if (ready === null || !ready.ok) {
+        return bad(`alloy is not answering ${base}/-/ready — is the config valid?`);
+      }
+      const components = await fetch(`${base}/api/v0/web/components`).then((r) => r.text()).catch(() => '[]');
+      const unhealthy = unhealthyAlloyComponents(components);
+      return unhealthy.length === 0
+        ? ok('unit active, ready, every component healthy')
+        : bad(unhealthy.map((component) => `${component.id} is ${component.message}`).join('; '));
+    },
+  },
+  {
+    name: 'backup-pings',
+    reach: 'box',
+    async run() {
+      // The three dead-man's switches (observability.md alerts A6 and A7) only fire if the pings
+      // are wired: the env file names a URL for each, and the *installed* units carry the line
+      // that sends it. The values are never printed; only which names are present.
+      const env = readFileSync('/etc/thp/healthchecks.env', 'utf8');
+      const named = parseHealthchecksEnv(env);
+      const expected = ['HEALTHCHECK_BACKUP_CHECK_URL', 'HEALTHCHECK_BACKUP_URL', 'HEALTHCHECK_RESTORE_DRILL_URL'];
+      const missing = expected.filter((name) => !named.includes(name));
+      if (missing.length > 0) return bad(`/etc/thp/healthchecks.env has no https URL for ${missing.join(', ')}`);
+      for (const [unit, variable] of [
+        ['thp-backup.service', 'HEALTHCHECK_BACKUP_URL'],
+        ['thp-backup-check.service', 'HEALTHCHECK_BACKUP_CHECK_URL'],
+      ] as const) {
+        const installed = await run('systemctl', ['cat', unit]).catch(() => '');
+        if (!unitPingsHealthchecks(installed, variable)) {
+          return bad(`the installed ${unit} does not ping \${${variable}} — recopy it from deploy/systemd and daemon-reload`);
+        }
+      }
+      return ok('three URLs named, both backup units ping on success');
     },
   },
   {

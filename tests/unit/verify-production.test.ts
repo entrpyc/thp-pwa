@@ -5,7 +5,10 @@ import {
   parsePgBackRestInfo,
   parsePm2List,
   parseSshdConfig,
+  parseHealthchecksEnv,
   parseUfwStatus,
+  unhealthyAlloyComponents,
+  unitPingsHealthchecks,
 } from '../../scripts/verify-production';
 
 /**
@@ -144,5 +147,51 @@ describe('certificate expiry', () => {
 
   it('goes negative once it is past, rather than wrapping to a pass', () => {
     expect(daysUntil(Date.UTC(2026, 7, 20), NOW)).toBe(-2);
+  });
+});
+
+describe('alloy components', () => {
+  // The shape of GET /api/v0/web/components on Alloy 1.x: one entry per component, each with the
+  // health its own evaluation last reported.
+  const CAPTURED = JSON.stringify([
+    { localID: 'prometheus.exporter.unix.host', health: { state: 'healthy', message: '' } },
+    { localID: 'prometheus.exporter.postgres.db', health: { state: 'unhealthy', message: 'pq: password authentication failed' } },
+    { localID: 'prometheus.remote_write.grafana_cloud', health: { state: 'healthy' } },
+  ]);
+
+  it('names the component that cannot do its job, with why', () => {
+    expect(unhealthyAlloyComponents(CAPTURED)).toEqual([
+      { id: 'prometheus.exporter.postgres.db', message: 'unhealthy: pq: password authentication failed' },
+    ]);
+  });
+
+  it('answers an empty list for a body that is not the component list, rather than failing the check on a shape', () => {
+    expect(unhealthyAlloyComponents('not json')).toEqual([]);
+    expect(unhealthyAlloyComponents('{"status":"ok"}')).toEqual([]);
+  });
+});
+
+describe('healthchecks wiring', () => {
+  it('lists only the ping variables that carry a real URL', () => {
+    const env = [
+      '# comment',
+      'HEALTHCHECK_BACKUP_URL=https://hc-ping.com/abc',
+      'HEALTHCHECK_BACKUP_CHECK_URL=',
+      'HEALTHCHECK_RESTORE_DRILL_URL=https://hc-ping.com/def',
+      'OTHER=https://example.com',
+    ].join('\n');
+    expect(parseHealthchecksEnv(env)).toEqual(['HEALTHCHECK_BACKUP_URL', 'HEALTHCHECK_RESTORE_DRILL_URL']);
+  });
+
+  it('sees the ping line in an installed unit, and its absence in the one from before', () => {
+    const wired = [
+      '[Service]',
+      'ExecStart=/usr/bin/pgbackrest --stanza=thp check',
+      'ExecStartPost=-/usr/bin/curl -fsS -m 10 --retry 3 -o /dev/null ${HEALTHCHECK_BACKUP_CHECK_URL}',
+    ].join('\n');
+    expect(unitPingsHealthchecks(wired, 'HEALTHCHECK_BACKUP_CHECK_URL')).toBe(true);
+    // The right line for the wrong job is still unwired for this one.
+    expect(unitPingsHealthchecks(wired, 'HEALTHCHECK_BACKUP_URL')).toBe(false);
+    expect(unitPingsHealthchecks('[Service]\nExecStart=/usr/bin/pgbackrest --stanza=thp check\n', 'HEALTHCHECK_BACKUP_CHECK_URL')).toBe(false);
   });
 });

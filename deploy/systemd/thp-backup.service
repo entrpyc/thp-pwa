@@ -18,6 +18,12 @@ ExecStart=/usr/bin/pgbackrest --stanza=thp --type=full backup
 # and `verify:production`'s `backup` check is what notices that the newest full has gone stale.
 Nice=10
 IOSchedulingClass=idle
+# Tell Healthchecks.io the backup finished (docs/project/observability.md § 2.4, alert A6). It
+# only runs after a successful ExecStart, so a failed backup pings nothing and the missing ping is
+# the alert. The leading `-` keeps a ping that cannot get out from failing a backup that did. The
+# URL comes from /etc/thp/healthchecks.env — deploy/observability/healthchecks.env.example.
+EnvironmentFile=-/etc/thp/healthchecks.env
+ExecStartPost=-/usr/bin/curl -fsS -m 10 --retry 3 -o /dev/null ${HEALTHCHECK_BACKUP_URL}
 
 [Install]
 WantedBy=multi-user.target

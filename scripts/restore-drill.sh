@@ -151,3 +151,18 @@ fi
 
 date -u +"%Y-%m-%dT%H:%M:%SZ restored $RESTORED_COUNTS" > "$RECEIPT"
 echo "Restore verified. Receipt written to $RECEIPT."
+
+# Tell Healthchecks.io the drill happened (docs/project/observability.md § 2.4, alert A7: a receipt
+# older than 90 days). Only after the receipt, so a drill that failed above pings nothing. The URL
+# is in /etc/thp/healthchecks.env, readable by the service user; a box without the file, or without
+# that line in it, drills exactly as before and `verify:production`'s `backup-pings` check is what
+# says so.
+HEALTHCHECKS_ENV=/etc/thp/healthchecks.env
+if [[ -r "$HEALTHCHECKS_ENV" ]]; then
+  # shellcheck disable=SC1090
+  source "$HEALTHCHECKS_ENV"
+fi
+if [[ -n "${HEALTHCHECK_RESTORE_DRILL_URL:-}" ]]; then
+  curl -fsS -m 10 --retry 3 -o /dev/null "$HEALTHCHECK_RESTORE_DRILL_URL" \
+    || echo "The drill passed but the Healthchecks.io ping did not get out." >&2
+fi

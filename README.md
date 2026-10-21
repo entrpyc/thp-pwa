@@ -618,4 +618,71 @@ days old, because a backup verified once in 2026 is an unverified backup in 2027
 
 The morning after setup, confirm the 02:00 timer actually fired: `pgbackrest info` should show two
 full backups, not one. A timer that never fires is the only failure here that cannot be detected on
-the day it ships.
+the day it ships — which is what the Healthchecks.io ping in **Monitoring** exists for.
+
+### Monitoring
+
+Seven alerts, all from outside the application, all free; the plan and its reasoning are in
+[docs/project/observability.md](docs/project/observability.md). Grafana Alloy on the box pushes
+host, Postgres and process metrics to Grafana Cloud; UptimeRobot watches the site from outside;
+Healthchecks.io notices when a scheduled job does not report in. The application links to none of
+them. This section is the box side; the accounts come first and are the plan's section 8.
+
+**1 — Alloy.** From Grafana's apt repository, running as its own `alloy` user. The config reads its
+four secrets from `/etc/default/alloy`, so the committed file is copied verbatim:
+
+```bash
+sudo mkdir -p /etc/apt/keyrings && wget -q -O - https://apt.grafana.com/gpg.key | gpg --dearmor | sudo tee /etc/apt/keyrings/grafana.gpg > /dev/null
+echo "deb [signed-by=/etc/apt/keyrings/grafana.gpg] https://apt.grafana.com stable main" | sudo tee /etc/apt/sources.list.d/grafana.list
+sudo apt update && sudo apt install -y alloy
+sudo install -o root -g alloy -m 640 deploy/observability/alloy.alloy /etc/alloy/config.alloy
+sudo install -o root -g root -m 600 deploy/observability/alloy.default /etc/default/alloy
+# fill in GRAFANA_CLOUD_PROM_URL, GRAFANA_CLOUD_PROM_USER, GRAFANA_CLOUD_TOKEN and THP_MONITORING_DSN
+```
+
+**2 — The monitoring role.** Read-only, so a leaked DSN reads statistics and nothing else:
+
+```bash
+sudo -u postgres psql -c "CREATE ROLE monitoring LOGIN PASSWORD '…'; GRANT pg_monitor TO monitoring;"
+sudo systemctl enable --now alloy
+```
+
+Alloy listens on `127.0.0.1:12345` only — nothing to open in the firewall. `verify:production`'s
+`alloy` check reads that port and fails if any component inside Alloy is unhealthy, which is how a
+wrong password or an expired token shows up.
+
+**3 — The Healthchecks.io pings.** Three URLs in one root-owned file, read by the two backup units
+and by the restore drill:
+
+```bash
+sudo install -d -o root -g root -m 755 /etc/thp
+sudo install -o root -g thp -m 640 deploy/observability/healthchecks.env.example /etc/thp/healthchecks.env
+# fill in the three URLs, then install the units that carry the ping line:
+sudo cp deploy/systemd/thp-backup.service deploy/systemd/thp-backup-check.service /etc/systemd/system/
+sudo systemctl daemon-reload
+sudo systemctl start thp-backup-check.service   # the first ping, now rather than at 09:00
+```
+
+The worker's own heartbeat is `HEALTHCHECK_WORKER_URL` in `.env`, not here, because the worker is
+the one process that reads `.env`. `verify:production`'s `backup-pings` check confirms all three
+URLs are named and both *installed* units carry their `ExecStartPost`.
+
+**4 — The alerts, in Grafana Cloud.** Five rules, each with the operator's e-mail as the contact
+point and *No data* treated as alerting. The expressions, against the metrics Alloy sends:
+
+| Alert | Expression | For |
+| :--- | :--- | :--- |
+| A2 process down | `namedprocess_namegroup_num_procs{groupname=~"thp-web\|thp-worker"} < 1` | 2m |
+| A4 disk | `(1 - node_filesystem_avail_bytes{mountpoint="/"} / node_filesystem_size_bytes{mountpoint="/"}) > 0.85` | 5m |
+| A4 memory | `(1 - node_memory_MemAvailable_bytes / node_memory_MemTotal_bytes) > 0.9` | 10m |
+| A4 steal | `avg(rate(node_cpu_seconds_total{mode="steal"}[5m])) > 0.2` | 15m |
+| A5 connections | `sum(pg_stat_activity_count) / max(pg_settings_max_connections) > 0.8` | 5m |
+| A5 long transaction | `max(pg_stat_activity_max_tx_duration) > 300` | 5m |
+
+For the dashboard, import the community *Node Exporter Full* (id 1860) and *PostgreSQL Database*
+(id 9628) dashboards against the stack's Prometheus data source; the committed copies under
+`deploy/observability/` are exported from there once the rules are proven.
+
+**5 — Prove it.** `npm run verify:production` passes `alloy` and `backup-pings`. Then
+`pm2 stop thp-worker`, wait three minutes, confirm the A2 e-mail arrived, `pm2 start thp-worker`,
+confirm it resolved.
