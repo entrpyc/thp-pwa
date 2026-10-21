@@ -35,7 +35,7 @@ import {
 import { apiFetch } from '@/client/api-client';
 import { track } from '@/client/observability/analytics';
 import { shouldRenewGrant } from '@/client/playback/renewal';
-import { shouldWriteProgress, type ProgressEventKind } from '@/client/playback/cadence';
+import { listenedStep, shouldWriteProgress, type ProgressEventKind } from '@/client/playback/cadence';
 
 /**
  * **The player, mounted once for the whole member surface.**
@@ -378,6 +378,15 @@ export function PlayerProvider({
    */
   const playedSinceLoad = useRef(false);
   const lastWriteAt = useRef<number | null>(null);
+  /**
+   * Media time heard since the last progress write went out, and the media clock at the last
+   * tick it was read from (docs/project/observability.md § 5.3). Accumulated here from
+   * `timeupdate`, through `listenedStep`, and sent as a delta with the next write — never sent on
+   * `timeupdate` itself. Reset when a teaching is loaded, because the count belongs to the pairing
+   * and a new teaching is a new pairing.
+   */
+  const listenedSinceWrite = useRef(0);
+  const lastTickMs = useRef<number | null>(null);
   /** Guards a renewal already in flight, so an error storm makes one request rather than many. */
   const renewing = useRef(false);
   /**
@@ -481,6 +490,8 @@ export function PlayerProvider({
       setCurrentMs(startAtMs ?? 0);
       setDurationMs(0);
       lastWriteAt.current = null;
+      listenedSinceWrite.current = 0;
+      lastTickMs.current = null;
       positionRef.current = startAtMs ?? 0;
       wantsPlay.current = false;
       seekOnLoad.current = startAtMs;
@@ -600,11 +611,22 @@ export function PlayerProvider({
     if (!shouldWriteProgress({ event, positionMs, lastWriteAt: lastWriteAt.current, now })) return;
 
     lastWriteAt.current = now;
+    // What was heard since the last write rides along as a delta, and the clock restarts here: a
+    // write that is dropped loses its delta, which biases completion downward and is accepted,
+    // the same way a dropped position is. The duration goes too, because nothing but this element
+    // knows it (observability.md § 5.3).
+    const listenedMs = Math.round(listenedSinceWrite.current);
+    listenedSinceWrite.current = 0;
+    const durationMs = Number.isFinite(element.duration) ? Math.round(element.duration * 1000) : 0;
     void apiFetch(recordingProgressPath(recording.id), {
       method: 'PUT',
       credentials: 'include',
       headers: { 'content-type': 'application/json' },
-      body: JSON.stringify({ positionMs }),
+      body: JSON.stringify({
+        positionMs,
+        ...(listenedMs > 0 ? { listenedMs } : {}),
+        ...(durationMs > 0 ? { durationMs } : {}),
+      }),
     }).catch(() => {
       // A dropped position costs the member a few seconds of re-listening. Retrying it would be
       // the outbox [§3.18](docs/project/prd.md) defers, so it is dropped deliberately.
@@ -639,7 +661,16 @@ export function PlayerProvider({
     };
     const onTimeUpdate = () => {
       remember();
-      setCurrentMs(Math.round(element.currentTime * 1000));
+      const currentMs = Math.round(element.currentTime * 1000);
+      // Listening is the media clock advancing by a tick's worth while playing; a jump is a seek
+      // or a return from the background and counts for nothing (`listenedStep`).
+      listenedSinceWrite.current += listenedStep({
+        previousMs: lastTickMs.current,
+        currentMs,
+        paused: element.paused,
+      });
+      lastTickMs.current = currentMs;
+      setCurrentMs(currentMs);
       pushProgress('tick');
     };
     const onPlay = () => {
@@ -663,7 +694,10 @@ export function PlayerProvider({
     };
     const onSeeked = () => {
       remember();
-      setCurrentMs(Math.round(element.currentTime * 1000));
+      const currentMs = Math.round(element.currentTime * 1000);
+      // The clock restarts where the seek landed, so the distance jumped is never listening.
+      lastTickMs.current = currentMs;
+      setCurrentMs(currentMs);
       pushProgress('seek');
     };
     // The definite signal that a grant has died — including for a reason the clock cannot know.

@@ -695,11 +695,20 @@ export const summary = pgTable(
  * **Cascades on both sides.** Progress is a fact about a pairing and is meaningless without either
  * half — unlike an invitation, it is not a record of something that happened.
  *
- * What is absent is the design. No `id`, because the pair *is* the identity. No `completed_at` and
- * no play log — [3.2.7](docs/project/prd.md) and [3.2.8](docs/project/prd.md) are deferred, and a
- * column added "for later" is how deferral quietly stops being deferral. No `duration`, because
- * nothing in this epic inspects the media and the player learns the total from the element. The
- * migration test asserts the exact column set rather than trusting this comment.
+ * What is absent is the design. No `id`, because the pair *is* the identity. No play log —
+ * [3.2.7](docs/project/prd.md) is deferred, and a column added "for later" is how deferral quietly
+ * stops being deferral. The migration test asserts the exact column set rather than trusting this
+ * comment.
+ *
+ * **Completion arrived with the observability scope** (docs/project/observability.md § 5.3), and
+ * it arrived as three columns on this row rather than as a log, because the question it answers —
+ * has this member heard this teaching — is a fact about the pairing. `listened_ms` is media time
+ * actually heard, accumulated across visits with seeking excluded, so a member who hears half
+ * today and the rest tomorrow completes, and one who scrubs to the end does not. `duration_ms` is
+ * the length as the member's player last reported it, held here because nothing else in the schema
+ * knows it: `recording` deliberately carries no duration. `completed_at` is set once, by the write
+ * that first carries the total past 80% of the duration, and never cleared — the column
+ * [3.2.8](docs/project/prd.md) reads when completed teachings are drawn apart.
  */
 export const playbackProgress = pgTable(
   'playback_progress',
@@ -714,6 +723,12 @@ export const playbackProgress = pgTable(
     positionMs: integer('position_ms').notNull(),
     /** When this position was written. What the resume card orders by. */
     updatedAt: timestamp('updated_at', { withTimezone: true }).notNull().defaultNow(),
+    /** Media time heard, across every visit, seeks excluded. Zero until the first write that carries some. */
+    listenedMs: integer('listened_ms').notNull().default(0),
+    /** The length as the player last reported it, or `null` until a player has. */
+    durationMs: integer('duration_ms'),
+    /** When `listened_ms` first reached 80% of `duration_ms`. Set once; never cleared. */
+    completedAt: timestamp('completed_at', { withTimezone: true }),
   },
   (table) => [primaryKey({ columns: [table.userId, table.recordingId] })],
 );

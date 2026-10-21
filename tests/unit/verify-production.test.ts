@@ -5,6 +5,7 @@ import {
   parsePgBackRestInfo,
   parsePm2List,
   parseSshdConfig,
+  lastHeartbeatAt,
   parseHealthchecksEnv,
   parseUfwStatus,
   unhealthyAlloyComponents,
@@ -147,6 +148,29 @@ describe('certificate expiry', () => {
 
   it('goes negative once it is past, rather than wrapping to a pass', () => {
     expect(daysUntil(Date.UTC(2026, 7, 20), NOW)).toBe(-2);
+  });
+});
+
+describe('the worker heartbeat, read from its log', () => {
+  // One JSON line per event, as the logger writes them and pm2 files them.
+  const line = (time: string, message: string) => JSON.stringify({ time, level: 'info', message });
+
+  it('finds the newest heartbeat, reading backwards past later lines that are not one', () => {
+    const log = [
+      line('2026-10-21T12:00:00.000Z', 'worker.heartbeat.sent'),
+      line('2026-10-21T12:05:00.000Z', 'worker.heartbeat.sent'),
+      line('2026-10-21T12:06:00.000Z', 'job.claimed'),
+      'Error: something a stack trace printed',
+      '',
+    ].join('\n');
+    expect(lastHeartbeatAt(log)).toBe(Date.parse('2026-10-21T12:05:00.000Z'));
+  });
+
+  it('answers null for a log with no heartbeat in it, or one that only mentions the word', () => {
+    expect(lastHeartbeatAt('')).toBeNull();
+    expect(lastHeartbeatAt(line('2026-10-21T12:00:00.000Z', 'worker.started'))).toBeNull();
+    expect(lastHeartbeatAt(JSON.stringify({ time: '2026-10-21T12:00:00.000Z', message: 'worker.heartbeat.failed' }))).toBeNull();
+    expect(lastHeartbeatAt('worker.heartbeat.sent but not json')).toBeNull();
   });
 });
 

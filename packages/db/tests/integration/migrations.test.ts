@@ -2339,3 +2339,89 @@ describe('the sound profile, and nothing beside it', () => {
     `).rejects.toThrow(/sound_profile_version_unique/);
   });
 });
+
+/**
+ * **Completion** (docs/project/observability.md § 5.3) — three columns on `playback_progress`,
+ * and nothing anywhere else.
+ *
+ * Asserted the way every migration in this file is: exact column sets before and after. The row
+ * written before the columns existed is read back afterwards, because "an older row is unheard,
+ * unmeasured and uncompleted" is the whole of what the defaults have to mean — and `listened_ms`
+ * refusing a null is a property of the database, not of the code that writes it.
+ */
+describe('playback completion, and nothing beside it', () => {
+  let target: ThrowawayDatabase;
+  let before: Map<string, string[]>;
+  let after: Map<string, string[]>;
+  let sql: ReturnType<typeof postgres>;
+  let userId: string;
+  let recordingId: string;
+
+  beforeAll(async () => {
+    target = await createThrowawayDatabase(inject('databaseUrl'), 'playback_completion_migration');
+
+    const priorCount = journalCountBefore('0027_playback_completion');
+    await runMigrations({ url: target.url, migrationsFolder: migrationsFolderUpTo(priorCount) });
+    before = await readColumnSets(target.url);
+
+    sql = postgres(target.url, { max: 2, onnotice: () => {} });
+    const [account] = await sql<{ id: string }[]>`
+      insert into "user" (email, password_hash, display_name, role)
+      values ('before-completion@example.test', 'hash', 'An older account', 'member')
+      returning id
+    `;
+    userId = account?.id as string;
+    const [written] = await sql<{ id: string }[]>`
+      insert into recording (original_media_key, playback_media_key, title, recorded_at)
+      values ('originals/before-completion.mp3', 'playback/before-completion.m4a', 'From Before Completion', '2026-10-21')
+      returning id
+    `;
+    recordingId = written?.id as string;
+    await sql`
+      insert into playback_progress (user_id, recording_id, position_ms)
+      values (${userId}, ${recordingId}, ${754_000})
+    `;
+
+    await runMigrations({ url: target.url, migrationsFolder: migrationsFolderUpTo(priorCount + 1) });
+    after = await readColumnSets(target.url);
+  }, 120_000);
+
+  afterAll(async () => {
+    await sql?.end({ timeout: 5 });
+    await target?.drop();
+  }, 60_000);
+
+  it('did not have the columns before this migration and does after — otherwise the comparison is vacuous', () => {
+    for (const column of ['listened_ms', 'duration_ms', 'completed_at']) {
+      expect(before.get('playback_progress')).not.toContain(column);
+      expect(after.get('playback_progress')).toContain(column);
+    }
+  });
+
+  it('adds exactly three columns to playback_progress, and nothing anywhere else', () => {
+    for (const [table, columns] of before) {
+      const expected =
+        table === 'playback_progress'
+          ? [...columns, 'completed_at', 'duration_ms', 'listened_ms'].sort()
+          : columns;
+      expect(after.get(table), `${table} changed`).toEqual(expected);
+    }
+    expect([...after.keys()].sort()).toEqual([...before.keys()].sort());
+  });
+
+  it('leaves an older row unheard, unmeasured and uncompleted, with its position intact', async () => {
+    const rows = await sql<
+      { position_ms: number; listened_ms: number; duration_ms: number | null; completed_at: Date | null }[]
+    >`
+      select position_ms, listened_ms, duration_ms, completed_at from playback_progress
+      where user_id = ${userId} and recording_id = ${recordingId}
+    `;
+    expect(rows).toEqual([{ position_ms: 754_000, listened_ms: 0, duration_ms: null, completed_at: null }]);
+  });
+
+  it('refuses a null listened total — it is a count, never unknown', async () => {
+    await expect(
+      sql`update playback_progress set listened_ms = null where user_id = ${userId}`,
+    ).rejects.toThrow(/null/i);
+  });
+});

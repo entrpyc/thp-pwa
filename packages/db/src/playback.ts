@@ -1,4 +1,4 @@
-import { and, eq } from 'drizzle-orm';
+import { and, eq, sql } from 'drizzle-orm';
 import { getDatabase, queryable, type DatabaseHandle, type Executor } from './client';
 import { playbackProgress, user } from './schema';
 
@@ -18,6 +18,12 @@ export interface PlaybackProgressRow {
   readonly recordingId: string;
   readonly positionMs: number;
   readonly updatedAt: Date;
+  /** Media time heard across every visit, seeks excluded (docs/project/observability.md § 5.3). */
+  readonly listenedMs: number;
+  /** The length as the player last reported it, or `null` until one has. */
+  readonly durationMs: number | null;
+  /** When `listenedMs` first reached 80% of `durationMs`; set once, never cleared. */
+  readonly completedAt: Date | null;
 }
 
 /**
@@ -60,17 +66,85 @@ export async function upsertPlaybackProgress(
   input: { readonly userId: string; readonly recordingId: string; readonly positionMs: number },
   executor: Executor = getDatabase(),
 ): Promise<PlaybackProgressRow> {
+  return (await recordPlaybackProgress(input, executor)).row;
+}
+
+export interface PlaybackProgressInput {
+  readonly userId: string;
+  readonly recordingId: string;
+  readonly positionMs: number;
+  /** Media time heard since the caller's last write, already bounded by the caller. Zero when absent. */
+  readonly listenedDeltaMs?: number;
+  /** The length as the player reports it. Absent leaves whatever the row already knows. */
+  readonly durationMs?: number;
+}
+
+export interface PlaybackProgressWrite {
+  readonly row: PlaybackProgressRow;
+  /**
+   * Whether **this** write is the one that completed the teaching. True exactly once per pairing,
+   * ever — the one moment the completion event is sent.
+   */
+  readonly completedNow: boolean;
+}
+
+/**
+ * The write above, carrying what was heard (docs/project/observability.md § 5.3).
+ *
+ * **One statement.** The delta is added to the total, the duration is remembered, and
+ * `completed_at` is set where it is null and the new total has reached 80% of the duration — all
+ * in the same `ON CONFLICT DO UPDATE`, so two writes from two devices cannot both claim the
+ * crossing: whichever lands second sees `completed_at` already set and leaves it. The comparison
+ * is integer arithmetic, `listened × 5 ≥ duration × 4`, with no float to argue with.
+ *
+ * **Whether this write completed is read from the row**, not guessed: `completed_at` and
+ * `updated_at` are both `now()` in the statement that sets them, and `now()` is one value for the
+ * whole statement — so the two are equal exactly when this write set the first.
+ */
+export async function recordPlaybackProgress(
+  input: PlaybackProgressInput,
+  executor: Executor = getDatabase(),
+): Promise<PlaybackProgressWrite> {
+  const delta = input.listenedDeltaMs ?? 0;
+  const duration = input.durationMs ?? null;
+  const completesOnInsert = duration !== null && duration > 0 && delta * 5 >= duration * 4;
+
+  const knownDuration = sql`coalesce(${duration}::integer, ${playbackProgress.durationMs})`;
+  const newTotal = sql`${playbackProgress.listenedMs} + ${delta}::integer`;
+
   const rows = await queryable(executor)
     .insert(playbackProgress)
-    .values({ ...input, updatedAt: new Date() })
+    .values({
+      userId: input.userId,
+      recordingId: input.recordingId,
+      positionMs: input.positionMs,
+      updatedAt: sql`now()`,
+      listenedMs: delta,
+      durationMs: duration,
+      completedAt: completesOnInsert ? sql`now()` : null,
+    })
     .onConflictDoUpdate({
       target: [playbackProgress.userId, playbackProgress.recordingId],
-      set: { positionMs: input.positionMs, updatedAt: new Date() },
+      set: {
+        positionMs: input.positionMs,
+        updatedAt: sql`now()`,
+        listenedMs: newTotal,
+        durationMs: knownDuration,
+        completedAt: sql`coalesce(
+          ${playbackProgress.completedAt},
+          case
+            when ${knownDuration} > 0 and (${newTotal}) * 5 >= ${knownDuration} * 4 then now()
+          end
+        )`,
+      },
     })
     .returning();
   const row = rows[0] as PlaybackProgressRow | undefined;
-  if (!row) throw new Error('upsertPlaybackProgress returned no row');
-  return row;
+  if (!row) throw new Error('recordPlaybackProgress returned no row');
+  return {
+    row,
+    completedNow: row.completedAt !== null && row.completedAt.getTime() === row.updatedAt.getTime(),
+  };
 }
 
 /**

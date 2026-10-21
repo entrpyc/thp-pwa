@@ -8,6 +8,7 @@ import {
 import { logger } from '@thp/shared/observability/logger';
 import { createHandlers } from './handlers';
 import { startWorkerLoop } from './loop';
+import { createHeartbeat } from './observability/heartbeat';
 import { sweepAbandonedJobs } from './sweep';
 
 /**
@@ -69,7 +70,9 @@ export async function main(): Promise<void> {
   checkEnvironment();
   await sweepAbandonedJobs();
 
-  const loop = startWorkerLoop({ handlers: createHandlers() });
+  // The heartbeat is built here, from the environment, and beats from inside the loop
+  // (docs/project/observability.md § 2.4): no URL means it says so once and does nothing.
+  const loop = startWorkerLoop({ handlers: createHandlers(), heartbeat: createHeartbeat().beat });
   installSignalHandlers(loop.stop);
 
   await loop.done;

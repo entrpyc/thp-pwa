@@ -17,6 +17,7 @@
     "next": "^16.3.1",
     "nodemailer": "^7.0.13",
     "posthog-js": "^1.438.13",
+    "posthog-node": "^5.56.4",
     "react": "^19.2.0",
     "react-dom": "^19.2.0"
   }

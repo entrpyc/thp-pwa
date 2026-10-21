@@ -22,6 +22,12 @@ export interface WorkerLoopOptions {
   readonly steps?: readonly PipelineStep[];
   readonly executor?: Executor;
   readonly pollIntervalMs?: number;
+  /**
+   * Called once per iteration, before the claim — the dead-man's switch
+   * (observability/heartbeat.ts). Absent in tests that are not about it. It is inside the loop
+   * rather than on a timer beside it so that a loop that stops iterating stops beating.
+   */
+  readonly heartbeat?: () => void;
 }
 
 export interface WorkerLoop {
@@ -55,6 +61,7 @@ export function startWorkerLoop(options: WorkerLoopOptions = {}): WorkerLoop {
     steps = PIPELINE_STEPS,
     executor,
     pollIntervalMs = POLL_INTERVAL_MS,
+    heartbeat,
   } = options;
 
   let stopped = false;
@@ -87,6 +94,7 @@ export function startWorkerLoop(options: WorkerLoopOptions = {}): WorkerLoop {
     logger.info('worker.started', { pollIntervalMs, steps: [...steps] });
 
     while (!stopped) {
+      heartbeat?.();
       let claimed;
       try {
         claimed = await claimNextJob(executor);

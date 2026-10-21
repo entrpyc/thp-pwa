@@ -1,7 +1,9 @@
 import { describe, expect, it } from 'vitest';
 import { MIN_STORED_POSITION_MS } from '@thp/shared';
 import {
+  MAX_LISTENED_STEP_MS,
   PROGRESS_TICK_INTERVAL_MS,
+  listenedStep,
   shouldWriteProgress,
   type ProgressEventKind,
 } from '@/client/playback/cadence';
@@ -85,5 +87,31 @@ describe('the four kinds are the whole vocabulary', () => {
     const kinds: ProgressEventKind[] = ['tick', 'pause', 'seek', 'hide'];
     const limited = kinds.filter((event) => !ask({ event, lastWriteAt: NOW }));
     expect(limited).toEqual(['tick']);
+  });
+});
+
+describe('what counts as listening between two ticks', () => {
+  // The media clock advancing by a tick's worth while playing — and only that
+  // (docs/project/observability.md § 5.3).
+  it('counts a tick-sized step while playing', () => {
+    expect(listenedStep({ previousMs: 10_000, currentMs: 10_250, paused: false })).toBe(250);
+    expect(listenedStep({ previousMs: 10_000, currentMs: 12_000, paused: false })).toBe(2_000);
+  });
+
+  it('counts nothing for a jump, which is a seek or a return from the background', () => {
+    expect(listenedStep({ previousMs: 10_000, currentMs: 10_000 + MAX_LISTENED_STEP_MS + 1, paused: false })).toBe(0);
+    expect(listenedStep({ previousMs: 10_000, currentMs: 600_000, paused: false })).toBe(0);
+  });
+
+  it('counts nothing backwards, while paused, or before there is a previous reading', () => {
+    expect(listenedStep({ previousMs: 10_000, currentMs: 9_000, paused: false })).toBe(0);
+    expect(listenedStep({ previousMs: 10_000, currentMs: 10_000, paused: false })).toBe(0);
+    expect(listenedStep({ previousMs: 10_000, currentMs: 10_250, paused: true })).toBe(0);
+    expect(listenedStep({ previousMs: null, currentMs: 10_250, paused: false })).toBe(0);
+  });
+
+  it('is media time, so a teaching heard at 2× counts in full', () => {
+    // At 2× the clock advances half a second per quarter-second tick; still under the cap.
+    expect(listenedStep({ previousMs: 10_000, currentMs: 10_500, paused: false })).toBe(500);
   });
 });

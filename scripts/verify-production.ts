@@ -206,6 +206,29 @@ export function unitPingsHealthchecks(unitText: string, variable: string): boole
   return new RegExp(`^ExecStartPost=-?\\S*curl\\b.*\\$\\{${variable}\\}`, 'm').test(unitText);
 }
 
+/**
+ * The worker's log, read backwards for the last heartbeat it sent — one JSON line per event, as
+ * `packages/shared/src/observability/logger.ts` writes them and pm2 files them. The epoch
+ * milliseconds of the newest `worker.heartbeat.sent` line, or `null` when there is none in the
+ * text. A line that is not JSON — a stack trace, a truncated tail — is skipped, not fatal.
+ */
+export function lastHeartbeatAt(logText: string, message = 'worker.heartbeat.sent'): number | null {
+  const lines = logText.split('\n');
+  for (let index = lines.length - 1; index >= 0; index -= 1) {
+    const line = lines[index]?.trim() ?? '';
+    if (!line.includes(message)) continue;
+    try {
+      const parsed = JSON.parse(line) as { message?: string; time?: string };
+      if (parsed.message !== message || typeof parsed.time !== 'string') continue;
+      const at = Date.parse(parsed.time);
+      if (Number.isFinite(at)) return at;
+    } catch {
+      // Not a JSON line. Keep looking.
+    }
+  }
+  return null;
+}
+
 // =================================================================================================
 // Small helpers the checks share.
 // =================================================================================================
@@ -633,6 +656,25 @@ const CHECKS: readonly Check[] = [
         }
       }
       return ok('three URLs named, both backup units ping on success');
+    },
+  },
+  {
+    name: 'heartbeat',
+    reach: 'box',
+    async run() {
+      // The worker's dead-man's switch (observability.md alert A3). The ping URL is in `.env`, and
+      // the proof it is being used is the worker's own log: it writes one line per ping sent, and
+      // pm2 files that log where this reads it. Ten minutes is the check's period plus its grace.
+      const url = process.env['HEALTHCHECK_WORKER_URL']?.trim() ?? '';
+      if (url === '') return bad('HEALTHCHECK_WORKER_URL is not set — the worker pings nothing');
+      const logPath = resolve(userInfo().homedir, '.pm2', 'logs', 'thp-worker-out.log');
+      const text = readFileSync(logPath, 'utf8');
+      const at = lastHeartbeatAt(text.slice(-512 * 1024));
+      if (at === null) return bad(`no heartbeat line in ${logPath} — has the worker restarted since the variable was set?`);
+      const minutes = (Date.now() - at) / 60_000;
+      return minutes <= 10
+        ? ok(`last ping ${minutes.toFixed(1)} min ago`)
+        : bad(`the last heartbeat was ${minutes.toFixed(0)} min ago — the loop is not iterating`);
     },
   },
   {

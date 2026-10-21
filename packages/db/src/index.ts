@@ -141,7 +141,10 @@ export {
   findPlaybackProgress,
   setPreferredPlaybackSpeed,
   upsertPlaybackProgress,
+  recordPlaybackProgress,
   type PlaybackProgressRow,
+  type PlaybackProgressInput,
+  type PlaybackProgressWrite,
 } from './playback';
 export {
   readPipeline,

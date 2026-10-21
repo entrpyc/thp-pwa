@@ -250,3 +250,91 @@ describe('the landing is offered the teaching this member was last part-way thro
     expect(response.status).toBe(401);
   });
 });
+
+// =================================================================================================
+
+describe('a teaching is completed by hearing 80% of it, across visits, and once', () => {
+  // docs/project/observability.md § 5.3. An hour-long teaching; completion is 48 minutes heard.
+  const DURATION = 60 * 60 * 1000;
+  let completionId: string;
+  let clampedId: string;
+
+  beforeAll(async () => {
+    completionId = await newRecording(`Progress completion ${RUN}`, '2026-10-21');
+    clampedId = await newRecording(`Progress clamped ${RUN}`, '2026-10-22');
+    await setRecordingPublication(completionId, new Date(), handle);
+    await setRecordingPublication(clampedId, new Date(), handle);
+  }, 60_000);
+
+  it('is not completed by scrubbing to the end', async () => {
+    // A position at the end with nothing heard: the resume point moves, the completion does not.
+    const scrubbed = await put(phone, completionId, { positionMs: DURATION - 1000, durationMs: DURATION });
+    expect(scrubbed.status).toBe(200);
+    expect((scrubbed.body as PlaybackProgressPayload).completedAt).toBeNull();
+  });
+
+  it('accumulates what was heard on the phone and finishes it on the laptop', async () => {
+    const half = await put(phone, completionId, {
+      positionMs: 30 * 60_000,
+      listenedMs: 30 * 60_000,
+      durationMs: DURATION,
+    });
+    expect((half.body as PlaybackProgressPayload).completedAt).toBeNull();
+
+    // Another device, another visit: 30 minutes heard there plus 18 here is 48, which is 80%.
+    const done = await put(laptop, completionId, {
+      positionMs: 50 * 60_000,
+      listenedMs: 18 * 60_000,
+      durationMs: DURATION,
+    });
+    expect(done.status).toBe(200);
+    expect((done.body as PlaybackProgressPayload).completedAt).not.toBeNull();
+
+    const row = await findPlaybackProgress(listener.id, completionId, handle);
+    expect(row?.listenedMs).toBe(48 * 60_000);
+    expect(row?.durationMs).toBe(DURATION);
+    expect(row?.completedAt).not.toBeNull();
+  });
+
+  it('keeps the first completion time however much more is heard', async () => {
+    const first = (await read(phone, completionId)).completedAt;
+    expect(first).not.toBeNull();
+
+    await put(phone, completionId, { positionMs: 55 * 60_000, listenedMs: 5 * 60_000 });
+    expect((await read(laptop, completionId)).completedAt).toBe(first);
+    expect((await findPlaybackProgress(listener.id, completionId, handle))?.listenedMs).toBe(53 * 60_000);
+  });
+
+  it('is somebody else’s completion on nobody else’s account', async () => {
+    expect((await read(strangerCookie, completionId)).completedAt).toBeNull();
+  });
+
+  it('refuses listening that is not whole, non-negative milliseconds, and a duration that is not positive', async () => {
+    for (const listenedMs of [-1, 1.5, '60000']) {
+      const refused = await put(phone, completionId, { positionMs: 10 * 60_000, listenedMs });
+      expect(refused.status, `listenedMs ${String(listenedMs)}`).toBe(400);
+    }
+    for (const durationMs of [0, -5, 2.5, 'an hour']) {
+      const refused = await put(phone, completionId, { positionMs: 10 * 60_000, durationMs });
+      expect(refused.status, `durationMs ${String(durationMs)}`).toBe(400);
+    }
+  });
+
+  it('clamps a delta past an hour rather than refusing the position beside it', async () => {
+    // A clock that ran ahead costs a count, not a resume point.
+    const written = await put(phone, clampedId, {
+      positionMs: 10 * 60_000,
+      listenedMs: 10 * 60 * 60_000,
+      durationMs: 100 * 60 * 60_000,
+    });
+    expect(written.status).toBe(200);
+    expect((await read(phone, clampedId)).positionMs).toBe(10 * 60_000);
+    expect((await findPlaybackProgress(listener.id, clampedId, handle))?.listenedMs).toBe(60 * 60_000);
+  });
+
+  it('still lands a position from a client that sends neither field', async () => {
+    const plain = await put(phone, clampedId, { positionMs: 12 * 60_000 });
+    expect(plain.status).toBe(200);
+    expect((await findPlaybackProgress(listener.id, clampedId, handle))?.listenedMs).toBe(60 * 60_000);
+  });
+});

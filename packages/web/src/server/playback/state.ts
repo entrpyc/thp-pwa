@@ -2,10 +2,11 @@ import {
   findPlaybackProgress,
   findResumeProgress,
   findVisibleRecording,
+  recordPlaybackProgress,
   setPreferredPlaybackSpeed,
-  upsertPlaybackProgress,
 } from '@thp/db';
 import {
+  MAX_LISTENED_DELTA_MS,
   MIN_STORED_POSITION_MS,
   isPlaybackSpeed,
   type PlaybackProgressPayload,
@@ -17,6 +18,7 @@ import {
 import { ApiError } from '@/server/api/errors';
 import type { Actor } from '@/server/auth/policy';
 import { mintArtworkGrant } from '@/server/series/artwork-grant';
+import { trackFor } from '@/server/observability/analytics';
 import { logger } from '@/server/observability/logger';
 
 /**
@@ -67,22 +69,42 @@ export async function writePlaybackProgress(
   body: unknown,
 ): Promise<PlaybackProgressPayload> {
   const positionMs = parsePosition(body);
+  const listened = parseListening(body);
 
   // The recording has to exist and be one this member may read; otherwise a session is a licence to
   // write rows keyed on any uuid at all.
   const recording = await findVisibleRecording(recordingId, { includeUnpublished: false });
   if (recording === null) throw ApiError.notFound('There is no such teaching.');
 
-  const row = await upsertPlaybackProgress({ userId: actor.id, recordingId, positionMs });
+  const { row, completedNow } = await recordPlaybackProgress({
+    userId: actor.id,
+    recordingId,
+    positionMs,
+    ...listened,
+  });
 
   logger.info('playback.progress.written', {
     actorId: actor.id,
     action: 'playback.progress',
     target: `recording:${recordingId}`,
     positionMs: row.positionMs,
+    listenedMs: row.listenedMs,
+    completed: completedNow,
   });
 
-  return { positionMs: row.positionMs, updatedAt: row.updatedAt.toISOString() };
+  // The one event the server sends (docs/project/observability.md § 5.3), the one time it is true.
+  if (completedNow) {
+    trackFor(actor.id, 'playback_completed', {
+      recording_id: recordingId,
+      series_id: recording.seriesId,
+    });
+  }
+
+  return {
+    positionMs: row.positionMs,
+    updatedAt: row.updatedAt.toISOString(),
+    completedAt: row.completedAt?.toISOString() ?? null,
+  };
 }
 
 /** Where this member had got to, or nothing. Read by the recording page as it loads. */
@@ -92,8 +114,12 @@ export async function readPlaybackProgress(
 ): Promise<PlaybackProgressPayload> {
   const row = await findPlaybackProgress(actor.id, recordingId);
   return row === null
-    ? { positionMs: null, updatedAt: null }
-    : { positionMs: row.positionMs, updatedAt: row.updatedAt.toISOString() };
+    ? { positionMs: null, updatedAt: null, completedAt: null }
+    : {
+        positionMs: row.positionMs,
+        updatedAt: row.updatedAt.toISOString(),
+        completedAt: row.completedAt?.toISOString() ?? null,
+      };
 }
 
 /** What the landing offers to pick back up, or nothing to offer. */
@@ -142,4 +168,28 @@ function parsePosition(body: unknown): number {
     throw ApiError.invalidInput('That is too near the start to be worth resuming from.');
   }
   return positionMs;
+}
+
+/**
+ * What was heard, and how long the teaching is — both optional, because a client from before
+ * this release sends neither and its position must still land. A delta past
+ * {@link MAX_LISTENED_DELTA_MS} is clamped rather than refused: the position beside it is still
+ * true, and a clock that ran ahead should cost a count, not a resume point.
+ */
+function parseListening(body: unknown): { listenedDeltaMs?: number; durationMs?: number } {
+  const { listenedMs, durationMs } = body as Partial<PlaybackProgressRequest>;
+  const parsed: { listenedDeltaMs?: number; durationMs?: number } = {};
+  if (listenedMs !== undefined) {
+    if (typeof listenedMs !== 'number' || !Number.isInteger(listenedMs) || listenedMs < 0) {
+      throw ApiError.invalidInput('Give what was heard as whole, non-negative milliseconds.');
+    }
+    parsed.listenedDeltaMs = Math.min(listenedMs, MAX_LISTENED_DELTA_MS);
+  }
+  if (durationMs !== undefined) {
+    if (typeof durationMs !== 'number' || !Number.isInteger(durationMs) || durationMs <= 0) {
+      throw ApiError.invalidInput('Give the duration as whole, positive milliseconds.');
+    }
+    parsed.durationMs = durationMs;
+  }
+  return parsed;
 }

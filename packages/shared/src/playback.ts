@@ -129,8 +129,30 @@ export interface PlaybackSpeedPayload {
 }
 
 /** Body of `PUT /api/v1/recordings/{id}/progress`. Milliseconds, matching `segment`'s offsets. */
+/**
+ * The share of a teaching a member must have *heard* for it to count as completed
+ * (docs/project/observability.md § 5.3) — a sharper reading of [3.2.8](docs/project/prd.md)'s
+ * "reach the end" that cannot be met by scrubbing there. Compared in integer arithmetic on the
+ * server (`listened × 5 ≥ duration × 4`), so there is no float to argue with.
+ */
+export const COMPLETION_LISTENED_SHARE = 0.8;
+
+/**
+ * The most listening one progress write may carry. The client writes at most every ten seconds
+ * while playing and on every pause, seek and hide, so a delta past an hour is not listening — it
+ * is a clock that went wrong — and the server clamps it rather than storing it.
+ */
+export const MAX_LISTENED_DELTA_MS = 60 * 60_000;
+
 export interface PlaybackProgressRequest {
   readonly positionMs: number;
+  /**
+   * Media time heard since the last write that went out, in whole milliseconds; absent or zero
+   * when none was. A delta, so the server can add it to a total no single visit can see.
+   */
+  readonly listenedMs?: number;
+  /** The teaching's length as the element reports it, in whole milliseconds. Absent until it is known. */
+  readonly durationMs?: number;
 }
 
 /**
@@ -141,6 +163,8 @@ export interface PlaybackProgressRequest {
  */
 export interface PlaybackProgressPayload {
   readonly positionMs: number | null;
+  /** When this member completed the teaching (observability.md § 5.3), or `null`. */
+  readonly completedAt: string | null;
   /** ISO 8601, or `null`. */
   readonly updatedAt: string | null;
 }

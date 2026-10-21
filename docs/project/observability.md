@@ -413,6 +413,21 @@ string property that is not an id or an enum; pausing and resuming sends no seco
 3. The worker heartbeat: a `fetch` of `HEALTHCHECK_WORKER_URL` at the top of each poll, at most once
    every five minutes, fire-and-forget. Absent URL means no ping, logged once at boot.
 
+**As built (21 October 2026).**
+
+- Migration `0027_playback_completion`. The old `upsertPlaybackProgress` stays, as a wrapper over
+  `recordPlaybackProgress`, which takes the delta and the duration and answers whether *this*
+  write completed the teaching: `completed_at` and `updated_at` are both `now()` in the statement
+  that sets them, and `now()` is one value per statement, so equality is the signal.
+- The client cadence file gains `listenedStep`, the pure rule for what a gap between two ticks is
+  worth: a step up to two seconds while playing counts; a jump, a step backwards, a tick while
+  paused counts nothing. Media time, so 2× counts in full.
+- The server clamps a listened delta past an hour rather than refusing the write, and accepts a
+  body with neither new field, so a client from before this release still lands its position.
+- The `heartbeat` check in `verify:production` reads the worker's own log for its last
+  `worker.heartbeat.sent` line rather than Healthchecks.io's status, which has no public read
+  without an API key. It is therefore a box check, not a remote one.
+
 **Proof:** listening to 80% of a short recording across two separate visits sets `completed_at`
 exactly once and produces exactly one `playback_completed`; scrubbing to the end of an unlistened
 recording produces none. Stopping the worker for ten minutes produces A3.
@@ -433,10 +448,10 @@ recreate them, and the HogQL query is recorded there verbatim.
 | `alloy` | The `alloy` systemd unit is active, its `/-/ready` endpoint on `127.0.0.1:12345` answers, and every component in `/api/v0/web/components` reports itself healthy — which is how a wrong Postgres password or a dead Grafana token shows up. |
 | `backup-pings` | `/etc/thp/healthchecks.env` names an `https` URL for all three pings, and the *installed* `thp-backup` and `thp-backup-check` units carry the `ExecStartPost` that sends theirs. |
 | `analytics` | `NEXT_PUBLIC_POSTHOG_KEY` and `POSTHOG_HOST` are set and the host is the EU one. |
-| `heartbeat` | The worker's Healthchecks.io check reports a ping in the last 10 min (read from the check's public status). |
+| `heartbeat` | `HEALTHCHECK_WORKER_URL` is set and the worker's pm2 log carries a `worker.heartbeat.sent` line in the last 10 min. |
 | `not-mocked` | Already exists; unchanged — `THP_MOCK_EXTERNAL` is not `true` on the box. |
 
-`--remote-only` covers `analytics` (from the built client) and `heartbeat`.
+`--remote-only` covers `analytics` (from the built client); `heartbeat` reads the box.
 
 ### 6.7 Configuration
 

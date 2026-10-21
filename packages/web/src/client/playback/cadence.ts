@@ -58,3 +58,31 @@ export function shouldWriteProgress({
   if (event !== 'tick') return true;
   return lastWriteAt === null || now - lastWriteAt >= PROGRESS_TICK_INTERVAL_MS;
 }
+
+/**
+ * **How much of the gap between two ticks was listening** (docs/project/observability.md § 5.3).
+ *
+ * `timeupdate` fires about four times a second while audio runs, so the media clock advances by
+ * a quarter-second or so between ticks. A step larger than {@link MAX_LISTENED_STEP_MS} is not
+ * listening: it is a seek, or the clock catching up after the tab was in the background, and it
+ * counts for nothing. Neither does a step backwards, nor a tick while paused. Media time, not wall
+ * time, so a teaching heard at 2× counts in full.
+ *
+ * A pure function over two clock readings, like the cadence above it and for the same reason.
+ */
+export const MAX_LISTENED_STEP_MS = 2_000;
+
+export function listenedStep({
+  previousMs,
+  currentMs,
+  paused,
+}: {
+  readonly previousMs: number | null;
+  readonly currentMs: number;
+  readonly paused: boolean;
+}): number {
+  if (paused || previousMs === null) return 0;
+  const step = currentMs - previousMs;
+  if (step <= 0 || step > MAX_LISTENED_STEP_MS) return 0;
+  return step;
+}

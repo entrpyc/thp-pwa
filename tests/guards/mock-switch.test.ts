@@ -5,6 +5,7 @@ import { readGenerateProvider } from '../../packages/worker/src/generate/env';
 import { readBibleSource } from '../../packages/bible/src/env';
 import { readTransportName } from '../../packages/web/src/server/mail/env';
 import { readAnalyticsConfig } from '../../packages/web/src/client/observability/config';
+import { readServerAnalyticsConfig } from '../../packages/web/src/server/observability/analytics-config';
 
 /**
  * **One switch, four adapters.**
@@ -97,5 +98,16 @@ describe('THP_MOCK_EXTERNAL', () => {
     expect(() => readAnalyticsConfig({ ...configured, [MOCK_EXTERNAL_VARIABLE]: 'yes' })).toThrow(
       MOCK_EXTERNAL_VARIABLE,
     );
+  });
+
+  it('silences the server analytics adapter the same way, under its runtime names', () => {
+    const configured = { POSTHOG_KEY: 'phc_x', POSTHOG_HOST: 'https://eu.i.posthog.com' };
+    expect(readServerAnalyticsConfig({ ...configured, [MOCK_EXTERNAL_VARIABLE]: 'true' })).toBeNull();
+    expect(readServerAnalyticsConfig(configured)).toEqual({
+      key: 'phc_x',
+      host: 'https://eu.i.posthog.com',
+    });
+    expect(readServerAnalyticsConfig({})).toBeNull();
+    expect(() => readServerAnalyticsConfig({ POSTHOG_KEY: 'phc_x' })).toThrow('POSTHOG_HOST');
   });
 });

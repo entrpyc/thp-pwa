@@ -28,14 +28,24 @@ export interface AnalyticsConfig {
  * operator's behalf.
  */
 export function readAnalyticsConfig(env: EnvSource): AnalyticsConfig | null {
+  return readAnalyticsConfigNamed(env, { key: ANALYTICS_KEY_VARIABLE, host: ANALYTICS_HOST_VARIABLE });
+}
+
+/**
+ * The same decision under other variable names — the server reads `POSTHOG_KEY` and
+ * `POSTHOG_HOST` at runtime where the client inlines the `NEXT_PUBLIC_` pair at build time, and
+ * one reader is what keeps the two sides' answers the same.
+ */
+export function readAnalyticsConfigNamed(
+  env: EnvSource,
+  names: { readonly key: string; readonly host: string },
+): AnalyticsConfig | null {
   if (isExternalMocked(env)) return null;
-  const key = (env[ANALYTICS_KEY_VARIABLE] ?? '').trim();
+  const key = (env[names.key] ?? '').trim();
   if (key === '') return null;
-  const host = (env[ANALYTICS_HOST_VARIABLE] ?? '').trim();
+  const host = (env[names.host] ?? '').trim();
   if (host === '') {
-    throw new Error(
-      `${ANALYTICS_HOST_VARIABLE} is not set but ${ANALYTICS_KEY_VARIABLE} is — see .env.example.`,
-    );
+    throw new Error(`${names.host} is not set but ${names.key} is — see .env.example.`);
   }
   return { key, host: host.replace(/\/+$/, '') };
 }
