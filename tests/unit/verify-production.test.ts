@@ -25,14 +25,31 @@ import {
 describe('pm2 jlist', () => {
   const CAPTURED = JSON.stringify([
     { name: 'thp-web', pid: 1201, pm2_env: { status: 'online', exec_mode: 'fork_mode', instances: 1, restart_time: 0 } },
-    { name: 'thp-worker', pid: 1202, pm2_env: { status: 'online', exec_mode: 'fork_mode', instances: 1, restart_time: 3 } },
+    {
+      name: 'thp-worker',
+      pid: 1202,
+      pm2_env: {
+        status: 'online',
+        exec_mode: 'fork_mode',
+        instances: 1,
+        restart_time: 3,
+        // pm2 puts the process id in the name in fork mode; the check reads this rather than guessing it.
+        pm_out_log_path: '/home/thp/.pm2/logs/thp-worker-out-1.log',
+      },
+    },
   ]);
 
   it('reads the fields the supervision criterion turns on', () => {
     const [web, worker] = parsePm2List(CAPTURED);
 
-    expect(web).toMatchObject({ name: 'thp-web', status: 'online', pid: 1201 });
-    expect(worker).toMatchObject({ execMode: 'fork_mode', instances: 1, restarts: 3, pid: 1202 });
+    expect(web).toMatchObject({ name: 'thp-web', status: 'online', pid: 1201, outLogPath: null });
+    expect(worker).toMatchObject({
+      execMode: 'fork_mode',
+      instances: 1,
+      restarts: 3,
+      pid: 1202,
+      outLogPath: '/home/thp/.pm2/logs/thp-worker-out-1.log',
+    });
   });
 
   it('surfaces cluster mode rather than smoothing it over', () => {

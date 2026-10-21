@@ -25,7 +25,7 @@
 import { execFile as execFileCallback, execFileSync } from 'node:child_process';
 import { createConnection } from 'node:net';
 import { lookup } from 'node:dns/promises';
-import { readFileSync, statSync } from 'node:fs';
+import { readFileSync, readdirSync, statSync } from 'node:fs';
 import { userInfo } from 'node:os';
 import { basename, resolve } from 'node:path';
 import { pathToFileURL } from 'node:url';
@@ -49,6 +49,12 @@ export interface Pm2App {
   readonly instances: number;
   readonly restarts: number;
   readonly pid: number;
+  /**
+   * Where pm2 files this process's stdout, or `null` when it did not say. Asked for rather than
+   * guessed: pm2 names the file with the process id in fork mode, and pm2-logrotate renames it
+   * again, so the only reliable name is the one pm2 holds.
+   */
+  readonly outLogPath: string | null;
 }
 
 interface RawPm2Entry {
@@ -59,6 +65,7 @@ interface RawPm2Entry {
     exec_mode?: string;
     instances?: number;
     restart_time?: number;
+    pm_out_log_path?: string;
   };
 }
 
@@ -71,7 +78,19 @@ export function parsePm2List(json: string): Pm2App[] {
     instances: entry.pm2_env?.instances ?? 1,
     restarts: entry.pm2_env?.restart_time ?? 0,
     pid: entry.pid ?? 0,
+    outLogPath: entry.pm2_env?.pm_out_log_path ?? null,
   }));
+}
+
+/** Every `.js` file under a directory, recursively. The built client, as it sits on disk. */
+export function listScripts(dir: string): string[] {
+  const found: string[] = [];
+  for (const entry of readdirSync(dir, { withFileTypes: true })) {
+    const path = resolve(dir, entry.name);
+    if (entry.isDirectory()) found.push(...listScripts(path));
+    else if (entry.isFile() && entry.name.endsWith('.js')) found.push(path);
+  }
+  return found;
 }
 
 /**
@@ -539,20 +558,27 @@ const CHECKS: readonly Check[] = [
   },
   {
     name: 'analytics',
-    reach: 'remote',
+    reach: 'box',
     async run() {
-      // docs/project/observability.md § 6.6. Both values are inlined at build time, so the served
-      // bundle is the only honest witness: a key in `.env` that was added after the last build is
-      // not in it. The key is public by design and `phc_` is its prefix.
-      const scripts = await servedClientScripts();
-      if (scripts.trim() === '') return bad('the origin served no client scripts — is the app running?');
+      // docs/project/observability.md § 6.6. Both values are inlined at build time, so the built
+      // client is the only honest witness: a key in `.env` that was added after the last build is
+      // not in it. Read from the chunks on disk rather than from what the origin serves, because
+      // the adapter lives in the member layout's chunk and an anonymous fetch is handed the
+      // sign-in page, which never loads it. The key is public by design and `phc_` is its prefix.
+      const chunks = resolve(REPO_ROOT, 'packages/web/.next/static/chunks');
+      const scripts = listScripts(chunks)
+        .map((file) => readFileSync(file, 'utf8'))
+        .join('\n');
+      if (scripts.trim() === '') return bad(`no client chunks under ${chunks} — has the app been built?`);
       if (!/phc_[A-Za-z0-9]{20,}/.test(scripts)) {
-        return bad('no PostHog project key in the served bundle — NEXT_PUBLIC_POSTHOG_KEY unset at build');
+        return bad('no PostHog project key in the built client — NEXT_PUBLIC_POSTHOG_KEY was unset at build; set it and rebuild');
       }
       if (!scripts.includes('eu.i.posthog.com')) {
-        return bad('the served bundle names no EU PostHog host — NEXT_PUBLIC_POSTHOG_HOST must be https://eu.i.posthog.com');
+        return bad('the built client names no EU PostHog host — NEXT_PUBLIC_POSTHOG_HOST must be https://eu.i.posthog.com at build');
       }
-      return ok('the served bundle carries a project key and the EU host');
+      const runtimeKey = process.env['POSTHOG_KEY']?.trim() ?? '';
+      if (runtimeKey === '') return bad('POSTHOG_KEY is not set — the API cannot send completions');
+      return ok('the built client carries a project key and the EU host; POSTHOG_KEY set for the API');
     },
   },
   {
@@ -667,7 +693,12 @@ const CHECKS: readonly Check[] = [
       // pm2 files that log where this reads it. Ten minutes is the check's period plus its grace.
       const url = process.env['HEALTHCHECK_WORKER_URL']?.trim() ?? '';
       if (url === '') return bad('HEALTHCHECK_WORKER_URL is not set — the worker pings nothing');
-      const logPath = resolve(userInfo().homedir, '.pm2', 'logs', 'thp-worker-out.log');
+      // pm2 names the file; asking it is the only way to be sure which one is current.
+      const worker = parsePm2List(await run('pm2', ['jlist'])).find((app) => app.name === 'thp-worker');
+      if (worker?.outLogPath === null || worker?.outLogPath === undefined) {
+        return bad('pm2 does not say where thp-worker logs to — is it running?');
+      }
+      const logPath = worker.outLogPath;
       const text = readFileSync(logPath, 'utf8');
       const at = lastHeartbeatAt(text.slice(-512 * 1024));
       if (at === null) return bad(`no heartbeat line in ${logPath} — has the worker restarted since the variable was set?`);
