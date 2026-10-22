@@ -5,9 +5,11 @@ import {
   DASHBOARD_PAGE_PATH,
   MEMBER_LIBRARY_PAGE_PATH,
   ROLE,
+  nextPlaybackSpeed,
   recordingNotesPath,
   recordingPagePath,
   recordingPlaybackPath,
+  type PlaybackGrantPayload,
 } from '@thp/shared';
 import {
   createDatabase,
@@ -75,6 +77,15 @@ let recoveryId: string;
 const RECOVERY_TITLE = `Player recovery ${RUN}`;
 const COVER_KEY = `artwork/${RUN}-transport.webp`;
 
+/**
+ * **And one for the lock-screen block**, for the recovery teaching's reason: those tests play
+ * from seconds they chose, and one of them waits on the renewal ticker with the element paused —
+ * where a stored position from another block would put the wait at the wrong second or, after
+ * enough plays, past the end of a two-minute teaching.
+ */
+let lockScreenId: string;
+const LOCK_SCREEN_TITLE = `Player lock screen ${RUN}`;
+
 interface Snapshot {
   readonly currentTime: number;
   readonly paused: boolean;
@@ -106,12 +117,28 @@ async function publishedRecording(title: string): Promise<string> {
   return row.id;
 }
 
+interface OpenOptions {
+  /** Install {@link MEDIA_SESSION_WATCH} before the app's first script runs. */
+  readonly watchMediaSession?: boolean;
+  /**
+   * Runs on the fresh page before sign-in — which is where a `page.route` has to be installed to
+   * catch the first grant, because the landing after sign-in can mint it before the recording
+   * page is ever reached.
+   */
+  readonly prepare?: (page: Page) => Promise<void>;
+}
+
 /** Sign in through the real screen and open a teaching, waiting until the element has metadata. */
-async function openTeaching(id: string): Promise<{ page: Page; requests: Request[] }> {
+async function openTeaching(
+  id: string,
+  options: OpenOptions = {},
+): Promise<{ page: Page; requests: Request[] }> {
   const context = await browser.newContext({ viewport: { width: 1280, height: 900 } });
+  if (options.watchMediaSession === true) await context.addInitScript(MEDIA_SESSION_WATCH);
   const page = await context.newPage();
   const requests: Request[] = [];
   page.on('request', (request) => requests.push(request));
+  await options.prepare?.(page);
 
   await page.goto(`${baseUrl}/sign-in`, { waitUntil: 'domcontentloaded' });
   await page.getByLabel('Email').fill(member.email);
@@ -156,6 +183,98 @@ function ranged(requests: readonly Request[]): Request[] {
   return requests.filter((request) => request.headers()['range'] !== undefined);
 }
 
+/**
+ * **Standing where the platform stands** ([3.2.6](docs/project/prd.md)).
+ *
+ * Playwright has no headset button and no lock screen, and a browser gives a page no way to read
+ * back the handlers it registered on its media session. So the watch is installed before the
+ * app's first script runs: `setActionHandler` is wrapped to keep every handler it is handed, and
+ * `setPositionState` to keep every state it is told. "The member pressed play on the lock
+ * screen" is then a call to the handler registered for `play` — which is exactly what the
+ * platform does with the button — and what is asserted afterwards is what the device would have
+ * heard and shown, not that a method was called.
+ *
+ * Both wrappers call through, so the app runs against the real session underneath.
+ */
+const MEDIA_SESSION_WATCH = `
+  (() => {
+    const session = navigator.mediaSession;
+    if (session === undefined) return;
+    const handlers = {};
+    const positions = [];
+    const setActionHandler = session.setActionHandler.bind(session);
+    session.setActionHandler = (action, handler) => {
+      if (handler === null) delete handlers[action];
+      else handlers[action] = handler;
+      setActionHandler(action, handler);
+    };
+    const setPositionState = session.setPositionState.bind(session);
+    session.setPositionState = (state) => {
+      positions.push(state === undefined ? null : { ...state });
+      setPositionState(state);
+    };
+    window.__mediaSession = { handlers, positions };
+  })();
+`;
+
+/** What the watch keeps, as the page sees it. */
+interface MediaSessionWatch {
+  readonly handlers: Partial<Record<MediaSessionAction, MediaSessionActionHandler>>;
+  readonly positions: readonly (MediaPositionState | null)[];
+}
+
+interface SessionSnapshot {
+  /** The actions with a handler registered, sorted. Empty unless the page was opened with the watch. */
+  readonly registered: readonly string[];
+  readonly playbackState: string;
+  readonly metadata: {
+    readonly title: string;
+    readonly artist: string;
+    readonly artwork: readonly string[];
+  } | null;
+  /** The last position state declared, or `null` when none has been — or the last one cleared. */
+  readonly position: MediaPositionState | null;
+}
+
+/** What the session has been told. Metadata and state are the session's own; the rest is the watch's. */
+async function sessionState(page: Page): Promise<SessionSnapshot> {
+  return page.evaluate((): SessionSnapshot => {
+    const watch = (window as unknown as { __mediaSession?: MediaSessionWatch }).__mediaSession;
+    const session = navigator.mediaSession;
+    const metadata = session.metadata;
+    return {
+      registered: Object.keys(watch?.handlers ?? {}).sort(),
+      playbackState: session.playbackState,
+      metadata:
+        metadata === null
+          ? null
+          : {
+              title: metadata.title,
+              artist: metadata.artist,
+              artwork: metadata.artwork.map((one) => one.src),
+            },
+      position: watch?.positions.at(-1) ?? null,
+    };
+  });
+}
+
+/** What the platform does with a button: call the handler the page registered for it. */
+async function pressFromLockScreen(
+  page: Page,
+  action: MediaSessionAction,
+  details: Omit<MediaSessionActionDetails, 'action'> = {},
+): Promise<void> {
+  await page.evaluate(
+    ({ action, details }) => {
+      const watch = (window as unknown as { __mediaSession?: MediaSessionWatch }).__mediaSession;
+      const handler = watch?.handlers[action];
+      if (handler === undefined) throw new Error(`nothing is registered for ${action}`);
+      handler({ action, ...details });
+    },
+    { action, details },
+  );
+}
+
 beforeAll(async () => {
   browser = await chromium.launch();
   handle = createDatabase({ url: databaseUrl, max: 6 });
@@ -173,6 +292,7 @@ beforeAll(async () => {
   await setRecordingSeries(coveredId, series.id, handle);
 
   recoveryId = await publishedRecording(RECOVERY_TITLE);
+  lockScreenId = await publishedRecording(LOCK_SCREEN_TITLE);
 }, 300_000);
 
 afterAll(async () => {
@@ -400,6 +520,13 @@ describe('a grant that dies mid-listen is replaced without the member noticing',
         .toBe(false);
       const after = await audioState(page);
       expect(after.currentTime).toBeGreaterThan(before.currentTime - 2);
+
+      // And the device still knows what it is playing (3.2.6): the swap replaced the element's
+      // source, and the teaching was named to the session again on the other side of it.
+      await expect
+        .poll(async () => (await sessionState(page)).playbackState, { timeout: 30_000 })
+        .toBe('playing');
+      expect((await sessionState(page)).metadata?.title).toBe(RECOVERY_TITLE);
     } finally {
       await page.context().close();
     }
@@ -649,6 +776,235 @@ describe('the notes the player now holds cannot reach the audio', () => {
             request.url() === `${baseUrl}${API_PREFIX}${recordingPlaybackPath(recordingId)}`,
         ),
       ).toHaveLength(1);
+    } finally {
+      await page.context().close();
+    }
+  }, 240_000);
+});
+
+/**
+ * **The lock screen and the headset drive the player** ([3.2.6](docs/project/prd.md)).
+ *
+ * The ticket: a member paused a teaching, locked the phone, and neither the headset's button nor
+ * the lock screen's would play it again — they had to unlock, find the app and press play there.
+ * Both buttons reach a page through the Media Session API, and the page had registered nothing on
+ * it, so each press went to the platform's default, which iOS stops honouring once a paused page
+ * has been in the background a while.
+ *
+ * {@link MEDIA_SESSION_WATCH} stands where the platform stands and {@link pressFromLockScreen}
+ * does what it does with a button. What a real lock screen then *draws* is the operator's device
+ * steps, which no browser can run.
+ */
+describe('the lock screen and the headset button drive the player', () => {
+  it('registers play, pause, stop, the two ten-second jumps and seek-to', async () => {
+    const { page } = await openTeaching(lockScreenId, { watchMediaSession: true });
+    try {
+      // Registered on the session, not on the element — so once, at mount, for whichever teaching
+      // is loaded when a button is pressed. No `previoustrack` or `nexttrack`: a teaching has no
+      // neighbour the player knows about, and an unregistered button is one the platform does not draw.
+      expect((await sessionState(page)).registered).toEqual([
+        'pause',
+        'play',
+        'seekbackward',
+        'seekforward',
+        'seekto',
+        'stop',
+      ]);
+    } finally {
+      await page.context().close();
+    }
+  }, 180_000);
+
+  it('names the teaching, its series as the artist and the series` cover to the device', async () => {
+    const { page } = await openTeaching(coveredId);
+    try {
+      await expect
+        .poll(async () => (await sessionState(page)).metadata?.title, { timeout: 30_000 })
+        .toBe(COVERED_TITLE);
+      const { metadata } = await sessionState(page);
+      expect(metadata?.artist).toBe(coveredSeriesTitle);
+      expect(metadata?.artwork).toHaveLength(1);
+      expect(metadata?.artwork[0]).toContain(COVER_KEY);
+    } finally {
+      await page.context().close();
+    }
+  }, 180_000);
+
+  it('names a teaching in no series by its title alone', async () => {
+    const { page } = await openTeaching(recordingId);
+    try {
+      await expect
+        .poll(async () => (await sessionState(page)).metadata?.title, { timeout: 30_000 })
+        .toBe(TITLE);
+      // No artist and no artwork rather than a placeholder — what every surface gives such a teaching.
+      const { metadata } = await sessionState(page);
+      expect(metadata?.artist).toBe('');
+      expect(metadata?.artwork).toEqual([]);
+    } finally {
+      await page.context().close();
+    }
+  }, 180_000);
+
+  it('plays again from the lock screen after a pause in the app, and declares each state', async () => {
+    const { page } = await openTeaching(lockScreenId, { watchMediaSession: true });
+    const paused = async () => (await audioState(page)).paused;
+    const declared = async () => (await sessionState(page)).playbackState;
+    try {
+      // The ticket's sequence: play in the app, pause in the app, then the button.
+      await page.getByRole('button', { name: 'Play', exact: true }).first().click();
+      await expect.poll(paused, { timeout: 30_000 }).toBe(false);
+      await expect.poll(declared, { timeout: 30_000 }).toBe('playing');
+
+      await page.getByRole('button', { name: 'Pause', exact: true }).first().click();
+      await expect.poll(paused, { timeout: 30_000 }).toBe(true);
+      await expect.poll(declared, { timeout: 30_000 }).toBe('paused');
+      const atPause = await audioState(page);
+
+      await pressFromLockScreen(page, 'play');
+      await expect.poll(paused, { timeout: 30_000 }).toBe(false);
+      await expect.poll(declared, { timeout: 30_000 }).toBe('playing');
+      // From where it was paused, and on: a resume, not a restart.
+      await expect
+        .poll(async () => (await audioState(page)).currentTime, { timeout: 30_000 })
+        .toBeGreaterThan(atPause.currentTime + 0.5);
+
+      await pressFromLockScreen(page, 'pause');
+      await expect.poll(paused, { timeout: 30_000 }).toBe(true);
+      await expect.poll(declared, { timeout: 30_000 }).toBe('paused');
+    } finally {
+      await page.context().close();
+    }
+  }, 180_000);
+
+  it('jumps ten seconds either way and seeks to a moment, whatever offset the platform suggests', async () => {
+    const { page } = await openTeaching(lockScreenId, { watchMediaSession: true });
+    // Paused throughout, so a seek lands exactly where it was sent.
+    const near = (seconds: number) =>
+      expect
+        .poll(async () => Math.abs((await audioState(page)).currentTime - seconds) < 0.25, {
+          timeout: 30_000,
+        })
+        .toBe(true);
+    try {
+      await page.getByRole('slider', { name: 'Position' }).fill('40000');
+      await near(40);
+
+      await pressFromLockScreen(page, 'seekforward');
+      await near(50);
+      // The platform's own suggestion is ignored: the step is the product's ten seconds (3.2.9),
+      // the same as the bar's, so the two surfaces never move by different amounts.
+      await pressFromLockScreen(page, 'seekbackward', { seekOffset: 30 });
+      await near(40);
+
+      await pressFromLockScreen(page, 'seekto', { seekTime: 15 });
+      await near(15);
+    } finally {
+      await page.context().close();
+    }
+  }, 180_000);
+
+  it('tells the device the duration, the position and the rate, and the rate again when it changes', async () => {
+    const { page } = await openTeaching(lockScreenId, { watchMediaSession: true });
+    try {
+      await page.getByRole('button', { name: 'Play', exact: true }).first().click();
+      await expect
+        .poll(async () => (await audioState(page)).currentTime, { timeout: 30_000 })
+        .toBeGreaterThan(1);
+
+      const { position } = await sessionState(page);
+      expect(position).not.toBeNull();
+      expect(position?.duration).toBeGreaterThan(TEACHING_SECONDS - 5);
+      expect(position?.position).toBeGreaterThan(0);
+      expect(position?.position).toBeLessThanOrEqual(position?.duration ?? 0);
+      // Whatever the element is playing at — the speed is a property of the account (3.2.4), and
+      // this member's was set by the speed block above — is what the device was told.
+      const rate = (await audioState(page)).rate;
+      expect(position?.playbackRate).toBe(rate);
+
+      // The device extrapolates its clock from the last rate it was told, so a rate change has to
+      // be declared or the lock screen's clock drifts from the sound.
+      const next = nextPlaybackSpeed(rate);
+      await page.getByRole('button', { name: /Playback speed/ }).click();
+      await expect.poll(async () => (await audioState(page)).rate, { timeout: 30_000 }).toBe(next);
+      await expect
+        .poll(async () => (await sessionState(page)).position?.playbackRate, { timeout: 30_000 })
+        .toBe(next);
+    } finally {
+      await page.context().close();
+    }
+  }, 180_000);
+
+  it('leaves a paused teaching`s stale grant alone, and swaps it on the press from the lock screen', async () => {
+    /*
+     * **The grant is answered as nearly out of time.** The URL is the store's real one and good for
+     * an hour; only `expiresAt` is brought inside the renewal margin, so what the player holds is a
+     * grant its ticker would ordinarily replace at the next tick. Only the first answer is bent:
+     * the one the press below asks for is real, so the test ends with a player in its ordinary
+     * state rather than one renewing every fifteen seconds.
+     */
+    let answered = 0;
+    const { page, requests } = await openTeaching(lockScreenId, {
+      watchMediaSession: true,
+      prepare: async (fresh) => {
+        await fresh.route(`**${API_PREFIX}${recordingPlaybackPath(lockScreenId)}`, async (route) => {
+          answered += 1;
+          if (answered > 1) {
+            await route.continue();
+            return;
+          }
+          const response = await route.fetch();
+          const grant = (await response.json()) as PlaybackGrantPayload;
+          await route.fulfill({
+            response,
+            json: { ...grant, expiresAt: new Date(Date.now() + 60_000).toISOString() },
+          });
+        });
+      },
+    });
+    const grants = () =>
+      requests.filter((request) =>
+        request.url().startsWith(`${baseUrl}${API_PREFIX}${recordingPlaybackPath(lockScreenId)}`),
+      ).length;
+    try {
+      expect(grants()).toBe(1);
+      await page.getByRole('slider', { name: 'Position' }).fill('20000');
+      await expect
+        .poll(async () => (await audioState(page)).currentTime, { timeout: 30_000 })
+        .toBeGreaterThan(19);
+      expect((await audioState(page)).paused).toBe(true);
+
+      /*
+       * Through at least one renewal tick — they are fifteen seconds apart — with the transport at
+       * rest. **No second grant**: a swap is `load()`, and `load()` on a paused element is what
+       * takes the lock screen's controls away, so a grant going stale under a pause is left where
+       * it is. (Before this, the ticker swapped it regardless, and a member who paused for most of
+       * an hour came back to a lock screen with nothing on it.)
+       */
+      await new Promise((resolve) => setTimeout(resolve, 20_000));
+      expect(grants()).toBe(1);
+      const resting = await audioState(page);
+      expect(resting.paused).toBe(true);
+      expect(resting.currentTime).toBeGreaterThan(19);
+
+      // The press — from the lock screen, where the ticket's member was. It swaps the grant
+      // itself, carries the position across the swap, and plays on the other side.
+      await pressFromLockScreen(page, 'play');
+      await expect.poll(grants, { timeout: 30_000 }).toBe(2);
+      await expect
+        .poll(async () => (await audioState(page)).paused, { timeout: 60_000 })
+        .toBe(false);
+      const after = await audioState(page);
+      expect(after.src.startsWith(STORE_ORIGIN)).toBe(true);
+      expect(after.currentTime).toBeGreaterThan(19);
+      expect(after.currentTime).toBeLessThan(40);
+
+      // And the session came through the swap whole: the state, the name, and every button.
+      await expect
+        .poll(async () => (await sessionState(page)).playbackState, { timeout: 30_000 })
+        .toBe('playing');
+      const session = await sessionState(page);
+      expect(session.metadata?.title).toBe(LOCK_SCREEN_TITLE);
+      expect(session.registered).toHaveLength(6);
     } finally {
       await page.context().close();
     }

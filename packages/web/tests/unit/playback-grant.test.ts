@@ -1,5 +1,9 @@
 import { describe, expect, it } from 'vitest';
-import { GRANT_RENEWAL_MARGIN_MS, shouldRenewGrant } from '@/client/playback/renewal';
+import {
+  GRANT_RENEWAL_MARGIN_MS,
+  shouldRenewGrant,
+  shouldRenewPreemptively,
+} from '@/client/playback/renewal';
 
 /**
  * **When a playback grant is replaced**, asserted against two numbers rather than a clock.
@@ -46,6 +50,27 @@ describe('a grant is replaced before it dies, not after', () => {
     // costs a request; trusting it costs the listen.
     expect(shouldRenewGrant({ expiresAt: 'not a date', now: NOW })).toBe(true);
     expect(shouldRenewGrant({ expiresAt: '', now: NOW })).toBe(true);
+  });
+});
+
+describe('a transport at rest is left alone, however stale its grant', () => {
+  it('says no to an idle transport inside the margin, past expiry, and with no expiry it can read', () => {
+    // The swap would be `load()` on a paused element, which is what takes the lock screen's
+    // controls away (3.2.6) — and it would be for nobody. The press that eventually asks for
+    // sound checks the grant itself.
+    expect(shouldRenewPreemptively({ expiresAt: at(60_000), now: NOW, idle: true })).toBe(false);
+    expect(shouldRenewPreemptively({ expiresAt: at(-HOUR), now: NOW, idle: true })).toBe(false);
+    expect(shouldRenewPreemptively({ expiresAt: 'not a date', now: NOW, idle: true })).toBe(false);
+  });
+
+  it('answers exactly as shouldRenewGrant does while somebody is listening', () => {
+    // Playing, or paused with a press waiting on a grant: the pre-emptive rule is unchanged from
+    // what it always was, so a long teaching still plays through its hour without a gap.
+    for (const expiresAt of [at(HOUR), at(GRANT_RENEWAL_MARGIN_MS), at(60_000), at(-1000), '']) {
+      expect(shouldRenewPreemptively({ expiresAt, now: NOW, idle: false })).toBe(
+        shouldRenewGrant({ expiresAt, now: NOW }),
+      );
+    }
   });
 });
 
