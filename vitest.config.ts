@@ -13,6 +13,11 @@ export default defineConfig({
     projects: [
       {
         resolve: { alias: { '@': webSrc } },
+        // tsconfig.base.json says `jsx: preserve`, which is right for Next — it compiles JSX itself —
+        // and wrong here, where Vite's transformer reads the same setting and hands the test runner
+        // JSX it cannot parse. The unit project renders components to markup (public-document.test.ts,
+        // legal-links.test.ts), so it names the transform Next would have applied.
+        oxc: { jsx: { runtime: 'automatic' } },
         test: {
           name: 'unit',
           environment: 'node',

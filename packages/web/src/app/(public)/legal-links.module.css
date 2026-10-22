@@ -1,0 +1,25 @@
+/*
+ * The legal links row (legal-links.tsx).
+ *
+ * Nothing new: each link is sign-in's secondary link — `--fs-meta` on `--color-text-muted`,
+ * underlined, brightening on hover — because the row sits under a form whose one primary action
+ * must not have to compete with "Privacy policy". The row wraps, so four entries on a phone become
+ * two lines rather than an overflow.
+ */
+
+.row {
+  width: 100%;
+}
+
+.list {
+  margin: 0;
+  padding: 0;
+  list-style: none;
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--space-2) var(--space-4);
+}
+
+.link {
+  composes: link from './sign-in/sign-in.module.css';
+}

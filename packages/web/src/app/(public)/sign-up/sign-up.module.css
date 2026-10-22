@@ -12,10 +12,6 @@
  * can fail it, at the weight the guide gives supporting metadata.
  */
 
-.screen {
-  composes: screen from '../sign-in/sign-in.module.css';
-}
-
 .card {
   composes: card from '../sign-in/sign-in.module.css';
 }

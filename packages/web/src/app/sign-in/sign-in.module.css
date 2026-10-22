@@ -1,185 +1,37 @@
 /*
- * The sign-in screen.
+ * **The old address of the auth form recipe.** Not a screen: there is no page in this folder, and
+ * Next routes nothing here.
  *
- * There is no `pages/sign-in.png`; by operator decision, auth screens are composed from
- * docs/design referencess png/style-guide.md instead. Four things the guide does not specify, and
- * the rule each one is read from:
+ * sign-in.module.css moved to `(public)/sign-in/` with the page it belongs to when the public
+ * route group was introduced, but three stylesheets outside that group compose the form recipe from
+ * this path — `(member)/feedback/feedback.module.css`, `(member)/profile/profile.module.css` and
+ * `admin/admin.module.css` — and each is owned by work in flight elsewhere. So this file forwards:
+ * every class the three read is composed from the moved sheet, unchanged, and nothing is restated.
  *
- * 1. **Text fields** follow `.search` — `--color-surface-raised` fill, 1px `--color-border` — but
- *    take `--radius-sm`, because the guide assigns `--radius-sm` to "small tiles, inputs" and
- *    reserves the pill for tabs and search.
- * 2. **The submit button** is this screen's one solid fill, from principle 3: "solid fills are
- *    reserved for the one primary action on screen". The guide's only filled button is round
- *    because it is a play control; the rule being applied is the fill, not the shape.
- * 3. **Field labels** sit above the field in `--fs-meta` / `--color-text-muted`. Placeholder-only
- *    labelling is rejected: `--color-text-dim` on a dark field is too faint to carry meaning, and
- *    it leaves the field with no accessible name.
- * 4. **The error message** sits under the fields in `--fs-body` at `--color-text`, with the card's
- *    border switched to `--color-border-strong`. The guide has no error colour, and red would be
- *    the second accent principle 1 forbids — so the error reads by emphasis rather than by hue.
- * 5. **A secondary link** (added in ticket 4, for the way out to `/forgot-password`) is `--fs-meta`
- *    on `--color-text-muted`, underlined, brightening to `--color-text` on hover. Not the accent
- *    colour: principle 3 reserves the accent for the one primary action, and a link that competes
- *    with the submit button is a link that gets pressed by mistake.
- *
- * The layout is the guide's `.card` recipe, centred on `--color-bg`.
+ * It exists to be deleted. When those three sheets compose from `(public)/sign-in/sign-in.module.css`
+ * directly, remove this folder; until then, add nothing here that is not a forward.
  */
 
-.screen {
-  min-height: 100vh;
-  /* The visible height on a phone, where the browser chrome comes and goes — without it the card
-     centres in a viewport partly hidden behind the toolbar and reads as sitting too high. */
-  min-height: 100dvh;
-  display: flex;
-  align-items: center;
-  /* `safe` keeps a card taller than a short viewport reachable from the top instead of clipping
-     both ends; browsers without it fall back to the plain `center` above. */
-  align-items: safe center;
-  justify-content: center;
-  padding: var(--space-5);
-  background: var(--color-bg);
-}
-
-.card {
-  width: 100%;
-  max-width: 26rem;
-  background: var(--color-surface);
-  border: 1px solid var(--color-border);
-  border-radius: var(--radius-md);
-  padding: var(--space-6);
-  display: flex;
-  flex-direction: column;
-  gap: var(--space-6);
-}
-
-.cardErrored {
-  border-color: var(--color-border-strong);
-}
-
-.title {
-  margin: 0;
-  font-size: var(--fs-title);
-  font-weight: 700;
-  line-height: 1.2;
-  color: var(--color-text);
-}
-
-.subtitle {
-  margin: var(--space-2) 0 0;
-  font-size: var(--fs-body);
-  color: var(--color-text-muted);
-}
-
-.form {
-  display: flex;
-  flex-direction: column;
-  gap: var(--space-5);
-}
-
 .field {
-  display: flex;
-  flex-direction: column;
-  gap: var(--space-2);
+  composes: field from '../(public)/sign-in/sign-in.module.css';
 }
 
 .label {
-  font-size: var(--fs-meta);
-  color: var(--color-text-muted);
+  composes: label from '../(public)/sign-in/sign-in.module.css';
 }
 
 .input {
-  width: 100%;
-  background: var(--color-surface-raised);
-  border: 1px solid var(--color-border);
-  border-radius: var(--radius-sm);
-  padding: var(--space-3) var(--space-4);
-  color: var(--color-text);
-  font-family: inherit;
-  font-size: var(--fs-body);
-  line-height: 1.4;
+  composes: input from '../(public)/sign-in/sign-in.module.css';
 }
 
-.input::placeholder {
-  color: var(--color-text-dim);
-}
-
-.input:hover {
-  border-color: var(--color-border-strong);
-}
-
-/*
- * The one solid fill on the screen, and full width because sign-in has exactly one thing to do.
- */
-.submit {
-  width: 100%;
-  background: var(--color-primary);
-  color: var(--color-text);
-  border: 1px solid var(--color-primary);
-  border-radius: var(--radius-sm);
-  padding: var(--space-3) var(--space-4);
-  font-family: inherit;
-  font-size: var(--fs-body);
-  font-weight: 600;
-  cursor: pointer;
-}
-
-.submit:disabled {
-  cursor: progress;
-  background: var(--color-primary-strong);
-  border-color: var(--color-primary-strong);
-  color: var(--color-text-muted);
-}
-
-/*
- * Emphasis, not hue. Full-weight text on the raised surface with the card's border strengthened —
- * a plain answer about what to do next, which is what being refused should feel like.
- */
-.error {
-  margin: 0;
-  background: var(--color-surface-raised);
-  border: 1px solid var(--color-border-strong);
-  border-radius: var(--radius-sm);
-  padding: var(--space-3) var(--space-4);
-  font-size: var(--fs-body);
-  color: var(--color-text);
-}
-
-/*
- * The way out, and never the way on. Quiet enough that it does not compete with the submit button,
- * present enough that somebody who has just been refused does not have to go looking for it.
- */
 .link {
-  align-self: flex-start;
-  font-size: var(--fs-meta);
-  color: var(--color-text-muted);
-  text-decoration: underline;
-  text-underline-offset: var(--space-1);
+  composes: link from '../(public)/sign-in/sign-in.module.css';
 }
 
-.link:hover,
-.link:focus-visible {
-  color: var(--color-text);
+.submit {
+  composes: submit from '../(public)/sign-in/sign-in.module.css';
 }
 
-/* Prose in the card with no form under it — a confirmation, or a dead end. */
-.prose {
-  margin: 0;
-  font-size: var(--fs-body);
-  line-height: 1.5;
-  color: var(--color-text-muted);
-}
-
-/*
- * A phone keeps the centring: `safe center` above already falls back to the top when the card
- * genuinely outgrows the viewport, so pinning it there on every small screen was centring lost
- * for nothing.
- */
-@media (max-width: 30rem) {
-  .screen {
-    padding: var(--space-4);
-  }
-
-  .card {
-    padding: var(--space-5);
-  }
+.error {
+  composes: error from '../(public)/sign-in/sign-in.module.css';
 }

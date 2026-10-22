@@ -35,11 +35,8 @@ export default async function AcceptInvitationPage({
     return <DeadEnd code={caught instanceof ApiError ? caught.code : null} />;
   }
 
-  return (
-    <main className={styles.screen}>
-      <AcceptInvitationForm email={email} token={token ?? ''} />
-    </main>
-  );
+  // The card only; the centred stage is the `(public)` layout's.
+  return <AcceptInvitationForm email={email} token={token ?? ''} />;
 }
 
 /**
@@ -54,27 +51,25 @@ function DeadEnd({ code }: { code: ApiErrorCode | null }) {
   const expired = code === 'invitation_expired';
 
   return (
-    <main className={styles.screen}>
-      <div className={styles.card}>
-        <div>
-          <h1 className={styles.title}>{expired ? 'This invitation expired' : 'This link is not valid'}</h1>
-          <p className={styles.subtitle}>Teaching Hub — the private teaching library.</p>
-        </div>
-        <p className={styles.deadEnd}>
-          {expired
-            ? 'Invitations last seven days. Ask an admin to send you a new one — it takes them a moment, and the new link will work straight away. You can also create an account yourself; you will join as a member, and an admin can set your role afterwards.'
-            : 'This invitation has already been used, was withdrawn, or the link was copied incompletely. Ask an admin to send you a new one, or create an account yourself.'}
-        </p>
-        {/*
-          The way on from a dead end. Since 3.1.15 an invitation is no longer the only route in, so
-          somebody holding a link that has stopped working is not stranded on this card waiting for
-          an admin — they can register, and the admin's part becomes setting the role rather than
-          issuing a second token.
-        */}
-        <Link className={styles.link} href={SIGN_UP_PAGE_PATH}>
-          Create an account
-        </Link>
+    <div className={styles.card}>
+      <div>
+        <h1 className={styles.title}>{expired ? 'This invitation expired' : 'This link is not valid'}</h1>
+        <p className={styles.subtitle}>Teaching Hub — the private teaching library.</p>
       </div>
-    </main>
+      <p className={styles.deadEnd}>
+        {expired
+          ? 'Invitations last seven days. Ask an admin to send you a new one — it takes them a moment, and the new link will work straight away. You can also create an account yourself; you will join as a member, and an admin can set your role afterwards.'
+          : 'This invitation has already been used, was withdrawn, or the link was copied incompletely. Ask an admin to send you a new one, or create an account yourself.'}
+      </p>
+      {/*
+        The way on from a dead end. Since 3.1.15 an invitation is no longer the only route in, so
+        somebody holding a link that has stopped working is not stranded on this card waiting for
+        an admin — they can register, and the admin's part becomes setting the role rather than
+        issuing a second token.
+      */}
+      <Link className={styles.link} href={SIGN_UP_PAGE_PATH}>
+        Create an account
+      </Link>
+    </div>
   );
 }
