@@ -18,6 +18,11 @@ function causeChain(error: unknown): string[] {
   let current: unknown = error;
   while (current instanceof Error && messages.length < 6) {
     messages.push(current.message.split('\n')[0] ?? current.message);
+    // A Postgres error carries its HINT separately, and for a permission error the hint is the
+    // half that says what to do — "Must have CREATE privilege on current database" and "Must be
+    // superuser" are different problems behind the same first line.
+    const hint = (current as { hint?: unknown }).hint;
+    if (typeof hint === 'string' && hint.length > 0) messages.push(`hint: ${hint}`);
     current = current.cause;
   }
   return messages.length > 0 ? messages : [String(error)];
@@ -30,6 +35,14 @@ function hintFor(messages: readonly string[]): string | null {
   }
   if (joined.includes('password authentication failed') || joined.includes('SASL')) {
     return 'The credentials in DATABASE_URL were rejected. Check .env against docker-compose.yml.';
+  }
+  if (joined.includes('permission denied to create extension')) {
+    return (
+      'The role in DATABASE_URL may not enable the extension. The owner of the database can (pgvector ' +
+      'is a trusted extension), so make it the owner — `alter database thp owner to thp` as postgres — ' +
+      'or enable it once by hand: `sudo -u postgres psql -d thp -c "create extension if not exists vector"`. ' +
+      'If the hint above says "Must be superuser", the installed pgvector is too old to be trusted; upgrade it.'
+    );
   }
   if (joined.includes('does not exist')) {
     return 'The database named in DATABASE_URL does not exist. Create it, or fix the name in .env.';

@@ -79,14 +79,9 @@ export interface SetAvatarRequest {
   readonly key: string;
 }
 
-/**
- * The privacy policy, on the web origin. Named here before the page exists, because the analytics
- * setting has to point at it today (Apple guideline 5.1.1(ii): consent is informed by a policy)
- * and the ticket that lands the page must land it at the address already being linked. A link to
- * a page not yet written is the one exception the settings copy makes to the rule that a missing
- * destination is dropped, and it is made on instruction rather than by habit.
- */
-export const PRIVACY_PAGE_PATH = '/privacy';
+// The privacy policy's path, which the analytics setting links to (Apple guideline 5.1.1(ii):
+// consent is informed by a policy), was named here before the page existed. The page landed and
+// legal.ts now owns `PRIVACY_PAGE_PATH` beside the other two public documents.
 
 /**
  * Where the signed-in account turns product analytics off and on. `me`, never an id in the path,

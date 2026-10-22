@@ -33,8 +33,8 @@ import { SettingsSection } from './settings-section';
  * *Sign out* already has, and a sentence with a `role="status"` beside it says which state the
  * account is in, so a screen reader hears the change without the focus moving.
  *
- * The privacy link is the one place the settings page links to a page that does not exist yet —
- * see `PRIVACY_PAGE_PATH` for why that exception is made.
+ * The privacy link points at the policy page `PRIVACY_PAGE_PATH` names (Apple guideline
+ * 5.1.1(ii): consent is informed by a policy).
  */
 
 const WRITE_FAILED = 'Could not save that. Nothing has changed — try again in a moment.';
