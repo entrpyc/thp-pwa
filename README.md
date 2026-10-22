@@ -393,6 +393,42 @@ Three things worth knowing before the first real recording:
   The `/api/v1/diagnostics/*` routes used by those tests are `404` in production unless
   `ENABLE_DIAGNOSTIC_ROUTES=true` is set, which only the test harness does.
 
+## Service worker
+
+[packages/web/public/sw.js](packages/web/public/sw.js) is a core that owns `install` and
+`activate` and nothing else; every feature is a plain script under
+[packages/web/public/sw/](packages/web/public/sw/) that the core pulls in with `importScripts`.
+`sw/push.js` owns `push` and `notificationclick`; `sw/offline.js` owns `fetch`. The worker caches
+**nothing** — not the app shell, not a route — because a cached shell would render the member
+chrome to a signed-out visitor before the server could redirect to sign-in. The `fetch` handler
+has to exist all the same: Chrome withholds the install prompt from a page whose worker has none.
+
+**Adding a module.** Create `packages/web/public/sw/<name>.js`, register its handlers on `self`
+with a doc comment saying what the file is for, and add it to the `importScripts` list in `sw.js`
+with the same `?v=` suffix the others carry. Modules are plain JavaScript outside `tsconfig`, so
+nothing but a browser would notice a broken one — which is why
+[tests/unit/service-worker.test.ts](packages/web/tests/unit/service-worker.test.ts) evaluates the
+core and every module in a fake worker and asserts the handlers that must be registered. Add the
+new handler to that list. Modules share no code and need no build step; if one ever does, that is
+the moment to bundle, not before.
+
+**Versioning.** The page registers `/sw.js?v=<release>`, where the release is the
+`NEXT_PUBLIC_APP_VERSION` that `next.config.ts` stamps into every build from `git describe` — the
+tag on a deployed box, the short commit elsewhere. A different query string is a different script
+to the browser, so every deploy installs a new worker whether or not the worker files changed; the
+core reads the version back out of its own URL and threads it onto its imports, so the modules are
+re-fetched with it. There is no constant to bump. `updateViaCache: 'none'` on the registration
+keeps the HTTP cache out of it.
+
+**Updates.** The worker calls `skipWaiting` and `clients.claim`, so a new release takes over every
+open tab as soon as it has installed; with nothing cached there is no old version to strand.
+[service-worker-registration.tsx](packages/web/src/app/service-worker-registration.tsx) watches
+`updatefound` and `controllerchange` and marks a store when a newer worker has taken a page that
+already had one. `useServiceWorkerUpdate()` in
+[service-worker-update.ts](packages/web/src/app/service-worker-update.ts) exposes that as
+`{ updateAvailable }` for a banner or a reload offer; nothing in the UI reads it yet, and nothing
+reloads on its own.
+
 ## Deployment
 
 The one deployment: **`https://thp.indepthwebsolutions.com`**, on a Contabo Ubuntu VPS at
