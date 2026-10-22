@@ -8,6 +8,7 @@ import {
   type Role,
 } from '@thp/shared';
 import { completeOnboarding } from '@thp/db';
+import { PROFILE_SECTIONS } from '@/app/(member)/profile/sections';
 import {
   closeTestDatabase,
   createAccount,
@@ -19,7 +20,10 @@ import {
  * **The profile screen, driven in a real browser** (docs/project/prd.md 3.1.12).
  *
  * The API's half is `profile.test.ts`; what a fetch cannot answer is what this file asks. Whether
- * the menu entry reaches the screen. Whether a saved name is what the next page load shows. Whether
+ * the menu entry reaches the screen. Whether the section strip under the heading is the sections
+ * list and nothing else, marks where the member is, and carries them to `/profile/settings` and
+ * back — and whether signing out from there ends the session. Whether a saved name is what the
+ * next page load shows. Whether
  * a chosen picture is actually decoded, cropped to the square the member chose and re-encoded by
  * the browser before anything is sent — which is the one property of the upload that only a canvas
  * can prove — whether cancelling the crop asks the API for nothing, and whether what comes back is
@@ -79,6 +83,22 @@ async function onTheProfile(
     .poll(() => page.getByRole('button', { name: 'Save name' }).count(), { timeout: 30_000 })
     .toBe(1);
   return page;
+}
+
+/**
+ * The label of the section the strip marks current, read off `aria-current` — or `null` when the
+ * strip marks nothing, which is what a section no entry claims would show. Exactly one link may
+ * carry the mark; two would be a strip that cannot say where the member is.
+ */
+async function currentSection(page: Page): Promise<string | null> {
+  const marked = page
+    .getByRole('navigation', { name: 'Profile sections' })
+    .getByRole('link')
+    .and(page.locator('[aria-current="page"]'));
+  const count = await marked.count();
+  if (count === 0) return null;
+  expect(count).toBe(1);
+  return marked.innerText();
 }
 
 /**
@@ -179,13 +199,79 @@ describe('getting there', () => {
       await page.context().close();
     }
 
-    const context = await browser.newContext({ viewport: DESKTOP });
-    const anonymous = await context.newPage();
+    // Every section is behind the same check — the layout's — so each refuses as the root does.
+    for (const section of PROFILE_SECTIONS) {
+      const context = await browser.newContext({ viewport: DESKTOP });
+      const anonymous = await context.newPage();
+      try {
+        await anonymous.goto(`${baseUrl}${section.href}`, { waitUntil: 'domcontentloaded' });
+        await anonymous.waitForURL(/\/sign-in/, { timeout: 30_000 });
+      } finally {
+        await context.close();
+      }
+    }
+  }, 120_000);
+});
+
+describe('the sections', () => {
+  const settings = PROFILE_SECTIONS.find((section) => section.id === 'settings');
+  if (settings === undefined) throw new Error('the settings section is not listed');
+
+  it('are the list, in order, with the current one marked — and the strip is on every section', async () => {
+    const member = await memberPastTheTour('profile-sections');
+    const page = await onTheProfile(member, PHONE);
     try {
-      await anonymous.goto(`${baseUrl}${PROFILE_PAGE_PATH}`, { waitUntil: 'domcontentloaded' });
-      await anonymous.waitForURL(/\/sign-in/, { timeout: 30_000 });
+      const strip = page.getByRole('navigation', { name: 'Profile sections' });
+      const labels = PROFILE_SECTIONS.map((section) => section.label);
+
+      // The identity page: the strip is the list, and the root entry is the one marked current.
+      await expect.poll(() => strip.getByRole('link').allInnerTexts()).toEqual(labels);
+      expect(await currentSection(page)).toBe('Profile');
+
+      // Across to settings by the strip: same heading, same strip, the mark has moved, and the
+      // page beneath is the settings page — its own h2 and its first section, the way out.
+      await strip.getByRole('link', { name: settings.label }).click();
+      await page.waitForURL(`${baseUrl}${settings.href}`, { timeout: 30_000 });
+      await expect
+        .poll(() => page.getByRole('heading', { level: 2, name: 'Settings' }).count(), {
+          timeout: 30_000,
+        })
+        .toBe(1);
+      expect(await page.getByRole('heading', { level: 1, name: 'My profile' }).count()).toBe(1);
+      await expect.poll(() => currentSection(page)).toBe(settings.label);
+      expect(await page.getByRole('region', { name: 'Session' }).isVisible()).toBe(true);
+      expect(await page.getByRole('button', { name: 'Save name' }).count()).toBe(0);
+
+      // And back, by the strip again: the identity page, with its cards.
+      await strip.getByRole('link', { name: 'Profile' }).click();
+      await page.waitForURL(`${baseUrl}${PROFILE_PAGE_PATH}`, { timeout: 30_000 });
+      await expect
+        .poll(() => page.getByRole('button', { name: 'Save name' }).count(), { timeout: 30_000 })
+        .toBe(1);
+      await expect.poll(() => currentSection(page)).toBe('Profile');
     } finally {
-      await context.close();
+      await page.context().close();
+    }
+  }, 120_000);
+
+  it('marks the section on a hard load of its address, and signing out from it ends the session', async () => {
+    const member = await memberPastTheTour('profile-settings-exit');
+    const page = await signInAs(member);
+    try {
+      await page.goto(`${baseUrl}${settings.href}`, { waitUntil: 'domcontentloaded' });
+      await expect.poll(() => currentSection(page), { timeout: 30_000 }).toBe(settings.label);
+
+      await page
+        .getByRole('region', { name: 'Session' })
+        .getByRole('button', { name: 'Sign out' })
+        .click();
+      await page.waitForURL(/\/sign-in/, { timeout: 30_000 });
+
+      // The session is gone server-side, not only on this tab: the profile now refuses this browser.
+      await page.goto(`${baseUrl}${PROFILE_PAGE_PATH}`, { waitUntil: 'domcontentloaded' });
+      await page.waitForURL(/\/sign-in/, { timeout: 30_000 });
+    } finally {
+      await page.context().close();
     }
   }, 120_000);
 });
