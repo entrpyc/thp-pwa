@@ -137,6 +137,22 @@ export const user = pgTable(
      * the orphan is the accepted price.
      */
     avatarKey: text('avatar_key'),
+    /**
+     * **Whether this person has turned product analytics off** (Apple guideline 5.1.1(ii): an app
+     * that collects usage data offers an easy way to withdraw consent).
+     *
+     * On the account rather than on the device, so that withdrawing consent on a phone is
+     * withdrawing it on the laptop too — a consent that had to be withdrawn once per device would
+     * be one the member could never be sure they had withdrawn. `NOT NULL DEFAULT false` because
+     * every account that already exists is collected from today and keeps being, and the column
+     * names the exception rather than the rule: the row says "opted out", not "consented", so a
+     * row written before this column existed reads as what it always was.
+     *
+     * Read into the session payload beside `preferred_playback_speed`, for the same reason: the
+     * client has to know before its first event whether it may send one, and a second request to
+     * learn a boolean would be a window in which it already had.
+     */
+    analyticsOptedOut: boolean('analytics_opted_out').notNull().default(false),
   },
   (table) => [
     uniqueIndex('user_email_lower_unique').on(sql`lower(${table.email})`),

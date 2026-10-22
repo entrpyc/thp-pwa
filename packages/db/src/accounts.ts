@@ -23,6 +23,8 @@ export interface UserRow {
   readonly preferredPlaybackSpeed: number;
   /** The avatar's object key, or `null` — the ordinary state (docs/project/prd.md 3.1.12). */
   readonly avatarKey: string | null;
+  /** Whether product analytics is off for this account. `false` for every account until its owner says otherwise. */
+  readonly analyticsOptedOut: boolean;
 }
 
 export interface NewUser {
@@ -138,6 +140,28 @@ export async function setUserAvatar(
     .where(eq(user.id, id))
     .returning();
   return (rows[0] as UserRow | undefined) ?? null;
+}
+
+/**
+ * Turn product analytics off or on for an account. Returns what the column now holds, or `null`
+ * if there is no such account.
+ *
+ * One write for both directions, as the avatar's is: consent withdrawn and consent restored are
+ * the same column with the opposite value, and nothing beside it has to be kept in step. Written
+ * unconditionally rather than only when the value changes, because a member pressing "off" on an
+ * account that is already off should be told "off" — not that nothing happened.
+ */
+export async function setAnalyticsOptOut(
+  id: string,
+  optedOut: boolean,
+  handle: DatabaseHandle = getDatabase(),
+): Promise<boolean | null> {
+  const rows = await handle.db
+    .update(user)
+    .set({ analyticsOptedOut: optedOut, updatedAt: new Date() })
+    .where(eq(user.id, id))
+    .returning({ optedOut: user.analyticsOptedOut });
+  return (rows[0] as { optedOut: boolean } | undefined)?.optedOut ?? null;
 }
 
 /**
