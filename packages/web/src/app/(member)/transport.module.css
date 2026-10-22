@@ -656,6 +656,106 @@
 }
 
 /*
+ * **The chapters sheet** — the list icon's destination, in the composer sheet's box above. What
+ * follows is the list inside it: a row per chapter, pressed whole, with the number, the title and
+ * the start laid out the way the Chapters tab lays them out (`chapters.module.css`), so a member
+ * who has seen the tab reads the sheet at once. Minus the summary: a sheet over another screen has
+ * no room for a paragraph per row, and a jump does not need one.
+ */
+
+/* The teaching these are the chapters of, muted and on one line like the bar's own second line. */
+.sheetTitle {
+  margin: 0;
+  min-width: 0;
+  color: var(--color-text-muted);
+  font-size: var(--fs-meta);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.chapterList {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-2);
+}
+
+/*
+ * The whole row is the press — 3.22.12's play control, with nothing else on the row to confuse it
+ * with. A button rather than a link because its one meaning is sound, and `text-align: left`
+ * because a button centres its content by default and a column of them would zigzag.
+ */
+.chapterRow {
+  width: 100%;
+  min-width: 0;
+  display: flex;
+  align-items: center;
+  gap: var(--space-3);
+  background: transparent;
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-md);
+  padding: var(--space-3) var(--space-4);
+  color: var(--color-text);
+  font-family: inherit;
+  font-size: var(--fs-body);
+  text-align: left;
+  cursor: pointer;
+}
+
+.chapterRow:hover {
+  border-color: var(--color-border-strong);
+}
+
+/*
+ * The chapter playing now — the accent outline and soft fill the pressed tool and the armed rate
+ * step already use for *this one*, so a member reads it without a key. `aria-current` on the row
+ * says the same thing to a screen reader.
+ */
+.chapterRowCurrent {
+  border-color: var(--color-primary-strong);
+  background: var(--color-primary-soft);
+}
+
+.chapterRowCurrent .chapterTitle {
+  color: var(--color-primary-strong);
+}
+
+/* The number the list shows (3.22.10), in the ring the Chapters tab draws it in. */
+.chapterNumber {
+  flex: none;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: var(--space-6);
+  height: var(--space-6);
+  border-radius: var(--radius-pill);
+  border: 1px solid var(--color-border-strong);
+  color: var(--color-text-muted);
+  font-size: var(--fs-meta);
+}
+
+/* Ellipsised on its own, so a long title shortens the row's middle and never pushes the start off it. */
+.chapterTitle {
+  flex: 1 1 auto;
+  min-width: 0;
+  font-weight: 500;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+/* The time it starts — tabular, so the column lines up down the sheet. */
+.chapterStart {
+  flex: none;
+  color: var(--color-text-dim);
+  font-size: var(--fs-meta);
+  font-variant-numeric: tabular-nums;
+}
+
+/*
  * **The rate picker** — what the pill opens when it is held rather than tapped.
  *
  * **Directly over the pill**, anchored to it the way the side toolbar is anchored to `···`: the

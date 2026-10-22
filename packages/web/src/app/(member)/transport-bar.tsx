@@ -9,6 +9,7 @@ import {
   formatTimecode,
   type NoteView,
 } from '@thp/shared';
+import { track } from '@/client/observability/analytics';
 import { segmentAt } from '@/client/transcript/current-segment';
 import { NoteComposer } from './recordings/[id]/note-composer';
 import { usePlayer } from './player-context';
@@ -29,10 +30,14 @@ import styles from './transport.module.css';
  * is what a member actually needs to know is playing (scope prd 3.2.6).
  *
  * **The `···` control** opens the side toolbar of `bottom-navigation/menu-opened.png`. The reference
- * draws seven icons — chapters, mind map, a list, an AI action, text size, notes and CC. Two of them
- * have data now: CC, and **the speech bubble that opens the composer as a sheet over whatever screen
- * the member is on** (active-scope prd 3.1.2, 5.1.5). The other five are dropped rather than
- * rendered disabled, which is the line the whole member surface draws for a deferred destination.
+ * draws seven icons — a book, mind map, a list, an AI action, text size, notes and CC. Three of them
+ * have data now: CC, **the speech bubble that opens the composer as a sheet over whatever screen
+ * the member is on** (active-scope prd 3.1.2, 5.1.5), and **the list, which is chapters** — the
+ * same sheet, holding the playing teaching's chapters so a member can jump to one from any screen
+ * without walking to the recording page's tab for it ([3.22.12](docs/project/prd.md)). The other
+ * four are dropped rather than rendered disabled, which is the line the whole member surface draws
+ * for a deferred destination; the chapters tool joins them whenever the teaching has no chapters
+ * ([3.22.4](docs/project/prd.md)).
  *
  * **The note markers** are the notes scope's other change here (3.2.4, 5.7.1–5.7.3): a tick on the
  * progress track at every visible top-level note. They travel with the bar, so a member who walks
@@ -120,10 +125,46 @@ function collapse(notes: readonly NoteView[], durationMs: number): Marker[] {
   return markers;
 }
 
+/**
+ * The list icon of `bottom-navigation/menu-opened.png` — three bulleted lines — drawn the way the
+ * top navigation draws its icons rather than set as a character, because no character reads as
+ * that icon at the size the strip draws it: `☰` is a menu, and a menu inside a menu is what a
+ * member would take it for.
+ */
+function ChaptersIcon() {
+  return (
+    <svg viewBox="0 0 24 24" width="18" height="18" aria-hidden="true" focusable="false">
+      <path
+        d="M9 7h11M9 12h11M9 17h11"
+        fill="none"
+        stroke="currentColor"
+        strokeWidth="1.8"
+        strokeLinecap="round"
+      />
+      <circle cx="5" cy="7" r="1.2" fill="currentColor" />
+      <circle cx="5" cy="12" r="1.2" fill="currentColor" />
+      <circle cx="5" cy="17" r="1.2" fill="currentColor" />
+    </svg>
+  );
+}
+
 export function TransportBar() {
   const player = usePlayer();
   const [toolbarOpen, setToolbarOpen] = useState(false);
   const [sheetOpen, setSheetOpen] = useState(false);
+  /**
+   * The teaching the chapters sheet is open for, or `null` while it is closed.
+   *
+   * An id rather than a boolean, because the sheet lists **the loaded teaching's** chapters and a
+   * different teaching arriving underneath it has to close it rather than refill it: the list a
+   * member opened was about one teaching, and a sheet that quietly became about another would send
+   * their next press to a chapter they never looked at. Holding the id makes that a comparison at
+   * render rather than an effect chasing the load — and it is its own state rather than a second
+   * value in `sheetOpen`, because the two sheets are independent: a member may well reach for a
+   * chapter with a note half-written, and closing the composer under them to show the list would
+   * be answering a question they did not ask.
+   */
+  const [chaptersOpenFor, setChaptersOpenFor] = useState<string | null>(null);
   const toolbarRef = useRef<HTMLElement>(null);
   const moreRef = useRef<HTMLButtonElement>(null);
 
@@ -188,7 +229,40 @@ export function TransportBar() {
     };
   }, [toolbarOpen]);
 
+  /*
+   * The chapters sheet is open when it was opened for the teaching that is loaded now **and** that
+   * teaching has chapters to list. The second half matters while a new teaching's list is in
+   * flight (`chapters` is `null` then) and for a teaching that has none ([3.22.4](docs/project/prd.md)):
+   * both draw no sheet, exactly as both draw no tool. Computed above the early return because the
+   * effect below reads it.
+   */
+  const chapterList = player.chapters?.chapters ?? [];
+  const chaptersOpen =
+    player.loaded !== null && chaptersOpenFor === player.loaded.id && chapterList.length > 0;
+
+  /*
+   * Escape puts the chapters sheet away, the way it puts the toolbar away. The composer's sheet has
+   * no such rule, and the difference is deliberate: a list has nothing being typed into it, so
+   * Escape can mean only one thing here, where on the composer it would be a second way to abandon
+   * a paragraph beside the one explicit `Cancel` that sheet keeps. The listener exists only while
+   * the sheet does.
+   */
+  useEffect(() => {
+    if (!chaptersOpen) return;
+
+    function onKeyDown(event: KeyboardEvent) {
+      if (event.key === 'Escape') setChaptersOpenFor(null);
+    }
+
+    document.addEventListener('keydown', onKeyDown);
+    return () => document.removeEventListener('keydown', onKeyDown);
+  }, [chaptersOpen]);
+
   if (player.loaded === null) return null;
+
+  // The teaching, as a value of its own: the closures below read it, and a narrowing of
+  // `player.loaded` does not survive into a callback the way a `const` does.
+  const loaded = player.loaded;
 
   const max = player.durationMs > 0 ? player.durationMs : 0;
   // Mid-drag the scrubber answers to the finger, not to the element that has not been seeked yet.
@@ -390,6 +464,77 @@ export function TransportBar() {
 
   return (
     <div className={styles.dock}>
+      {/*
+        **The chapters sheet** — where the list icon goes, over whatever screen the member is on,
+        on the composer sheet's pattern beneath it. Every chapter in order with its number, its
+        title and the time it starts — the row of [3.22.10](docs/project/prd.md), read here rather
+        than on the page — with the chapter playing now marked, and **the whole row is the play
+        control**: a press seeks to the chapter's start and plays ([3.22.12](docs/project/prd.md))
+        and puts the sheet away, because a member who chose a chapter has finished choosing.
+
+        No row opens the chapter's page. That is the tab's business, and this sheet stays in the
+        transport: a member who reached for it from the library wanted to hear a chapter, not to
+        be taken somewhere.
+      */}
+      {chaptersOpen ? (
+        <section className={styles.sheet} aria-label="Jump to a chapter">
+          {/*
+            Over another screen the title is the only thing that says which teaching these are
+            the chapters of — the reason the composer names it above the moment (5.1.5).
+          */}
+          <p className={styles.sheetTitle} title={loaded.title}>
+            {loaded.title}
+          </p>
+          <ol className={styles.chapterList}>
+            {chapterList.map((chapter) => {
+              const current = chapter.id === player.currentChapter?.id;
+              return (
+                <li key={chapter.id}>
+                  {/*
+                    `aria-current` is what says *playing now* to a screen reader; the accent
+                    outline says it to everyone else. The spaces between the three parts are
+                    deliberate: a flex row drops them from the layout and keeps them in the name,
+                    so the row is announced as "1 The vine 00:00" rather than run together.
+                  */}
+                  <button
+                    className={`${styles.chapterRow}${
+                      current ? ` ${styles.chapterRowCurrent}` : ''
+                    }`}
+                    type="button"
+                    aria-current={current ? 'true' : undefined}
+                    onClick={() => {
+                      // The index in the teaching's own order — the same number the tab reports.
+                      track('chapter_jumped', {
+                        recording_id: loaded.id,
+                        chapter_index: chapterList.indexOf(chapter),
+                      });
+                      player.playFromMs(chapter.startMs);
+                      setChaptersOpenFor(null);
+                    }}
+                  >
+                    <span className={styles.chapterNumber}>{chapter.position}</span>{' '}
+                    <span className={styles.chapterTitle}>{chapter.title}</span>{' '}
+                    <time
+                      className={styles.chapterStart}
+                      dateTime={`PT${Math.round(chapter.startMs / 1000)}S`}
+                    >
+                      {formatTimecode(chapter.startMs)}
+                    </time>
+                  </button>
+                </li>
+              );
+            })}
+          </ol>
+          <button
+            className={styles.sheetClose}
+            type="button"
+            onClick={() => setChaptersOpenFor(null)}
+          >
+            Close
+          </button>
+        </section>
+      ) : null}
+
       {sheetOpen ? (
         <section className={styles.sheet} aria-label="Note composer">
           <NoteComposer
@@ -598,6 +743,28 @@ export function TransportBar() {
         <span className={styles.moreSlot}>
           {toolbarOpen ? (
             <nav className={styles.toolbar} ref={toolbarRef} aria-label="Player tools">
+              {/*
+                **Chapters** — above the speech bubble, where the reference puts the list icon.
+                Absent rather than disabled for a teaching with no chapters
+                ([3.22.4](docs/project/prd.md)), the line every chapter surface draws and the one the
+                recording page draws for its tab ([3.22.10](docs/project/prd.md)). A list that has
+                not arrived yet lands here too: it is not a list a member can open.
+              */}
+              {chapterList.length === 0 ? null : (
+                <button
+                  className={styles.tool}
+                  type="button"
+                  aria-label="Chapters"
+                  aria-pressed={chaptersOpen}
+                  onClick={() => {
+                    setToolbarOpen(false);
+                    // The same press puts it away, the rule the two tools beside it follow.
+                    setChaptersOpenFor(chaptersOpen ? null : loaded.id);
+                  }}
+                >
+                  <ChaptersIcon />
+                </button>
+              )}
               <button
                 className={styles.tool}
                 type="button"
