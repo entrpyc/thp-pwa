@@ -109,15 +109,14 @@ fails the build, not by convention.
 
 ## Accounts, sessions and authorisation
 
-**Every `/api/v1` route requires a session**, with exactly four enumerated exceptions:
-`GET /api/v1/health` (it must answer while the database is down, which is when a session lookup
-cannot), `POST /api/v1/auth/session` (signing in is how a session comes to exist), and the two
-invitation-accept routes `GET` and `POST /api/v1/invitations/accept` (an invitee has no account
-yet, and a dead link has to be able to say so before anybody chooses a password). None of the four
-carries account content. The list is
+**Every `/api/v1` route requires a session**, with a short enumerated list of exceptions: health
+(it must answer while the database is down, which is when a session lookup cannot), sign-in and
+sign-up (each is how a session or an account comes to exist), and the token routes behind
+invitations and password resets (the holder has no session yet, and a dead link has to be able to
+say so before anybody chooses a password). None of them carries account content. The list is
 [packages/web/src/server/auth/allowlist.ts](packages/web/src/server/auth/allowlist.ts), and it is
 the *only* source of exceptions — a route declared public that is not on it refuses anonymous
-callers like any other.
+callers like any other. How to add one is under [Public pages](#public-pages).
 
 Three things make that checkable rather than reviewed:
 
@@ -266,6 +265,46 @@ CSS custom properties and several strip `<style>` blocks, so the template inline
 from [server/mail/theme.ts](packages/web/src/server/mail/theme.ts) — the only file in the codebase
 allowed to spell a colour out. A test asserts every value there equals the token it copies, and the
 guard that forbids colour literals in source exempts that one path **by name**, not by pattern.
+
+### Public pages
+
+A page is public **by position**: everything under
+[packages/web/src/app/(public)](packages/web/src/app/(public)) renders without a session, and
+everything under `(member)` is sent to `/sign-in` without one by that group's layout. The
+`(public)` layout draws the centred shell every unauthenticated page sits on and decides nothing
+else — a page under it renders its card and chooses for itself what a session means (sign-in sends a
+signed-in visitor on; forgot-password is reachable either way).
+
+To add a public page:
+
+1. Create `packages/web/src/app/(public)/<path>/page.tsx`. The route group adds no URL segment, so
+   the page is served at `/<path>`.
+2. If the page reads the session (`currentActor()`), declare `export const dynamic =
+   'force-dynamic'` as the others do.
+3. For long-form text — a policy, the terms, a support page — render
+   [`PublicDocument`](packages/web/src/app/(public)/public-document.tsx) with a title, the day the
+   text last changed (`YYYY-MM-DD`) and its sections. It draws the dated heading and the way back,
+   and reads the session itself to decide where that way leads.
+4. If the page belongs in the legal footer, add it to `LEGAL_LINKS` in
+   [legal-links.tsx](packages/web/src/app/(public)/legal-links.tsx). The sign-in form and the
+   profile draw that list; while it is empty the row is absent rather than empty.
+5. Compose any stylesheet from `sign-in/sign-in.module.css` and name it in
+   [tests/guards/style-tokens.test.ts](tests/guards/style-tokens.test.ts), so the token guard is
+   known to have read it.
+6. Add a screen test under `packages/web/tests/integration`, driven in Chromium like the others.
+
+To add a public **API route** — which is a separate decision from a public page, and a rarer one:
+
+1. Add the method and path to `UNAUTHENTICATED_ROUTES` in
+   [allowlist.ts](packages/web/src/server/auth/allowlist.ts), with a `because` that argues against
+   the entries already there. The property every entry holds is that it carries no content about
+   anybody but the caller.
+2. Declare the handler with `apiRoute(PUBLIC, …)` from `server/api/access`. Both steps are needed:
+   the allowlist is consulted at request time, so a route declared `PUBLIC` that is not listed still
+   refuses anonymous callers.
+3. The route sweep in `packages/web/tests/integration/route-sweep.test.ts` subtracts the list and
+   asserts everything else refuses, so the new route needs its own test of what it answers to an
+   anonymous caller.
 
 ## Database
 

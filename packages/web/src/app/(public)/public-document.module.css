@@ -1,0 +1,102 @@
+/*
+ * A public document — the long-form text page (public-document.tsx).
+ *
+ * There is no `pages/privacy.png` or any other reference for a page of prose; the operator
+ * carve-out that lets the auth screens compose from the style guide covers it. Two things are read
+ * from the guide rather than from sign-in.module.css, and the rule each one is read from:
+ *
+ * 1. **The card is the guide's own recipe, restated, at a reading width.** Sign-in's card is 26rem
+ *    because a form is narrow; a policy is not, and 44rem is where a line of `--fs-body` stops
+ *    being tiring to follow. It is restated rather than composed because `composes` cannot
+ *    override a declaration — which of two equal-specificity `max-width`s wins would depend on the
+ *    order the bundler emitted the sheets in, and a width that depends on bundle order is not a
+ *    width.
+ * 2. **Section headings are card titles** — `--fs-card-title` at 600 — because that is the one
+ *    heading weight the guide has under the page title, and a document has exactly those two
+ *    levels. Links in the prose take the guide's link colour, `--color-primary-strong`, where
+ *    sign-in's secondary links do not: a form has one primary action to protect and a page of
+ *    prose has none.
+ *
+ * The title, the way back and the shell are sign-in's, composed, so the document reads as the same
+ * place as the door it is reached from.
+ */
+
+.article {
+  width: 100%;
+  max-width: 44rem;
+  background: var(--color-surface);
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-md);
+  padding: var(--space-6);
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-6);
+}
+
+.title {
+  composes: title from './sign-in/sign-in.module.css';
+}
+
+/* Metadata weight — the date is context for the text, not part of it. */
+.updated {
+  margin: var(--space-2) 0 0;
+  font-size: var(--fs-meta);
+  color: var(--color-text-dim);
+}
+
+.section {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-3);
+}
+
+.heading {
+  margin: 0;
+  font-size: var(--fs-card-title);
+  font-weight: 600;
+  line-height: 1.2;
+  color: var(--color-text);
+}
+
+/* Body copy, allowed to wrap: a document is the detail view the guide lets descriptions wrap in. */
+.body {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-3);
+  font-size: var(--fs-body);
+  line-height: 1.5;
+  color: var(--color-text-muted);
+}
+
+.body p,
+.body ul,
+.body ol {
+  margin: 0;
+}
+
+.body ul,
+.body ol {
+  padding-left: var(--space-5);
+}
+
+.body a {
+  color: var(--color-primary-strong);
+  font-weight: 500;
+  text-decoration: underline;
+  text-underline-offset: var(--space-1);
+}
+
+.body a:hover,
+.body a:focus-visible {
+  color: var(--color-text);
+}
+
+.link {
+  composes: link from './sign-in/sign-in.module.css';
+}
+
+@media (max-width: 30rem) {
+  .article {
+    padding: var(--space-5);
+  }
+}

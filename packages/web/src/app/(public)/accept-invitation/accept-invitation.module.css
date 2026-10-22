@@ -17,10 +17,6 @@
  * 3. `.deadEnd` — an expired, revoked or unknown link. The card's copy, with no form under it.
  */
 
-.screen {
-  composes: screen from '../sign-in/sign-in.module.css';
-}
-
 .card {
   composes: card from '../sign-in/sign-in.module.css';
 }

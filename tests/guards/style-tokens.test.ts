@@ -56,7 +56,13 @@ describe('no component declares what a token already covers', () => {
     const sheets = listStylesheets(WEB_SRC);
     expect(sheets).toContain('app/tokens.css');
     expect(sheets).toContain('app/globals.css');
-    expect(sheets).toContain('app/sign-in/sign-in.module.css');
+    // The auth screens moved under `(public)` when that route group took over drawing the centred
+    // shell; the shell's own sheet and the two public-page components join them.
+    expect(sheets).toContain('app/(public)/public.module.css');
+    expect(sheets).toContain('app/(public)/public-document.module.css');
+    expect(sheets).toContain('app/(public)/legal-links.module.css');
+    expect(sheets).toContain('app/(public)/sign-in/sign-in.module.css');
+    expect(sheets).toContain('app/(public)/sign-up/sign-up.module.css');
     // `app/home.module.css` was here until Story 4 Ticket 01 retired the placeholder landing it
     // styled. What replaced it is the member surface below — three stylesheets rather than one,
     // and the ones that matter most for this check, because they carry every colour and radius the
@@ -65,9 +71,9 @@ describe('no component declares what a token already covers', () => {
     expect(sheets).toContain('app/(member)/member.module.css');
     expect(sheets).toContain('app/(member)/transport.module.css');
     expect(sheets).toContain('app/(member)/screens.module.css');
-    expect(sheets).toContain('app/accept-invitation/accept-invitation.module.css');
-    expect(sheets).toContain('app/forgot-password/forgot-password.module.css');
-    expect(sheets).toContain('app/reset-password/reset-password.module.css');
+    expect(sheets).toContain('app/(public)/accept-invitation/accept-invitation.module.css');
+    expect(sheets).toContain('app/(public)/forgot-password/forgot-password.module.css');
+    expect(sheets).toContain('app/(public)/reset-password/reset-password.module.css');
     expect(sheets).toContain('app/admin/admin.module.css');
     // Story 6's one new stylesheet. Named for the same reason every other one is: "no violations"
     // must not be able to mean "this file was never read".

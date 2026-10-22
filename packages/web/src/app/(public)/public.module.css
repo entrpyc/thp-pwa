@@ -1,0 +1,38 @@
+/*
+ * The public shell — the stage every unauthenticated page is drawn on.
+ *
+ * `.screen` lived in sign-in.module.css from the first designed screen, and the four auth screens
+ * after it each composed it under their own name. It moved here, unchanged, when the `(public)`
+ * route group took over drawing it: a page under the group renders its card and nothing else, so
+ * the centring is said once and cannot drift between pages that are meant to look like one place.
+ *
+ * Everything else the auth screens share — the card, the field, the button, the error line — stays
+ * in sign-in.module.css, because those are *components* a page chooses, and this is the one thing a
+ * page does not choose.
+ */
+
+.screen {
+  min-height: 100vh;
+  /* The visible height on a phone, where the browser chrome comes and goes — without it the card
+     centres in a viewport partly hidden behind the toolbar and reads as sitting too high. */
+  min-height: 100dvh;
+  display: flex;
+  align-items: center;
+  /* `safe` keeps a card taller than a short viewport reachable from the top instead of clipping
+     both ends; browsers without it fall back to the plain `center` above. */
+  align-items: safe center;
+  justify-content: center;
+  padding: var(--space-5);
+  background: var(--color-bg);
+}
+
+/*
+ * A phone keeps the centring: `safe center` above already falls back to the top when the card
+ * genuinely outgrows the viewport, so pinning it there on every small screen was centring lost
+ * for nothing.
+ */
+@media (max-width: 30rem) {
+  .screen {
+    padding: var(--space-4);
+  }
+}

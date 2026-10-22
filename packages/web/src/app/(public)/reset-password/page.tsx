@@ -39,11 +39,8 @@ export default async function ResetPasswordPage({
     return <DeadEnd code={caught instanceof ApiError ? caught.code : null} />;
   }
 
-  return (
-    <main className={styles.screen}>
-      <ResetPasswordForm email={email} token={token ?? ''} />
-    </main>
-  );
+  // The card only; the centred stage is the `(public)` layout's.
+  return <ResetPasswordForm email={email} token={token ?? ''} />;
 }
 
 /**
@@ -72,23 +69,21 @@ function DeadEnd({ code }: { code: ApiErrorCode | null }) {
       : 'This link has already been used, was replaced by a newer one, or was copied incompletely. Ask for another to get a fresh link.';
 
   return (
-    <main className={styles.screen}>
-      <div className={styles.card}>
-        <div>
-          <h1 className={styles.title}>{heading}</h1>
-          <p className={styles.subtitle}>Teaching Hub — the private teaching library.</p>
-        </div>
-        <p className={styles.prose}>{explanation}</p>
-        {deactivated ? (
-          <Link className={styles.link} href="/sign-in">
-            Back to sign in
-          </Link>
-        ) : (
-          <Link className={styles.link} href={FORGOT_PASSWORD_PAGE_PATH}>
-            Send me another link
-          </Link>
-        )}
+    <div className={styles.card}>
+      <div>
+        <h1 className={styles.title}>{heading}</h1>
+        <p className={styles.subtitle}>Teaching Hub — the private teaching library.</p>
       </div>
-    </main>
+      <p className={styles.prose}>{explanation}</p>
+      {deactivated ? (
+        <Link className={styles.link} href="/sign-in">
+          Back to sign in
+        </Link>
+      ) : (
+        <Link className={styles.link} href={FORGOT_PASSWORD_PAGE_PATH}>
+          Send me another link
+        </Link>
+      )}
+    </div>
   );
 }

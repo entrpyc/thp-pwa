@@ -5,6 +5,7 @@ import { useRouter } from 'next/navigation';
 import { useId, useState, type FormEvent } from 'react';
 import { AUTH_SESSION_PATH, FORGOT_PASSWORD_PAGE_PATH, SIGN_UP_PAGE_PATH } from '@thp/shared';
 import { ApiClientError, apiFetch } from '@/client/api-client';
+import { LegalLinks } from '../legal-links';
 import styles from './sign-in.module.css';
 
 /**
@@ -137,6 +138,14 @@ export function SignInForm() {
           New here? Create an account
         </Link>
       </form>
+
+      {/*
+        The product's legal and support links, last in the card and outside the form: they are
+        about the product rather than about this attempt to sign in, so they come after both ways
+        out above and are not among the things a keyboard reaches on its way to the button. The
+        row draws nothing — hairline included — while the list it reads is empty.
+      */}
+      <LegalLinks className={styles.legal} />
     </div>
   );
 }
