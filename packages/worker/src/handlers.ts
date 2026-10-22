@@ -4,6 +4,7 @@ import {
   createGenerateChaptersHandler,
   type GenerateChaptersDependencies,
 } from './generate-chapters';
+import { createEmbedHandler, type EmbedDependencies } from './embed-recording';
 import { createGenerateDraftHandler, type GenerateDraftDependencies } from './generate-draft';
 import { createPreviewAudioHandler } from './preview-audio';
 import { createProcessAudioHandler, type ProcessAudioDependencies } from './process-audio';
@@ -51,7 +52,8 @@ export interface WorkerDependencies
   extends ProcessAudioDependencies,
     TranscribeDependencies,
     GenerateDraftDependencies,
-    GenerateChaptersDependencies {}
+    GenerateChaptersDependencies,
+    EmbedDependencies {}
 
 /**
  * The steps this worker runs — **all of them for real.**
@@ -80,6 +82,7 @@ export function createHandlers(deps: WorkerDependencies = {}): HandlerRegistry {
     transcribe: createTranscribeHandler(deps),
     generate_draft: createGenerateDraftHandler(deps),
     generate_chapters: createGenerateChaptersHandler(deps),
+    embed: createEmbedHandler(deps),
     reprocess_audio: processAudio,
     preview_audio: createPreviewAudioHandler(deps),
   };

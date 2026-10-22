@@ -81,6 +81,7 @@ const STEP_LABEL: Record<PipelineStep, string> = {
   transcribe: 'Transcribe',
   generate_draft: 'Generate draft',
   generate_chapters: 'Generate chapters',
+  embed: 'Embed',
 };
 
 /**
@@ -113,6 +114,9 @@ const CONFIRMS_RERUN: Record<PipelineStep, boolean> = {
   transcribe: true,
   generate_draft: false,
   generate_chapters: true,
+  // Re-embedding replaces vectors with vectors of the same words. Nothing a human wrote is lost
+  // and the cost is a fraction of a cent, so a confirmation would be friction with no guardrail.
+  embed: false,
 };
 
 /**
@@ -151,6 +155,9 @@ function confirmationFor(step: PipelineStep, title: string, editedChapters: numb
         'runs on from it: the teaching is transcribed again (replacing the transcript and any corrections), ' +
         'and the drafts and chapters are regenerated. To refresh only the rendition under the current sound profile, use Re-process on the Sound profile panel instead.'
       );
+    case 'embed':
+      // Never shown — CONFIRMS_RERUN says so — and here because the switch is exhaustive.
+      return `Embed “${title}” again? Its vectors are recomputed from the words it has now; nothing is lost.`;
   }
 }
 
@@ -160,6 +167,7 @@ const CONFIRM_ACTION: Record<PipelineStep, string> = {
   transcribe: 'Yes, transcribe again',
   generate_draft: 'Yes, generate again',
   generate_chapters: 'Yes, replace the chapters',
+  embed: 'Yes, embed again',
 };
 
 /** What a status is called on screen, in the words an operator would use for it. */

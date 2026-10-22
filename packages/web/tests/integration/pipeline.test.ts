@@ -459,9 +459,11 @@ describe('running one step again', () => {
     try {
       await waitFor('the re-run to chain forward and the successor to run', async () => {
         const rows = await ledgerRows(recording.id);
-        // Waiting for the successor to *finish*, not merely to appear: stopping the loop the
-        // moment the row exists would leave the assertion below racing the worker.
-        return rows.some((row) => row.step === 'generate_chapters' && row.status === 'succeeded');
+        // Waiting for the *last* step to finish, not merely to appear: stopping the loop the
+        // moment the row exists would leave the assertion below racing the worker. Read off the
+        // list rather than named, so a step added after it moves this wait with it.
+        const last = PIPELINE_STEPS[PIPELINE_STEPS.length - 1];
+        return rows.some((row) => row.step === last && row.status === 'succeeded');
       });
     } finally {
       loop.stop();
@@ -482,6 +484,7 @@ describe('running one step again', () => {
       ['transcribe', 'succeeded', 1],
       ['generate_draft', 'succeeded', 1],
       ['generate_chapters', 'succeeded', 1],
+      ['embed', 'succeeded', 1],
     ]);
   }, 180_000);
 
@@ -489,17 +492,20 @@ describe('running one step again', () => {
     const recording = await newRecording('Generate only', '2026-04-22');
     await failJob(await firstJobId(recording.id), 'below the confidence threshold', handle);
 
-    // `generate_chapters` is the last step of the chain ([3.22.1](docs/project/prd.md)), which is
-    // why it is the one asked for by name here. Nothing runs it: what is under test is the enqueue.
-    await rerun(recording.id, 'generate_chapters');
+    // The last step of the chain, read off the list rather than named — `embed` today, which is
+    // why a step added after it moves this test with it. Nothing runs it: what is under test is
+    // the enqueue.
+    const last = PIPELINE_STEPS[PIPELINE_STEPS.length - 1] as PipelineStep;
+    await rerun(recording.id, last);
 
     // Re-running the last step queues that step and nothing else — nothing before it is re-queued
     // behind it, because the chain runs forward and never back.
     const rows = await ledgerRows(recording.id);
     expect(rows.filter((row) => row.step === FIRST_PIPELINE_STEP)).toHaveLength(1);
-    expect(rows.filter((row) => row.step === 'generate_chapters')).toHaveLength(1);
-    expect(rows.filter((row) => row.step === 'transcribe')).toHaveLength(0);
-    expect(rows.filter((row) => row.step === 'generate_draft')).toHaveLength(0);
+    expect(rows.filter((row) => row.step === last)).toHaveLength(1);
+    for (const between of PIPELINE_STEPS.slice(1, -1)) {
+      expect(rows.filter((row) => row.step === between)).toHaveLength(0);
+    }
   }, 120_000);
 
   it('answers not_found for an unknown recording and invalid_input for a value that is not a step', async () => {

@@ -17,10 +17,13 @@ import {
   unique,
   uniqueIndex,
   uuid,
+  vector,
 } from 'drizzle-orm/pg-core';
 import {
   ANNOUNCEMENT_KINDS,
   DEFAULT_PLAYBACK_SPEED,
+  EMBEDDING_DIMENSIONS,
+  EMBEDDING_SOURCE_KINDS,
   JOB_STATUSES,
   JOB_STEPS,
   MAX_ANNOUNCEMENT_BODY_LENGTH,
@@ -74,6 +77,8 @@ export const noteVisibility = pgEnum('note_visibility', NOTE_VISIBILITIES);
 export const scriptureOrigin = pgEnum('scripture_origin', SCRIPTURE_ORIGINS);
 
 export const notificationKind = pgEnum('notification_kind', NOTIFICATION_KINDS);
+
+export const embeddingSource = pgEnum('embedding_source', EMBEDDING_SOURCE_KINDS);
 
 /**
  * An account. Columns arrive with the steps that use them: `deactivated_at` comes with ticket 4
@@ -1435,6 +1440,83 @@ export const soundProfile = pgTable(
     check(
       'sound_profile_note_length',
       sql`char_length(${table.note}) <= ${sql.raw(String(MAX_SOUND_PROFILE_NOTE_LENGTH))}`,
+    ),
+  ],
+);
+
+/**
+ * **Vectors, beside the rows that say who may read them** (project tdd 4.4) — the foundation
+ * semantic search ([3.10](docs/project/prd.md)) and cross-referencing
+ * ([3.9](docs/project/prd.md)) are built on. Neither feature is here; this is the table both read.
+ *
+ * One row per **source** — a transcript segment, a chapter, a note, a published summary or a
+ * series — named by `(source_kind, source_id)`, which is unique: embedding a source again
+ * *replaces* its row rather than adding one, so a corrected line ([3.5.5](docs/project/prd.md))
+ * or a retitled chapter ([3.22.7](docs/project/prd.md)) never leaves its old words findable
+ * beside its new ones. The source id is **not a foreign key**, because it points at five tables;
+ * what keeps the rows honest is `recording_id`, which cascades, and the embed step itself, which
+ * removes rows whose source is gone (project tdd 3.3 says the same of cross-references: a cache
+ * of other rows, rebuildable, never a source of truth).
+ *
+ * `text` is the words the vector was computed from, stored so a re-run can tell an unchanged
+ * source from a changed one without spending a call, and so a search hit can be shown without a
+ * second read. `model` is which model produced the vector: two models' vectors are not
+ * comparable, and a search that mixed them would rank nonsense — so a model change is a
+ * re-embed, and this column is how the step knows which rows still need one.
+ *
+ * `owner_user_id` is set on **private notes and nothing else** ([3.12.3](docs/project/prd.md)),
+ * and it is the whole of what makes [3.10.9](docs/project/prd.md) a `where` clause: a row with
+ * an owner is visible to that member alone. It cascades on the account, because a private note
+ * goes with its account ([3.1.9](docs/project/prd.md)) and its vector has to go with the note.
+ * Public notes carry no owner here for the same reason `note.author_id` restricts rather than
+ * cascades — a public note outlives its author, and so must its vector.
+ *
+ * `recording_id` is nullable for exactly one kind, `series`, which belongs to no single teaching.
+ * The check says so, rather than leaving a null recording as something any kind may have.
+ *
+ * The vector is `vector(1536)` — the width is `EMBEDDING_DIMENSIONS` and nothing else, so an
+ * adapter answering a different width is refused by the column. Its HNSW index under cosine
+ * distance is declared below and emitted by drizzle-kit; what drizzle-kit does **not** emit is
+ * the `vector` extension the type comes from, which is hand-written at the top of the migration
+ * that creates this table.
+ */
+export const embedding = pgTable(
+  'embedding',
+  {
+    id: uuid('id').primaryKey().defaultRandom(),
+    sourceKind: embeddingSource('source_kind').notNull(),
+    sourceId: uuid('source_id').notNull(),
+    /** Cascades: a teaching that is gone has nothing left to find. */
+    recordingId: uuid('recording_id').references(() => recording.id, { onDelete: 'cascade' }),
+    /** The member a private note belongs to; null on everything a member may share. */
+    ownerUserId: uuid('owner_user_id').references(() => user.id, { onDelete: 'cascade' }),
+    text: text('text').notNull(),
+    embedding: vector('embedding', { dimensions: EMBEDDING_DIMENSIONS }).notNull(),
+    model: text('model').notNull(),
+    createdAt: timestamp('created_at', { withTimezone: true }).notNull().defaultNow(),
+    updatedAt: timestamp('updated_at', { withTimezone: true }).notNull().defaultNow(),
+  },
+  (table) => [
+    /** One vector per source: embedding a source again replaces it. */
+    uniqueIndex('embedding_source_unique').on(table.sourceKind, table.sourceId),
+    /** Every write is "this recording's rows", and this index is that read. */
+    index('embedding_recording_idx').on(table.recordingId),
+    /**
+     * Cosine distance over the vector, HNSW (project tdd 4.4). Cosine because the real model's
+     * vectors are unit length and cosine is what its documentation ranks by; HNSW because the
+     * table is read far more than written, and an index built once per embed is the cheap side
+     * of that trade.
+     */
+    index('embedding_vector_hnsw_idx').using('hnsw', table.embedding.op('vector_cosine_ops')),
+    /** A series has no recording; everything else has exactly one. */
+    check(
+      'embedding_recording_per_kind',
+      sql`(${table.sourceKind} = 'series') = (${table.recordingId} is null)`,
+    ),
+    /** Only a note can be private, so only a note can have an owner. */
+    check(
+      'embedding_owner_only_on_note',
+      sql`${table.ownerUserId} is null or ${table.sourceKind} = 'note'`,
     ),
   ],
 );

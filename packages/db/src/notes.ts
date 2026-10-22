@@ -1,4 +1,4 @@
-import { and, asc, desc, eq, exists, inArray, isNull, or, sql } from 'drizzle-orm';
+import { and, asc, desc, eq, exists, inArray, isNotNull, isNull, or, sql } from 'drizzle-orm';
 import { alias } from 'drizzle-orm/pg-core';
 import { getDatabase, queryable, type Executor } from './client';
 import { note, notePin, noteReaction, user } from './schema';
@@ -442,4 +442,43 @@ export async function listPinnedNoteIds(
     .from(notePin)
     .where(eq(notePin.recordingId, recordingId));
   return rows.map((row) => row.noteId);
+}
+
+/** One note as the embed step sees it: its words, and who alone may find them. */
+export interface EmbeddableNoteRow {
+  readonly id: string;
+  readonly text: string;
+  /** The author, on a private note; `null` on a public one, which any member may find. */
+  readonly ownerUserId: string | null;
+}
+
+/**
+ * Every live note on a recording, for the `embed` step — **public and private alike, with the
+ * private ones carrying their owner.**
+ *
+ * This is the one read in the file that is not *for a reader*, and it is here rather than in
+ * `embeddings.ts` because it states half of the privacy condition: which notes are private and
+ * whose they are. The step copies that answer onto the vector's `owner_user_id`, and
+ * `visibility.ts` then applies it as [3.10.9](docs/project/prd.md)'s `where` — so the rule a
+ * search enforces is read off `note` exactly once, here, rather than re-derived by a worker.
+ *
+ * Tombstones are left out: a removed note's text is returned to nobody
+ * ([3.12.19](docs/project/prd.md)), and its vector goes with it.
+ */
+export async function listNotesForEmbedding(
+  recordingId: string,
+  executor: Executor = getDatabase(),
+): Promise<EmbeddableNoteRow[]> {
+  const rows = await queryable(executor)
+    .select({
+      id: note.id,
+      text: sql<string>`${note.text}`,
+      ownerUserId: sql<
+        string | null
+      >`case when ${note.visibility} = 'private' then ${note.authorId} end`,
+    })
+    .from(note)
+    .where(and(eq(note.recordingId, recordingId), isNull(note.deletedAt), isNotNull(note.text)))
+    .orderBy(asc(note.createdAt), asc(note.id));
+  return rows as EmbeddableNoteRow[];
 }

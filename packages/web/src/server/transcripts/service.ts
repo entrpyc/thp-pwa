@@ -156,7 +156,7 @@ export async function correctTranscriptSegment(
       );
     }
 
-    return correctSegment(
+    const written = await correctSegment(
       {
         id: segmentId,
         text: requested.text,
@@ -166,6 +166,18 @@ export async function correctTranscriptSegment(
       },
       tx,
     );
+
+    // **The words changed, so the vector for them is stale** ([3.5.5](docs/project/prd.md)). The
+    // `embed` step is enqueued in the same transaction as the correction, so a committed
+    // correction is always one a re-embed is already queued behind. This is not the regeneration
+    // offer in 3.5.6 — that is about derived artefacts an admin reviews, and is offered rather
+    // than performed; a vector is an index entry nobody reviews, and leaving it standing would
+    // make search find the misheard word after the admin fixed it. One job per recording, not per
+    // line: the step compares every source and spends only on the changed ones, and the partial
+    // unique index folds a run of corrections into the job already waiting.
+    await queue().enqueue({ recordingId, step: 'embed' }, tx);
+
+    return written;
   });
 
   logger.info('transcript.correct', {

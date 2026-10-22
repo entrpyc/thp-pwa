@@ -48,10 +48,23 @@ export interface ChaptersGeneratedEvent {
   readonly recordingId: string;
 }
 
+/**
+ * A teaching's vectors were brought up to date — the end of the chain, and the moment
+ * cross-referencing (project tdd 5.7) will attach to: embed the new arrival, then run it against
+ * the index. Emitted on every run, including one that found nothing changed, because the
+ * subscriber's question is "is this recording current in the index", and the answer is yes
+ * either way.
+ */
+export interface RecordingEmbeddedEvent {
+  readonly type: 'recording_embedded';
+  readonly recordingId: string;
+}
+
 export type DomainEvent =
   | DraftGeneratedEvent
   | RecordingPublishedEvent
-  | ChaptersGeneratedEvent;
+  | ChaptersGeneratedEvent
+  | RecordingEmbeddedEvent;
 
 /** The message every domain event is logged under, so one search returns all of them. */
 export const DOMAIN_EVENT_MESSAGE = 'domain.event';

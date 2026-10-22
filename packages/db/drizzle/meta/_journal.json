@@ -197,6 +197,13 @@
       "when": 1792600930424,
       "tag": "0027_playback_completion",
       "breakpoints": true
+    },
+    {
+      "idx": 28,
+      "version": "7",
+      "when": 1792677509621,
+      "tag": "0028_embeddings",
+      "breakpoints": true
     }
   ]
-}
+}

@@ -270,9 +270,11 @@ guard that forbids colour literals in source exempts that one path **by name**, 
 ## Database
 
 The development database is [docker-compose.yml](docker-compose.yml): `pgvector/pgvector:pg17`,
-which ships PostgreSQL 17 with the `vector` extension installed as a package but **not enabled**.
-That is the required state — enabling it (`CREATE EXTENSION vector`) belongs to a later epic, and
-`packages/db/tests/integration/pgvector.test.ts` fails if either half of that is wrong.
+which ships PostgreSQL 17 with the `vector` extension installed as a package. Migration
+`0028_embeddings` enables it in the application database (`create extension if not exists vector`)
+and creates the `embedding` table on it, so after `npm run migrate` the extension is **enabled** —
+`packages/db/tests/integration/pgvector.test.ts` fails if the package is missing from the instance
+or the migrated database does not have it on.
 
 Any Postgres 17 works as long as pgvector is installed on the instance. On Debian/Ubuntu:
 `apt install postgresql-17-pgvector`.
@@ -494,9 +496,11 @@ sudo -u postgres createuser thp --pwprompt
 sudo -u postgres createdb thp --owner=thp
 ```
 
-The `vector` extension must be **installed and available but not enabled** — the state
-[epic architecture § Primary datastore](docs/epics/epic-core-listening/architecture.md#L177) requires,
-and `verify:production` asserts both halves. Then bind Postgres to localhost in
+The `vector` extension must be **installed on the instance**; migration `0028_embeddings` enables
+it in the `thp` database, and the role running `npm run migrate` must be allowed to (pgvector is a
+trusted extension, so the database owner can; a role that is neither owner nor superuser cannot).
+`verify:production` asserts both halves — package present, extension enabled. Then bind Postgres to
+localhost in
 `/etc/postgresql/17/main/postgresql.conf`:
 
 ```

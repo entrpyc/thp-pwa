@@ -391,10 +391,17 @@ const CHECKS: readonly Check[] = [
       );
       const enabled = await query("select count(*) from pg_extension where extname = 'vector'");
       if (available === '0') return bad('the vector package is not installed on this instance');
-      if (enabled !== '0') {
-        return bad('the vector extension is ENABLED — this epic requires it available and unenabled');
+      // Migration 0028 runs `create extension if not exists vector` in the application database,
+      // so after it the extension is enabled there. The check is still worth making: an enabled
+      // extension is what the `embedding` table's type resolves against, and a database restored
+      // from a dump onto a box without the package would answer the first half wrong before
+      // anything reached the second.
+      if (enabled === '0') {
+        return bad(
+          'the vector extension is not enabled — migration 0028_embeddings enables it; run `npm run migrate`',
+        );
       }
-      return ok('installed and available, not enabled');
+      return ok('installed and enabled');
     },
   },
   {
