@@ -8,13 +8,19 @@ ask something this file does not answer, the policy is the source and this file 
 
 Dated **22 October 2026**, the policy's own date.
 
-Three URLs both consoles ask for, on the production origin:
+Four URLs the consoles ask for, on the production origin:
 
 | Console field | URL |
 | :--- | :--- |
 | Privacy policy | `https://thp.indepthwebsolutions.com/privacy` |
 | Support / contact | `https://thp.indepthwebsolutions.com/support` |
 | Terms (EULA, optional on Apple; linked under *user-generated content* on Google) | `https://thp.indepthwebsolutions.com/terms` |
+| Account deletion request (Google Play → *Data safety* → *Data deletion*; shown on the store listing) | `https://thp.indepthwebsolutions.com/delete-account` |
+
+The deletion-request page ([packages/web/src/app/(public)/delete-account/page.tsx](../../packages/web/src/app/(public)/delete-account/page.tsx))
+works without the app and without a session: it takes an email address, mails a one-hour link,
+and the link's page asks for the account's current password before anything is erased. It is
+linked from the sign-in screen's legal row beside the three above.
 
 Contact email for both consoles: `asen.angelov@indepthwebsolutions.com`.
 
@@ -64,9 +70,12 @@ For every type below: *Linked to the user* = **Yes**; *Used for tracking* = **No
 (Profile → Settings, project prd 3.1.8 / 5.2.6), and can turn analytics off for their account there
 too. Both are stated on `/privacy`.
 
-**Account deletion (guideline 5.1.1(v))**: in-app, under Profile → Settings, plus a written request
-to the support address. If the deletion control is not in the build under review, say so in the
-review notes and point at the support page; the policy already names both routes.
+**Account deletion (guideline 5.1.1(v))**: in-app, under Profile → Settings → *Delete account*
+(current password plus a typed confirmation; immediate, no undo), and from outside the app at
+`/delete-account` by emailed link plus the current password. Review notes: "Delete the account under
+Profile → Settings → Delete account. Members without the app use
+https://thp.indepthwebsolutions.com/delete-account." A written request to the support address
+remains a third route.
 
 ## Google Play — Data safety (Play Console → App content → Data safety)
 
@@ -77,8 +86,9 @@ only (nginx returns a 301 to `https://` for every plain request, `deploy/nginx/t
 every processor is reached over TLS.
 
 **Do you provide a way for users to request that their data is deleted?** Yes — in-app account
-deletion under Profile → Settings, and by email to the support address. URL to give:
-`https://thp.indepthwebsolutions.com/support`.
+deletion under Profile → Settings → *Delete account*, the public request page, and by email to the
+support address. URL to give (Play shows it on the store listing):
+`https://thp.indepthwebsolutions.com/delete-account`.
 
 **Does your app follow the Families policy?** No (the app is 16+, not designed for children).
 

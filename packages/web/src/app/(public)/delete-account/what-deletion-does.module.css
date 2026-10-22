@@ -1,0 +1,23 @@
+/*
+ * The list of what deletion does (what-deletion-does.tsx), shown in the settings card and on the
+ * public page alike.
+ *
+ * It invents nothing: the list is sign-in's `.prose` with the browser's bullet indent kept, because
+ * five facts about what happens to a person's data are read one at a time and a paragraph would
+ * run them together. The emphasised lead of each item is `--color-text` at 600 — the weight the
+ * guide gives a card title — so a reader scanning for "what is kept" finds it without a second
+ * colour.
+ */
+
+.list {
+  composes: prose from '../sign-in/sign-in.module.css';
+  padding-left: var(--space-5);
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-3);
+}
+
+.list strong {
+  color: var(--color-text);
+  font-weight: 600;
+}

@@ -2,6 +2,7 @@ import { afterAll, beforeAll, describe, expect, it, inject } from 'vitest';
 import { chromium, type Browser, type Page } from 'playwright';
 import {
   DASHBOARD_PAGE_PATH,
+  DELETE_ACCOUNT_PAGE_PATH,
   PRIVACY_PAGE_PATH,
   ROLE,
   SUPPORT_EMAIL,
@@ -39,13 +40,14 @@ const PAGES = [
  * What the sign-in footer is expected to list, restated here rather than imported from
  * `legal-links.tsx`: the integration project has no JSX transform (only the unit project renders
  * components, and names the transform for it in vitest.config.ts), so a `.tsx` import fails to
- * parse before any test runs. The unit test pins `LEGAL_LINKS` to the same three entries; this
+ * parse before any test runs. The unit test pins `LEGAL_LINKS` to the same four entries; this
  * file pins what the browser shows.
  */
 const LEGAL_LINKS = [
   { href: PRIVACY_PAGE_PATH, label: 'Privacy policy' },
   { href: TERMS_PAGE_PATH, label: 'Terms' },
   { href: SUPPORT_PAGE_PATH, label: 'Support' },
+  { href: DELETE_ACCOUNT_PAGE_PATH, label: 'Delete account' },
 ] as const;
 
 let browser: Browser;

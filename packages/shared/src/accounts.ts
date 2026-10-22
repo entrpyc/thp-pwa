@@ -254,6 +254,14 @@ export const ACCOUNT_DELETION_COMPLETE_PATH = `${ACCOUNT_DELETION_PATH}/complete
  */
 export const DELETE_ACCOUNT_PAGE_PATH = '/delete-account';
 
+/**
+ * Where both doors land once the account is gone. A public page, because the person has no session
+ * by then — the signed-in route cleared the cookie and the token route never set one — and a fixed
+ * one with nothing in its URL, so the address can be bookmarked, shared or reloaded without
+ * carrying a fact about a deleted account.
+ */
+export const ACCOUNT_DELETED_PAGE_PATH = '/account-deleted';
+
 /** The query parameter the deletion link carries the token in. */
 export const DELETION_TOKEN_PARAM = 'token';
 

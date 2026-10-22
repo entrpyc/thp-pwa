@@ -1,0 +1,27 @@
+/*
+ * The account-deleted screen — the confirmation both doors land on.
+ *
+ * A card, a heading, two paragraphs and the way back: the forgot-password confirmation's shape,
+ * composed from `sign-in.module.css` so it reads as the same place as the door it sends you to.
+ * Nothing is only here.
+ */
+
+.card {
+  composes: card from '../sign-in/sign-in.module.css';
+}
+
+.title {
+  composes: title from '../sign-in/sign-in.module.css';
+}
+
+.subtitle {
+  composes: subtitle from '../sign-in/sign-in.module.css';
+}
+
+.prose {
+  composes: prose from '../sign-in/sign-in.module.css';
+}
+
+.link {
+  composes: link from '../sign-in/sign-in.module.css';
+}

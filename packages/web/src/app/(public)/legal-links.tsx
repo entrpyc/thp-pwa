@@ -1,5 +1,10 @@
 import Link from 'next/link';
-import { PRIVACY_PAGE_PATH, SUPPORT_PAGE_PATH, TERMS_PAGE_PATH } from '@thp/shared';
+import {
+  DELETE_ACCOUNT_PAGE_PATH,
+  PRIVACY_PAGE_PATH,
+  SUPPORT_PAGE_PATH,
+  TERMS_PAGE_PATH,
+} from '@thp/shared';
 import styles from './legal-links.module.css';
 
 export interface LegalLink {
@@ -14,17 +19,20 @@ export interface LegalLink {
  *
  * Grows only with the pages: a link to a page that is not there yet would be a link to a 404, so
  * each ticket that adds a page adds its entry here, and nothing else about either surface changes.
- * The three the app stores require are here (Apple 5.1.1(i) and Google's listing rules for the
- * policy, Apple 1.2 for contact, Google's UGC policy for the terms); the account-deletion request
- * joins them when its page exists.
+ * The four the app stores require are here: Apple 5.1.1(i) and Google's listing rules for the
+ * policy, Apple 1.2 for contact, Google's UGC policy for the terms, and Google Play's
+ * account-deletion policy for the request page, whose URL the store listing carries
+ * (docs/project/store-declarations.md).
  *
  * The order is the order a store reviewer reads them in: the policy first, because it is the one a
- * listing links to; then the terms a member accepts; then where to write when neither answers.
+ * listing links to; then the terms a member accepts; then where to write when neither answers; and
+ * last the request page, which is the one link here a member is meant to need once.
  */
 export const LEGAL_LINKS: readonly LegalLink[] = [
   { href: PRIVACY_PAGE_PATH, label: 'Privacy policy' },
   { href: TERMS_PAGE_PATH, label: 'Terms' },
   { href: SUPPORT_PAGE_PATH, label: 'Support' },
+  { href: DELETE_ACCOUNT_PAGE_PATH, label: 'Delete account' },
 ];
 
 /**

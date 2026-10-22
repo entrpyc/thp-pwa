@@ -1,0 +1,12 @@
+/*
+ * The delete-account card's form (delete-account-section.tsx).
+ *
+ * One class, because the card needed one thing the profile sheet does not have: the column the
+ * sign-in form stacks its fields in. Everything else the card draws — the fields, the two button
+ * shapes, the failure — is `profile.module.css`'s already, and restating a stack of fields there
+ * would have been a second answer to a question sign-in settled.
+ */
+
+.form {
+  composes: form from '../../../(public)/sign-in/sign-in.module.css';
+}
