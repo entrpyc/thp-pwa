@@ -20,9 +20,10 @@ import {
  *
  * The API's half is `profile.test.ts`; what a fetch cannot answer is what this file asks. Whether
  * the menu entry reaches the screen. Whether a saved name is what the next page load shows. Whether
- * a chosen picture is actually decoded, squared and re-encoded by the browser before anything is
- * sent — which is the one property of the upload that only a canvas can prove — and whether what
- * comes back is painted.
+ * a chosen picture is actually decoded, cropped to the square the member chose and re-encoded by
+ * the browser before anything is sent — which is the one property of the upload that only a canvas
+ * can prove — whether cancelling the crop asks the API for nothing, and whether what comes back is
+ * painted and opens larger.
  */
 
 const baseUrl = inject('apiBaseUrl');
@@ -102,6 +103,60 @@ async function landscapePng(page: Page, width: number, height: number): Promise<
     [width, height],
   );
   return Buffer.from(dataUrl.split(',')[1] ?? '', 'base64');
+}
+
+/**
+ * What was stored: the object fetched from the bucket by the signed URL the screen painted from,
+ * then decoded in the page, so the assertion is about what is in the store rather than about
+ * anything the screen claims. Fetched outside the page because a cross-origin image drawn onto a
+ * canvas taints it, and a tainted canvas answers no pixels. Answers the size and the four corners.
+ */
+async function storedPicture(
+  page: Page,
+): Promise<{ width: number; height: number; corners: number[][] }> {
+  const src = await page
+    .getByRole('img', { name: 'Your picture', exact: true })
+    .getAttribute('src');
+  const fetched = await page.request.get(src ?? '');
+  expect(fetched.ok()).toBe(true);
+  expect(fetched.headers()['content-type']).toBe('image/webp');
+  const encoded = (await fetched.body()).toString('base64');
+  return page.evaluate(async (base64) => {
+    const binary = atob(base64);
+    const bytes = new Uint8Array(binary.length);
+    for (let index = 0; index < binary.length; index += 1) bytes[index] = binary.charCodeAt(index);
+    const bitmap = await createImageBitmap(new Blob([bytes], { type: 'image/webp' }));
+    const canvas = document.createElement('canvas');
+    canvas.width = bitmap.width;
+    canvas.height = bitmap.height;
+    const context = canvas.getContext('2d');
+    if (context === null) throw new Error('no 2d context');
+    context.drawImage(bitmap, 0, 0);
+    const corner = (x: number, y: number) => [...context.getImageData(x, y, 1, 1).data];
+    return {
+      width: bitmap.width,
+      height: bitmap.height,
+      corners: [
+        corner(2, 2),
+        corner(bitmap.width - 3, 2),
+        corner(2, bitmap.height - 3),
+        corner(bitmap.width - 3, bitmap.height - 3),
+      ],
+    };
+  }, encoded);
+}
+
+/**
+ * The zoom slider, set the way React hears it: through the prototype's own setter, so React's
+ * value tracker sees the change, and then an `input` event. Playwright's `fill` will not drive a
+ * range input.
+ */
+async function setZoom(page: Page, zoom: number): Promise<void> {
+  await page.getByLabel('Zoom').evaluate((element, value) => {
+    const setter = Object.getOwnPropertyDescriptor(HTMLInputElement.prototype, 'value')?.set;
+    setter?.call(element, String(value));
+    element.dispatchEvent(new Event('input', { bubbles: true }));
+  }, zoom);
 }
 
 describe('getting there', () => {
@@ -199,45 +254,20 @@ describe('the picture', () => {
         buffer: png,
       });
 
-      const portrait = page.getByRole('img', { name: 'Your picture' });
+      // The crop step, confirmed where it starts: the centre square.
+      const sheet = page.getByRole('dialog', { name: 'Crop your picture' });
+      await expect.poll(() => sheet.count(), { timeout: 30_000 }).toBe(1);
+      await sheet.getByRole('button', { name: 'Use this picture' }).click();
+
+      const portrait = page.getByRole('img', { name: 'Your picture', exact: true });
       await expect.poll(() => portrait.count(), { timeout: 60_000 }).toBe(1);
       await expect
         .poll(() => portrait.getAttribute('src'), { timeout: 30_000 })
         .toContain('X-Amz-Signature');
 
-      // What was stored: the object fetched from the bucket by the signed URL the screen painted
-      // from, then decoded in the page, so the assertion is about what is in the store rather than
-      // about anything the screen claims. Fetched outside the page because a cross-origin image
-      // drawn onto a canvas taints it, and a tainted canvas answers no pixels. 512 square — the
-      // bound — and blue at every corner, which only the centre square of the source is.
-      const src = await portrait.getAttribute('src');
-      const fetched = await page.request.get(src ?? '');
-      expect(fetched.ok()).toBe(true);
-      expect(fetched.headers()['content-type']).toBe('image/webp');
-      const encoded = (await fetched.body()).toString('base64');
-      const stored = await page.evaluate(async (base64) => {
-        const binary = atob(base64);
-        const bytes = new Uint8Array(binary.length);
-        for (let index = 0; index < binary.length; index += 1) bytes[index] = binary.charCodeAt(index);
-        const bitmap = await createImageBitmap(new Blob([bytes], { type: 'image/webp' }));
-        const canvas = document.createElement('canvas');
-        canvas.width = bitmap.width;
-        canvas.height = bitmap.height;
-        const context = canvas.getContext('2d');
-        if (context === null) throw new Error('no 2d context');
-        context.drawImage(bitmap, 0, 0);
-        const corner = (x: number, y: number) => [...context.getImageData(x, y, 1, 1).data];
-        return {
-          width: bitmap.width,
-          height: bitmap.height,
-          corners: [
-            corner(2, 2),
-            corner(bitmap.width - 3, 2),
-            corner(2, bitmap.height - 3),
-            corner(bitmap.width - 3, bitmap.height - 3),
-          ],
-        };
-      }, encoded);
+      // 512 square — the bound — and blue at every corner, which only the centre square of the
+      // source is.
+      const stored = await storedPicture(page);
       expect(stored.width).toBe(512);
       expect(stored.height).toBe(512);
       for (const [red, green, blue] of stored.corners) {
@@ -248,6 +278,16 @@ describe('the picture', () => {
         expect(green).toBeLessThan(60);
       }
 
+      // The saved picture opens larger from the portrait, and closes again.
+      await page.getByRole('button', { name: 'View your picture' }).click();
+      const viewer = page.getByRole('dialog', { name: 'Your picture, enlarged' });
+      await expect.poll(() => viewer.count()).toBe(1);
+      expect(await viewer.getByRole('img', { name: 'Your picture, enlarged' }).getAttribute('src')).toBe(
+        await portrait.getAttribute('src'),
+      );
+      await viewer.getByRole('button', { name: 'Close' }).click();
+      await expect.poll(() => viewer.count()).toBe(0);
+
       await page.getByRole('button', { name: 'Remove picture' }).click();
       await expect
         .poll(() => page.getByRole('img', { name: 'No picture yet' }).count(), { timeout: 30_000 })
@@ -257,6 +297,94 @@ describe('the picture', () => {
       await page.context().close();
     }
   }, 180_000);
+
+  it('stores the square the member chose — zoomed in and dragged to the left wing', async () => {
+    const member = await memberPastTheTour('profile-crop');
+    const page = await onTheProfile(member, PHONE);
+    try {
+      const requests: string[] = [];
+      page.on('request', (request) => {
+        if (request.url().includes('/avatar')) requests.push(request.url());
+      });
+
+      const png = await landscapePng(page, 1600, 800);
+      await page.locator('input[name="avatar"]').setInputFiles({
+        name: 'me.png',
+        mimeType: 'image/png',
+        buffer: png,
+      });
+      const sheet = page.getByRole('dialog', { name: 'Crop your picture' });
+      await expect.poll(() => sheet.count(), { timeout: 30_000 }).toBe(1);
+      const square = sheet.getByLabel('The square that will be kept', { exact: false });
+      await expect.poll(() => square.count()).toBe(1);
+
+      // Zoom 2: a 400 square, which starts in the blue centre.
+      await setZoom(page, 2);
+      // Dragged to the left edge of the stage and well past it: clamped to x = 0, which is the red
+      // wing and nothing else.
+      const box = await square.boundingBox();
+      if (box === null) throw new Error('the crop square was not painted');
+      const fromX = box.x + box.width / 2;
+      const fromY = box.y + box.height / 2;
+      await page.mouse.move(fromX, fromY);
+      await page.mouse.down();
+      await page.mouse.move(1, fromY, { steps: 8 });
+      await page.mouse.up();
+
+      // Choosing and cropping asked the API for nothing: the grant is budgeted (3.1.22).
+      expect(requests).toEqual([]);
+      await sheet.getByRole('button', { name: 'Use this picture' }).click();
+
+      const portrait = page.getByRole('img', { name: 'Your picture', exact: true });
+      await expect.poll(() => portrait.count(), { timeout: 60_000 }).toBe(1);
+      await expect
+        .poll(() => portrait.getAttribute('src'), { timeout: 30_000 })
+        .toContain('X-Amz-Signature');
+
+      // 400 square — under the bound, so not scaled up — and red at every corner.
+      const stored = await storedPicture(page);
+      expect(stored.width).toBe(400);
+      expect(stored.height).toBe(400);
+      for (const [red, green, blue] of stored.corners) {
+        expect(red, 'a corner was not red: the chosen square was not what was stored').toBeGreaterThan(
+          200,
+        );
+        expect(green).toBeLessThan(60);
+        expect(blue).toBeLessThan(60);
+      }
+    } finally {
+      await page.context().close();
+    }
+  }, 180_000);
+
+  it('cancels the crop without asking for a grant, and the picture is as it was', async () => {
+    const member = await memberPastTheTour('profile-crop-cancel');
+    const page = await onTheProfile(member);
+    try {
+      const requests: string[] = [];
+      page.on('request', (request) => {
+        if (request.url().includes('/avatar')) requests.push(request.url());
+      });
+
+      const png = await landscapePng(page, 1600, 800);
+      await page.locator('input[name="avatar"]').setInputFiles({
+        name: 'me.png',
+        mimeType: 'image/png',
+        buffer: png,
+      });
+      const sheet = page.getByRole('dialog', { name: 'Crop your picture' });
+      await expect.poll(() => sheet.count(), { timeout: 30_000 }).toBe(1);
+      await sheet.getByRole('button', { name: 'Cancel' }).click();
+      await expect.poll(() => sheet.count()).toBe(0);
+
+      expect(await page.getByRole('img', { name: 'No picture yet' }).count()).toBe(1);
+      expect(requests).toEqual([]);
+      // The picker is live again: the same file can be chosen a second time.
+      expect(await page.locator('input[name="avatar"]').isDisabled()).toBe(false);
+    } finally {
+      await page.context().close();
+    }
+  }, 120_000);
 
   it('refuses a file that is not an image before anything is sent, in the API’s own words', async () => {
     const member = await memberPastTheTour('profile-not-image');

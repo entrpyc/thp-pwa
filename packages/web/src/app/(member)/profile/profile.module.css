@@ -199,3 +199,130 @@
   cursor: not-allowed;
   color: var(--color-text-muted);
 }
+
+/* ------------------------------------------------------------------ the crop step and the viewer */
+
+/* The portrait as a press: the circle is the whole control, and the ring is the only chrome. */
+.portraitPress {
+  flex: none;
+  display: inline-flex;
+  margin: 0;
+  padding: 0;
+  background: transparent;
+  border: none;
+  border-radius: var(--radius-circle);
+  cursor: pointer;
+}
+
+.portraitPress:focus-visible {
+  outline: 2px solid var(--color-primary-icon);
+  outline-offset: 2px;
+}
+
+/*
+ * The layer both the crop sheet and the viewer sit on. Fixed over everything, above the menu
+ * region's 2 and the transport dock, because each is an answer the member owes before the page
+ * behind it means anything again. The page's own bg, made mostly see-through, so the sheet reads
+ * as the same surface lifted rather than as a different place.
+ */
+.scrim {
+  position: fixed;
+  inset: 0;
+  z-index: 10;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: var(--space-4);
+  background: color-mix(in srgb, var(--color-bg) 85%, transparent);
+}
+
+/* The card recipe, as a sheet: one column, bounded so a desktop does not stretch the picture. */
+.sheet {
+  composes: card from '../screens.module.css';
+  width: 100%;
+  max-width: 28rem;
+  max-height: 100%;
+  overflow: auto;
+}
+
+/*
+ * The stage the picture is painted on. The stage **shrink-wraps the picture** rather than filling
+ * the sheet: the square is positioned in percentages of the stage, and that only names the right
+ * pixels when the stage's box is exactly the picture's — a tall photo held to the height limit
+ * would otherwise sit letterboxed inside a full-width box, and the square would drift off it.
+ */
+.cropStageRow {
+  display: flex;
+  justify-content: center;
+}
+
+.cropStage {
+  position: relative;
+  display: inline-block;
+  max-width: 100%;
+  background: var(--color-bg-deep);
+  border-radius: var(--radius-sm);
+  overflow: hidden;
+  line-height: 0;
+  touch-action: none;
+}
+
+.cropImage {
+  display: block;
+  max-width: 100%;
+  max-height: 60vh;
+  width: auto;
+  height: auto;
+  -webkit-user-select: none;
+  user-select: none;
+  -webkit-touch-callout: none;
+}
+
+/*
+ * The square that will be kept, drawn as the circle it becomes: the shadow darkens everything
+ * outside it, which is what says "this part and not that" without a second colour.
+ */
+.cropSquare {
+  position: absolute;
+  box-sizing: border-box;
+  border: 2px solid var(--color-text);
+  border-radius: var(--radius-circle);
+  box-shadow: 0 0 0 100vmax color-mix(in srgb, var(--color-bg) 60%, transparent);
+  cursor: grab;
+  touch-action: none;
+}
+
+.cropSquare:active {
+  cursor: grabbing;
+}
+
+.cropSquare:focus-visible {
+  outline: 2px solid var(--color-primary-icon);
+  outline-offset: 2px;
+}
+
+.zoom {
+  width: 100%;
+  margin: 0;
+  accent-color: var(--color-primary);
+}
+
+/* The viewer: the picture as large as the screen allows, and nothing else. */
+.viewer {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: var(--space-4);
+  max-width: 100%;
+  max-height: 100%;
+}
+
+.viewerImage {
+  display: block;
+  width: min(100%, 32rem);
+  max-height: 80vh;
+  object-fit: contain;
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-md);
+  background: var(--color-surface-raised);
+}

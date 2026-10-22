@@ -122,19 +122,25 @@ export async function encodeArtwork(file: File): Promise<EncodedArtwork> {
  */
 export const AVATAR_MAX_EDGE = 512;
 
+/** A square region of the source image, in source pixels: where to start reading and how much. */
+export interface CropSquare {
+  readonly x: number;
+  readonly y: number;
+  readonly size: number;
+}
+
 /**
  * The square cut from `width × height`, centred — where to start reading and how much to read.
  *
  * **Here the shape does not survive, deliberately.** A cover keeps its aspect ratio because the
  * surfaces crop it differently; an avatar is drawn in exactly one shape everywhere it appears — a
  * circle — and a landscape photo left landscape would be squashed into it by whichever surface
- * drew it. Taking the centre square once, in the browser, means one stored image that every circle
- * agrees on. Pure, and separate from the plumbing, so the decision is the part a test can reach.
+ * drew it. Taking a square once, in the browser, means one stored image that every circle agrees
+ * on. The centre is where the crop step **starts**; where it ends is the member's (3.1.12), and
+ * `clampSquare` is what keeps their choice inside the picture. Pure, and separate from the
+ * plumbing, so the decision is the part a test can reach.
  */
-export function centreSquare(
-  width: number,
-  height: number,
-): { readonly x: number; readonly y: number; readonly size: number } {
+export function centreSquare(width: number, height: number): CropSquare {
   const size = Math.max(1, Math.min(width, height));
   return {
     x: Math.floor((width - size) / 2),
@@ -144,13 +150,65 @@ export function centreSquare(
 }
 
 /**
- * Decode, crop to the centre square, resize to the bound, and re-encode to one WebP — the cover's
- * encoder with the square applied, and the same `createImageBitmap` refusal of a file that is not
- * really an image.
+ * `square` brought back inside `width × height`: the size held between one pixel and the shorter
+ * edge, then the corner held so the whole square still lies on the picture. Whole pixels, because
+ * `drawImage` reads whole pixels and a fractional origin would blur the edge of the crop.
+ *
+ * Every move and every zoom the crop step makes goes through here, so dragging past the edge of
+ * the picture stops at the edge rather than reading what is not there — and the encoder runs the
+ * square through it once more, so a region that arrived from anywhere else is still a legal read.
  */
-export async function encodeAvatar(file: File): Promise<EncodedArtwork> {
+export function clampSquare(width: number, height: number, square: CropSquare): CropSquare {
+  const size = Math.round(Math.max(1, Math.min(square.size, width, height)));
+  return {
+    x: Math.round(Math.min(Math.max(0, square.x), Math.max(0, width - size))),
+    y: Math.round(Math.min(Math.max(0, square.y), Math.max(0, height - size))),
+    size,
+  };
+}
+
+/** `square` shifted by `dx, dy` source pixels and kept on the picture. */
+export function moveSquare(
+  width: number,
+  height: number,
+  square: CropSquare,
+  dx: number,
+  dy: number,
+): CropSquare {
+  return clampSquare(width, height, { ...square, x: square.x + dx, y: square.y + dy });
+}
+
+/**
+ * `square` resized to `size` **about its own centre** and kept on the picture. Resizing about the
+ * centre rather than the corner is what makes a zoom slider feel like a zoom: the face under the
+ * middle of the square stays under the middle of the square.
+ */
+export function resizeSquare(
+  width: number,
+  height: number,
+  square: CropSquare,
+  size: number,
+): CropSquare {
+  const centreX = square.x + square.size / 2;
+  const centreY = square.y + square.size / 2;
+  return clampSquare(width, height, { x: centreX - size / 2, y: centreY - size / 2, size });
+}
+
+/**
+ * Decode, crop to `square` — the centre square when the caller chose none — resize to the bound,
+ * and re-encode to one WebP: the cover's encoder with the square applied, and the same
+ * `createImageBitmap` refusal of a file that is not really an image.
+ *
+ * The square is clamped against the decoded size rather than trusted: the crop step measured a
+ * painted `<img>`, and the bitmap decoded here is the authority on how many pixels there are.
+ */
+export async function encodeAvatar(file: File, chosen?: CropSquare): Promise<EncodedArtwork> {
   const source = await createImageBitmap(file);
-  const square = centreSquare(source.width, source.height);
+  const square = clampSquare(
+    source.width,
+    source.height,
+    chosen ?? centreSquare(source.width, source.height),
+  );
   const edge = Math.min(square.size, AVATAR_MAX_EDGE);
 
   const canvas = document.createElement('canvas');
