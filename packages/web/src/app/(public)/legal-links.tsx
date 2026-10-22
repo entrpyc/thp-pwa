@@ -1,4 +1,5 @@
 import Link from 'next/link';
+import { PRIVACY_PAGE_PATH, SUPPORT_PAGE_PATH, TERMS_PAGE_PATH } from '@thp/shared';
 import styles from './legal-links.module.css';
 
 export interface LegalLink {
@@ -11,12 +12,20 @@ export interface LegalLink {
  * profile both read this list, so a policy added for one is added for both and the two cannot
  * disagree about what the product publishes.
  *
- * Empty until the pages exist: the tickets that add the privacy policy, the terms, support and the
- * account-deletion request each add their entry here, and nothing else about either surface
- * changes. A link to a page that is not there yet would be a link to a 404, so the list grows only
- * with the pages.
+ * Grows only with the pages: a link to a page that is not there yet would be a link to a 404, so
+ * each ticket that adds a page adds its entry here, and nothing else about either surface changes.
+ * The three the app stores require are here (Apple 5.1.1(i) and Google's listing rules for the
+ * policy, Apple 1.2 for contact, Google's UGC policy for the terms); the account-deletion request
+ * joins them when its page exists.
+ *
+ * The order is the order a store reviewer reads them in: the policy first, because it is the one a
+ * listing links to; then the terms a member accepts; then where to write when neither answers.
  */
-export const LEGAL_LINKS: readonly LegalLink[] = [];
+export const LEGAL_LINKS: readonly LegalLink[] = [
+  { href: PRIVACY_PAGE_PATH, label: 'Privacy policy' },
+  { href: TERMS_PAGE_PATH, label: 'Terms' },
+  { href: SUPPORT_PAGE_PATH, label: 'Support' },
+];
 
 /**
  * A row of the product's legal and support links.
