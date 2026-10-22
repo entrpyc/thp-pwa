@@ -1,0 +1,20 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>Teaching Hub</title>
+  </head>
+  <body>
+    <!--
+      This directory is deliberately empty of product code.
+
+      The store shell loads the live site through `server.url` in capacitor.config.ts rather than
+      bundling a web build: the app is server-rendered Next.js with API routes, so there is no
+      static export to ship (docs/project/tdd.md decision 4.3). Capacitor still requires a `webDir`
+      with an index.html, and this file is only that. Nothing here is ever shown to a member —
+      if it is, `server.url` failed to load.
+    -->
+    <p>Teaching Hub loads from the web. If you can read this, the app could not reach its server.</p>
+  </body>
+</html>
