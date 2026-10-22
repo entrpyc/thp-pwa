@@ -81,6 +81,7 @@ describe('the policy module answers (actor, action, resource)', () => {
       deactivatedAt: null,
       preferredPlaybackSpeed: DEFAULT_PLAYBACK_SPEED,
       avatarKey: 'avatars/private-object-name.webp',
+      deletedAt: null,
     };
 
     const actor = toActor(row);

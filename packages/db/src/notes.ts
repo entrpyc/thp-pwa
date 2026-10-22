@@ -444,6 +444,71 @@ export async function listPinnedNoteIds(
   return rows.map((row) => row.noteId);
 }
 
+// =================================================================================================
+// Account deletion (README.md beside the schema; [3.1.9](docs/project/prd.md), [3.1.10](docs/project/prd.md))
+// =================================================================================================
+
+/** What became of one author's notes when their account was deleted. */
+export interface ReassignedNotes {
+  /** Ids of the private notes that were deleted outright — for the caller to take their vectors with. */
+  readonly deletedPrivateNoteIds: readonly string[];
+  /** Public top-level notes now attributed to the placeholder. */
+  readonly retainedPublicNotes: number;
+  /** Public replies now attributed to the placeholder. */
+  readonly retainedPublicReplies: number;
+}
+
+/**
+ * **Move one author's notes out from under their account**, ahead of the row being deleted.
+ *
+ * Here and nowhere else, because both statements are predicates over `note.visibility` and
+ * `note.author_id` — the two halves of the private-note condition this module alone may state
+ * (tests/guards/note-privacy.test.ts). An erasure written beside the account code would be a
+ * second place deciding which notes are private.
+ *
+ * Two statements, in this order:
+ *
+ * 1. **Private notes are deleted.** A private note is the person's own study and goes with them
+ *    (3.1.9). A hard delete rather than a tombstone: a tombstone exists to hold a thread's shape,
+ *    and a private note never has a thread (`note_reply_is_public`). Reactions cannot exist on one
+ *    either, so nothing cascades that anybody would miss. The ids come back so the caller can take
+ *    the vectors in the same transaction — the owner cascade on `embedding` fires when the account
+ *    row goes, but a caller should not have to know that to be correct.
+ * 2. **Public notes are re-pointed at the placeholder.** Every remaining row by this author — live
+ *    notes, live replies and tombstones alike — now names the placeholder as its author, which is
+ *    what lets the account row be deleted under a `restrict` key and what keeps every thread
+ *    coherent (3.1.10). The text is untouched: a public note was written to the group, and the
+ *    person leaving does not un-say it. `deleted_by` is left alone on purpose; the set-null fires
+ *    when the row goes, exactly as it would for any departed moderator.
+ *
+ * The counts are what the confirmation screen tells the person was kept.
+ */
+export async function reassignNotesOfDeletedAuthor(
+  authorId: string,
+  placeholderId: string,
+  executor: Executor = getDatabase(),
+): Promise<ReassignedNotes> {
+  const db = queryable(executor);
+
+  const deleted = await db
+    .delete(note)
+    // The private half of the condition, as a write. The one place it may be written.
+    .where(and(eq(note.authorId, authorId), eq(note.visibility, 'private')))
+    .returning({ id: note.id });
+
+  const reassigned = await db
+    .update(note)
+    .set({ authorId: placeholderId })
+    .where(eq(note.authorId, authorId))
+    .returning({ parentId: note.parentId });
+
+  return {
+    deletedPrivateNoteIds: deleted.map((row) => row.id),
+    retainedPublicNotes: reassigned.filter((row) => row.parentId === null).length,
+    retainedPublicReplies: reassigned.filter((row) => row.parentId !== null).length,
+  };
+}
+
 /** One note as the embed step sees it: its words, and who alone may find them. */
 export interface EmbeddableNoteRow {
   readonly id: string;

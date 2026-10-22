@@ -1,5 +1,12 @@
 import { beforeAll, describe, expect, it, inject } from 'vitest';
-import { UPLOAD_GRANT_SECONDS, mediaStore, mintOriginalKey, type MediaStore } from '@thp/media';
+import {
+  AVATAR_KEY_PREFIX,
+  UPLOAD_GRANT_SECONDS,
+  mediaStore,
+  mintAvatarKey,
+  mintOriginalKey,
+  type MediaStore,
+} from '@thp/media';
 
 /**
  * The media store, driven against the **real** MinIO container rather than a stub.
@@ -275,5 +282,39 @@ describe('asking what is behind a key', () => {
   it('answers null for a key nothing was ever put at', async () => {
     // "Nothing is there" is an answer rather than a failure — finalisation refuses on it by name.
     expect(await store.head(mintOriginalKey(AUDIO))).toBeNull();
+  });
+});
+
+/**
+ * The one delete on the port (docs/project/prd.md 3.1.8; packages/db/src/README.md). The
+ * property worth a real store is the refusal: the prefix check is the whole of what keeps this
+ * from being the delete the product does not have, so it is driven against the adapter rather
+ * than read off the comment.
+ */
+describe('deleting an avatar', () => {
+  const WEBP = 'image/webp';
+
+  it('removes the object behind an avatars/ key, and is a success again when nothing is there', async () => {
+    const key = mintAvatarKey(WEBP);
+    const url = await store.presignPut({ key, contentType: WEBP, expiresInSeconds: 60 });
+    expect((await fetch(url, { method: 'PUT', headers: { 'content-type': WEBP }, body: bytes() })).status).toBe(200);
+    expect(await store.head(key)).not.toBeNull();
+
+    await store.deleteAvatar(key);
+    expect(await store.head(key)).toBeNull();
+
+    // Deleting twice is the state that was asked for, not an error a caller has to special-case.
+    await expect(store.deleteAvatar(key)).resolves.toBeUndefined();
+  });
+
+  it('refuses any key outside avatars/ before a request is made, and leaves the object', async () => {
+    const key = mintOriginalKey(AUDIO);
+    const url = await store.presignPut({ key, contentType: AUDIO, expiresInSeconds: 60 });
+    expect((await fetch(url, { method: 'PUT', headers: { 'content-type': AUDIO }, body: bytes() })).status).toBe(200);
+
+    await expect(store.deleteAvatar(key)).rejects.toThrow(AVATAR_KEY_PREFIX);
+    // A key that merely *contains* the prefix is not under it.
+    await expect(store.deleteAvatar(`originals/${AVATAR_KEY_PREFIX}x.webp`)).rejects.toThrow();
+    expect(await store.head(key)).not.toBeNull();
   });
 });

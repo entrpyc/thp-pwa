@@ -56,6 +56,13 @@ import {
  * The enums are **derived** from the shared TypeScript constants rather than restated beside them.
  * That is what keeps "each enum is declared exactly once in the repository" true, and it is
  * enforced by tests/guards/domain-declarations.test.ts.
+ *
+ * **What happens to a table's rows when an account is deleted is decided once**, in
+ * [README.md](./README.md) beside this file — which rows go with the account, which authored
+ * content is kept under a placeholder, what the audit log keeps and what happens to storage
+ * objects. Every foreign key to `user` below states its `onDelete` to match that text, and a later
+ * table follows the convention by reading it and declaring its own clause; the deletion service
+ * never has to learn the table's name.
  */
 export const userRole = pgEnum('user_role', ROLES);
 
@@ -137,9 +144,30 @@ export const user = pgTable(
      * the orphan is the accepted price.
      */
     avatarKey: text('avatar_key'),
+    /**
+     * **Set only on a placeholder row** — what is left of an account after its owner deleted it
+     * ([3.1.8](docs/project/prd.md), [3.1.10](docs/project/prd.md); README.md beside this file).
+     *
+     * A deleted account is not an erased row: it is a *fresh* row, carrying a sentinel address, the
+     * name "Removed member", a hash nothing verifies against and this timestamp, that the person's
+     * public notes were re-pointed at before the real row was deleted. The real row going is what
+     * fires every cascade and set-null below exactly as declared, so the schema is the convention
+     * rather than a list the service keeps; the placeholder is what keeps a thread's shape
+     * (3.1.10) without keeping the person.
+     *
+     * Nullable, and `null` on every account anybody can sign in to. A placeholder is also
+     * deactivated — the check below says so — so the session join, the notification fan-out and
+     * the last-admin count all leave it out without being taught about a second state.
+     */
+    deletedAt: timestamp('deleted_at', { withTimezone: true }),
   },
   (table) => [
     uniqueIndex('user_email_lower_unique').on(sql`lower(${table.email})`),
+    /** A placeholder cannot be an account somebody signs in to: deleted implies deactivated. */
+    check(
+      'user_deleted_is_deactivated',
+      sql`${table.deletedAt} is null or ${table.deactivatedAt} is not null`,
+    ),
     check(
       'user_preferred_playback_speed_allowed',
       sql`${table.preferredPlaybackSpeed} in (${sql.raw(PLAYBACK_SPEEDS.join(', '))})`,
@@ -260,6 +288,45 @@ export const passwordReset = pgTable(
     uniqueIndex('password_reset_live_user_unique')
       .on(table.userId)
       .where(sql`${table.usedAt} is null and ${table.revokedAt} is null`),
+  ],
+);
+
+/**
+ * A request to delete an account, started from outside a session
+ * ([3.1.8](docs/project/prd.md); Apple 5.1.1(v) and Google Play both require a way to begin
+ * deletion from a public page, for a person who may no longer have the app installed).
+ *
+ * **`password_reset`'s shape, one table over**, and its own table for the reason that one is not a
+ * second life for `invitation`: a reset changes an account and a deletion request ends one, and
+ * sharing a table would mean a `kind` column and two sets of rules in one place. The three
+ * properties are the same and held the same way — the raw token is never stored, at most one
+ * *live* request per account (the partial unique index), and status is derived from the timestamps
+ * rather than stored.
+ *
+ * **No `used_at`.** Completing a request deletes the account row, and this row cascades with it —
+ * a request that worked leaves nothing behind, which is the whole point. A request refused at
+ * completion (the last active admin) stays live, so the person can promote somebody and press the
+ * same link again inside the hour.
+ */
+export const accountDeletionRequest = pgTable(
+  'account_deletion_request',
+  {
+    id: uuid('id').primaryKey().defaultRandom(),
+    /** Cascades: a request to delete an account that is gone has nothing left to do. */
+    userId: uuid('user_id')
+      .notNull()
+      .references(() => user.id, { onDelete: 'cascade' }),
+    /** SHA-256 of the token in the emailed link. The raw token is never stored. */
+    tokenHash: text('token_hash').notNull(),
+    createdAt: timestamp('created_at', { withTimezone: true }).notNull().defaultNow(),
+    expiresAt: timestamp('expires_at', { withTimezone: true }).notNull(),
+    revokedAt: timestamp('revoked_at', { withTimezone: true }),
+  },
+  (table) => [
+    uniqueIndex('account_deletion_request_token_hash_unique').on(table.tokenHash),
+    uniqueIndex('account_deletion_request_live_user_unique')
+      .on(table.userId)
+      .where(sql`${table.revokedAt} is null`),
   ],
 );
 

@@ -144,11 +144,28 @@ could not be read), `weak_password` (it could, and the password was refused on i
 `invitation_expired` versus `invitation_invalid`.
 
 One more, `rate_limited` (`429`, with `Retry-After`), is the answer from a route whose budget a
-caller has spent. Registration, sign-in and the reset request carry one; sign-in's is per caller
-*and* per account, spent before any password is verified, with no lockout and nothing for an admin
-to clear. Feedback and the three upload grants carry one per signed-in account, spent only on what
-would have left the server. Every budget, its keys and its numbers are in
-[docs/project/rate-limits.md](docs/project/rate-limits.md).
+caller has spent. Registration, sign-in, the reset request and the account-deletion request carry
+one; sign-in's is per caller *and* per account, spent before any password is verified, with no
+lockout and nothing for an admin to clear. Feedback and the three upload grants carry one per
+signed-in account, spent only on what would have left the server. Every budget, its keys and its
+numbers are in [docs/project/rate-limits.md](docs/project/rate-limits.md).
+
+### Deleting an account
+
+A member deletes their own account with `DELETE /api/v1/users/me`, confirmed with the current
+password in the body (project prd 3.1.8; Apple 5.1.1(v) and Google Play require it, and both say
+deactivation is not enough). Somebody who no longer has the app starts from the public page
+instead: `POST /api/v1/auth/account-deletion` with an address answers one fixed payload whatever
+the address is and mails a one-hour link; `POST …/complete` takes that token **and the current
+password** — the link proves the inbox, the password proves the person. The last active admin is
+refused with `last_admin` by the same lock deactivation uses.
+
+Deletion is immediate and has no undo. What happens to each table — private notes deleted, public
+notes retained under a `Removed member` placeholder, other members' notifications renamed, every
+foreign key firing as declared — is one page,
+[packages/db/src/README.md](packages/db/src/README.md), which is also where the privacy policy's
+author reads what the product can and cannot promise. A placeholder never appears in the member
+list and cannot be signed in to, restored or renamed.
 
 ### Sessions
 
@@ -322,6 +339,10 @@ Migrations are plain checked-in SQL in [packages/db/drizzle](packages/db/drizzle
 `drizzle-kit` from [packages/db/src/schema.ts](packages/db/src/schema.ts) and applied in journal
 order. Read the diff, not the ORM.
 
+Every foreign key to `user` declares what happens to its rows when the account is deleted, and the
+convention those clauses follow is [packages/db/src/README.md](packages/db/src/README.md). A new
+table with a `user` column reads that page and declares its clause; nothing else is needed.
+
 ## Media store
 
 Original audio uploads live in an S3-compatible bucket. Development runs against the MinIO
@@ -345,10 +366,13 @@ Three properties, none of them optional:
    with `content-type` on the allowed headers. Without it the browser cannot make the upload at all
    — the preflight fails and no `PUT` is ever sent. The container is configured for this in
    `docker-compose.yml`; on R2 it is a rule on the bucket.
-3. **Nothing is ever deleted.** The original is the input transcription reads, and every later
-   re-transcription depends on it, so the media store port has **no delete operation** — a guard test
-   asserts the interface declares none. The cost is that an upload whose finalisation is refused
-   leaves an orphan object nobody can see, and that is the cheap side of the trade.
+3. **Nothing is ever deleted, except a deleted member's avatar.** The original is the input
+   transcription reads, and every later re-transcription depends on it, so the media store port has
+   **no general delete operation** — a guard test asserts the interface declares none beyond the
+   one named member, `deleteAvatar`, which the adapter confines to the `avatars/` prefix and which
+   only account deletion calls ([packages/db/src/README.md](packages/db/src/README.md)). The cost
+   is that an upload whose finalisation is refused, or a picture a member replaced, leaves an
+   orphan object nobody can see, and that is the cheap side of the trade.
 
 Uploads go **straight from the browser to the bucket** on a presigned `PUT`; bytes never pass
 through the application. The API mints the key, signs the grant, and afterwards asks the store what

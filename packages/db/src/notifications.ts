@@ -1,7 +1,12 @@
 import { and, desc, eq, isNull, sql } from 'drizzle-orm';
 import { getDatabase, queryable, type Executor } from './client';
 import { announcement, notification, user } from './schema';
-import type { AnnouncementKind, NotificationKind } from '@thp/shared';
+import {
+  noteReactionNotificationTitle,
+  noteReplyNotificationTitle,
+  type AnnouncementKind,
+  type NotificationKind,
+} from '@thp/shared';
 
 /**
  * **Notifications and announcements at the database** ([3.17](docs/project/prd.md),
@@ -184,6 +189,40 @@ export async function deleteReactionNotifications(
     )
     .returning({ id: notification.id });
   return rows.length;
+}
+
+/**
+ * **Take a departed member's name out of the notices they caused** (README.md beside the schema).
+ *
+ * The title is denormalised on purpose and nothing else ever rewrites one — see the table's
+ * comment. This is the exception, and it is narrow: the rows are other members' records of having
+ * been told something, so they stay; what goes is the one thing in them that is the leaver's, the
+ * name in the title. Rewritten by kind from the shared helpers that wrote the title in the first
+ * place, rather than by replacing the display name as a substring — a member who renamed
+ * themselves between the reply and the deletion would otherwise keep their old name in somebody's
+ * inbox. The body is the *recipient's* note's excerpt on a reaction and the reply's words on a
+ * reply; the reply itself is retained under the placeholder (3.1.10), so its excerpt is too.
+ *
+ * Called **before** the account row is deleted: `actor_id` sets null when it goes, and after that
+ * there would be nothing to find the rows by.
+ */
+export async function anonymiseNotificationsByActor(
+  actorId: string,
+  placeholderName: string,
+  executor: Executor = getDatabase(),
+): Promise<number> {
+  const db = queryable(executor);
+  const replies = await db
+    .update(notification)
+    .set({ title: noteReplyNotificationTitle(placeholderName) })
+    .where(and(eq(notification.actorId, actorId), eq(notification.kind, 'note_reply')))
+    .returning({ id: notification.id });
+  const reactions = await db
+    .update(notification)
+    .set({ title: noteReactionNotificationTitle(placeholderName) })
+    .where(and(eq(notification.actorId, actorId), eq(notification.kind, 'note_reaction')))
+    .returning({ id: notification.id });
+  return replies.length + reactions.length;
 }
 
 // =================================================================================================

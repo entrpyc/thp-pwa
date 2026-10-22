@@ -204,6 +204,13 @@
       "when": 1792677509621,
       "tag": "0028_embeddings",
       "breakpoints": true
+    },
+    {
+      "idx": 29,
+      "version": "7",
+      "when": 1792683545579,
+      "tag": "0029_account_deletion",
+      "breakpoints": true
     }
   ]
-}
+}

@@ -202,3 +202,98 @@ export function monogramFor(displayName: string): string {
     .map((word) => word.slice(0, 1));
   return letters.join('').toUpperCase() || '?';
 }
+
+// =================================================================================================
+// Deleting your own account ([3.1.8](docs/project/prd.md); Apple 5.1.1(v), Google Play)
+// =================================================================================================
+
+/**
+ * The signed-in account itself. `DELETE` here is **deletion, not deactivation**: the row goes and
+ * what the person wrote in private goes with it (3.1.9), which is why it is a `DELETE` on `me`
+ * where an admin's deactivation is a `POST` to a sub-resource of somebody else's id.
+ */
+export const ME_PATH = `${USERS_PATH}/me`;
+
+/**
+ * Starting deletion from outside a session: `POST` with an address, `GET` to preview a token.
+ * Both are on the unauthenticated allowlist and argued there.
+ */
+export const ACCOUNT_DELETION_PATH = '/auth/account-deletion';
+
+/** Finishing it: the mailed token plus the current password. */
+export const ACCOUNT_DELETION_COMPLETE_PATH = `${ACCOUNT_DELETION_PATH}/complete`;
+
+/**
+ * The public page the mailed link opens, on the web origin. The page is a later ticket; the path
+ * is fixed now because the message that carries it ships with this one, and a link in somebody's
+ * inbox cannot be renamed afterwards.
+ */
+export const DELETE_ACCOUNT_PAGE_PATH = '/delete-account';
+
+/** The query parameter the deletion link carries the token in. */
+export const DELETION_TOKEN_PARAM = 'token';
+
+/**
+ * **The name every retained note of a deleted account is shown under** (3.1.10).
+ *
+ * One string, here, because the placeholder row is written by the database package and read by
+ * the note card, and the two spelling it differently would be two different people on one screen.
+ * It is also what a notification that used to name the person says instead.
+ */
+export const REMOVED_MEMBER_DISPLAY_NAME = 'Removed member';
+
+/** Body of `DELETE /api/v1/users/me`. The current password, as confirmation. */
+export interface DeleteOwnAccountRequest {
+  readonly password: string;
+}
+
+/**
+ * Payload of `DELETE /api/v1/users/me` and of `POST /api/v1/auth/account-deletion/complete` — what
+ * the later confirmation screen has to say.
+ *
+ * The counts are **what was kept**, not what was removed: a person who just deleted their account
+ * is owed the one fact that might surprise them, which is that their public notes are still on the
+ * recordings under a placeholder name (3.1.10). What was removed is everything else, and listing it
+ * would be a list of things they will never see again anyway.
+ */
+export interface AccountDeletedPayload {
+  readonly deleted: true;
+  /** ISO 8601. */
+  readonly deletedAt: string;
+  readonly retained: {
+    /** Public top-level notes still on their recordings, now attributed to the placeholder. */
+    readonly publicNotes: number;
+    /** Public replies still in their threads, likewise. */
+    readonly publicReplies: number;
+  };
+}
+
+/** Body of `POST /api/v1/auth/account-deletion`. */
+export interface RequestAccountDeletionRequest {
+  readonly email: string;
+}
+
+/**
+ * Payload of `POST /api/v1/auth/account-deletion` — **the same object for every outcome**, for
+ * the reason the reset request's is: a field that differed between a known and an unknown address
+ * would be an enumeration oracle on an unauthenticated route.
+ */
+export interface AccountDeletionRequestedPayload {
+  readonly requested: true;
+}
+
+/** Payload of `GET /api/v1/auth/account-deletion?token=…`: the address the link was mailed to. */
+export interface AccountDeletionPreviewPayload {
+  readonly email: string;
+}
+
+/** Body of `POST /api/v1/auth/account-deletion/complete`. */
+export interface CompleteAccountDeletionRequest {
+  readonly token: string;
+  readonly password: string;
+}
+
+/** Derived from the timestamps on read, exactly as a reset's status is. There is no `used`: a used request is gone. */
+export const ACCOUNT_DELETION_STATUSES = ['pending', 'expired', 'revoked'] as const;
+
+export type AccountDeletionStatus = (typeof ACCOUNT_DELETION_STATUSES)[number];

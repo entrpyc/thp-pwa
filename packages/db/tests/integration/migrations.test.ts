@@ -175,7 +175,10 @@ describe('migrations apply to an empty database by one command', () => {
       `;
       // The embedding foundation adds `embedding` (project tdd 4.4) — one table for every kind of
       // source, because the search that reads it wants one index, not five.
+      // Account deletion adds `account_deletion_request` ([3.1.8](docs/project/prd.md)) — the
+      // token half of the public flow, `password_reset`'s shape one table over.
       expect(tables.map((row) => row.tablename)).toEqual([
+        'account_deletion_request',
         'announcement',
         'chapter',
         'embedding',

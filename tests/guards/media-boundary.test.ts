@@ -4,6 +4,7 @@ import { describe, expect, it } from 'vitest';
 import {
   MEDIA_ADAPTER_FILES,
   MEDIA_PORT_FILE,
+  PERMITTED_DELETE_OPERATIONS,
   checkMediaBoundary,
   findDeleteOperations,
   formatMediaBoundaryViolations,
@@ -47,12 +48,22 @@ describe('one media store module', () => {
   });
 });
 
-describe('nothing is ever deleted from the store', () => {
-  it('the port declares no delete operation', () => {
+describe('nothing but an avatar is ever deleted from the store', () => {
+  it('the port declares no delete operation beyond the one account deletion needs', () => {
     // docs/project/prd.md 3.4.9, and the one non-negotiable of
     // core-listening scope tdd § Media store. Held by the *type*: an adapter
     // can only offer what the interface declares, so there is nothing for a caller to reach for.
+    // Account deletion (3.1.8) narrowed this to one named member, `deleteAvatar`, confined by the
+    // adapter to the `avatars/` prefix; the original audio is still unreachable by anything here.
     expect(findDeleteOperations(portSource)).toEqual([]);
+    expect(PERMITTED_DELETE_OPERATIONS).toEqual(['deleteAvatar']);
+    expect(portMembers(portSource)).toContain('deleteAvatar');
+  });
+
+  it('would report the permitted delete too if the permission were withdrawn', () => {
+    // The exemption is a named member, not a shape: an unnamed list makes the real port fail, which
+    // is what "one delete, deliberately" has to mean.
+    expect(findDeleteOperations(portSource, [])).toEqual(['deleteAvatar']);
   });
 
   it('reads the interface it claims to — otherwise the assertion above is vacuous', () => {

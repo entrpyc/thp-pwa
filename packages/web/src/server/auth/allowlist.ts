@@ -1,4 +1,6 @@
 import {
+  ACCOUNT_DELETION_COMPLETE_PATH,
+  ACCOUNT_DELETION_PATH,
   API_PREFIX,
   AUTH_SESSION_PATH,
   SIGN_UP_PATH,
@@ -34,6 +36,14 @@ import {
  * holds the property the row protects, but the list is no longer short: **ticket 5 should add none**,
  * and any later ticket proposing an entry should have to argue against these seven rather than beside
  * them.
+ *
+ * **Account deletion adds three** (docs/project/prd.md, 3.1.8), the ninth to eleventh, and they
+ * argue against the eight on the one ground the list has always accepted: the person has no
+ * session *by construction*. Apple and Google require that deletion can be started by somebody who
+ * uninstalled the app, which is somebody who cannot sign in to ask. The three are the reset's
+ * three — request, preview, complete — with one thing the reset does not have: completion needs
+ * the current password as well as the token, so the link proves the inbox and the password proves
+ * the person, and nothing on this list can delete an account by itself.
  *
  * **Sign-up is the eighth** (docs/project/prd.md, 3.1.15), and it is the entry that had to argue
  * against the seven. It wins on the same ground the second one does: registering is how an account
@@ -113,6 +123,31 @@ export const UNAUTHENTICATED_ROUTES: readonly AllowlistEntry[] = [
     because:
       'Setting the new password is what ends the anonymous half of the flow; requiring a session ' +
       'to recover a password would be circular in exactly the way sign-in is.',
+  },
+  {
+    method: 'POST',
+    path: `${API_PREFIX}${ACCOUNT_DELETION_PATH}`,
+    because:
+      'Apple 5.1.1(v) and Google Play require that deletion can be started from a public page by ' +
+      'somebody who may no longer have the app, and therefore no session. It answers one fixed ' +
+      'payload for every outcome, as the reset request does, so it carries no content — not even ' +
+      'the fact that the address has an account.',
+  },
+  {
+    method: 'GET',
+    path: `${API_PREFIX}${ACCOUNT_DELETION_PATH}`,
+    because:
+      'A dead deletion link must be able to say so before anybody types a password. It answers ' +
+      'only with the address the token was already mailed to, to a caller already holding that ' +
+      'token, and with nothing else about the account.',
+  },
+  {
+    method: 'POST',
+    path: `${API_PREFIX}${ACCOUNT_DELETION_COMPLETE_PATH}`,
+    because:
+      'Finishing is what ends the anonymous half of the flow, and the person finishing has no ' +
+      'session by construction. The token alone deletes nothing: the body must carry the current ' +
+      'password, so a forwarded message is not a deleted account.',
   },
 ];
 
