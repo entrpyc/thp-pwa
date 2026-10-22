@@ -1,7 +1,8 @@
 'use client';
 
 import Link from 'next/link';
-import { useEffect, useRef, useState } from 'react';
+import { useSearchParams } from 'next/navigation';
+import { useEffect, useLayoutEffect, useRef, useState } from 'react';
 import {
   MEMBER_LIBRARY_PAGE_PATH,
   memberRecordingPath,
@@ -18,13 +19,17 @@ import { ChaptersPanel } from './chapters-panel';
 import { CollapsibleProse } from './collapsible-prose';
 import { NotesPanel } from './notes-panel';
 import { RecordingContentProvider, toLoaded, useRecordingContentFor } from './recording-content';
+import { listOffsetLeftHere, tabFromAddress, writeTabToAddress } from './round-trip';
 import { ScripturePanel } from './scripture-panel';
 import { TranscriptPanel } from './transcript-panel';
 import { TagLabels } from '../../tag-labels';
 import styles from '../../screens.module.css';
 
+/** The strip's tabs, by the name each takes in the address (`?tab=chapters`). */
+const TABS = ['notes', 'chapters', 'scripture', 'transcript'] as const;
+
 /** The strip is single-select: opening one tab closes the others, and `null` is all closed. */
-type OpenTab = 'chapters' | 'scripture' | 'notes' | 'transcript' | null;
+type OpenTab = (typeof TABS)[number] | null;
 
 /**
  * **The recording page** — `pages/recording.png`.
@@ -63,6 +68,11 @@ type OpenTab = 'chapters' | 'scripture' | 'notes' | 'transcript' | null;
  *   ([3.22.16](docs/project/prd.md)) — so, like the notes, the panel draws something the page
  *   already holds.
  * - **No download control.** Deferred; dropped rather than disabled.
+ * - **Coming back from a chapter lands where the member left**: the `Chapters` tab open and the
+ *   list at the offset it had when the row was pressed. The open tab is in the address and the
+ *   offset is on the history entry, and the chapter page's back control goes back through history
+ *   when this page is the entry behind it — `round-trip.ts` is the whole of it. A direct link to
+ *   a teaching is none of that, and opens `Notes` at the top as it always has.
  *
  * **Opening the page loads the teaching and does not play it.** The stored position is restored
  * once the element has metadata — seeking before that is silently clamped to zero — and the member
@@ -98,12 +108,20 @@ export function RecordingScreen({
    */
   const [startAtMs, setStartAtMs] = useState<number | null>(null);
   /*
-   * **Notes is open when the page is.** Every other tab is a download a member asks for, but the
-   * notes are already in hand — the player fetches them on open, because the transport's markers
-   * draw from them without any tab being pressed — so opening the panel costs nothing and is what
-   * a member came to the page for. Pressing it still closes it.
+   * **Notes is open when the page is**, unless the address names another tab. Every other tab is
+   * a download a member asks for, but the notes are already in hand — the player fetches them on
+   * open, because the transport's markers draw from them without any tab being pressed — so
+   * opening the panel costs nothing and is what a member came to the page for. Pressing it still
+   * closes it.
+   *
+   * The address is read once, at mount, and written on every press (`round-trip.ts`). That is how
+   * the tab survives the trip to a chapter page and back — by this page's control or by the
+   * browser's, since either lands on an entry whose address names it — and why `?tab=chapters` is
+   * where the chapter page's back control points. The bare address is Notes, so a direct link
+   * opens as it always has.
    */
-  const [openTab, setOpenTab] = useState<OpenTab>('notes');
+  const params = useSearchParams();
+  const [openTab, setOpenTab] = useState<OpenTab>(() => tabFromAddress(params, TABS) ?? 'notes');
 
   /**
    * **The panel area holds its height while a tab is swapped**, so the page cannot jump under the
@@ -134,7 +152,9 @@ export function RecordingScreen({
     if (next !== null && openTab !== next) {
       track('tab_opened', { tab: next, surface: 'recording', recording_id: recordingId });
     }
-    setOpenTab((open) => (open === next ? null : next));
+    const open = openTab === next ? null : next;
+    setOpenTab(open);
+    writeTabToAddress(open, 'notes');
   };
 
   /**
@@ -239,6 +259,46 @@ export function RecordingScreen({
    * without ever showing another teaching's notes under this one's title.
    */
   const content = useRecordingContentFor(recordingId, recording, startAtMs);
+  const hasChapters = (content.chapters?.length ?? 0) > 0;
+
+  /**
+   * **An address naming a tab the strip does not draw falls back to Notes.** `?tab=chapters` is the
+   * route back from a chapter page, and a chapter page can outlive its chapter — a list regenerated
+   * or merged while a member was reading one — so the address can name a tab the teaching no longer
+   * has; `?tab=scripture` on a teaching that cites nothing is the same case by another road. The
+   * strip decides what it draws off what the page holds, and the open tab follows that decision
+   * rather than the address. The chapters case waits for the list: `null` is "not known yet", not
+   * "none", and the tab is not drawn either way until it is.
+   */
+  useEffect(() => {
+    if (recording === null) return;
+    const undrawn =
+      (openTab === 'chapters' && content.chapters !== null && !hasChapters) ||
+      (openTab === 'scripture' && !recording.hasScripture);
+    if (!undrawn) return;
+    setOpenTab('notes');
+    writeTabToAddress('notes', 'notes');
+  }, [content.chapters, hasChapters, openTab, recording]);
+
+  /**
+   * **Put the list back where it was left**, on the way back from a chapter.
+   *
+   * The offset is on this history entry if and only if a row was pressed on this very visit
+   * (`round-trip.ts`), so a fresh open of the same address finds nothing here. It is applied the
+   * moment the list is on screen — not before, because a document that does not yet hold the rows
+   * has nowhere to scroll to — and in a layout effect so the jump lands before that first paint: an
+   * effect after it would show the member the top of the list for a frame and then move them.
+   * Once, because an admin's edit can rewrite the list afterwards and that is not a return.
+   */
+  const listRestored = useRef(false);
+  useLayoutEffect(() => {
+    if (listRestored.current || recording === null || openTab !== 'chapters' || !hasChapters) {
+      return;
+    }
+    listRestored.current = true;
+    const offset = listOffsetLeftHere();
+    if (offset !== null) window.scrollTo(0, offset);
+  }, [hasChapters, openTab, recording]);
 
   /**
    * The band holds the back control and is drawn before the teaching arrives, so the cover is read
@@ -395,7 +455,7 @@ export function RecordingScreen({
               because that list is fetched when the teaching is opened regardless (3.22.16) and a
               second answer to "does this teaching have chapters" could disagree with the first.
             */}
-            {(content.chapters?.length ?? 0) > 0 ? (
+            {hasChapters ? (
               <button
                 className={styles.tab}
                 type="button"
@@ -451,7 +511,8 @@ export function RecordingScreen({
                 <NotesPanel recordingId={recordingId} canModerate={canModerate} />
               ) : null}
 
-              {openTab === 'chapters' ? (
+              {/* Guarded as its tab is: the address can name this panel before the list has arrived. */}
+              {openTab === 'chapters' && hasChapters ? (
                 <ChaptersPanel recordingId={recordingId} canEdit={canEditChapters} />
               ) : null}
 
