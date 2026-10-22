@@ -35,7 +35,10 @@ API routes, which is why nothing is bundled — `www/` holds one explanatory pag
 
 Prerequisites, none of which are in this repository:
 
-- JDK 21 (Android Studio bundles one under `jbr/`; otherwise Temurin 21).
+- JDK 21, named in `JAVA_HOME`. Gradle 8.14 refuses to run on anything newer, and the `jbr/`
+  runtime bundled with Android Studio 2026.2 is Java 25 — the build then fails with "Unsupported
+  class file major version 69". Android Studio downloads a JDK 21 to `~/.jdks/` when a project
+  asks for one (Settings, Build Tools, Gradle, Gradle JDK); otherwise install Temurin 21.
 - Android SDK with platform 36 and build-tools 36. Android Studio's SDK Manager installs them.
   Set `ANDROID_HOME`, or write `sdk.dir=...` to `android/local.properties` (gitignored).
 
