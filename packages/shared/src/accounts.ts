@@ -79,6 +79,35 @@ export interface SetAvatarRequest {
   readonly key: string;
 }
 
+/**
+ * The privacy policy, on the web origin. Named here before the page exists, because the analytics
+ * setting has to point at it today (Apple guideline 5.1.1(ii): consent is informed by a policy)
+ * and the ticket that lands the page must land it at the address already being linked. A link to
+ * a page not yet written is the one exception the settings copy makes to the rule that a missing
+ * destination is dropped, and it is made on instruction rather than by habit.
+ */
+export const PRIVACY_PAGE_PATH = '/privacy';
+
+/**
+ * Where the signed-in account turns product analytics off and on. `me`, never an id in the path,
+ * for the reason the speed and the avatar are: the only consent anybody may withdraw is their own.
+ */
+export const ANALYTICS_PREFERENCE_PATH = `${USERS_PATH}/me/analytics`;
+
+/**
+ * Body of `PUT /api/v1/users/me/analytics`. `true` turns analytics off. The field names the
+ * exception rather than the consent, as the column does, so that `false` and "never said" read
+ * the same and nothing has to ask which of the two a row is.
+ */
+export interface AnalyticsPreferenceRequest {
+  readonly optedOut: boolean;
+}
+
+/** Payload of the same: what the account now holds. */
+export interface AnalyticsPreferencePayload {
+  readonly optedOut: boolean;
+}
+
 /** The query parameter the reset link carries the token in. */
 export const RESET_TOKEN_PARAM = 'token';
 

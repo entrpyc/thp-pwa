@@ -93,7 +93,11 @@ export async function writePlaybackProgress(
   });
 
   // The one event the server sends (docs/project/observability.md § 5.3), the one time it is true.
-  if (completedNow) {
+  // Not for a member who has turned analytics off: withdrawing consent on the settings page
+  // withdraws it from every event about them, and this is the one the browser's opt-out cannot
+  // reach. The completion itself is still recorded — the row is the member's progress, not a
+  // measurement of them.
+  if (completedNow && !actor.analyticsOptedOut) {
     trackFor(actor.id, 'playback_completed', {
       recording_id: recordingId,
       series_id: recording.seriesId,

@@ -249,6 +249,7 @@ describe('finalising an upload', () => {
       role: ROLE.admin,
       preferredPlaybackSpeed: DEFAULT_PLAYBACK_SPEED,
       avatarKey: null,
+      analyticsOptedOut: false,
     };
 
     try {

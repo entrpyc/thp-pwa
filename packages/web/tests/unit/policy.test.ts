@@ -17,6 +17,7 @@ function actorWith(role: (typeof ROLES)[number]): Actor {
     role,
     preferredPlaybackSpeed: DEFAULT_PLAYBACK_SPEED,
     avatarKey: null,
+    analyticsOptedOut: false,
   };
 }
 
@@ -81,6 +82,7 @@ describe('the policy module answers (actor, action, resource)', () => {
       deactivatedAt: null,
       preferredPlaybackSpeed: DEFAULT_PLAYBACK_SPEED,
       avatarKey: 'avatars/private-object-name.webp',
+      analyticsOptedOut: true,
     };
 
     const actor = toActor(row);
@@ -91,6 +93,7 @@ describe('the policy module answers (actor, action, resource)', () => {
       role: ROLE.member,
       preferredPlaybackSpeed: DEFAULT_PLAYBACK_SPEED,
       avatarKey: 'avatars/private-object-name.webp',
+      analyticsOptedOut: true,
     });
 
     const payload = describeActor(actor);
@@ -121,6 +124,7 @@ describe('an owned action is answered against the resource, not only the role', 
     role: ROLE.member,
     preferredPlaybackSpeed: DEFAULT_PLAYBACK_SPEED,
     avatarKey: null,
+    analyticsOptedOut: false,
   };
   const somebodyElse: Actor = { ...owner, id: 'other-1', email: 'other@example.test' };
   const admin: Actor = { ...owner, id: 'admin-1', email: 'admin@example.test', role: ROLE.admin };
@@ -239,6 +243,7 @@ describe('the six moderation, ownership and reaction actions', () => {
     role: ROLE.member,
     preferredPlaybackSpeed: DEFAULT_PLAYBACK_SPEED,
     avatarKey: null,
+    analyticsOptedOut: false,
   };
   const somebodyElse: Actor = { ...owner, id: 'other-1', email: 'other@example.test' };
   const admin: Actor = { ...owner, id: 'admin-1', email: 'admin@example.test', role: ROLE.admin };
