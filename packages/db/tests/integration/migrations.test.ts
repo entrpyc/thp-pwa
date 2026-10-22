@@ -174,9 +174,13 @@ describe('migrations apply to an empty database by one command', () => {
         select tablename from pg_tables where schemaname = 'public' order by tablename
       `;
       // The embedding foundation adds `embedding` (project tdd 4.4) — one table for every kind of
-      // source, because the search that reads it wants one index, not five. Member blocks add
-      // `member_block` — one row per directed pair, read in both directions by one predicate.
+      // source, because the search that reads it wants one index, not five.
+      // Account deletion adds `account_deletion_request` ([3.1.8](docs/project/prd.md)) — the
+      // token half of the public flow, `password_reset`'s shape one table over.
+      // Member blocks add `member_block` — one row per directed pair, read in both directions by
+      // one predicate.
       expect(tables.map((row) => row.tablename)).toEqual([
+        'account_deletion_request',
         'announcement',
         'chapter',
         'embedding',
@@ -2609,7 +2613,7 @@ describe('the member_block table, and nothing beside it', () => {
   beforeAll(async () => {
     target = await createThrowawayDatabase(inject('databaseUrl'), 'member_blocks_migration');
 
-    const priorCount = journalCountBefore('0029_member_blocks');
+    const priorCount = journalCountBefore('0031_member_blocks');
     await runMigrations({ url: target.url, migrationsFolder: migrationsFolderUpTo(priorCount) });
     before = await readColumnSets(target.url);
 

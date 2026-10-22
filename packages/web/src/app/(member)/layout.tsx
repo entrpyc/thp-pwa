@@ -44,7 +44,8 @@ export default async function MemberLayout({ children }: { children: ReactNode }
     // Outermost, because the player underneath it reports plays and the pages report views, and
     // the member surface is the only surface that reports anything (observability.md § 6.3). What
     // crosses this line is what the policy module says analytics may know; the e-mail is not in it.
-    <AnalyticsProvider person={analyticsPerson(actor)}>
+    // The preference crosses with it, off the same row, so the client knows before its first event.
+    <AnalyticsProvider person={analyticsPerson(actor)} optedOut={actor.analyticsOptedOut}>
       <PlayerProvider initialSpeed={actor.preferredPlaybackSpeed}>
         {/*
           Inside the player rather than around it, because it is the smaller thing: the bell and the

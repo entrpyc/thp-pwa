@@ -39,6 +39,7 @@ const replier: Actor = {
   role: ROLE.member,
   preferredPlaybackSpeed: DEFAULT_PLAYBACK_SPEED,
   avatarKey: null,
+  analyticsOptedOut: false,
 };
 
 const input = {

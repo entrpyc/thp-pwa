@@ -36,6 +36,7 @@ describe('the accounts schema', () => {
       'avatar_key',
       'created_at',
       'deactivated_at',
+      'deleted_at',
       'display_name',
       'email',
       'id',
@@ -53,11 +54,16 @@ describe('the accounts schema', () => {
       expect(columns.map((column) => column.column_name)).not.toContain(absent);
     }
 
-    // The two columns that may be absent from a row, and both mean "the ordinary state": an
-    // account is active by omission and has no picture by omission, so no existing row had to be
-    // given a value when either column arrived.
+    // The three columns that may be absent from a row, and all three mean "the ordinary state": an
+    // account is active by omission, has no picture by omission, and is a real account rather than
+    // a removed-member placeholder by omission (packages/db/src/README.md), so no existing row had
+    // to be given a value when any of them arrived.
     const nullable = columns.filter((column) => column.is_nullable === 'YES');
-    expect(nullable.map((column) => column.column_name)).toEqual(['avatar_key', 'deactivated_at']);
+    expect(nullable.map((column) => column.column_name)).toEqual([
+      'avatar_key',
+      'deactivated_at',
+      'deleted_at',
+    ]);
   });
 
   it('migrates every account that already existed to active', async () => {

@@ -1,5 +1,5 @@
 {
-  "id": "f11dc7b1-d552-448b-8727-e3055e4bfbc2",
+  "id": "903a67c9-cf69-468d-a1fe-c251ee86bef1",
   "prevId": "71f50fd3-f6e7-4a65-b2fc-253a859cf698",
   "version": "7",
   "dialect": "postgresql",
@@ -633,94 +633,6 @@
       "uniqueConstraints": {},
       "policies": {},
       "checkConstraints": {},
-      "isRLSEnabled": false
-    },
-    "public.member_block": {
-      "name": "member_block",
-      "schema": "",
-      "columns": {
-        "blocker_id": {
-          "name": "blocker_id",
-          "type": "uuid",
-          "primaryKey": false,
-          "notNull": true
-        },
-        "blocked_id": {
-          "name": "blocked_id",
-          "type": "uuid",
-          "primaryKey": false,
-          "notNull": true
-        },
-        "created_at": {
-          "name": "created_at",
-          "type": "timestamp with time zone",
-          "primaryKey": false,
-          "notNull": true,
-          "default": "now()"
-        }
-      },
-      "indexes": {
-        "member_block_blocked_idx": {
-          "name": "member_block_blocked_idx",
-          "columns": [
-            {
-              "expression": "blocked_id",
-              "isExpression": false,
-              "asc": true,
-              "nulls": "last"
-            }
-          ],
-          "isUnique": false,
-          "concurrently": false,
-          "method": "btree",
-          "with": {}
-        }
-      },
-      "foreignKeys": {
-        "member_block_blocker_id_user_id_fk": {
-          "name": "member_block_blocker_id_user_id_fk",
-          "tableFrom": "member_block",
-          "tableTo": "user",
-          "columnsFrom": [
-            "blocker_id"
-          ],
-          "columnsTo": [
-            "id"
-          ],
-          "onDelete": "cascade",
-          "onUpdate": "no action"
-        },
-        "member_block_blocked_id_user_id_fk": {
-          "name": "member_block_blocked_id_user_id_fk",
-          "tableFrom": "member_block",
-          "tableTo": "user",
-          "columnsFrom": [
-            "blocked_id"
-          ],
-          "columnsTo": [
-            "id"
-          ],
-          "onDelete": "cascade",
-          "onUpdate": "no action"
-        }
-      },
-      "compositePrimaryKeys": {
-        "member_block_blocker_id_blocked_id_pk": {
-          "name": "member_block_blocker_id_blocked_id_pk",
-          "columns": [
-            "blocker_id",
-            "blocked_id"
-          ]
-        }
-      },
-      "uniqueConstraints": {},
-      "policies": {},
-      "checkConstraints": {
-        "member_block_not_self": {
-          "name": "member_block_not_self",
-          "value": "\"member_block\".\"blocker_id\" <> \"member_block\".\"blocked_id\""
-        }
-      },
       "isRLSEnabled": false
     },
     "public.note": {
@@ -2760,6 +2672,13 @@
           "type": "text",
           "primaryKey": false,
           "notNull": false
+        },
+        "analytics_opted_out": {
+          "name": "analytics_opted_out",
+          "type": "boolean",
+          "primaryKey": false,
+          "notNull": true,
+          "default": false
         }
       },
       "indexes": {

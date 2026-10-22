@@ -170,7 +170,28 @@ export function portMembers(source: string): string[] {
   return members;
 }
 
-/** Members of the port whose name says it removes something. Must be empty. */
-export function findDeleteOperations(source: string): string[] {
-  return portMembers(source).filter((name) => /delete|remove|destroy|purge/i.test(name));
+/**
+ * **The one member of the port that may remove something.**
+ *
+ * Account deletion ([3.1.8](docs/project/prd.md); packages/db/src/README.md) has to take a
+ * person's picture out of the store — Apple 5.1.1(v) and Google Play do not accept "the pointer
+ * is dropped" as deletion — so the port carries exactly one delete, confined by the adapter to the
+ * `avatars/` prefix. Named here, by its exact spelling, so that the guard below still fails the
+ * build on any other member whose name says it removes something: a `deleteObject`, a
+ * `removeOriginal`, or a renamed version of this one. The original audio stays unreachable by
+ * anything on the type, which is what docs/project/prd.md 3.4.9 actually protects.
+ */
+export const PERMITTED_DELETE_OPERATIONS: readonly string[] = ['deleteAvatar'];
+
+/**
+ * Members of the port whose name says it removes something, less the one permitted above. Must be
+ * empty.
+ */
+export function findDeleteOperations(
+  source: string,
+  permitted: readonly string[] = PERMITTED_DELETE_OPERATIONS,
+): string[] {
+  return portMembers(source).filter(
+    (name) => /delete|remove|destroy|purge/i.test(name) && !permitted.includes(name),
+  );
 }

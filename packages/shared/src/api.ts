@@ -113,6 +113,17 @@ export const CORRELATION_ID_HEADER = 'x-correlation-id';
  *   `Grace` when `grace` exists. Its own code rather than `invalid_input` because the name was
  *   fine and the fix is different: pick the tag that is already there, or choose another name.
  *
+ * Account deletion ([3.1.8](docs/project/prd.md)) adds three:
+ *
+ * - `password_incorrect` — a signed-in member confirmed a destructive action with a password that
+ *   is not theirs. Deliberately **not** `invalid_credentials`: that code is sign-in's and is a
+ *   `401`, which a client reads as "the session is gone" and answers by signing out — the exact
+ *   opposite of what a person who mistyped a confirmation needs, which is the same form with the
+ *   field marked. `403`, because the session is fine and the request was refused on its merits.
+ * - `deletion_invalid` and `deletion_expired` — the reset pair, one flow over, for the same
+ *   reason: an expired deletion link is owed "ask for another" rather than "wrong", and unknown,
+ *   malformed and revoked all answer `deletion_invalid` so a guesser learns nothing about which of
+ *   their guesses was ever real.
  * Member blocks add one:
  *
  * - `blocked` — the request is one member acting on another member's content, and there is a
@@ -146,6 +157,9 @@ export const API_ERROR_CODES = [
   'spend_ceiling_reached',
   'rendition_in_flight',
   'tag_exists',
+  'password_incorrect',
+  'deletion_invalid',
+  'deletion_expired',
   'blocked',
   'not_found',
   'internal_error',

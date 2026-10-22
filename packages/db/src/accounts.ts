@@ -1,6 +1,6 @@
 import { and, asc, eq, isNull, sql } from 'drizzle-orm';
 import { ROLE, type Role } from '@thp/shared';
-import { getDatabase, type DatabaseHandle } from './client';
+import { getDatabase, queryable, type DatabaseHandle, type Executor } from './client';
 import { user } from './schema';
 
 /**
@@ -23,6 +23,10 @@ export interface UserRow {
   readonly preferredPlaybackSpeed: number;
   /** The avatar's object key, or `null` — the ordinary state (docs/project/prd.md 3.1.12). */
   readonly avatarKey: string | null;
+  /** Whether product analytics is off for this account. `false` for every account until its owner says otherwise. */
+  readonly analyticsOptedOut: boolean;
+  /** Set only on a removed-member placeholder (README.md). `null` on every real account. */
+  readonly deletedAt: Date | null;
 }
 
 export interface NewUser {
@@ -92,9 +96,18 @@ const { role: roleColumn } = user;
  *
  * Selects the whole row: the caller turns it into a payload, and the payload type is what
  * guarantees no hash travels — not this function remembering to leave a column out.
+ *
+ * **Placeholders are left out.** A removed member is not an account an admin can do anything to —
+ * there is nobody to reactivate and no role to change — and a console listing one would be a row
+ * with every control dead on it. The notes it authored are still on their recordings; the member
+ * list is for people who can sign in.
  */
 export async function listUsers(handle: DatabaseHandle = getDatabase()): Promise<UserRow[]> {
-  const rows = await handle.db.select().from(user).orderBy(asc(user.createdAt));
+  const rows = await handle.db
+    .select()
+    .from(user)
+    .where(isNull(user.deletedAt))
+    .orderBy(asc(user.createdAt));
   return rows as UserRow[];
 }
 
@@ -141,6 +154,28 @@ export async function setUserAvatar(
 }
 
 /**
+ * Turn product analytics off or on for an account. Returns what the column now holds, or `null`
+ * if there is no such account.
+ *
+ * One write for both directions, as the avatar's is: consent withdrawn and consent restored are
+ * the same column with the opposite value, and nothing beside it has to be kept in step. Written
+ * unconditionally rather than only when the value changes, because a member pressing "off" on an
+ * account that is already off should be told "off" — not that nothing happened.
+ */
+export async function setAnalyticsOptOut(
+  id: string,
+  optedOut: boolean,
+  handle: DatabaseHandle = getDatabase(),
+): Promise<boolean | null> {
+  const rows = await handle.db
+    .update(user)
+    .set({ analyticsOptedOut: optedOut, updatedAt: new Date() })
+    .where(eq(user.id, id))
+    .returning({ optedOut: user.analyticsOptedOut });
+  return (rows[0] as { optedOut: boolean } | undefined)?.optedOut ?? null;
+}
+
+/**
  * How a guarded write ended. Four outcomes rather than a row-or-null, because the caller has four
  * different things to say: it happened, it was already like that, it would have left the product
  * with nobody able to administer it, or there is no such account.
@@ -152,6 +187,21 @@ export type GuardedWrite =
   | { readonly outcome: 'no-such-account' };
 
 /**
+ * The same four outcomes with whatever the write produced in the `applied` arm — a row for the
+ * three lifecycle writes, a deletion record for the erasure. {@link GuardedWrite} is this with
+ * `T = UserRow`, kept under its own name because three callers already read `.user` off it.
+ */
+export type Guarded<T> =
+  | { readonly outcome: 'applied'; readonly value: T }
+  | { readonly outcome: 'unchanged'; readonly user: UserRow }
+  | { readonly outcome: 'last-admin'; readonly user: UserRow }
+  | { readonly outcome: 'no-such-account' };
+
+function asGuardedWrite(result: Guarded<UserRow>): GuardedWrite {
+  return result.outcome === 'applied' ? { outcome: 'applied', user: result.value } : result;
+}
+
+/**
  * Whether a row is an admin.
  *
  * Destructured rather than read as a field: tools/role-usage.ts refuses a `.role` access outside
@@ -159,7 +209,7 @@ export type GuardedWrite =
  * is not one — the last-admin invariant is a fact about the data, and it genuinely has to know
  * which role it is about.
  */
-function isAdmin(row: UserRow): boolean {
+export function isAdmin(row: UserRow): boolean {
   const { role } = row;
   return role === ROLE.admin;
 }
@@ -179,13 +229,16 @@ function isAdmin(row: UserRow): boolean {
  * other and both succeed. This invariant has no way back once broken — nobody left can promote
  * anybody — so that window is not an acceptable one, and the concurrency test in the web suite is
  * what makes the difference observable rather than asserted.
+ *
+ * Exported for one caller outside this file: `account-deletion.ts`, because deleting the last
+ * active admin is removal in 3.1.11's sense and must be refused by the same lock, not by a copy.
  */
-async function withLastAdminGuard(
+export async function withLastAdminGuard<T>(
   id: string,
   wouldRemoveAnAdmin: (row: UserRow) => boolean,
-  apply: (tx: DatabaseHandle['db']) => Promise<UserRow | null>,
+  apply: (tx: Executor, row: UserRow) => Promise<T | null>,
   handle: DatabaseHandle = getDatabase(),
-): Promise<GuardedWrite> {
+): Promise<Guarded<T>> {
   return handle.db.transaction(async (tx) => {
     // The active-admin set is locked first, and always in the same order, so two concurrent
     // guarded writes queue rather than interleave. Taken before the target row is read: a
@@ -198,7 +251,13 @@ async function withLastAdminGuard(
       .orderBy(asc(user.id))
       .for('update')) as { id: string }[];
 
-    const found = await tx.select().from(user).where(eq(user.id, id)).limit(1);
+    // A placeholder is not an account (README.md): there is nobody to deactivate, promote or
+    // delete, and a write that reached one would be a write to a row no person owns.
+    const found = await tx
+      .select()
+      .from(user)
+      .where(and(eq(user.id, id), isNull(user.deletedAt)))
+      .limit(1);
     const row = found[0] as UserRow | undefined;
     if (!row) return { outcome: 'no-such-account' as const };
 
@@ -206,10 +265,10 @@ async function withLastAdminGuard(
       return { outcome: 'last-admin' as const, user: row };
     }
 
-    const updated = await apply(tx as unknown as DatabaseHandle['db']);
-    return updated === null
+    const applied = await apply(tx, row);
+    return applied === null
       ? { outcome: 'unchanged' as const, user: row }
-      : { outcome: 'applied' as const, user: updated };
+      : { outcome: 'applied' as const, value: applied };
   });
 }
 
@@ -222,19 +281,21 @@ export async function deactivateUser(
   id: string,
   handle: DatabaseHandle = getDatabase(),
 ): Promise<GuardedWrite> {
-  return withLastAdminGuard(
-    id,
-    // Only an account that is *currently* an active admin can take the last one away with it.
-    (row) => row.deactivatedAt === null && isAdmin(row),
-    async (tx) => {
-      const rows = await tx
-        .update(user)
-        .set({ deactivatedAt: new Date(), updatedAt: new Date() })
-        .where(and(eq(user.id, id), isNull(user.deactivatedAt)))
-        .returning();
-      return (rows[0] as UserRow | undefined) ?? null;
-    },
-    handle,
+  return asGuardedWrite(
+    await withLastAdminGuard(
+      id,
+      // Only an account that is *currently* an active admin can take the last one away with it.
+      (row) => row.deactivatedAt === null && isAdmin(row),
+      async (tx) => {
+        const rows = await queryable(tx)
+          .update(user)
+          .set({ deactivatedAt: new Date(), updatedAt: new Date() })
+          .where(and(eq(user.id, id), isNull(user.deactivatedAt)))
+          .returning();
+        return (rows[0] as UserRow | undefined) ?? null;
+      },
+      handle,
+    ),
   );
 }
 
@@ -250,12 +311,14 @@ export async function reactivateUser(
   handle: DatabaseHandle = getDatabase(),
 ): Promise<GuardedWrite> {
   const found = await findUserById(id, handle);
-  if (found === null) return { outcome: 'no-such-account' };
+  // A placeholder reads as no account at all, here as in the guard: restoring one would put a
+  // "Removed member" back in the member list with nobody behind it.
+  if (found === null || found.deletedAt !== null) return { outcome: 'no-such-account' };
 
   const rows = await handle.db
     .update(user)
     .set({ deactivatedAt: null, updatedAt: new Date() })
-    .where(and(eq(user.id, id), sql`${user.deactivatedAt} is not null`))
+    .where(and(eq(user.id, id), sql`${user.deactivatedAt} is not null`, isNull(user.deletedAt)))
     .returning();
   const updated = rows[0] as UserRow | undefined;
   return updated ? { outcome: 'applied', user: updated } : { outcome: 'unchanged', user: found };
@@ -272,17 +335,20 @@ export async function setUserRole(
   role: Role,
   handle: DatabaseHandle = getDatabase(),
 ): Promise<GuardedWrite> {
-  return withLastAdminGuard(
-    id,
-    (row) => row.deactivatedAt === null && isAdmin(row) && role !== ROLE.admin,
-    async (tx) => {
-      const rows = await tx
-        .update(user)
-        .set({ role, updatedAt: new Date() })
-        .where(and(eq(user.id, id), sql`${roleColumn} <> ${role}::user_role`))
-        .returning();
-      return (rows[0] as UserRow | undefined) ?? null;
-    },
-    handle,
+  return asGuardedWrite(
+    await withLastAdminGuard(
+      id,
+      (row) => row.deactivatedAt === null && isAdmin(row) && role !== ROLE.admin,
+      async (tx) => {
+        const rows = await queryable(tx)
+          .update(user)
+          .set({ role, updatedAt: new Date() })
+          .where(and(eq(user.id, id), sql`${roleColumn} <> ${role}::user_role`))
+          .returning();
+        return (rows[0] as UserRow | undefined) ?? null;
+      },
+      handle,
+    ),
   );
 }
+

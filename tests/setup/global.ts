@@ -128,6 +128,24 @@ const TIGHT_PASSWORD_RESET = {
 } as const;
 
 /**
+ * **The account-deletion request budget, lifted for every server but one.** Same argument as the
+ * reset's: the suite is one caller, and the shipped three-per-caller would be spent by the second
+ * test file that asks for a link.
+ */
+const UNLIMITED_ACCOUNT_DELETION = {
+  DELETION_RATE_LIMIT_WINDOW_SECONDS: '900',
+  DELETION_RATE_LIMIT_PER_IP: '100000',
+  DELETION_RATE_LIMIT_TOTAL: '100000',
+} as const;
+
+/** **The account-deletion request budget on the server that has one.** Two per caller, so a third is a refusal. */
+const TIGHT_ACCOUNT_DELETION = {
+  DELETION_RATE_LIMIT_WINDOW_SECONDS: '300',
+  DELETION_RATE_LIMIT_PER_IP: '2',
+  DELETION_RATE_LIMIT_TOTAL: '1000',
+} as const;
+
+/**
  * **A spend ceiling one job can reach, on the server that has one.**
  *
  * The ledger is the shared database, so a cost written by the spend-ceiling suite is read by
@@ -191,14 +209,14 @@ export default async function setup(project: TestProject): Promise<() => Promise
       name: 'primary',
       databaseUrl: appDatabase.url,
       port: primaryPort,
-      env: { ...media, ...TEST_BIBLE, ...UNLIMITED_SIGN_UP, ...UNLIMITED_SIGN_IN, ...UNLIMITED_PASSWORD_RESET,...captureMail('primary') },
+      env: { ...media, ...TEST_BIBLE, ...UNLIMITED_SIGN_UP, ...UNLIMITED_SIGN_IN, ...UNLIMITED_PASSWORD_RESET, ...UNLIMITED_ACCOUNT_DELETION, ...captureMail('primary') },
     });
     servers.push(primary);
 
     const broken = await startNextServer({
       name: 'broken-db',
       databaseUrl: UNREACHABLE_DATABASE_URL,
-      env: { ...media, ...TEST_BIBLE, ...UNLIMITED_SIGN_UP, ...UNLIMITED_SIGN_IN, ...UNLIMITED_PASSWORD_RESET,...captureMail('broken-db') },
+      env: { ...media, ...TEST_BIBLE, ...UNLIMITED_SIGN_UP, ...UNLIMITED_SIGN_IN, ...UNLIMITED_PASSWORD_RESET, ...UNLIMITED_ACCOUNT_DELETION, ...captureMail('broken-db') },
     });
     servers.push(broken);
 
@@ -207,7 +225,7 @@ export default async function setup(project: TestProject): Promise<() => Promise
     const mailDown = await startNextServer({
       name: 'mail-down',
       databaseUrl: appDatabase.url,
-      env: { ...media, ...TEST_BIBLE, ...UNLIMITED_SIGN_UP, ...UNLIMITED_SIGN_IN, ...UNLIMITED_PASSWORD_RESET,...FAILING_MAIL },
+      env: { ...media, ...TEST_BIBLE, ...UNLIMITED_SIGN_UP, ...UNLIMITED_SIGN_IN, ...UNLIMITED_PASSWORD_RESET, ...UNLIMITED_ACCOUNT_DELETION, ...FAILING_MAIL },
     });
     servers.push(mailDown);
 
@@ -222,6 +240,7 @@ export default async function setup(project: TestProject): Promise<() => Promise
         ...TIGHT_SIGN_UP,
         ...TIGHT_SIGN_IN,
         ...TIGHT_PASSWORD_RESET,
+        ...TIGHT_ACCOUNT_DELETION,
         ...TIGHT_SPEND_CEILING,
         ...captureMail('rate-limited'),
       },
@@ -245,6 +264,10 @@ export default async function setup(project: TestProject): Promise<() => Promise
     project.provide('rateLimitedPasswordReset', {
       perAddress: Number(TIGHT_PASSWORD_RESET.RESET_RATE_LIMIT_PER_IP),
       windowSeconds: Number(TIGHT_PASSWORD_RESET.RESET_RATE_LIMIT_WINDOW_SECONDS),
+    });
+    project.provide('rateLimitedAccountDeletion', {
+      perAddress: Number(TIGHT_ACCOUNT_DELETION.DELETION_RATE_LIMIT_PER_IP),
+      windowSeconds: Number(TIGHT_ACCOUNT_DELETION.DELETION_RATE_LIMIT_WINDOW_SECONDS),
     });
     project.provide('rateLimitedMailCapturePath', resolve(MAIL_DIR, 'rate-limited.jsonl'));
     project.provide(
@@ -283,6 +306,7 @@ declare module 'vitest' {
       readonly windowSeconds: number;
     };
     rateLimitedPasswordReset: { readonly perAddress: number; readonly windowSeconds: number };
+    rateLimitedAccountDeletion: { readonly perAddress: number; readonly windowSeconds: number };
     /** JSON-lines file the rate-limited server appends every outgoing message to. */
     rateLimitedMailCapturePath: string;
     /** That server's daily spend ceiling in dollars — a cent, so one job reaches it. */

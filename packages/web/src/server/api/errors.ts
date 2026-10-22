@@ -227,6 +227,33 @@ export class ApiError extends Error {
   }
 
   /**
+   * A signed-in member confirmed a destructive action with a password that is not theirs
+   * ([3.1.8](docs/project/prd.md)). `403` and its own code rather than sign-in's
+   * `invalid_credentials`: the session is fine, and a `401` would have the client sign the person
+   * out of the account they were in the middle of deciding about. The message names the field.
+   */
+  static passwordIncorrect(message = 'That is not your current password. Check it and try again.'): ApiError {
+    return new ApiError('password_incorrect', 403, message);
+  }
+
+  /**
+   * Unknown, malformed or revoked — **one code for all three**, so an anonymous guesser cannot
+   * learn which of their guesses was ever a real deletion token. The reset pair, one flow over.
+   */
+  static deletionInvalid(
+    message = 'That link is not valid. Ask for a new one from the account-deletion page.',
+  ): ApiError {
+    return new ApiError('deletion_invalid', 410, message);
+  }
+
+  /** Ours, and out of time. Distinguishable so the page can offer another link rather than say "wrong". */
+  static deletionExpired(
+    message = 'That link has expired. Deletion links last one hour — ask for a new one.',
+  ): ApiError {
+    return new ApiError('deletion_expired', 410, message);
+  }
+
+  /**
    * One member acting on another's content across a block, whichever of them placed it.
    *
    * `403` because the act is refused to this caller, and its own code rather than `forbidden`

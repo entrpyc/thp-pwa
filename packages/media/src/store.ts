@@ -11,13 +11,16 @@ import { buildMediaStore } from './s3-store';
  * door to the bucket, one that does not go through the key minting below and does not have to obey
  * the interface's most important property.
  *
- * **That property is what is missing. There is no delete.** "The original is never overwritten or
- * deleted" (docs/project/prd.md, 3.4.9;
+ * **That property is what is missing. There is no general delete.** "The original is never
+ * overwritten or deleted" (docs/project/prd.md, 3.4.9;
  * core-listening scope tdd § Media store calls it the one non-negotiable) is
  * a fact about this type rather than about anybody's discipline: there is nothing to call. An
  * upload that is refused at finalisation leaves its object where it is, and that orphan is the
  * price — it is invisible, the list reads `recording` rows, and it is cheaper than any mechanism
  * capable of removing the input Story 3 and every re-transcription afterwards depend on.
+ *
+ * The one exception is `deleteAvatar`, which account deletion needs and which reaches the
+ * `avatars/` prefix and nothing else — see the member, and the guard that pins it to that name.
  *
  * **This is a package beside `@thp/db` and `@thp/shared`, not a folder in the web app.** It lived
  * under `packages/web/src/server/media/` while the API was the only thing that read the store;
@@ -97,7 +100,27 @@ export interface MediaStore {
     readonly expiresInSeconds: number;
     readonly cache?: { readonly windowSeconds: number };
   }): Promise<string>;
+
+  /**
+   * **The one delete on this port, and it reaches one prefix.**
+   *
+   * Account deletion ([3.1.8](docs/project/prd.md); packages/db/src/README.md) has to be able to
+   * take a person's picture out of the store, and "the key is dropped and the object stays" is
+   * not deletion in the sense Apple 5.1.1(v) and Google Play mean it. So the no-delete property
+   * narrows rather than breaks: the original audio, the renditions, the previews and the covers
+   * are still unreachable by anything on this type, and tools/media-boundary.ts still fails the
+   * build on any *other* member whose name says it removes something.
+   *
+   * The adapter refuses — throws, before any request is made — a key that does not begin with
+   * `avatars/`. That check is in the adapter and not only here in prose, so a caller that got
+   * hold of an original's key could not widen this into the delete the product does not have.
+   * Deleting a key nothing is behind is a success: the state asked for is the state there is.
+   */
+  deleteAvatar(key: string): Promise<void>;
 }
+
+/** The prefix {@link MediaStore.deleteAvatar} is confined to. The adapter checks against this. */
+export const AVATAR_KEY_PREFIX = 'avatars/';
 
 /**
  * One hour. Long enough for a 200 MB upload on a domestic connection, short enough that a grant
@@ -206,13 +229,16 @@ export function mintArtworkKey(contentType: string): string {
  * is its own kind of thing: an operator reading the bucket should be able to tell a study's face
  * from a person's without opening either.
  *
- * **It brings no delete with it.** Replacing an avatar, or removing one, repoints the account and
- * leaves the object where it is — the accepted price every other upload in this product pays.
+ * **It brings the port's one delete with it** — {@link MediaStore.deleteAvatar}, confined to this
+ * prefix. Replacing an avatar or removing one from the profile still repoints the account and
+ * leaves the object where it is, as every other upload does; it is deleting the *account* that
+ * takes the picture out of the store, because a person who has left is owed that and a person
+ * who changed their picture is not.
  */
 export function mintAvatarKey(contentType: string): string {
   const extension = extensionForArtworkType(contentType);
   if (extension === null) {
     throw new Error(`no accepted avatar extension for content type "${contentType}"`);
   }
-  return `avatars/${randomUUID()}.${extension}`;
+  return `${AVATAR_KEY_PREFIX}${randomUUID()}.${extension}`;
 }

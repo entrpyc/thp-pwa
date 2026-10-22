@@ -1,7 +1,13 @@
-import { GetObjectCommand, HeadObjectCommand, PutObjectCommand, S3Client } from '@aws-sdk/client-s3';
+import {
+  DeleteObjectCommand,
+  GetObjectCommand,
+  HeadObjectCommand,
+  PutObjectCommand,
+  S3Client,
+} from '@aws-sdk/client-s3';
 import { getSignedUrl } from '@aws-sdk/s3-request-presigner';
 import { readMediaSettings } from './env';
-import type { MediaStore, StoredObject } from './store';
+import { AVATAR_KEY_PREFIX, type MediaStore, type StoredObject } from './store';
 
 /**
  * **The one file in the repository permitted to import the S3 SDK** — tools/media-boundary.ts
@@ -105,6 +111,22 @@ export function buildMediaStore(): MediaStore {
         if (isNotFound(cause)) return null;
         throw cause;
       }
+    },
+
+    async deleteAvatar(key: string): Promise<void> {
+      // Checked here, in the adapter, and not only promised by the port's comment: this is the
+      // only line in the repository that can remove an object, and the prefix test is what keeps
+      // it from being a general delete with a narrow name. Thrown rather than ignored, because a
+      // caller passing an original's key here has a bug worth hearing about.
+      if (!key.startsWith(AVATAR_KEY_PREFIX)) {
+        throw new Error(
+          `deleteAvatar refuses "${key}": only an object under ${AVATAR_KEY_PREFIX} may be deleted`,
+        );
+      }
+      // S3, R2 and MinIO all answer 204 to a delete of a key nothing is behind, so idempotence
+      // needs no special case: deleting twice, or deleting a picture that never finished
+      // uploading, is the state that was asked for.
+      await client.send(new DeleteObjectCommand({ Bucket: settings.bucket, Key: key }));
     },
   };
 }

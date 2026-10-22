@@ -322,6 +322,13 @@ export interface Actor {
    * and the payload the client renders from needs a URL signed for this key.
    */
   readonly avatarKey: string | null;
+  /**
+   * Whether this account has turned product analytics off. Not an authorisation input and never
+   * consulted by {@link can}. Carried because two things read it off the actor and neither may
+   * ask again: the member layout, which hands it to the analytics client before the first event,
+   * and the progress write, which sends the one server-side event and must not for this person.
+   */
+  readonly analyticsOptedOut: boolean;
 }
 
 /**
@@ -490,6 +497,7 @@ export function toActor(row: UserRow): Actor {
     role: row.role,
     preferredPlaybackSpeed: row.preferredPlaybackSpeed,
     avatarKey: row.avatarKey,
+    analyticsOptedOut: row.analyticsOptedOut,
   };
 }
 
@@ -510,6 +518,7 @@ export function describeActor(actor: Actor): SessionIdentity {
     displayName: actor.displayName,
     role: actor.role,
     preferredPlaybackSpeed: actor.preferredPlaybackSpeed,
+    analyticsOptedOut: actor.analyticsOptedOut,
   };
 }
 

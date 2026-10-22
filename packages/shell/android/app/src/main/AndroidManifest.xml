@@ -48,4 +48,11 @@
     <!-- Permissions -->
 
     <uses-permission android:name="android.permission.INTERNET" />
+    <!-- The media-session plugin's foreground service is typed mediaPlayback, and Android 14+
+         refuses to start a typed service unless the app also holds the matching permission. The
+         plugin's own manifest declares plain FOREGROUND_SERVICE only, so the typed one is declared
+         here; without it the first press of play throws SecurityException in the service and the
+         lock screen stays empty. Neither needs a runtime prompt, and a media-session notification
+         is exempt from Android 13's notification permission. -->
+    <uses-permission android:name="android.permission.FOREGROUND_SERVICE_MEDIA_PLAYBACK" />
 </manifest>

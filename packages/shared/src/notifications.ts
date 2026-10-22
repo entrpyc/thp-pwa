@@ -215,3 +215,21 @@ export function excerptForNotification(text: string): string {
   if (flat.length <= NOTIFICATION_EXCERPT_LENGTH) return flat;
   return `${flat.slice(0, NOTIFICATION_EXCERPT_LENGTH - 1).trimEnd()}…`;
 }
+
+/**
+ * **The two titles that name a person**, spelled once.
+ *
+ * A notification's title is denormalised on purpose — it says what the member was told at the
+ * time — and ordinarily nothing rewrites it. Account deletion is the one exception
+ * ([3.1.8](docs/project/prd.md); packages/db/src/README.md): the person named in "Ana replied to
+ * your note" has asked to be gone, so the title is rewritten with the placeholder's name. The
+ * service that writes the title and the erasure that rewrites it both call these, which is what
+ * stops the rewrite from having to guess how the original was phrased.
+ */
+export function noteReplyNotificationTitle(displayName: string): string {
+  return `${displayName} replied to your note`;
+}
+
+export function noteReactionNotificationTitle(displayName: string): string {
+  return `${displayName} reacted to your note`;
+}
