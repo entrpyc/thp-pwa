@@ -5,6 +5,7 @@ import { defineConfig } from 'vitest/config';
 // tsconfig.base.json is what lets `tsc` read the same line.
 import { TEST_AUDIO_PROCESSOR } from './tests/setup/audio-processor.ts';
 import { TEST_BIBLE } from './tests/setup/bible.ts';
+import { TEST_EMBEDDER } from './tests/setup/embedder.ts';
 
 const webSrc = resolve(import.meta.dirname, 'packages/web/src');
 
@@ -43,7 +44,9 @@ export default defineConfig({
           // The audio processor is named for the same reason: the worker’s `process_audio` step runs
           // here too, and its default is a binary — ffmpeg — that CI does not have and the suite’s
           // 256-byte uploads could not feed anyway.
-          env: { ...TEST_BIBLE, ...TEST_AUDIO_PROCESSOR },
+          // The embedder for the same reason as the processor: the chain now ends on `embed`, whose
+          // default is a paid provider behind a key CI does not have.
+          env: { ...TEST_BIBLE, ...TEST_AUDIO_PROCESSOR, ...TEST_EMBEDDER },
           globalSetup: ['./tests/setup/global.ts'],
           testTimeout: 60_000,
           hookTimeout: 240_000,

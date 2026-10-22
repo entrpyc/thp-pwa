@@ -1,15 +1,18 @@
 import {
+  deleteEmbeddingsForSources,
   findRecordingById,
   findSummaryByRecording,
   setRecordingPublication,
   setSummaryPublication,
   updateSummaryContent,
+  withTransaction,
   type SummaryRow,
 } from '@thp/db';
 import type { EditSummaryRequest, PublicationPayload } from '@thp/shared';
 import { emitDomainEvent } from '@thp/shared/observability/events';
 import { ApiError } from '@/server/api/errors';
 import type { Actor } from '@/server/auth/policy';
+import { queue } from '@/server/jobs/queue';
 import { notifyRecordingPublished } from '@/server/notifications/service';
 import { audit } from '@/server/observability/audit';
 import { logger } from '@/server/observability/logger';
@@ -96,7 +99,14 @@ export async function editSummary(
   const recording = await requireRecording(id);
   const content = parseEditRequest(body);
 
-  const row = await updateSummaryContent(id, content);
+  const row = await withTransaction(async (tx) => {
+    const updated = await updateSummaryContent(id, content, tx);
+    // New words under the same gate: the published summary's vector is stale, and the step is
+    // asked for in the write's own transaction. A draft's edit enqueues too and embeds nothing,
+    // which is the step's rule rather than this route's to repeat.
+    if (updated !== null) await queue().enqueue({ recordingId: id, step: 'embed' }, tx);
+    return updated;
+  });
   if (row === null) {
     // No summary exists — which means no draft was ever approved. Editing one into existence here
     // would be a second way to create a summary, bypassing the gate the whole story is about.
@@ -114,7 +124,15 @@ export async function editSummary(
 export async function unpublishSummary(actor: Actor, id: string): Promise<PublicationPayload> {
   const recording = await requireRecording(id);
 
-  const row = await setSummaryPublication(id, false);
+  const row = await withTransaction(async (tx) => {
+    const taken = await setSummaryPublication(id, false, tx);
+    // Returned to draft is returned to unfindable ([3.6.12](docs/project/prd.md),
+    // [3.10.9](docs/project/prd.md)): the vector goes in the same transaction rather than at the
+    // next embed run, so there is no moment in which search surfaces words the page no longer
+    // shows. The visibility rule would hide the row anyway; removing it is the honest state.
+    if (taken !== null) await deleteEmbeddingsForSources('summary', [taken.id], tx);
+    return taken;
+  });
   if (row === null) throw ApiError.notFound('This recording has no summary to take down.');
 
   logger.info('summary.unpublish', audit(actor, 'summary.unpublish', `recording:${id}`));

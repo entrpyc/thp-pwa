@@ -45,7 +45,13 @@ const ASR_API_HOSTS = [
 ];
 
 /** The one file permitted to name the provider, repo-relative and posix. */
-export const ASR_ADAPTER_FILES: readonly string[] = ['packages/worker/src/asr/deepgram.ts'];
+export const ASR_ADAPTER_FILES: readonly string[] = [
+  'packages/worker/src/asr/deepgram.ts',
+  // Not a transcription adapter: the embedding adapter names the same vendor's host because that
+  // vendor sells both. It is exempt here, as it is in generate-boundary.ts, so that one host on
+  // the list does not forbid a second product behind its own port. It transcribes nothing.
+  'packages/worker/src/embed/openai.ts',
+];
 
 /** The port the rest of the application calls instead. */
 export const ASR_PORT_FILE = 'packages/worker/src/asr/transcriber.ts';

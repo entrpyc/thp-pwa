@@ -361,14 +361,20 @@ describe('what the run records', () => {
  * of the pipeline, so the step before it queues it on success without anything naming it.
  */
 describe('its place in the chain (3.21.1)', () => {
-  it('is queued by the step before it, and queues nothing after', async () => {
+  it('is queued by the step before it, and queues the embed step after', async () => {
     const job = await claimedJob({ minutes: 90 });
     await run(job);
 
-    const queued = await sql<{ step: string }[]>`
-      select step::text as step from job where recording_id = ${job.recordingId}
+    const queued = await sql<{ step: string; status: string }[]>`
+      select step::text as step, status::text as status from job
+      where recording_id = ${job.recordingId} order by enqueued_at, id
     `;
-    // The last step of the chain: nothing follows it, so nothing was enqueued behind it.
-    expect(queued.map((row) => row.step)).toEqual(['generate_chapters']);
+    // No longer the last step of the chain: `embed` follows it (project tdd 4.4), so a chapter
+    // list that was just written is a chapter list about to be made findable — and nothing else
+    // is queued behind it.
+    expect(queued.map((row) => [row.step, row.status])).toEqual([
+      ['generate_chapters', 'succeeded'],
+      ['embed', 'pending'],
+    ]);
   });
 });

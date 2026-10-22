@@ -1,6 +1,14 @@
-import { and, asc, desc, eq, isNotNull, sql } from 'drizzle-orm';
+import { and, asc, desc, eq, isNotNull, sql, type SQL } from 'drizzle-orm';
+import type { EmbeddingSourceKind } from '@thp/shared';
 import { getDatabase, queryable, type Executor } from './client';
-import { playbackProgress, recording, scriptureReference, series, summary } from './schema';
+import {
+  embedding,
+  playbackProgress,
+  recording,
+  scriptureReference,
+  series,
+  summary,
+} from './schema';
 
 /**
  * **The member visibility condition, written once.**
@@ -424,4 +432,102 @@ export async function findVisibleSeries(
     },
     recordings,
   };
+}
+
+// =================================================================================================
+// Embeddings ([3.10.9](docs/project/prd.md)) — the seventh read path, and the one project tdd 4.4
+// put the whole datastore decision on.
+// =================================================================================================
+
+/**
+ * **Which vectors a member may be answered with**, said once and in two spellings that must agree:
+ * {@link isEmbeddingVisibleTo} over facts already in hand, and {@link embeddingVisibleTo} as the
+ * `where` a search will put beside its `<=>`. The pure form exists so the rule can be unit-tested
+ * against every combination without a database; the SQL form exists because filtering *after*
+ * a top-k query is exactly what breaks top-k, which is why the vectors live in Postgres at all.
+ *
+ * The rule, in words: **a row of a published recording, plus the member's own private notes, and
+ * nothing else.**
+ *
+ * - The recording gate applies to every kind, private notes included. A teaching taken down takes
+ *   its notes out of a member's search as it takes them off the page (the notes read path refuses
+ *   an unpublished recording outright), and never anyone's drafts in ([3.10.9](docs/project/prd.md)).
+ * - A summary has the second gate too: returned to draft ([3.6.12](docs/project/prd.md)), it
+ *   leaves search as it leaves the page. The embed step already removes an unpublished summary's
+ *   row, so this clause covers the moment between the two.
+ * - An owner on the row is a private note ([3.12.3](docs/project/prd.md)), and only its owner
+ *   sees it. No role bends this — an admin asking is a member asking (NFR 6.7).
+ * - A row with no recording — a series, once something writes one — is visible to **nobody** until
+ *   the scope that writes it says what its gate is. Stated so that a kind arriving later cannot be
+ *   visible by default.
+ */
+export interface EmbeddingVisibilityFacts {
+  readonly sourceKind: EmbeddingSourceKind;
+  /** The recording's gate, or `null` for a row that belongs to no recording. */
+  readonly recordingPublishedAt: Date | null;
+  /** The summary's own gate. Read only when the kind is `summary`. */
+  readonly summaryPublishedAt: Date | null;
+  readonly ownerUserId: string | null;
+}
+
+/** The rule over facts already read. Must say exactly what {@link embeddingVisibleTo} says. */
+export function isEmbeddingVisibleTo(readerId: string, facts: EmbeddingVisibilityFacts): boolean {
+  if (facts.recordingPublishedAt === null) return false;
+  if (facts.sourceKind === 'summary' && facts.summaryPublishedAt === null) return false;
+  return facts.ownerUserId === null || facts.ownerUserId === readerId;
+}
+
+/**
+ * The rule as a predicate over `embedding`, for a query that already selects from it.
+ *
+ * Correlated `exists` rather than joins, so the caller adds one `where` and no join a second
+ * caller would have to repeat in the same shape. Both gates are the same `is not null` the lists
+ * above compare, and this file is the only one allowed to spell them.
+ */
+export function embeddingVisibleTo(readerId: string): SQL {
+  return sql`(
+    exists (
+      select 1 from ${recording}
+      where ${recording.id} = ${embedding.recordingId} and ${recording.publishedAt} is not null
+    )
+    and (
+      ${embedding.sourceKind} <> 'summary'
+      or exists (
+        select 1 from ${summary}
+        where ${summary.id} = ${embedding.sourceId} and ${summary.publishedAt} is not null
+      )
+    )
+    and (${embedding.ownerUserId} is null or ${embedding.ownerUserId} = ${readerId})
+  )`;
+}
+
+/** One visible row, as far as this epic reads it back — the source it stands for, never the vector. */
+export interface VisibleEmbeddingRow {
+  readonly id: string;
+  readonly sourceKind: EmbeddingSourceKind;
+  readonly sourceId: string;
+  readonly recordingId: string | null;
+}
+
+/**
+ * Every row this member may be answered with, in no particular order.
+ *
+ * Not a search: no query vector, no ranking, no limit. It exists so the SQL spelling of the rule
+ * can be driven against seeded rows and held to the pure one, and so the search scope has the
+ * predicate's one caller to copy rather than a sentence to interpret.
+ */
+export async function listVisibleEmbeddings(
+  readerId: string,
+  executor: Executor = getDatabase(),
+): Promise<VisibleEmbeddingRow[]> {
+  const rows = await queryable(executor)
+    .select({
+      id: embedding.id,
+      sourceKind: embedding.sourceKind,
+      sourceId: embedding.sourceId,
+      recordingId: embedding.recordingId,
+    })
+    .from(embedding)
+    .where(embeddingVisibleTo(readerId));
+  return rows as VisibleEmbeddingRow[];
 }

@@ -1,5 +1,6 @@
 import {
   clearNoteReaction,
+  deleteEmbeddingsForSources,
   findNoteById,
   findVisibleRecording,
   insertNote,
@@ -13,6 +14,7 @@ import {
   unpinNote,
   updateNoteText,
   withTransaction,
+  type Executor,
   type NoteReactionRow,
   type NoteRow,
   type NoteWithAuthorRow,
@@ -37,6 +39,7 @@ import { ApiError } from '@/server/api/errors';
 import { authorise } from '@/server/auth/authorise';
 import { can, type Actor } from '@/server/auth/policy';
 import { requireChapterScope } from '@/server/chapters/service';
+import { queue } from '@/server/jobs/queue';
 import { notifyNoteReaction, notifyNoteReply } from '@/server/notifications/service';
 import { audit } from '@/server/observability/audit';
 import { logger } from '@/server/observability/logger';
@@ -95,12 +98,19 @@ export async function createNote(
 
   if (parentId === undefined || parentId === null) {
     const requested = parseTopLevel(fields);
-    const row = await insertNote({
-      recordingId,
-      authorId: actor.id,
-      visibility: requested.visibility,
-      text,
-      timestampMs: requested.timestampMs,
+    const row = await withTransaction(async (tx) => {
+      const written = await insertNote(
+        {
+          recordingId,
+          authorId: actor.id,
+          visibility: requested.visibility,
+          text,
+          timestampMs: requested.timestampMs,
+        },
+        tx,
+      );
+      await enqueueEmbed(recordingId, tx);
+      return written;
     });
 
     logger.info('note.write', {
@@ -116,15 +126,23 @@ export async function createNote(
   }
 
   const parent = await requireReplyableParent(parentId, recordingId, fields);
-  const row = await insertNote({
-    recordingId,
-    authorId: actor.id,
-    // Public in every case (scope prd 3.3.3): a reply to a note everyone can see,
-    // that only its author could see, would be a message to nobody. There is nothing to choose, so
-    // nothing here reads what the body asked for beyond refusing an explicit `private`.
-    visibility: 'public',
-    text,
-    parentId: parent.id,
+  const row = await withTransaction(async (tx) => {
+    const written = await insertNote(
+      {
+        recordingId,
+        authorId: actor.id,
+        // Public in every case (scope prd 3.3.3): a reply to a note everyone can see,
+        // that only its author could see, would be a message to nobody. There is nothing to
+        // choose, so nothing here reads what the body asked for beyond refusing an explicit
+        // `private`.
+        visibility: 'public',
+        text,
+        parentId: parent.id,
+      },
+      tx,
+    );
+    await enqueueEmbed(recordingId, tx);
+    return written;
   });
 
   logger.info('note.write', {
@@ -172,7 +190,13 @@ export async function editNote(actor: Actor, noteId: string, body: unknown): Pro
   requireStanding(existing, NOTE_ALREADY_REMOVED_MESSAGE);
 
   const text = parseText(asObject(body, 'Send a JSON object carrying the new text.')['text']);
-  const row = await updateNoteText(noteId, text);
+  const row = await withTransaction(async (tx) => {
+    const updated = await updateNoteText(noteId, text, tx);
+    // New words, stale vector — the same enqueue a correction makes, for the same reason. Inside
+    // the transaction, so an edit that landed is an edit a re-embed is queued behind.
+    if (updated !== null) await enqueueEmbed(updated.recordingId, tx);
+    return updated;
+  });
   if (row === null) throw ApiError.noteRemoved(NOTE_ALREADY_REMOVED_MESSAGE);
 
   return { note: await describeOne(row, actor) };
@@ -213,6 +237,12 @@ export async function deleteNote(actor: Actor, noteId: string): Promise<NotePayl
     const deleted = await softDeleteNote(noteId, actor.id, tx);
     if (deleted === null) return null;
     await unpinNote(noteId, tx);
+    // A removed note's text is returned to nobody ([3.12.19](docs/project/prd.md)) — and that
+    // includes being found. The row goes in the delete's own transaction rather than waiting for
+    // the next embed run, because a soft delete fires no cascade and a vector is a copy of the
+    // words: between the delete and a later run, a search would otherwise still surface the text
+    // the tombstone says is gone.
+    await deleteEmbeddingsForSources('note', [noteId], tx);
     return deleted;
   });
   if (row === null) throw ApiError.noteRemoved(NOTE_ALREADY_REMOVED_MESSAGE);
@@ -222,6 +252,21 @@ export async function deleteNote(actor: Actor, noteId: string): Promise<NotePayl
   }
 
   return { note: await describeOne(row, actor) };
+}
+
+/**
+ * Ask the worker to bring the recording's vectors up to date, inside the write that made them
+ * stale.
+ *
+ * **Never a condition of the note.** No spend check is made here and no error of the queue's is
+ * turned into a refusal a member reads: a member writing a note is not an operator spending
+ * money, and the ceiling is applied where it is for every paid step — by the worker, before the
+ * provider is called — where a refused embed is a row on `/admin/pipeline` rather than a lost
+ * note. One job per recording, not per note: the step embeds every source whose words changed,
+ * and the partial unique index folds a burst of notes into the job already waiting.
+ */
+async function enqueueEmbed(recordingId: string, tx: Executor): Promise<void> {
+  await queue().enqueue({ recordingId, step: 'embed' }, tx);
 }
 
 // =================================================================================================

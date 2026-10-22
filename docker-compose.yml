@@ -1,6 +1,6 @@
 # Development Postgres. `pgvector/pgvector:pg17` ships PostgreSQL 17 with the `vector` extension
-# installed as a package but NOT enabled — which is exactly the state this epic requires and asserts.
-# Enabling it (`CREATE EXTENSION vector`) belongs to a later epic.
+# installed as a package. Migration 0028_embeddings enables it per database (`CREATE EXTENSION IF
+# NOT EXISTS vector`), so nothing here needs to; the image only has to carry the package.
 services:
   postgres:
     image: pgvector/pgvector:pg17

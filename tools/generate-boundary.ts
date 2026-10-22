@@ -60,6 +60,10 @@ const MODEL_API_HOSTS = [
 /** The one file permitted to name the provider, repo-relative and posix. */
 export const GENERATE_ADAPTER_FILES: readonly string[] = [
   'packages/worker/src/generate/minimax.ts',
+  // The embedding adapter is the second and only other file allowed to name a model vendor's host:
+  // the embedding port (project tdd 5.5) is a sibling of the generation port, behind the same
+  // rule — one file per provider, named here, so a third door is an edit to this list.
+  'packages/worker/src/embed/openai.ts',
 ];
 
 /** The port the rest of the application calls instead. */

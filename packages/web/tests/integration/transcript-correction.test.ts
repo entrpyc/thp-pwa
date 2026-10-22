@@ -447,7 +447,7 @@ describe('accepting the offer produces a draft the approve press publishes', () 
     expect(second.body.error.code).toBe('generation_in_flight');
   });
 
-  it('leaves nothing behind when the offer is never accepted', async () => {
+  it('leaves no draft behind when the offer is never accepted — only the re-embed', async () => {
     const recordingId = await publishedTeaching('declined');
     const [first] = await readSegments(recordingId);
     if (first === undefined) throw new Error('expected a segment');
@@ -457,12 +457,31 @@ describe('accepting the offer produces a draft the approve press publishes', () 
         .status,
     ).toBe(200);
 
-    // Correcting alone enqueues nothing and creates nothing: the offer is an offer.
-    const jobs = await sql<{ count: string }[]>`
-      select count(*)::text as count from job where recording_id = ${recordingId}
+    // Correcting alone generates nothing: the offer is an offer. What it does enqueue is the
+    // `embed` step, because the vector for the misheard words is an index entry nobody reviews
+    // and leaving it standing would make search find the mistake after the admin fixed it
+    // (project tdd 4.4). One job, that step, and no draft in the queue.
+    const jobs = await sql<{ step: string }[]>`
+      select step::text as step from job where recording_id = ${recordingId}
     `;
-    expect(jobs[0]?.count).toBe('0');
+    expect(jobs.map((row) => row.step)).toEqual(['embed']);
     expect(await queueFor(recordingId)).toHaveLength(0);
+  });
+
+  it('folds a run of corrections into the one re-embed already waiting', async () => {
+    const recordingId = await publishedTeaching('run-of-corrections');
+    const [first, second] = await readSegments(recordingId);
+    if (first === undefined || second === undefined) throw new Error('expected two segments');
+
+    await correct(recordingId, first.id, { text: 'Good morning, all.', startMs: 0, endMs: 4000 });
+    await correct(recordingId, second.id, { text: 'We are reading Paul today.', startMs: 4000, endMs: 9000 });
+
+    // The partial unique index over `(recording_id, step)` makes the second enqueue the first
+    // job: an admin correcting line after line queues one run, not one per line.
+    const jobs = await sql<{ step: string; status: string }[]>`
+      select step::text as step, status::text as status from job where recording_id = ${recordingId}
+    `;
+    expect(jobs).toEqual([{ step: 'embed', status: 'pending' }]);
   });
 });
 

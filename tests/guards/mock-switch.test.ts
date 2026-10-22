@@ -2,6 +2,7 @@ import { describe, expect, it } from 'vitest';
 import { MOCK_EXTERNAL_VARIABLE, isExternalMocked } from '@thp/shared/mock';
 import { readAsrProvider } from '../../packages/worker/src/asr/env';
 import { readGenerateProvider } from '../../packages/worker/src/generate/env';
+import { readEmbedProvider } from '../../packages/worker/src/embed/env';
 import { readBibleSource } from '../../packages/bible/src/env';
 import { readTransportName } from '../../packages/web/src/server/mail/env';
 import { readAnalyticsConfig } from '../../packages/web/src/client/observability/config';
@@ -21,6 +22,7 @@ import { readServerAnalyticsConfig } from '../../packages/web/src/server/observa
 const REAL = {
   ASR_PROVIDER: 'deepgram',
   GENERATE_PROVIDER: 'minimax',
+  EMBED_PROVIDER: 'openai',
   BIBLE_SOURCE: 'free-use',
   MAIL_TRANSPORT: 'smtp',
 } as const;
@@ -31,6 +33,7 @@ describe('THP_MOCK_EXTERNAL', () => {
 
     expect(readAsrProvider(env)).toBe('fake');
     expect(readGenerateProvider(env)).toBe('fake');
+    expect(readEmbedProvider(env)).toBe('fake');
     expect(readBibleSource(env)).toBe('fake');
     // `capture` rather than `failing`: a mocked environment should still render a readable message.
     expect(readTransportName(env)).toBe('capture');
@@ -41,6 +44,7 @@ describe('THP_MOCK_EXTERNAL', () => {
     // than the values — a switch that loses to a named provider cannot promise "nothing leaves".
     expect(readAsrProvider({ ...REAL, [MOCK_EXTERNAL_VARIABLE]: '1' })).toBe('fake');
     expect(readGenerateProvider({ ...REAL, [MOCK_EXTERNAL_VARIABLE]: '1' })).toBe('fake');
+    expect(readEmbedProvider({ ...REAL, [MOCK_EXTERNAL_VARIABLE]: '1' })).toBe('fake');
     expect(readBibleSource({ ...REAL, [MOCK_EXTERNAL_VARIABLE]: '1' })).toBe('fake');
     expect(readTransportName({ ...REAL, [MOCK_EXTERNAL_VARIABLE]: '1' })).toBe('capture');
   });
@@ -49,11 +53,13 @@ describe('THP_MOCK_EXTERNAL', () => {
     // Without this the test above would pass just as well if the readers always returned a fake.
     expect(readAsrProvider(REAL)).toBe('deepgram');
     expect(readGenerateProvider(REAL)).toBe('minimax');
+    expect(readEmbedProvider(REAL)).toBe('openai');
     expect(readBibleSource(REAL)).toBe('free-use');
     expect(readTransportName(REAL)).toBe('smtp');
 
     expect(readAsrProvider({})).toBe('deepgram');
     expect(readGenerateProvider({})).toBe('minimax');
+    expect(readEmbedProvider({})).toBe('openai');
     expect(readBibleSource({})).toBe('free-use');
     expect(readTransportName({})).toBe('smtp');
 
@@ -77,6 +83,7 @@ describe('THP_MOCK_EXTERNAL', () => {
     expect(() => isExternalMocked(env)).toThrow(MOCK_EXTERNAL_VARIABLE);
     expect(() => readAsrProvider(env)).toThrow(MOCK_EXTERNAL_VARIABLE);
     expect(() => readGenerateProvider(env)).toThrow(MOCK_EXTERNAL_VARIABLE);
+    expect(() => readEmbedProvider(env)).toThrow(MOCK_EXTERNAL_VARIABLE);
     expect(() => readBibleSource(env)).toThrow(MOCK_EXTERNAL_VARIABLE);
     expect(() => readTransportName(env)).toThrow(MOCK_EXTERNAL_VARIABLE);
   });

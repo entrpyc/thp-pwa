@@ -23,6 +23,7 @@ import {
 } from '@thp/shared';
 import { ApiError } from '@/server/api/errors';
 import type { Actor } from '@/server/auth/policy';
+import { queue } from '@/server/jobs/queue';
 import { logger } from '@/server/observability/logger';
 
 /**
@@ -220,6 +221,10 @@ export async function editChapter(
       },
       tx,
     );
+    // The chapter's words may have changed, so its vector is stale ([3.22.7](docs/project/prd.md));
+    // enqueued with the edit so the two cannot come apart. The step itself tells a retitle from a
+    // boundary move and spends nothing on the latter.
+    await queue().enqueue({ recordingId: chapter.recordingId, step: 'embed' }, tx);
     return chapter.recordingId;
   });
 
@@ -275,6 +280,8 @@ export async function splitChapter(
       },
       tx,
     );
+    // A new chapter is a new source to embed ([3.22.7](docs/project/prd.md)).
+    await queue().enqueue({ recordingId: chapter.recordingId, step: 'embed' }, tx);
     return chapter.recordingId;
   });
 
@@ -324,6 +331,10 @@ export async function mergeChapter(
     for (const one of emptied ? siblings : [chapter]) {
       await deleteChapter(one.id, tx);
     }
+
+    // A chapter that is gone has a vector that is gone with it; the step removes rows for sources
+    // it no longer finds ([3.22.7](docs/project/prd.md)).
+    await queue().enqueue({ recordingId: chapter.recordingId, step: 'embed' }, tx);
 
     return { recordingId: chapter.recordingId, emptied };
   });

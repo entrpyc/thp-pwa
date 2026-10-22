@@ -25,12 +25,24 @@ import { RECORDINGS_PATH } from './recordings';
  * transcript's own timings were right to within a frame. It runs **first**, before `transcribe`,
  * exactly where the reservation put it — the rendition is what members hear, so it is the thing to
  * produce before anything downstream spends money.
+ *
+ * `embed` is the foundation semantic search ([3.10](docs/project/prd.md)) and cross-referencing
+ * ([3.9](docs/project/prd.md)) stand on: every segment, chapter and published summary of the
+ * recording as a vector in the same database as the rows that say who may read it
+ * (project tdd 4.4). It runs **last**, after `generate_chapters`, because it embeds what the
+ * steps before it wrote — chapters included — and a vector of text that is about to be replaced
+ * is a vector nobody will search. It is its own step rather than a tail on `generate_chapters` for
+ * the reason chapters are their own step: it is re-run on its own, and far more often — a
+ * transcript correction ([3.5.5](docs/project/prd.md)), a chapter edit
+ * ([3.22.7](docs/project/prd.md)) or a note written on the teaching each enqueue it again, and
+ * none of those should regenerate a chapter list a human has edited.
  */
 export const PIPELINE_STEPS = [
   'process_audio',
   'transcribe',
   'generate_draft',
   'generate_chapters',
+  'embed',
 ] as const;
 
 export type PipelineStep = (typeof PIPELINE_STEPS)[number];
@@ -86,15 +98,20 @@ export const FIRST_PIPELINE_STEP: PipelineStep = PIPELINE_STEPS[0];
  * The steps that spend money at a provider (docs/project/prd.md, 3.21.2.8).
  *
  * `process_audio` is ffmpeg on our own box and costs nothing that a budget could count. The other
- * three each make one billed call, and each records what it cost on the job row it ran as
+ * four each bill a provider, and each records what it cost on the job row it ran as
  * (3.19.13) — which is what the daily spend ceiling reads. Listed here beside the steps rather
  * than inferred from a provider name so the worker and the API agree on which jobs the ceiling
  * applies to without either having to know how a step is implemented.
+ *
+ * `embed` is on the list although a teaching costs well under a cent to embed: a step that bills
+ * anything is a step the ledger has to be able to add up, and a step the ceiling could not stop
+ * is a step a runaway loop could spend through unmetered.
  */
 export const SPENDING_STEPS: readonly PipelineStep[] = [
   'transcribe',
   'generate_draft',
   'generate_chapters',
+  'embed',
 ];
 
 export function isSpendingStep(step: JobStep): boolean {

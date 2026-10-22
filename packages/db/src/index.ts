@@ -45,6 +45,14 @@ export {
   type NewChapter,
 } from './chapters';
 export {
+  deleteEmbeddingsForSources,
+  findEmbeddingsForSources,
+  listEmbeddingsForRecording,
+  upsertEmbeddings,
+  type EmbeddingRow,
+  type NewEmbedding,
+} from './embeddings';
+export {
   DEFAULT_SPEND_CEILING_USD_PER_DAY,
   readSpendCeilingUsdPerDay,
   requireDatabaseUrl,
@@ -101,6 +109,7 @@ export {
   clearNoteReaction,
   findNoteById,
   insertNote,
+  listNotesForEmbedding,
   listNotesForReader,
   listPinnedNoteIds,
   listReactionsForNotes,
@@ -110,6 +119,7 @@ export {
   softDeleteNote,
   unpinNote,
   updateNoteText,
+  type EmbeddableNoteRow,
   type NewNote,
   type NoteReactionRow,
   type NoteRow,
@@ -226,12 +236,17 @@ export {
   type TagRow,
 } from './tags';
 export {
+  embeddingVisibleTo,
   findResumeProgress,
   findVisibleRecording,
   findVisibleSeries,
+  isEmbeddingVisibleTo,
+  listVisibleEmbeddings,
   listVisibleRecordings,
   listVisibleSeries,
+  type EmbeddingVisibilityFacts,
   type ResumeProgressRow,
+  type VisibleEmbeddingRow,
   type VisibilityOptions,
   type VisibleRecordingRow,
   type VisibleSeriesDetail,

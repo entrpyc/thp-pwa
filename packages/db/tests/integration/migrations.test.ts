@@ -6,6 +6,8 @@ import postgres from 'postgres';
 import { MIGRATIONS_DIR, runMigrations } from '@thp/db';
 import {
   DEFAULT_SOUND_PROFILE,
+  EMBEDDING_DIMENSIONS,
+  EMBEDDING_SOURCE_KINDS,
   JOB_STATUSES,
   JOB_STEPS,
   PIPELINE_STEPS,
@@ -171,9 +173,12 @@ describe('migrations apply to an empty database by one command', () => {
       const tables = await sql<{ tablename: string }[]>`
         select tablename from pg_tables where schemaname = 'public' order by tablename
       `;
+      // The embedding foundation adds `embedding` (project tdd 4.4) — one table for every kind of
+      // source, because the search that reads it wants one index, not five.
       expect(tables.map((row) => row.tablename)).toEqual([
         'announcement',
         'chapter',
+        'embedding',
         'invitation',
         'job',
         'note',
@@ -2115,10 +2120,10 @@ describe('the chapter table, and nothing beside it', () => {
     `;
     // Derived from the one declaration rather than restated beside it, exactly as every other enum
     // in this file is — less `process_audio`, which `0021_process_audio` adds ahead of `transcribe`
-    // two migrations later and which this database, migrated only as far as chapters, does not
-    // yet admit.
+    // two migrations later, and less `embed`, which `0028_embeddings` adds after the chain; this
+    // database, migrated only as far as chapters, admits neither yet.
     expect(steps.map((row) => row.enumlabel)).toEqual(
-      PIPELINE_STEPS.filter((step) => step !== 'process_audio'),
+      PIPELINE_STEPS.filter((step) => step !== 'process_audio' && step !== 'embed'),
     );
     expect(steps.map((row) => row.enumlabel)).toContain('generate_chapters');
 
@@ -2291,7 +2296,9 @@ describe('the sound profile, and nothing beside it', () => {
       join pg_type on pg_type.oid = pg_enum.enumtypid
       where pg_type.typname = 'pipeline_step' order by pg_enum.enumsortorder
     `;
-    expect(steps.map((row) => row.enumlabel)).toEqual([...JOB_STEPS]);
+    // Less `embed`, which `0028_embeddings` slots in ahead of the standalone pair two migrations
+    // later; this database, migrated only as far as the sound profile, does not admit it yet.
+    expect(steps.map((row) => row.enumlabel)).toEqual(JOB_STEPS.filter((step) => step !== 'embed'));
   });
 
   it('seeds version 1 with the shared defaults, saved by nobody', async () => {
@@ -2423,5 +2430,162 @@ describe('playback completion, and nothing beside it', () => {
     await expect(
       sql`update playback_progress set listened_ms = null where user_id = ${userId}`,
     ).rejects.toThrow(/null/i);
+  });
+});
+
+// =================================================================================================
+
+/**
+ * **The embedding table, the step that fills it, and the extension under it** (project tdd 4.4) —
+ * the migration that turns "pgvector is installed but deliberately not enabled" into "enabled".
+ *
+ * The same before-and-after as every block above: migrated to the state before, photographed,
+ * one further, photographed again. Three things are properties of the database rather than of the
+ * query layer and are asserted here: the extension is on, the vector column is the shared width,
+ * and the pipeline enum admits `embed` where the chain puts it — after `generate_chapters` and
+ * before the standalone steps — while a job written before the widening still reads as it did.
+ */
+describe('the embedding table, and nothing beside it', () => {
+  let target: ThrowawayDatabase;
+  let before: Map<string, string[]>;
+  let after: Map<string, string[]>;
+  let sql: ReturnType<typeof postgres>;
+  let existingRecordingId: string;
+
+  beforeAll(async () => {
+    target = await createThrowawayDatabase(inject('databaseUrl'), 'embeddings_migration');
+
+    const priorCount = journalCountBefore('0028_embeddings');
+    await runMigrations({ url: target.url, migrationsFolder: migrationsFolderUpTo(priorCount) });
+    before = await readColumnSets(target.url);
+
+    sql = postgres(target.url, { max: 2, onnotice: () => {} });
+    const [written] = await sql<{ id: string }[]>`
+      insert into recording (original_media_key, title, recorded_at)
+      values ('originals/before-embeddings.mp3', 'From Before Embeddings', '2026-10-21')
+      returning id
+    `;
+    existingRecordingId = written?.id as string;
+    await sql`
+      insert into job (recording_id, step, status, attempt, correlation_id)
+      values (${existingRecordingId}, 'generate_chapters', 'succeeded', 1, 'a-known-correlation-id')
+    `;
+
+    await runMigrations({ url: target.url, migrationsFolder: migrationsFolderUpTo(priorCount + 1) });
+    after = await readColumnSets(target.url);
+  }, 120_000);
+
+  afterAll(async () => {
+    await sql?.end({ timeout: 5 });
+    await target?.drop();
+  }, 60_000);
+
+  it('did not have the table before this migration and does after — otherwise the comparison is vacuous', () => {
+    expect(before.has('embedding')).toBe(false);
+    expect(after.has('embedding')).toBe(true);
+  });
+
+  it('adds the embedding table and changes no column of any other', () => {
+    for (const [table, columns] of before) {
+      expect(after.get(table), `${table} changed`).toEqual(columns);
+    }
+    expect([...after.keys()].sort()).toEqual([...before.keys(), 'embedding'].sort());
+    expect(after.get('embedding')).toEqual([
+      'created_at',
+      'embedding',
+      'id',
+      'model',
+      'owner_user_id',
+      'recording_id',
+      'source_id',
+      'source_kind',
+      'text',
+      'updated_at',
+    ]);
+  });
+
+  it('enables the vector extension, which nothing before it had', async () => {
+    // The throwaway database is created from the template, where the extension is off — which is
+    // what pgvector.test.ts asserted for twenty-seven migrations. What is asserted is that *this*
+    // migration is the one that turns it on.
+    const rows = await sql<{ extname: string }[]>`select extname from pg_extension where extname = 'vector'`;
+    expect(rows.map((row) => row.extname)).toEqual(['vector']);
+  });
+
+  it('sizes the vector at the shared width and indexes it with HNSW under cosine', async () => {
+    const [column] = await sql<{ typmod: number; udt: string }[]>`
+      select a.atttypmod as typmod, t.typname as udt
+      from pg_attribute a join pg_type t on t.oid = a.atttypid
+      where a.attrelid = 'public.embedding'::regclass and a.attname = 'embedding'
+    `;
+    expect(column?.udt).toBe('vector');
+    expect(column?.typmod).toBe(EMBEDDING_DIMENSIONS);
+
+    const indexes = await sql<{ indexname: string; indexdef: string }[]>`
+      select indexname, indexdef from pg_indexes where tablename = 'embedding' order by indexname
+    `;
+    expect(indexes.map((row) => row.indexname)).toEqual([
+      'embedding_pkey',
+      'embedding_recording_idx',
+      'embedding_source_unique',
+      'embedding_vector_hnsw_idx',
+    ]);
+    expect(indexes.find((row) => row.indexname === 'embedding_vector_hnsw_idx')?.indexdef).toMatch(
+      /USING hnsw \(embedding vector_cosine_ops\)/,
+    );
+    expect(indexes.find((row) => row.indexname === 'embedding_source_unique')?.indexdef).toMatch(/UNIQUE/);
+  });
+
+  it('derives the source-kind enum from the one declaration', async () => {
+    const rows = await sql<{ enumlabel: string }[]>`
+      select enumlabel from pg_enum
+      join pg_type on pg_type.oid = pg_enum.enumtypid
+      where pg_type.typname = 'embedding_source' order by pg_enum.enumsortorder
+    `;
+    expect(rows.map((row) => row.enumlabel)).toEqual([...EMBEDDING_SOURCE_KINDS]);
+  });
+
+  it('adds embed to the pipeline steps after generate_chapters and before the standalone ones', async () => {
+    const steps = await sql<{ enumlabel: string }[]>`
+      select enumlabel from pg_enum
+      join pg_type on pg_type.oid = pg_enum.enumtypid
+      where pg_type.typname = 'pipeline_step' order by pg_enum.enumsortorder
+    `;
+    // The whole declaration, in its order: the chain, then the standalone steps. This database is
+    // migrated to the newest migration, so nothing is missing from it as `process_audio` is from
+    // the chapters block above.
+    expect(steps.map((row) => row.enumlabel)).toEqual([...JOB_STEPS]);
+    expect(PIPELINE_STEPS[PIPELINE_STEPS.length - 1]).toBe('embed');
+
+    // The job written before the widening is still readable and still says what it said.
+    const rows = await sql<{ step: string }[]>`
+      select step::text as step from job where recording_id = ${existingRecordingId}
+    `;
+    expect(rows.map((row) => row.step)).toEqual(['generate_chapters']);
+  });
+
+  it('cascades a recording’s rows and a private owner’s rows, and restricts nothing', async () => {
+    const [owner] = await sql<{ id: string }[]>`
+      insert into "user" (email, password_hash, display_name, role)
+      values ('owner-embeddings@example.test', 'hash', 'An owner', 'member')
+      returning id
+    `;
+    const vector = `[${Array.from({ length: EMBEDDING_DIMENSIONS }, () => 0).join(',')}]`;
+    await sql`
+      insert into embedding (source_kind, source_id, recording_id, owner_user_id, text, embedding, model)
+      values
+        ('segment', gen_random_uuid(), ${existingRecordingId}, null, 'a line', ${vector}::vector, 'm'),
+        ('note', gen_random_uuid(), ${existingRecordingId}, ${owner?.id as string}, 'mine', ${vector}::vector, 'm')
+    `;
+
+    await sql`delete from "user" where id = ${owner?.id as string}`;
+    const [afterOwner] = await sql<{ count: string }[]>`
+      select count(*)::text as count from embedding where recording_id = ${existingRecordingId}
+    `;
+    expect(afterOwner?.count).toBe('1');
+
+    await sql`delete from recording where id = ${existingRecordingId}`;
+    const [afterRecording] = await sql<{ count: string }[]>`select count(*)::text as count from embedding`;
+    expect(afterRecording?.count).toBe('0');
   });
 });
