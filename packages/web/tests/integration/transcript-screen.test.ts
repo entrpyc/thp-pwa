@@ -29,16 +29,12 @@ import { uploadTestAudio } from '../support/audio';
  * 30 s to 33 s belongs to nobody. Long enough that the list genuinely scrolls, and gapped so the
  * "a silence shows no caption" rule is exercised on screen rather than only in the unit test.
  *
- * **Most of this file is skipped while the `Transcript` tab is hidden.** The tab is the only way
- * into the panel, so every block that opens it has nothing to drive — not a failure, and not a
- * feature that stopped working: `recording-view.tsx` has the control commented in place, and
- * un-skipping these is the other half of putting it back. They are skipped rather than deleted
- * precisely so that is one edit rather than a rewrite.
- *
- * **The captions block below still runs**, and it is the reason this file is not skipped whole.
- * Captions come off the transport's own menu, not off the tab, so a member can still be read to
- * while the panel is out of reach — and that is exactly the thing most likely to break unnoticed
- * while nothing else here is watching the transcript fetch.
+ * **Every block here was skipped for a while**, when the `Transcript` tab was hidden by operator
+ * decision: the tab is the only way into the panel, so the blocks that open it had nothing to
+ * drive. They were skipped rather than deleted so that bringing the tab back was one edit in
+ * `recording-view.tsx` and the un-skips here, which is what happened. The captions block was the
+ * one that kept running throughout — captions come off the transport's own menu, not off the tab —
+ * so it is written to hold whether or not the tab is drawn, and it should stay that way.
  */
 
 const baseUrl = inject('apiBaseUrl');
@@ -167,7 +163,7 @@ afterAll(async () => {
 
 // =================================================================================================
 
-describe.skip('the recording page carries the tab strip and the transcript under it', () => {
+describe('the recording page carries the tab strip and the transcript under it', () => {
   it('holds the two tabs that have data, and drops the three that do not', async () => {
     const { page } = await openTeaching(recordingId);
     try {
@@ -222,7 +218,7 @@ describe.skip('the recording page carries the tab strip and the transcript under
   }, 180_000);
 });
 
-describe.skip('the line being spoken is highlighted', () => {
+describe('the line being spoken is highlighted', () => {
   it('starts on the first line, moves as playback runs, and follows a seek', async () => {
     const { page } = await openTeaching(recordingId);
     try {
@@ -271,7 +267,7 @@ describe.skip('the line being spoken is highlighted', () => {
   }, 180_000);
 });
 
-describe.skip('selecting a line seeks the audio there', () => {
+describe('selecting a line seeks the audio there', () => {
   it('moves the element and the transport’s elapsed reading, without starting playback', async () => {
     const { page } = await openTeaching(recordingId);
     try {
@@ -297,7 +293,7 @@ describe.skip('selecting a line seeks the audio there', () => {
   }, 240_000);
 });
 
-describe.skip('the transcript keeps the current line in view by itself', () => {
+describe('the transcript keeps the current line in view by itself', () => {
   it('follows the highlight, suspends on a member scroll, and resumes when a line is selected', async () => {
     const { page } = await openTeaching(recordingId);
     try {
@@ -439,7 +435,7 @@ describe('captions float above the transport on any member screen', () => {
   }, 240_000);
 });
 
-describe.skip('the transcript is fetched once per loaded recording, and only when needed', () => {
+describe('the transcript is fetched once per loaded recording, and only when needed', () => {
   it('asks for nothing on open, once when the tab is opened, and not again on the way back', async () => {
     const { page, requests } = await openTeaching(recordingId);
     try {

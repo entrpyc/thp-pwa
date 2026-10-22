@@ -1,6 +1,7 @@
 'use client';
 
 import Link from 'next/link';
+import { useSearchParams } from 'next/navigation';
 import { useEffect, useState } from 'react';
 import {
   formatTimecode,
@@ -21,12 +22,22 @@ import {
   toLoaded,
   useRecordingContentFor,
 } from '../../recording-content';
+import {
+  arrivedFromList,
+  isPlainPress,
+  recordingTabHref,
+  tabFromAddress,
+  writeTabToAddress,
+} from '../../round-trip';
 import { ScripturePanel } from '../../scripture-panel';
 import { TranscriptPanel } from '../../transcript-panel';
 import styles from '../../../../screens.module.css';
 
+/** The strip's tabs, by the name each takes in the address — the recording page's, minus one. */
+const TABS = ['notes', 'scripture', 'transcript'] as const;
+
 /** The strip is single-select, as the recording page's is. `null` is all closed. */
-type OpenTab = 'scripture' | 'notes' | 'transcript' | null;
+type OpenTab = (typeof TABS)[number] | null;
 
 /**
  * **The chapter page** ([3.22.13](docs/project/prd.md)–[3.22.15](docs/project/prd.md)).
@@ -43,13 +54,13 @@ type OpenTab = 'scripture' | 'notes' | 'transcript' | null;
  *   series' cover, exactly as it is on the recording page.
  * - **The recording's tabs sit beside them, each scoped to this chapter's span**
  *   ([3.22.14](docs/project/prd.md)). A note belongs to the chapter its timestamp falls in, a
- *   citation to the chapter its anchor falls in, and the transcript stops at the boundaries — the
- *   last of those still true of the panel, which is intact and merely unreachable while the
- *   `Transcript` tab is hidden. See the strip below.
+ *   citation to the chapter its anchor falls in, and the transcript stops at the boundaries.
  * - **It offers a route back to the recording it came from** ([3.22.13](docs/project/prd.md)) — the
- *   back control over the band, pointing at the teaching rather than at the library. The address is
- *   what decides that, so a member who arrived from a link gets the same route back as one who
- *   walked here.
+ *   back control over the band, pointing at the teaching with its chapter list open rather than at
+ *   the library. The address is what decides that, so a member who arrived from a link gets the
+ *   same route back as one who walked here. A member who *did* walk here — pressed a row on that
+ *   list — goes back through history instead, which is what brings the list back at the offset
+ *   they left it; see the control below and `round-trip.ts`.
  * - **The breadcrumb draws the whole path** — `home › series › recording › chapter` — which is a
  *   different question from the one the back control answers. Back is *one press up*; the trail is
  *   *where this page sits*, and a chapter sits inside a teaching inside a study. Naming only the
@@ -78,12 +89,29 @@ export function ChapterScreen({
   const player = usePlayer();
   const [recording, setRecording] = useState<Recording | null>(null);
   const [failure, setFailure] = useState<string | null>(null);
-  const [openTab, setOpenTab] = useState<OpenTab>('notes');
+  /**
+   * Notes unless the address names another tab — read once at mount, written on every press, for
+   * the reason the recording page gives: the entry a member comes back to names the tab they left
+   * open (`round-trip.ts`). Every tab here is always drawn, so there is no fallback to make.
+   */
+  const params = useSearchParams();
+  const [openTab, setOpenTab] = useState<OpenTab>(() => tabFromAddress(params, TABS) ?? 'notes');
   /** The same press opens and closes; only the open is counted (observability.md § 5.2). */
   const chooseTab = (next: Exclude<OpenTab, null>) => {
     if (openTab !== next) track('tab_opened', { tab: next, surface: 'chapter', recording_id: recordingId });
-    setOpenTab((open) => (open === next ? null : next));
+    const open = openTab === next ? null : next;
+    setOpenTab(open);
+    writeTabToAddress(open, 'notes');
   };
+  /**
+   * Whether the teaching's page is the history entry behind this one — a row on its chapter list
+   * was pressed to get here. Decided once, on arrival, and false until then, so the back control is
+   * a plain link for the first paint and stays one for a page opened from a link (`round-trip.ts`).
+   */
+  const [fromList, setFromList] = useState(false);
+  useEffect(() => {
+    setFromList(arrivedFromList(recordingId, chapterId));
+  }, [chapterId, recordingId]);
   /** The stored position, kept for the moment the play control hands the player over. */
   const [startAtMs, setStartAtMs] = useState<number | null>(null);
 
@@ -197,14 +225,26 @@ export function ChapterScreen({
         )}
         {/*
           **The route back to the recording** ([3.22.13](docs/project/prd.md)) — to the teaching this
-          chapter divides rather than to browser history, so it behaves the same when the page was
-          opened from a link. The recording page's own back control goes to the library, which makes
-          two presses out of here and each of them somewhere a member meant to be.
+          chapter divides, with its chapter list open: that list is what this chapter is a row of.
+          The recording page's own back control goes to the study or the library, which makes two
+          presses out of here and each of them somewhere a member meant to be.
+
+          The href is that address, always, so the control reads the same when the page was opened
+          from a link and a middle-click opens the teaching in a tab. A plain press when the
+          teaching's page is the entry behind this one goes back through history instead — the one
+          way to land on *that* entry rather than on a fresh one, which is what puts the list back
+          at the offset it was left at, and what keeps the browser's own back from looping to this
+          chapter again.
         */}
         <Link
           className={styles.back}
-          href={recordingPagePath(recordingId)}
+          href={recordingTabHref(recordingId, 'chapters')}
           aria-label="Back to the teaching"
+          onClick={(event) => {
+            if (!fromList || !isPlainPress(event)) return;
+            event.preventDefault();
+            window.history.back();
+          }}
         >
           <span aria-hidden="true">‹</span>
         </Link>
@@ -300,21 +340,20 @@ export function ChapterScreen({
               Scripture
             </button>
             {/*
-              **`Transcript` is hidden**, the same operator decision the recording page's strip
-              carries and for the same reason — the two strips are one control a member reads twice,
-              and a tab that vanished on one screen and not the other would read as a bug rather
-              than as a decision. See `recording-view.tsx` for the whole of it.
-
-              <button
-                className={styles.tab}
-                type="button"
-                role="tab"
-                aria-selected={openTab === 'transcript'}
-                onClick={() => chooseTab('transcript')}
-              >
-                Transcript
-              </button>
+              Drawn whenever the recording page's strip draws it — the two strips are one control a
+              member reads twice, and a tab that vanished on one screen and not the other would read
+              as a bug rather than as a decision. It was hidden on both for a while by operator
+              decision, and came back on both; see `recording-view.tsx` for the whole of it.
             */}
+            <button
+              className={styles.tab}
+              type="button"
+              role="tab"
+              aria-selected={openTab === 'transcript'}
+              onClick={() => chooseTab('transcript')}
+            >
+              Transcript
+            </button>
           </div>
 
           {openTab === 'notes' ? (

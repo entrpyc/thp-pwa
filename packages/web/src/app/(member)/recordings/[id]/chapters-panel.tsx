@@ -15,6 +15,7 @@ import {
 import { ApiClientError, apiFetch } from '@/client/api-client';
 import { track } from '@/client/observability/analytics';
 import { useRecordingContent } from './recording-content';
+import { isPlainPress, leaveForChapter } from './round-trip';
 import styles from './chapters.module.css';
 
 /**
@@ -36,7 +37,8 @@ import styles from './chapters.module.css';
  *   Selecting a chapter opens its page and does **not** start playback — a member who tapped a
  *   chapter has not asked for sound, which is the rule opening a teaching (3.2.12) and selecting a
  *   transcript line (3.5.4) already follow. The play control beside it is the one that asks for
- *   sound, and it seeks and plays in one press.
+ *   sound, and it seeks and plays in one press. Pressing the row also notes where the list is, so
+ *   the way back from the chapter can put it there (`round-trip.ts`).
  * - **The search field searches this teaching and nothing else**
  *   ([3.22.11](docs/project/prd.md)). Title and summary, as the member types, over the chapters in
  *   front of them; searching the library is 3.10 and is not here. The matching rule is
@@ -136,6 +138,13 @@ export function ChaptersPanel({
                 <Link
                   className={styles.rowLink}
                   href={chapterPagePath(recordingId, chapter.id)}
+                  onClick={(event) => {
+                    // The plain press is the one that leaves this page for the chapter's: note
+                    // where the list is, so the way back can put it there. A middle-click or a
+                    // modified press opens the chapter elsewhere and leaves this page where it
+                    // is, so there is nothing to note.
+                    if (isPlainPress(event)) leaveForChapter(recordingId, chapter.id);
+                  }}
                 >
                   <span className={styles.position}>{chapter.position}</span>
                   <span className={styles.rowText}>

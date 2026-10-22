@@ -60,6 +60,8 @@ const EDITABLE_TITLE = `Editable teaching ${RUN}`;
 /** A fourth teaching, in a study, so the chapter page's full trail has three ancestors to name. */
 const IN_SERIES_TITLE = `Chaptered teaching in a series ${RUN}`;
 const SERIES_TITLE = `Chapters screen series ${RUN}`;
+/** A fifth, with twelve chapters, for the round trip — see `TWELVE`. */
+const LONG_TITLE = `Long teaching ${RUN}`;
 
 const GENERATED = { model: 'fake', modelVersion: 'fake-1', promptVersion: 'chapters-1' };
 
@@ -73,6 +75,18 @@ const THREE = [
   { startMs: CHAPTER_MS, title: 'The branches', summary: 'The cost of pruning.' },
   { startMs: 2 * CHAPTER_MS, title: 'The gardener', summary: 'Who tends the field.' },
 ];
+
+/**
+ * Twelve chapters, a line each. The count is the point: a list long enough to outrun a window, so
+ * the round trip below has somewhere to scroll to and something to put back. Three forty-second
+ * chapters fit in a window with room to spare, and an offset that cannot be reached cannot be
+ * restored either.
+ */
+const TWELVE = Array.from({ length: 12 }, (_unused, index) => ({
+  startMs: index * LINE_MS,
+  title: `Part ${index + 1} of twelve`,
+  summary: `The ten seconds from ${index * 10} on.`,
+}));
 
 let browser: Browser;
 let handle: DatabaseHandle;
@@ -93,6 +107,7 @@ let chapterIds: string[] = [];
 let inSeriesId: string;
 let seriesId: string;
 let inSeriesChapterIds: string[] = [];
+let longId: string;
 
 interface Snapshot {
   readonly currentTime: number;
@@ -218,6 +233,8 @@ beforeAll(async () => {
   seriesId = (await insertSeries({ title: SERIES_TITLE, description: null }, handle)).id;
   await setRecordingSeries(inSeriesId, seriesId, handle);
   inSeriesChapterIds = (await listChapters(inSeriesId, handle)).map((one) => one.id);
+
+  longId = await publishedTeaching(LONG_TITLE, TWELVE);
 }, 300_000);
 
 afterAll(async () => {
@@ -257,8 +274,8 @@ describe('the Chapters tab on the recording page (3.22.10)', () => {
     try {
       await expect.poll(() => strip(page).count(), { timeout: 30_000 }).toBe(1);
       // Another tab is there, so this is the strip having decided rather than not having drawn.
-      // `Notes` rather than `Transcript`: the transcript tab is hidden, and `Notes` is the one entry
-      // that is always present whatever a teaching holds — which is what this needs it for.
+      // `Notes`, because it is the one entry that is always present whatever a teaching holds —
+      // which is what this needs it for.
       await expect
         .poll(() => strip(page).getByRole('tab', { name: 'Notes' }).count(), { timeout: 30_000 })
         .toBe(1);
@@ -365,9 +382,19 @@ describe('the chapter page (3.22.13, 3.22.14, 3.22.15)', () => {
         .toContain('The cost of pruning.');
       expect(await page.getByRole('heading', { name: 'The branches' }).count()).toBe(1);
 
-      // 3.22.13's route back — to the teaching this chapter divides, rather than to the library.
+      // 3.22.13's route back — to the teaching this chapter divides, with its chapter list open,
+      // rather than to the library. Opened from a link here, so there is no entry behind this one
+      // to go back to and the control navigates: the stack grows by one, and the list is at the top.
+      const entries = await page.evaluate(() => window.history.length);
       await page.getByRole('link', { name: 'Back to the teaching' }).click();
-      await page.waitForURL(`${baseUrl}${recordingPagePath(chapteredId)}`, { timeout: 30_000 });
+      await page.waitForURL(
+        (url) =>
+          url.pathname === recordingPagePath(chapteredId) && url.searchParams.get('tab') === 'chapters',
+        { timeout: 30_000 },
+      );
+      await expect.poll(() => panel(page).count(), { timeout: 30_000 }).toBe(1);
+      expect(await page.evaluate(() => window.history.length)).toBe(entries + 1);
+      expect(await page.evaluate(() => window.scrollY)).toBe(0);
     } finally {
       await page.context().close();
     }
@@ -447,9 +474,9 @@ describe('the chapter page (3.22.13, 3.22.14, 3.22.15)', () => {
 
       expect(await tabs.getByRole('tab', { name: 'Notes' }).count()).toBe(1);
       expect(await tabs.getByRole('tab', { name: 'Scripture' }).count()).toBe(1);
-      // Hidden on this strip exactly as it is on the recording page's — the two are one control a
-      // member reads twice, so the entry is absent from both or from neither.
-      expect(await tabs.getByRole('tab', { name: 'Transcript' }).count()).toBe(0);
+      // Drawn on this strip exactly as it is on the recording page's — the two are one control a
+      // member reads twice, so the entry is present on both or on neither.
+      expect(await tabs.getByRole('tab', { name: 'Transcript' }).count()).toBe(1);
       expect(await tabs.getByRole('tab', { name: 'Chapters' }).count()).toBe(0);
     } finally {
       await page.context().close();
@@ -459,11 +486,10 @@ describe('the chapter page (3.22.13, 3.22.14, 3.22.15)', () => {
   /**
    * **The transcript shows that chapter's lines and stops at its boundaries** (3.22.14).
    *
-   * Skipped while the `Transcript` tab is hidden — the tab is the only way into the panel, so there
-   * is nothing to open. The scoping itself is still asserted against the API in `chapters.test.ts`;
-   * what is out of reach is the screen half. Un-skip with the tab.
+   * The screen half of a rule `chapters.test.ts` asserts against the API. It was skipped while the
+   * `Transcript` tab was hidden — the tab is the only way into the panel — and came back with it.
    */
-  it.skip('shows only this chapter’s transcript lines', async () => {
+  it('shows only this chapter’s transcript lines', async () => {
     const page = await openTeaching(chapteredId);
     try {
       await page.goto(`${baseUrl}${chapterPagePath(chapteredId, chapterIds[1]!)}`, {
@@ -522,6 +548,133 @@ describe('the chapter page (3.22.13, 3.22.14, 3.22.15)', () => {
       await page.context().close();
     }
   }, 300_000);
+});
+
+/**
+ * **Coming back from a chapter lands where the member left** — the `Chapters` tab open and the list
+ * at the offset it had when the row was pressed — by the page's own control and by the browser's,
+ * while a direct link to the teaching still opens `Notes` at the top.
+ *
+ * Against the twelve-chapter teaching in a window six hundred pixels tall, so the list genuinely
+ * scrolls (see `TWELVE`). The offset asserted is the one the window actually had at the press,
+ * read back from it rather than assumed from the `scrollTo`, and the row pressed is one in the
+ * middle of the window at that offset — clear of the sticky navigation above and the docked
+ * transport below. Playwright scrolls a row into view when its press does not land, and a press
+ * that moved the list first would note an offset this test never saw: the first row, half under
+ * the navigation, was pressed that way and noted an offset of zero.
+ */
+describe('coming back from a chapter', () => {
+  const chapterOf = (id: string) => (url: URL) =>
+    url.pathname.startsWith(`${recordingPagePath(id)}/`);
+  const listOf = (id: string) => (url: URL) =>
+    url.pathname === recordingPagePath(id) && url.searchParams.get('tab') === 'chapters';
+  const scrollY = (page: Page) => page.evaluate(() => window.scrollY);
+  const chaptersSelected = (page: Page) =>
+    strip(page).getByRole('tab', { name: 'Chapters' }).getAttribute('aria-selected');
+
+  /** Open the long teaching in a short window, open `Chapters`, and scroll partway down the list. */
+  async function downTheList(): Promise<{ page: Page; offset: number }> {
+    const page = await openTeaching(longId);
+    await page.setViewportSize({ width: 1280, height: 600 });
+    await openChapters(page);
+    await expect
+      .poll(() => panel(page).getByRole('listitem').count(), { timeout: 30_000 })
+      .toBe(12);
+    await page.evaluate(() => window.scrollTo(0, 400));
+    await expect.poll(() => scrollY(page), { timeout: 30_000 }).toBe(400);
+    return { page, offset: await scrollY(page) };
+  }
+
+  /** The first row wholly inside the middle band of the window — the second quarter to the third. */
+  async function rowInView(page: Page): Promise<Locator> {
+    const rows = panel(page).getByRole('link', { name: /Part \d+ of twelve/ });
+    const height = await page.evaluate(() => window.innerHeight);
+    const count = await rows.count();
+    for (let index = 0; index < count; index += 1) {
+      const box = await rows.nth(index).boundingBox();
+      if (box !== null && box.y >= height / 4 && box.y + box.height <= (3 * height) / 4) {
+        return rows.nth(index);
+      }
+    }
+    throw new Error('no chapter row is wholly inside the middle band of the window');
+  }
+
+  it('reopens Chapters at the offset the list was left at, by the page’s own back control', async () => {
+    const { page, offset } = await downTheList();
+    try {
+      await (await rowInView(page)).click();
+      await page.waitForURL(chapterOf(longId), { timeout: 30_000 });
+      const tabs = page.getByRole('tablist', { name: 'Chapter contents' });
+      await expect.poll(() => tabs.count(), { timeout: 30_000 }).toBe(1);
+      // Pressing a tab here rewrites this page's own address; the way back has to survive that.
+      await tabs.getByRole('tab', { name: 'Scripture' }).click();
+      const entries = await page.evaluate(() => window.history.length);
+
+      await page.getByRole('link', { name: 'Back to the teaching' }).click();
+      await page.waitForURL(listOf(longId), { timeout: 30_000 });
+      await expect.poll(() => panel(page).count(), { timeout: 30_000 }).toBe(1);
+      expect(await chaptersSelected(page)).toBe('true');
+      await expect.poll(() => scrollY(page), { timeout: 30_000 }).toBe(offset);
+      // Back *through history* rather than to a third entry: the stack is no longer than it was on
+      // the chapter page, so the browser's own back from here does not loop to the chapter again.
+      expect(await page.evaluate(() => window.history.length)).toBe(entries);
+    } finally {
+      await page.context().close();
+    }
+  }, 240_000);
+
+  it('reopens Chapters at the same offset by the browser’s own back', async () => {
+    const { page, offset } = await downTheList();
+    try {
+      await (await rowInView(page)).click();
+      await page.waitForURL(chapterOf(longId), { timeout: 30_000 });
+      await expect
+        .poll(() => page.getByRole('tablist', { name: 'Chapter contents' }).count(), {
+          timeout: 30_000,
+        })
+        .toBe(1);
+
+      await page.goBack();
+      await page.waitForURL(listOf(longId), { timeout: 30_000 });
+      await expect.poll(() => panel(page).count(), { timeout: 30_000 }).toBe(1);
+      expect(await chaptersSelected(page)).toBe('true');
+      await expect.poll(() => scrollY(page), { timeout: 30_000 }).toBe(offset);
+    } finally {
+      await page.context().close();
+    }
+  }, 240_000);
+
+  /**
+   * A fresh navigation to the teaching is not a return, whatever the last visit left: the bare
+   * address opens `Notes` at the top, and the address the chapter page's control points at opens
+   * the list — at the top too, because nothing was left on a fresh entry.
+   */
+  it('still opens Notes at the top from a direct link, and the list at the top from one naming it', async () => {
+    const { page } = await downTheList();
+    try {
+      await (await rowInView(page)).click();
+      await page.waitForURL(chapterOf(longId), { timeout: 30_000 });
+
+      await page.goto(`${baseUrl}${recordingPagePath(longId)}`, { waitUntil: 'domcontentloaded' });
+      await expect
+        .poll(() => strip(page).getByRole('tab', { name: 'Chapters' }).count(), { timeout: 30_000 })
+        .toBe(1);
+      expect(await strip(page).getByRole('tab', { name: 'Notes' }).getAttribute('aria-selected')).toBe(
+        'true',
+      );
+      expect(await chaptersSelected(page)).toBe('false');
+      expect(await scrollY(page)).toBe(0);
+
+      await page.goto(`${baseUrl}${recordingPagePath(longId)}?tab=chapters`, {
+        waitUntil: 'domcontentloaded',
+      });
+      await expect.poll(() => panel(page).count(), { timeout: 30_000 }).toBe(1);
+      expect(await chaptersSelected(page)).toBe('true');
+      expect(await scrollY(page)).toBe(0);
+    } finally {
+      await page.context().close();
+    }
+  }, 240_000);
 });
 
 describe('what the transport says and draws (3.22.16, 3.22.17)', () => {
