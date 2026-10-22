@@ -218,6 +218,13 @@
       "when": 1792687242827,
       "tag": "0030_account_deletion",
       "breakpoints": true
+    },
+    {
+      "idx": 31,
+      "version": "7",
+      "when": 1792687742537,
+      "tag": "0031_member_blocks",
+      "breakpoints": true
     }
   ]
 }

@@ -268,6 +268,27 @@ export const POLICY_ACTIONS = [
    */
   'announcement.send',
   'announcement.list',
+  /**
+   * **The three block actions** — blocking a member, unblocking one, and reading your own blocked
+   * list. Three rather than one `block.manage`, the split every group above takes.
+   *
+   * **Anyone may block anyone, and that is the decision rather than an omission.** No rule here
+   * refuses a member blocking an admin, or an admin blocking a member: a block is a member's own
+   * control over what they see, which is the one thing this table never makes an operator's
+   * business — the same argument `profile.update` makes about a display name. An admin who blocks
+   * a member stops seeing that member's notes on the member screens, and that is the admin's own
+   * choice to live with; moderation ([3.12.10](docs/project/prd.md)) is deletion and deactivation,
+   * and both still reach a note by its id.
+   *
+   * There is deliberately no ownership flag on any of the three. Every block is on the caller's
+   * own list by construction — the route is `/users/me/blocks` — and the one refusal that is
+   * about identity, blocking yourself, is the inverse of ownership rather than an instance of
+   * it, so the service refuses it as `invalid_input` instead of this table bending to say "may
+   * act on everything but your own".
+   */
+  'block.create',
+  'block.remove',
+  'block.list',
 ] as const;
 
 export type PolicyAction = (typeof POLICY_ACTIONS)[number];
@@ -456,6 +477,11 @@ const RULES: PolicyRules = {
   // puts *broadcast announcements* under Admin alone). A member is told; a member does not tell.
   'announcement.send': { roles: { admin: true, member: false } },
   'announcement.list': { roles: { admin: true, member: false } },
+  // Both roles, on the same terms, and over anybody. A block is a member's own control over what
+  // they see — the one thing this table never makes an operator's business.
+  'block.create': { roles: { admin: true, member: true } },
+  'block.remove': { roles: { admin: true, member: true } },
+  'block.list': { roles: { admin: true, member: true } },
 };
 
 export function isPolicyAction(value: string): value is PolicyAction {

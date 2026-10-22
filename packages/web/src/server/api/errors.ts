@@ -253,6 +253,18 @@ export class ApiError extends Error {
     return new ApiError('deletion_expired', 410, message);
   }
 
+  /**
+   * One member acting on another's content across a block, whichever of them placed it.
+   *
+   * `403` because the act is refused to this caller, and its own code rather than `forbidden`
+   * because the policy module permitted it — the refusal is a fact about the pair, not the role.
+   * `message` is written for the person who pressed the control, and says what they cannot do
+   * without saying who placed the block.
+   */
+  static blocked(message: string): ApiError {
+    return new ApiError('blocked', 403, message);
+  }
+
   static notFound(message = 'The requested resource does not exist.'): ApiError {
     return new ApiError('not_found', 404, message);
   }

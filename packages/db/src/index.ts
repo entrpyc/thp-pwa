@@ -112,6 +112,15 @@ export {
   type ProviderMeta,
   type ReclaimedJob,
 } from './jobs';
+export {
+  deleteMemberBlock,
+  findMemberBlock,
+  insertMemberBlock,
+  isBlockedEitherWay,
+  listBlockedMembers,
+  type BlockedMemberRow,
+  type MemberBlockRow,
+} from './member-blocks';
 export { MIGRATIONS_DIR, runMigrations, type RunMigrationsOptions } from './migrate';
 export {
   clearNoteReaction,

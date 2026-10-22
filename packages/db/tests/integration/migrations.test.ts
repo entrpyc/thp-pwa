@@ -177,6 +177,8 @@ describe('migrations apply to an empty database by one command', () => {
       // source, because the search that reads it wants one index, not five.
       // Account deletion adds `account_deletion_request` ([3.1.8](docs/project/prd.md)) — the
       // token half of the public flow, `password_reset`'s shape one table over.
+      // Member blocks add `member_block` — one row per directed pair, read in both directions by
+      // one predicate.
       expect(tables.map((row) => row.tablename)).toEqual([
         'account_deletion_request',
         'announcement',
@@ -184,6 +186,7 @@ describe('migrations apply to an empty database by one command', () => {
         'embedding',
         'invitation',
         'job',
+        'member_block',
         'note',
         'note_pin',
         'note_reaction',
@@ -2590,5 +2593,85 @@ describe('the embedding table, and nothing beside it', () => {
     await sql`delete from recording where id = ${existingRecordingId}`;
     const [afterRecording] = await sql<{ count: string }[]>`select count(*)::text as count from embedding`;
     expect(afterRecording?.count).toBe('0');
+  });
+});
+
+/**
+ * `member_block` — **one member choosing not to see another**, the table Apple guideline 1.2 and
+ * Google Play's UGC policy require, and the migration that adds nothing beside it.
+ *
+ * The same before-and-after as every block above. Three things are properties of the database
+ * rather than of the query layer and are asserted here: the pair is the primary key, a self-block
+ * is refused by a check, and the row goes with **either** account.
+ */
+describe('the member_block table, and nothing beside it', () => {
+  let target: ThrowawayDatabase;
+  let before: Map<string, string[]>;
+  let after: Map<string, string[]>;
+  let sql: ReturnType<typeof postgres>;
+
+  beforeAll(async () => {
+    target = await createThrowawayDatabase(inject('databaseUrl'), 'member_blocks_migration');
+
+    const priorCount = journalCountBefore('0031_member_blocks');
+    await runMigrations({ url: target.url, migrationsFolder: migrationsFolderUpTo(priorCount) });
+    before = await readColumnSets(target.url);
+
+    await runMigrations({ url: target.url, migrationsFolder: migrationsFolderUpTo(priorCount + 1) });
+    after = await readColumnSets(target.url);
+    sql = postgres(target.url, { max: 2, onnotice: () => {} });
+  }, 120_000);
+
+  afterAll(async () => {
+    await sql?.end({ timeout: 5 });
+    await target?.drop();
+  }, 60_000);
+
+  it('did not have the table before this migration and does after — otherwise the comparison is vacuous', () => {
+    expect(before.has('member_block')).toBe(false);
+    expect(after.has('member_block')).toBe(true);
+  });
+
+  it('adds the member_block table and changes no column of any other', () => {
+    for (const [table, columns] of before) {
+      expect(after.get(table), `${table} changed`).toEqual(columns);
+    }
+    expect([...after.keys()].sort()).toEqual([...before.keys(), 'member_block'].sort());
+    expect(after.get('member_block')).toEqual(['blocked_id', 'blocker_id', 'created_at']);
+  });
+
+  it('keys the pair, indexes the blocked side, refuses a self-block and cascades both ways', async () => {
+    const [alice] = await sql<{ id: string }[]>`
+      insert into "user" (email, password_hash, display_name, role)
+      values ('alice-blocks@example.test', 'hash', 'Alice', 'member') returning id
+    `;
+    const [bob] = await sql<{ id: string }[]>`
+      insert into "user" (email, password_hash, display_name, role)
+      values ('bob-blocks@example.test', 'hash', 'Bob', 'member') returning id
+    `;
+    const a = alice?.id as string;
+    const b = bob?.id as string;
+
+    const indexes = await sql<{ indexname: string }[]>`
+      select indexname from pg_indexes where tablename = 'member_block' order by indexname
+    `;
+    expect(indexes.map((row) => row.indexname)).toEqual([
+      'member_block_blocked_idx',
+      'member_block_blocker_id_blocked_id_pk',
+    ]);
+
+    await sql`insert into member_block (blocker_id, blocked_id) values (${a}, ${b})`;
+    await expect(
+      sql`insert into member_block (blocker_id, blocked_id) values (${a}, ${b})`,
+    ).rejects.toThrow(/member_block_blocker_id_blocked_id_pk/);
+    await expect(
+      sql`insert into member_block (blocker_id, blocked_id) values (${a}, ${a})`,
+    ).rejects.toThrow(/member_block_not_self/);
+    // The reverse pair is a different row, which is what "directed" means at the table.
+    await sql`insert into member_block (blocker_id, blocked_id) values (${b}, ${a})`;
+
+    await sql`delete from "user" where id = ${b}`;
+    const [count] = await sql<{ count: string }[]>`select count(*)::text as count from member_block`;
+    expect(count?.count).toBe('0');
   });
 });

@@ -16,8 +16,9 @@ import type { PolicyRules } from '@/server/auth/policy';
  * teaching's notes and writing one. The artwork scope adds `series.artwork` — setting a cover, split
  * from `series.update` for the reason every pair here is split. The tags scope adds five — the
  * taxonomy's list, create, rename and delete, and applying tags to a recording or a series. The
- * notifications scope adds two — sending an announcement to everybody, and listing past sends. The
- * same edit was required every time.
+ * notifications scope adds two — sending an announcement to everybody, and listing past sends.
+ * Member blocks add three — blocking, unblocking, and reading your own blocked list. The same edit
+ * was required every time.
  */
 export const rules: PolicyRules = {
   'session.read': { roles: { admin: true, member: true } },
@@ -72,4 +73,7 @@ export const rules: PolicyRules = {
   'tag.assign': { roles: { admin: true, member: false } },
   'announcement.send': { roles: { admin: true, member: false } },
   'announcement.list': { roles: { admin: true, member: false } },
+  'block.create': { roles: { admin: true, member: true } },
+  'block.remove': { roles: { admin: true, member: true } },
+  'block.list': { roles: { admin: true, member: true } },
 };

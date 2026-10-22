@@ -124,6 +124,15 @@ export const CORRELATION_ID_HEADER = 'x-correlation-id';
  *   reason: an expired deletion link is owed "ask for another" rather than "wrong", and unknown,
  *   malformed and revoked all answer `deletion_invalid` so a guesser learns nothing about which of
  *   their guesses was ever real.
+ * Member blocks add one:
+ *
+ * - `blocked` — the request is one member acting on another member's content, and there is a
+ *   block between the two, whichever of them placed it. `403` and its own code rather than
+ *   `forbidden`, because the policy module did not refuse — the actor *may* reply and react —
+ *   and rather than `not_found`, because the note is there and the screen that offered the
+ *   control may still be showing it. Its own code so the screen can say "you cannot reply to
+ *   this member" rather than "something went wrong", which is what a block is supposed to feel
+ *   like from either side: a closed door, not a broken one.
  */
 export const API_ERROR_CODES = [
   'unauthenticated',
@@ -151,6 +160,7 @@ export const API_ERROR_CODES = [
   'password_incorrect',
   'deletion_invalid',
   'deletion_expired',
+  'blocked',
   'not_found',
   'internal_error',
   'service_unavailable',

@@ -2,6 +2,7 @@ export * from './accounts';
 export * from './api';
 export * from './artwork';
 export * from './auth';
+export * from './blocks';
 export * from './chapters';
 export * from './embeddings';
 export * from './feedback';

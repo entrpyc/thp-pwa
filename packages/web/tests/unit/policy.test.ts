@@ -440,3 +440,49 @@ describe('correcting a recording’s title and date is its own action', () => {
     }
   });
 });
+
+/**
+ * **The three block actions** — and the decision they carry: anyone may block anyone.
+ *
+ * The assertion worth having is the one that is easy to lose: that no role rule and no ownership
+ * flag sits on any of the three. A later edit that refused a member blocking an admin, or gave
+ * an admin a view past somebody's block, would pass every "both roles may" check and quietly make
+ * a block an operator's business. Self-block is the service's refusal, deliberately not a rule
+ * here — it is the inverse of ownership, not an instance of it.
+ */
+describe('the three block actions are in the table, and neither differs by role nor by resource', () => {
+  const member: Actor = {
+    id: 'member-1',
+    email: 'member@example.test',
+    displayName: 'Member',
+    role: ROLE.member,
+    preferredPlaybackSpeed: DEFAULT_PLAYBACK_SPEED,
+    avatarKey: null,
+    analyticsOptedOut: false,
+  };
+  const admin: Actor = { ...member, id: 'admin-1', email: 'admin@example.test', role: ROLE.admin };
+
+  it.each(['block.create', 'block.remove', 'block.list'] as const)('permits %s for both roles', (action) => {
+    expect(isPolicyAction(action)).toBe(true);
+    for (const role of ROLES) {
+      expect(can(actorWith(role), action), role).toBe(true);
+    }
+    expect(can(null, action)).toBe(false);
+  });
+
+  it('is not owned, so a block over anybody — an admin included — is answered the same', () => {
+    for (const action of ['block.create', 'block.remove'] as const) {
+      expect(can(member, action, { kind: 'user', id: admin.id, ownerId: admin.id })).toBe(true);
+      expect(can(admin, action, { kind: 'user', id: member.id, ownerId: member.id })).toBe(true);
+      expect(can(member, action, { kind: 'user' })).toBe(true);
+    }
+  });
+
+  it('grants nothing to the nearby names nobody wrote a rule for', () => {
+    for (const role of ROLES) {
+      for (const absent of ['block.manage', 'block.read', 'user.block', 'member.block']) {
+        expect(can(actorWith(role), absent), `${absent}/${role}`).toBe(false);
+      }
+    }
+  });
+});

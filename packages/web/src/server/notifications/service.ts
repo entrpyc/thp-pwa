@@ -4,6 +4,7 @@ import {
   insertAnnouncement,
   insertNotification,
   insertNotificationForAllMembers,
+  isBlockedEitherWay,
   listAnnouncements,
   listNotificationsForUser,
   markAllNotificationsRead,
@@ -50,6 +51,16 @@ import { logger } from '@/server/observability/logger';
  * log, not a refused publish — the write is already committed, and un-publishing a teaching because
  * a notice failed would be the wrong thing to undo.
  *
+ * **A notice about one member's act on another's content is not written across a block**, in
+ * either direction — the blocker hears nothing of the blocked member, and the blocked member
+ * hears nothing of the blocker. The notes service already refuses the act itself, so for a
+ * reply or a reaction this is a second answer to the same question; it is asked again here
+ * because the two reads are not one transaction, and because this is the function a later
+ * event will call — an SOS reply ([3.16.7](docs/project/prd.md)), a push ([3.17.1](docs/project/prd.md))
+ * — and the suppression has to hold for a caller that did not think to ask first. The row is
+ * simply never written: push is a second delivery of the same rows, so a notice that does not
+ * exist is never pushed either.
+ *
  * The **reading** half is always about the caller's own rows. The account comes from the session
  * and never from the request, which is why the routes behind it are `SESSION` and no policy action
  * exists for them: there is nothing to authorise that the `where` clause is not already deciding.
@@ -92,6 +103,9 @@ export async function notifyNoteReply(input: {
 }): Promise<void> {
   if (input.authorId === input.replier.id) return;
   await raise('note.reply', async () => {
+    if (await isBlockedEitherWay(input.authorId, input.replier.id)) {
+      return { noteId: input.noteId, suppressed: 'blocked' };
+    }
     const row = await insertNotification(input.authorId, {
       kind: 'note_reply',
       title: noteReplyNotificationTitle(input.replier.displayName),
@@ -118,8 +132,11 @@ export async function notifyNoteReaction(input: {
   readonly noteText: string;
 }): Promise<void> {
   if (input.authorId === input.reactor.id) return;
-  await raise('note.react', async () =>
-    withTransaction(async (tx) => {
+  await raise('note.react', async () => {
+    if (await isBlockedEitherWay(input.authorId, input.reactor.id)) {
+      return { noteId: input.noteId, suppressed: 'blocked' };
+    }
+    return withTransaction(async (tx) => {
       await deleteReactionNotifications(
         { userId: input.authorId, noteId: input.noteId, actorId: input.reactor.id },
         tx,
@@ -138,8 +155,8 @@ export async function notifyNoteReaction(input: {
         tx,
       );
       return { notificationId: row.id, noteId: input.noteId };
-    }),
-  );
+    });
+  });
 }
 
 /**
