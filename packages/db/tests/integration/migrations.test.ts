@@ -10,8 +10,11 @@ import {
   EMBEDDING_SOURCE_KINDS,
   JOB_STATUSES,
   JOB_STEPS,
+  NOTIFICATION_KINDS,
   PIPELINE_STEPS,
   PLAYBACK_SPEEDS,
+  REPORT_OUTCOMES,
+  REPORT_REASONS,
   REVIEW_KINDS,
   REVIEW_STATUSES,
   SCRIPTURE_ORIGINS,
@@ -178,7 +181,8 @@ describe('migrations apply to an empty database by one command', () => {
       // Account deletion adds `account_deletion_request` ([3.1.8](docs/project/prd.md)) — the
       // token half of the public flow, `password_reset`'s shape one table over.
       // Member blocks add `member_block` — one row per directed pair, read in both directions by
-      // one predicate.
+      // one predicate. The UGC controls add `note_report` — a member's request that an admin look
+      // at a note (Apple 1.2, Google Play UGC); the terms acceptance is two columns on `user`.
       expect(tables.map((row) => row.tablename)).toEqual([
         'account_deletion_request',
         'announcement',
@@ -190,6 +194,7 @@ describe('migrations apply to an empty database by one command', () => {
         'note',
         'note_pin',
         'note_reaction',
+        'note_report',
         'notification',
         'password_reset',
         'playback_progress',
@@ -2672,6 +2677,168 @@ describe('the member_block table, and nothing beside it', () => {
 
     await sql`delete from "user" where id = ${b}`;
     const [count] = await sql<{ count: string }[]>`select count(*)::text as count from member_block`;
+    expect(count?.count).toBe('0');
+  });
+});
+
+/**
+ * `note_report` and the two terms-acceptance columns on `user` — **the member-facing moderation
+ * controls** (Apple guideline 1.2, Google Play's UGC policy), and the migration that adds nothing
+ * beside them.
+ *
+ * The same before-and-after as every block above. The properties of the *database* asserted here:
+ * the two enums admit exactly what the shared constants declare, the notification enum gained its
+ * two kinds, a report goes with its note and survives its reporter and its resolver, an
+ * acceptance is a version and a moment together or nothing, a resolution is an outcome and a
+ * moment together or nothing, and the queue has its partial index.
+ */
+describe('the note_report table and the terms columns, and nothing beside them', () => {
+  let target: ThrowawayDatabase;
+  let before: Map<string, string[]>;
+  let after: Map<string, string[]>;
+  let sql: ReturnType<typeof postgres>;
+  let existingUserId: string;
+
+  beforeAll(async () => {
+    target = await createThrowawayDatabase(inject('databaseUrl'), 'ugc_controls_migration');
+
+    const priorCount = journalCountBefore('0032_ugc_controls');
+    await runMigrations({ url: target.url, migrationsFolder: migrationsFolderUpTo(priorCount) });
+    before = await readColumnSets(target.url);
+
+    const seed = postgres(target.url, { max: 1, onnotice: () => {} });
+    try {
+      const [row] = await seed<{ id: string }[]>`
+        insert into "user" (email, password_hash, display_name, role)
+        values ('before-terms@example.test', 'hash', 'Before', 'member') returning id
+      `;
+      existingUserId = row?.id as string;
+    } finally {
+      await seed.end({ timeout: 5 });
+    }
+
+    await runMigrations({ url: target.url, migrationsFolder: migrationsFolderUpTo(priorCount + 1) });
+    after = await readColumnSets(target.url);
+    sql = postgres(target.url, { max: 2, onnotice: () => {} });
+  }, 120_000);
+
+  afterAll(async () => {
+    await sql?.end({ timeout: 5 });
+    await target?.drop();
+  }, 60_000);
+
+  it('did not have the table or the columns before, and does after', () => {
+    expect(before.has('note_report')).toBe(false);
+    expect(before.get('user')).not.toContain('terms_accepted_version');
+    expect(after.has('note_report')).toBe(true);
+    expect(after.get('user')).toContain('terms_accepted_version');
+    expect(after.get('user')).toContain('terms_accepted_at');
+  });
+
+  it('adds the table and the two columns and changes nothing else', () => {
+    for (const [table, columns] of before) {
+      const expected =
+        table === 'user' ? [...columns, 'terms_accepted_at', 'terms_accepted_version'].sort() : columns;
+      expect(after.get(table), `${table} changed`).toEqual(expected);
+    }
+    expect([...after.keys()].sort()).toEqual([...before.keys(), 'note_report'].sort());
+    expect(after.get('note_report')).toEqual([
+      'created_at',
+      'detail',
+      'id',
+      'note_id',
+      'outcome',
+      'reason',
+      'reporter_id',
+      'resolved_at',
+      'resolved_by',
+    ]);
+  });
+
+  it('derives the two enums from the shared vocabulary and widens the notification kinds by two', async () => {
+    const enumValues = async (name: string) =>
+      (
+        await sql<{ value: string }[]>`
+          select enumlabel as value from pg_enum
+          join pg_type on pg_type.oid = pg_enum.enumtypid
+          where pg_type.typname = ${name}
+          order by enumsortorder
+        `
+      ).map((row) => row.value);
+    expect(await enumValues('report_reason')).toEqual([...REPORT_REASONS]);
+    expect(await enumValues('report_outcome')).toEqual([...REPORT_OUTCOMES]);
+    expect(await enumValues('notification_kind')).toEqual([...NOTIFICATION_KINDS]);
+  });
+
+  it('leaves an account written before the columns with no acceptance rather than a default one', async () => {
+    const rows = await sql<{ terms_accepted_version: string | null; terms_accepted_at: string | null }[]>`
+      select terms_accepted_version, terms_accepted_at from "user" where id = ${existingUserId}
+    `;
+    expect(rows[0]?.terms_accepted_version).toBeNull();
+    expect(rows[0]?.terms_accepted_at).toBeNull();
+
+    // Half an acceptance is refused; a whole one is stored.
+    await expect(
+      sql`update "user" set terms_accepted_version = '2026-10-22' where id = ${existingUserId}`,
+    ).rejects.toThrow(/user_terms_acceptance_whole/);
+    await sql`update "user" set terms_accepted_version = '2026-10-22', terms_accepted_at = now() where id = ${existingUserId}`;
+  });
+
+  it('cascades with the note, survives the reporter and the resolver, and keeps a resolution whole', async () => {
+    const [reporter] = await sql<{ id: string }[]>`
+      insert into "user" (email, password_hash, display_name, role)
+      values ('reporter@example.test', 'hash', 'Reporter', 'member') returning id
+    `;
+    const [resolver] = await sql<{ id: string }[]>`
+      insert into "user" (email, password_hash, display_name, role)
+      values ('resolver@example.test', 'hash', 'Resolver', 'admin') returning id
+    `;
+    const [recording] = await sql<{ id: string }[]>`
+      insert into recording (original_media_key, title, recorded_at)
+      values ('originals/reports.mp3', 'A teaching', '2026-08-16') returning id
+    `;
+    const [note] = await sql<{ id: string }[]>`
+      insert into note (recording_id, author_id, visibility, text, timestamp_ms)
+      values (${recording?.id as string}, ${existingUserId}, 'public', 'words', 1000) returning id
+    `;
+    const noteId = note?.id as string;
+
+    const indexes = await sql<{ indexname: string }[]>`
+      select indexname from pg_indexes where tablename = 'note_report' order by indexname
+    `;
+    expect(indexes.map((row) => row.indexname)).toEqual([
+      'note_report_note_idx',
+      'note_report_open_idx',
+      'note_report_pkey',
+    ]);
+
+    const [report] = await sql<{ id: string }[]>`
+      insert into note_report (note_id, reporter_id, reason)
+      values (${noteId}, ${reporter?.id as string}, 'spam') returning id
+    `;
+    await expect(
+      sql`insert into note_report (note_id, reporter_id, reason) values (${noteId}, ${reporter?.id as string}, 'rude')`,
+    ).rejects.toThrow(/report_reason/);
+    await expect(
+      sql`insert into note_report (note_id, reporter_id, reason, detail) values (${noteId}, ${reporter?.id as string}, 'spam', ${'x'.repeat(501)})`,
+    ).rejects.toThrow(/note_report_detail_length/);
+    // An outcome without a moment, or a moment without an outcome, is half a decision.
+    await expect(
+      sql`update note_report set outcome = 'dismissed' where id = ${report?.id as string}`,
+    ).rejects.toThrow(/note_report_resolution_whole/);
+    await sql`update note_report set outcome = 'dismissed', resolved_at = now(), resolved_by = ${resolver?.id as string} where id = ${report?.id as string}`;
+
+    // The reporter and the resolver go; the record stays, naming nobody.
+    await sql`delete from "user" where id in (${reporter?.id as string}, ${resolver?.id as string})`;
+    const [kept] = await sql<{ reporter_id: string | null; resolved_by: string | null }[]>`
+      select reporter_id, resolved_by from note_report where id = ${report?.id as string}
+    `;
+    expect(kept?.reporter_id).toBeNull();
+    expect(kept?.resolved_by).toBeNull();
+
+    // The note goes; the report goes with it.
+    await sql`delete from note where id = ${noteId}`;
+    const [count] = await sql<{ count: string }[]>`select count(*)::text as count from note_report`;
     expect(count?.count).toBe('0');
   });
 });

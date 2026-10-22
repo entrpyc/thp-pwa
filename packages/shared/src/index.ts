@@ -19,6 +19,7 @@ export * from './playback';
 export * from './pipeline';
 export * from './reactions';
 export * from './recordings';
+export * from './reports';
 export * from './reviews';
 export * from './roles';
 export * from './scripture';

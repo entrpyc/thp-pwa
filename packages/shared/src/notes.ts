@@ -96,6 +96,14 @@ export interface NoteView {
    * its parent's moment rather than to one of its own (scope prd 3.3.2).
    */
   readonly timestampMs: number | null;
+  /**
+   * The author's account id, or `null` on a tombstone — what **Block** and **Report** in the note
+   * menu act on (Apple guideline 1.2, Google Play's UGC policy). Block is `POST
+   * /users/me/blocks/{authorId}`, a route that already exists and takes a member id, so the id has
+   * to travel; it is the same opaque id the blocked list and the member list already answer, and
+   * nothing about a person can be learned from it. Not on a tombstone: nobody is named there.
+   */
+  readonly authorId: string | null;
   /** The author's display name ([3.1.12](docs/project/prd.md)). A monogram is drawn from it. */
   readonly authorDisplayName: string;
   /**

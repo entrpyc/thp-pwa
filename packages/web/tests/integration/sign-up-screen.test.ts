@@ -1,6 +1,12 @@
 import { afterAll, beforeAll, describe, expect, it, inject } from 'vitest';
 import { chromium, type Browser, type Page } from 'playwright';
-import { NEW_USER_ONBOARDING_ID, ROLE, SIGN_UP_PAGE_PATH, onboardingPagePath } from '@thp/shared';
+import {
+  NEW_USER_ONBOARDING_ID,
+  ROLE,
+  SIGN_UP_PAGE_PATH,
+  TERMS_PAGE_PATH,
+  onboardingPagePath,
+} from '@thp/shared';
 import { closeTestDatabase, createAccount, type TestAccount } from '../support/accounts';
 
 /**
@@ -50,19 +56,36 @@ function freshEmail(label: string): string {
   return `${label}-${suffix}@example.test`;
 }
 
-async function fillAndSubmit(page: Page, email: string, password: string): Promise<void> {
+/** The consent box, by the sentence that labels it (Google Play UGC policy). */
+function consent(page: Page) {
+  return page.getByRole('checkbox', { name: /accept the terms of use/i });
+}
+
+async function fillAndSubmit(
+  page: Page,
+  email: string,
+  password: string,
+  options: { readonly acceptTerms?: boolean } = {},
+): Promise<void> {
   await page.getByLabel('Email').fill(email);
   await page.getByLabel('Password').fill(password);
+  if (options.acceptTerms !== false) await consent(page).check();
   await page.getByRole('button', { name: 'Create account' }).click();
 }
 
 describe('the sign-up screen', () => {
-  it('renders email, password, the rule and a submit', async () => {
+  it('renders email, password, the rule, the terms consent and a submit', async () => {
     const page = await openSignUp();
     try {
       await expect.poll(() => page.getByLabel('Email').count()).toBe(1);
       expect(await page.getByLabel('Password').count()).toBe(1);
       expect(await page.getByRole('button', { name: 'Create account' }).count()).toBe(1);
+      // The consent is unticked until the person ticks it, and its sentence links to the terms.
+      expect(await consent(page).count()).toBe(1);
+      expect(await consent(page).isChecked()).toBe(false);
+      expect(
+        await page.locator('form').getByRole('link', { name: 'terms of use' }).getAttribute('href'),
+      ).toBe(TERMS_PAGE_PATH);
       expect(await page.getByRole('heading', { level: 1 }).textContent()).toContain(
         'Create your account',
       );
@@ -87,6 +110,30 @@ describe('the sign-up screen', () => {
         .poll(() => page.getByRole('button', { name: 'Skip' }).count(), { timeout: 30_000 })
         .toBe(1);
       expect(new URL(page.url()).pathname).not.toBe('/sign-in');
+    } finally {
+      await page.context().close();
+    }
+  }, 60_000);
+
+  it('refuses to register without the terms ticked, keeps what was typed, and sends nothing', async () => {
+    const page = await openSignUp();
+    const sent: string[] = [];
+    page.on('request', (request) => {
+      if (request.method() === 'POST') sent.push(request.url());
+    });
+    try {
+      const email = freshEmail('browser-unticked');
+      await fillAndSubmit(page, email, PASSWORD, { acceptTerms: false });
+
+      const error = page.locator('form').getByRole('alert');
+      await expect
+        .poll(async () => ((await error.textContent().catch(() => '')) ?? '').trim(), {
+          timeout: 20_000,
+        })
+        .toContain('accept the terms of use');
+      expect(await page.getByLabel('Email').inputValue()).toBe(email);
+      expect(new URL(page.url()).pathname).toBe(SIGN_UP_PAGE_PATH);
+      expect(sent.filter((url) => url.includes('/auth/sign-up'))).toEqual([]);
     } finally {
       await page.context().close();
     }
@@ -171,6 +218,9 @@ describe('the sign-up screen', () => {
     const page = await openSignUp();
     try {
       await page.getByLabel('Email').focus();
+      // Password, the consent box, the terms link inside its sentence, then the submit.
+      await page.keyboard.press('Tab');
+      await page.keyboard.press('Tab');
       await page.keyboard.press('Tab');
       await page.keyboard.press('Tab');
       const focused = await page.evaluate(() => document.activeElement?.textContent ?? '');

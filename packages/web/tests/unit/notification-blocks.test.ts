@@ -40,6 +40,7 @@ const replier: Actor = {
   preferredPlaybackSpeed: DEFAULT_PLAYBACK_SPEED,
   avatarKey: null,
   analyticsOptedOut: false,
+  termsAcceptedVersion: null,
 };
 
 const input = {

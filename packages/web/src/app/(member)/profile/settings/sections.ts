@@ -1,5 +1,6 @@
 import type { ComponentType } from 'react';
 import { AnalyticsSection } from './analytics-section';
+import { BlockedMembersSection } from './blocked-members-section';
 import { DeleteAccountSection } from './delete-account-section';
 import { SessionSection } from './session-section';
 
@@ -20,13 +21,15 @@ import { SessionSection } from './session-section';
  * destination drawn rather than dropped, which the codebase does not do. The analytics opt-out was
  * the first to arrive this way; account deletion the second.
  *
- * The order is the order of consequence. The way out stays the first thing on the page; consent is
- * the second thing that concerns only the account's owner; and deleting the account is last, so
- * the one button on the page nobody can undo is never the first one under a thumb.
+ * The order is the order of consequence. The way out stays the first thing on the page; the blocked
+ * list is next, because it is the one setting a member comes here *looking for* after pressing
+ * Block on a note; consent follows; and deleting the account is last, so the one button on the
+ * page nobody can undo is never the first one under a thumb.
  */
 export const SETTINGS_SECTIONS: readonly { readonly id: string; readonly Section: ComponentType }[] =
   [
     { id: 'session', Section: SessionSection },
+    { id: 'blocked-members', Section: BlockedMembersSection },
     { id: 'analytics', Section: AnalyticsSection },
     { id: 'delete-account', Section: DeleteAccountSection },
   ];

@@ -250,6 +250,7 @@ describe('finalising an upload', () => {
       preferredPlaybackSpeed: DEFAULT_PLAYBACK_SPEED,
       avatarKey: null,
       analyticsOptedOut: false,
+      termsAcceptedVersion: null,
     };
 
     try {

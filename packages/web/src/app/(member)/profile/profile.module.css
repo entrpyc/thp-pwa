@@ -369,3 +369,43 @@
   border-radius: var(--radius-md);
   background: var(--color-surface-raised);
 }
+
+/*
+ * The blocked list on the settings page: one row per member, name and date on the left, Unblock
+ * on the right, wrapping under the name at phone width. The guide's list-row recipe the admin
+ * console already uses, restated here rather than composed across the member/admin boundary.
+ */
+.blockedList {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+}
+
+.blockedRow {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--space-3);
+  padding: var(--space-3) 0;
+  border-top: 1px solid var(--color-border);
+  min-width: 0;
+}
+
+.blockedWho {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-1);
+  flex: 1 1 12rem;
+  min-width: 0;
+}
+
+.blockedName {
+  margin: 0;
+  font-size: var(--fs-body);
+  font-weight: 600;
+  color: var(--color-text);
+  overflow-wrap: anywhere;
+}

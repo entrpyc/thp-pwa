@@ -94,8 +94,14 @@ export const SIGN_UP_PAGE_PATH = '/sign-up';
  * (docs/project/prd.md, 3.1.15); a request shape with a role in it is a request shape somebody
  * will one day trust. Changing a role is an admin action on an account that already exists
  * (3.1.5), and it travels on `PATCH /api/v1/users/:id` where it can be authorised.
+ *
+ * **`termsVersion` is required** (Google Play UGC policy: a member accepts the terms before they
+ * post). It is the version the form showed and the member ticked, and it has to equal
+ * `TERMS_VERSION` — the same rule `TermsAcceptanceRequest` states, so registering and accepting
+ * later are one act recorded two ways rather than two acts with two rules.
  */
 export interface SignUpRequest {
   readonly email: string;
   readonly password: string;
+  readonly termsVersion: string;
 }

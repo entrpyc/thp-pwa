@@ -4,6 +4,7 @@ import {
   AUTH_SESSION_PATH,
   NEW_USER_ONBOARDING_ID,
   SESSION_COOKIE_NAME,
+  TERMS_VERSION,
   type Role,
 } from '@thp/shared';
 import { hashPassword } from '@/server/auth/password';
@@ -46,6 +47,11 @@ export interface CreateAccountOptions {
    * otherwise — see {@link createAccount}.
    */
   readonly onboarded?: boolean;
+  /**
+   * Whether the account has accepted the current terms. `true` unless a test says otherwise —
+   * see {@link createAccount}.
+   */
+  readonly termsAccepted?: boolean;
 }
 
 /**
@@ -59,6 +65,12 @@ export interface CreateAccountOptions {
  * that is *about* the tour asks for `{ onboarded: false }` and gets the account as registration
  * would have left it; the flows that create an account for real — sign-up, accepting an
  * invitation — never come through here, so they still land in the tour and their tests say so.
+ *
+ * **Past the terms by default, for the same reason.** A note write from an account with no
+ * acceptance on record is refused with `terms_required`, so every suite that writes a note would
+ * otherwise meet the prompt instead of the thing it came to drive. A test that is *about* the
+ * prompt asks for `{ termsAccepted: false }` and gets the account as an invitation would have
+ * left it.
  */
 export async function createAccount(
   databaseUrl: string,
@@ -75,6 +87,7 @@ export async function createAccount(
       passwordHash: await hashPassword(password),
       displayName: `Test ${label}`,
       role,
+      ...(options.termsAccepted === false ? {} : { termsAcceptedVersion: TERMS_VERSION }),
     },
     testDatabase(databaseUrl),
   );

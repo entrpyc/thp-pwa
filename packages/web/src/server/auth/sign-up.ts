@@ -10,6 +10,7 @@ import {
 import {
   ROLE,
   checkPassword,
+  termsAcceptanceIsCurrent,
   type SessionUser,
   type SignUpRequest,
 } from '@thp/shared';
@@ -62,7 +63,7 @@ function parseSignUp(body: unknown): SignUpRequest {
   if (typeof body !== 'object' || body === null) {
     throw ApiError.invalidInput('Send a JSON object with an email and a password.');
   }
-  const { email, password } = body as Partial<SignUpRequest>;
+  const { email, password, termsVersion } = body as Partial<SignUpRequest>;
 
   if (typeof email !== 'string' || email.trim() === '' || email.length > MAX_FIELD_LENGTH) {
     throw ApiError.invalidInput('Give an email address.');
@@ -73,7 +74,23 @@ function parseSignUp(body: unknown): SignUpRequest {
   if (typeof password !== 'string' || password.length > MAX_FIELD_LENGTH) {
     throw ApiError.weakPassword('Choose a password.');
   }
-  return { email: normaliseEmail(email), password };
+  return { email: normaliseEmail(email), password, termsVersion: parseTermsVersion(termsVersion) };
+}
+
+/**
+ * The terms the registrant ticked, which must be the terms in force (Google Play UGC policy).
+ *
+ * Checked **after** the address and the password and **before** the hash: a form that did not
+ * send it is a form built against an older contract, and the sentence tells the person what to do
+ * rather than what went wrong in the request. Equality rather than "any version", so a screen that
+ * showed last month's terms cannot record acceptance of this month's — the same rule the
+ * acceptance route applies to a member who is already in.
+ */
+function parseTermsVersion(value: unknown): string {
+  if (!termsAcceptanceIsCurrent(typeof value === 'string' ? value : null)) {
+    throw ApiError.invalidInput('Please read and accept the terms of use to create an account.');
+  }
+  return value as string;
 }
 
 export interface SignUpResult {
@@ -86,7 +103,7 @@ export interface SignUpResult {
 }
 
 export async function signUp(body: unknown): Promise<SignUpResult> {
-  const { email, password } = parseSignUp(body);
+  const { email, password, termsVersion } = parseSignUp(body);
 
   // Checked before the hash so the argon2 work is not spent on an address that cannot have an
   // account. The unique index below is what actually makes two accounts impossible; this is what
@@ -101,7 +118,7 @@ export async function signUp(body: unknown): Promise<SignUpResult> {
 
   const passwordHash = await hashPassword(password);
 
-  const row = await insertMember(email, passwordHash);
+  const row = await insertMember(email, passwordHash, termsVersion);
 
   await retireInvitationFor(email, row.id);
 
@@ -111,12 +128,17 @@ export async function signUp(body: unknown): Promise<SignUpResult> {
     actorEmail: row.email,
     action: 'signup',
     target: `account:${row.id}`,
+    termsVersion,
   });
   return { user: await describeSessionUser(toActor(row)), session };
 }
 
 /** The insert, and the one refusal it can come back with that is not a bug. */
-async function insertMember(email: string, passwordHash: string): Promise<UserRow> {
+async function insertMember(
+  email: string,
+  passwordHash: string,
+  termsVersion: string,
+): Promise<UserRow> {
   try {
     return await insertUser({
       email,
@@ -125,6 +147,9 @@ async function insertMember(email: string, passwordHash: string): Promise<UserRo
       // Named from the enum rather than spelled, which is what tools/role-usage.ts is for: the one
       // place a role is chosen outside the policy module is a constant, not a value off the wire.
       role: ROLE.member,
+      // Registering and accepting were one press, so the acceptance is written with the row rather
+      // than by a second statement that could land without it.
+      termsAcceptedVersion: termsVersion,
     });
   } catch (caught) {
     // Two registrations for the same address, in flight at once. The unique index refused the

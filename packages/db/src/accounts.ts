@@ -27,6 +27,9 @@ export interface UserRow {
   readonly analyticsOptedOut: boolean;
   /** Set only on a removed-member placeholder (README.md). `null` on every real account. */
   readonly deletedAt: Date | null;
+  /** The terms version this person accepted (`TERMS_VERSION`'s shape), or `null` for never. */
+  readonly termsAcceptedVersion: string | null;
+  readonly termsAcceptedAt: Date | null;
 }
 
 export interface NewUser {
@@ -34,6 +37,13 @@ export interface NewUser {
   readonly passwordHash: string;
   readonly displayName: string;
   readonly role: Role;
+  /**
+   * The terms version the person accepted while registering, or absent for an account created
+   * some other way — by invitation, by the seed command, by a test. Absent means the row is
+   * written with no acceptance and the member is asked before their first note; the moment is
+   * taken as the insert's, because accepting and registering were one press.
+   */
+  readonly termsAcceptedVersion?: string;
 }
 
 /**
@@ -69,13 +79,47 @@ export async function insertUser(
   input: NewUser,
   handle: DatabaseHandle = getDatabase(),
 ): Promise<UserRow> {
+  const { termsAcceptedVersion, ...account } = input;
   const rows = await handle.db
     .insert(user)
-    .values({ ...input, email: normaliseEmail(input.email) })
+    .values({
+      ...account,
+      email: normaliseEmail(input.email),
+      ...(termsAcceptedVersion === undefined
+        ? {}
+        : { termsAcceptedVersion, termsAcceptedAt: new Date() }),
+    })
     .returning();
   const row = rows[0] as UserRow | undefined;
   if (!row) throw new Error('insertUser returned no row');
   return row;
+}
+
+/**
+ * Record that this person accepted a terms version, now.
+ *
+ * Written unconditionally, as the analytics write is: a member accepting the version they have
+ * already accepted gets a fresh moment and the same version, which is the truthful record of what
+ * they just did. Answers the row's two columns, or `null` for an account that does not exist.
+ */
+export async function recordTermsAcceptance(
+  id: string,
+  version: string,
+  handle: DatabaseHandle = getDatabase(),
+): Promise<{ readonly termsAcceptedVersion: string; readonly termsAcceptedAt: Date } | null> {
+  const rows = await handle.db
+    .update(user)
+    .set({ termsAcceptedVersion: version, termsAcceptedAt: new Date(), updatedAt: new Date() })
+    .where(eq(user.id, id))
+    .returning({
+      termsAcceptedVersion: user.termsAcceptedVersion,
+      termsAcceptedAt: user.termsAcceptedAt,
+    });
+  const row = rows[0];
+  if (row === undefined || row.termsAcceptedVersion === null || row.termsAcceptedAt === null) {
+    return null;
+  }
+  return { termsAcceptedVersion: row.termsAcceptedVersion, termsAcceptedAt: row.termsAcceptedAt };
 }
 
 // ---------------------------------------------------------------------------------------------
@@ -212,6 +256,23 @@ function asGuardedWrite(result: Guarded<UserRow>): GuardedWrite {
 export function isAdmin(row: UserRow): boolean {
   const { role } = row;
   return role === ROLE.admin;
+}
+
+/**
+ * The ids of every account that can act on a report today: active admins, placeholders excluded
+ * by the deactivation they carry.
+ *
+ * A fact about the data rather than an authorisation decision, like {@link isAdmin}: the question
+ * is *who should be told* that a report arrived, and the answer is the set of people the console
+ * will let in. The policy module still decides, per request, whether any one of them may act.
+ */
+export async function listActiveAdminIds(executor: Executor = getDatabase()): Promise<string[]> {
+  const rows = await queryable(executor)
+    .select({ id: user.id })
+    .from(user)
+    .where(and(sql`${roleColumn} = ${ROLE.admin}::user_role`, isNull(user.deactivatedAt)))
+    .orderBy(asc(user.id));
+  return rows.map((row) => row.id);
 }
 
 /**

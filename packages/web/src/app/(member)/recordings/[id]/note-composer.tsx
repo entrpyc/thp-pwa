@@ -13,6 +13,7 @@ import { ApiClientError, apiFetch } from '@/client/api-client';
 import { track } from '@/client/observability/analytics';
 import { clearNoteDraft, readNoteDraft, writeNoteDraft } from '@/client/notes/draft';
 import { useRecordingContent } from './recording-content';
+import { TermsPrompt, isTermsRequired } from './terms-prompt';
 import styles from './notes.module.css';
 
 /**
@@ -69,9 +70,18 @@ export function CharacterCount({ count }: { count: number }) {
 /** What a member is told when a save fails for a reason that is not the teaching going away. */
 export const SAVE_FAILED_MESSAGE = "Couldn't save your note. Your text is still here — try again.";
 
-/** The refusal a member reads, chosen by the code the API answered with. */
+/**
+ * The refusal a member reads, chosen by the code the API answered with.
+ *
+ * `invalid_input` carries the API's own sentence: on a write it is the word filter or the text
+ * rules, both written for the person who typed, and "edit the wording and try again" is more use
+ * than the generic line.
+ */
 export function refusalFor(caught: unknown, gone: string, fallback: string): string {
-  return caught instanceof ApiClientError && caught.code === 'not_found' ? gone : fallback;
+  if (!(caught instanceof ApiClientError)) return fallback;
+  if (caught.code === 'not_found') return gone;
+  if (caught.code === 'invalid_input') return caught.message;
+  return fallback;
 }
 
 export function NoteComposer({
@@ -114,6 +124,8 @@ export function NoteComposer({
   const anchorMs = draftAnchorMs ?? content.composerAnchorMs ?? content.positionMs;
   const [saving, setSaving] = useState(false);
   const [failure, setFailure] = useState<string | null>(null);
+  /** Whether the API refused the last save with `terms_required` — see `terms-prompt.tsx`. */
+  const [termsPrompt, setTermsPrompt] = useState(false);
   /**
    * Whether the draft has been read back yet, so the first render never writes over it.
    *
@@ -160,38 +172,53 @@ export function NoteComposer({
     writeNoteDraft(recordingId, { text, visibility, anchorMs });
   }, [anchorMs, hydrated, recordingId, text, visibility]);
 
+  /**
+   * One save for the submit and for the terms prompt's `onAccepted`: a member who accepted the
+   * terms has already pressed Save once and meant it, so the note goes without a second press.
+   */
+  function save(): void {
+    setSaving(true);
+    setFailure(null);
+    setTermsPrompt(false);
+    void apiFetch<CreateNotePayload>(recordingNotesPath(recordingId), {
+      method: 'POST',
+      credentials: 'include',
+      headers: { 'content-type': 'application/json' },
+      body: JSON.stringify({ text: text.trim(), visibility, timestampMs: anchorMs }),
+    })
+      .then(() => {
+        setText('');
+        // That a note was written, and whether it was private — never what it said.
+        track('note_created', { recording_id: recordingId, visibility, is_reply: false });
+        // The draft is the note until the note exists; once it does, it is a second copy of one
+        // the member can see in the list, and it would reopen the composer holding it again.
+        setDraftAnchorMs(null);
+        clearNoteDraft(recordingId);
+        // Armed again: the member has finished this note, so the next one starts from wherever
+        // the teaching has reached rather than from where this one did (3.1.1).
+        releaseComposerAnchor();
+        refreshNotes();
+        onSaved?.();
+      })
+      .catch((caught: unknown) => {
+        // The terms gate is the one refusal answered with a prompt rather than a sentence. The
+        // text and the draft stay exactly where they are, like every other refusal.
+        if (isTermsRequired(caught)) {
+          setTermsPrompt(true);
+          return;
+        }
+        setFailure(refusalFor(caught, NOTE_RECORDING_GONE_MESSAGE, SAVE_FAILED_MESSAGE));
+      })
+      .finally(() => setSaving(false));
+  }
+
   return (
     <form
       className={styles.composer}
       aria-label="Write a note"
       onSubmit={(event) => {
         event.preventDefault();
-        setSaving(true);
-        setFailure(null);
-        void apiFetch<CreateNotePayload>(recordingNotesPath(recordingId), {
-          method: 'POST',
-          credentials: 'include',
-          headers: { 'content-type': 'application/json' },
-          body: JSON.stringify({ text: text.trim(), visibility, timestampMs: anchorMs }),
-        })
-          .then(() => {
-            setText('');
-            // That a note was written, and whether it was private — never what it said.
-            track('note_created', { recording_id: recordingId, visibility, is_reply: false });
-            // The draft is the note until the note exists; once it does, it is a second copy of one
-            // the member can see in the list, and it would reopen the composer holding it again.
-            setDraftAnchorMs(null);
-            clearNoteDraft(recordingId);
-            // Armed again: the member has finished this note, so the next one starts from wherever
-            // the teaching has reached rather than from where this one did (3.1.1).
-            releaseComposerAnchor();
-            refreshNotes();
-            onSaved?.();
-          })
-          .catch((caught: unknown) => {
-            setFailure(refusalFor(caught, NOTE_RECORDING_GONE_MESSAGE, SAVE_FAILED_MESSAGE));
-          })
-          .finally(() => setSaving(false));
+        save();
       }}
     >
       {title === undefined ? null : <p className={styles.sheetTitle}>{title}</p>}
@@ -255,6 +282,8 @@ export function NoteComposer({
       </p>
 
       <CharacterCount count={count} />
+
+      {termsPrompt ? <TermsPrompt onAccepted={save} onDismiss={() => setTermsPrompt(false)} /> : null}
 
       {failure === null ? null : (
         <p className={styles.failure} role="status">

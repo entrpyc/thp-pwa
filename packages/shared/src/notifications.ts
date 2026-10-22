@@ -40,6 +40,18 @@ export const NOTIFICATION_KINDS = [
   'note_reply',
   /** Somebody reacted to your public note ([3.17.16](docs/project/prd.md)). The author. */
   'note_reaction',
+  /**
+   * A member reported a public note (Apple guideline 1.2, Google Play UGC policy). Every active
+   * admin, one row per report: a report is a request for a person to look, and the bell is where
+   * admins already learn that something waits on them.
+   */
+  'note_reported',
+  /**
+   * An admin acted on a report you made — the note was removed, or reviewed and left up. The
+   * reporter, once per report, so "timely responses" is something the member can see rather than
+   * infer from a note going quiet.
+   */
+  'report_resolved',
   ...ANNOUNCEMENT_KINDS,
 ] as const;
 
@@ -62,6 +74,8 @@ export const NOTIFICATION_KIND_LABEL: Record<NotificationKind, string> = {
   recording_published: 'New recording',
   note_reply: 'Reply',
   note_reaction: 'Reaction',
+  note_reported: 'Report',
+  report_resolved: 'Report reviewed',
   announcement: 'Announcement',
   new_feature: 'New feature',
 };
@@ -233,3 +247,19 @@ export function noteReplyNotificationTitle(displayName: string): string {
 export function noteReactionNotificationTitle(displayName: string): string {
   return `${displayName} reacted to your note`;
 }
+
+/**
+ * The title an admin reads when a member reports a note. It names the reporter — an admin acting
+ * on a report may need to speak to the person who made it — and never the note's author, who is
+ * one press away on the console and is not the subject of the notice.
+ */
+export function noteReportedNotificationTitle(reporterDisplayName: string): string {
+  return `${reporterDisplayName} reported a note`;
+}
+
+/**
+ * The two sentences a reporter reads when an admin closes their report. Neither names the admin:
+ * a decision of the group's moderation is the product's answer, not one person's.
+ */
+export const REPORT_REMOVED_TITLE = 'The note you reported was removed';
+export const REPORT_DISMISSED_TITLE = 'The note you reported was reviewed';

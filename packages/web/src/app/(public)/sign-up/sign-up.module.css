@@ -62,3 +62,27 @@
   font-size: var(--fs-meta);
   color: var(--color-text-dim);
 }
+
+/*
+ * The terms consent (Google Play's UGC policy): a checkbox and the sentence it agrees to, at body
+ * size because it is a decision rather than metadata, with the link inheriting the form's link
+ * treatment. The box is the native control — the codebase draws no custom one, and a native box
+ * is the one every screen reader already knows how to announce.
+ */
+.consent {
+  display: flex;
+  align-items: flex-start;
+  gap: var(--space-3);
+  margin: 0;
+  font-size: var(--fs-body);
+  color: var(--color-text);
+  cursor: pointer;
+}
+
+.consentBox {
+  flex: 0 0 auto;
+  width: var(--space-5);
+  height: var(--space-5);
+  margin: 0.15em 0 0;
+  accent-color: var(--color-primary);
+}

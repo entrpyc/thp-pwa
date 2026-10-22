@@ -14,6 +14,7 @@ import {
   REMOVED_MEMBER_DISPLAY_NAME,
   ROLE,
   SIGN_UP_PATH,
+  TERMS_VERSION,
   USERS_PATH,
   isApiErrorBody,
   notePath,
@@ -361,7 +362,11 @@ describe('deleting your own account from a session', () => {
     // The address is free again: the same person can register anew, and starts with nothing.
     const again = await call<SessionPayload>(SIGN_UP_PATH, {
       method: 'POST',
-      body: { email: leaver.email, password: 'a-fresh-passphrase-for-a-fresh-start' },
+      body: {
+        email: leaver.email,
+        password: 'a-fresh-passphrase-for-a-fresh-start',
+        termsVersion: TERMS_VERSION,
+      },
     });
     expect(again.status).toBe(201);
     expect(again.body.user.id).not.toBe(leaver.id);

@@ -2,8 +2,10 @@ import {
   clearNoteReaction,
   deleteEmbeddingsForSources,
   findNoteById,
+  findOpenNoteReportByReporter,
   findVisibleRecording,
   insertNote,
+  insertNoteReport,
   isBlockedEitherWay,
   listNotesForReader,
   listPinnedNoteIds,
@@ -22,29 +24,41 @@ import {
 } from '@thp/db';
 import {
   MAX_NOTE_LENGTH,
+  MAX_REPORT_DETAIL_LENGTH,
   NOTE_ALREADY_REMOVED_MESSAGE,
   NOTE_RECORDING_GONE_MESSAGE,
   NOTE_REMOVED_MESSAGE,
   NOTE_REMOVED_WHILE_REPLYING_MESSAGE,
   NOTE_VISIBILITIES,
+  TERMS_REQUIRED_MESSAGE,
   isInChapter,
   isReactionEmoji,
+  isReportReason,
+  termsAcceptanceIsCurrent,
   type CreateNotePayload,
   type NotePayload,
   type NoteView,
   type NoteVisibility,
   type NotesPayload,
   type ReactionCount,
+  type ReportNotePayload,
+  type ReportNoteRequest,
+  type ReportReason,
 } from '@thp/shared';
 import { ApiError } from '@/server/api/errors';
 import { authorise } from '@/server/auth/authorise';
 import { can, type Actor } from '@/server/auth/policy';
 import { requireChapterScope } from '@/server/chapters/service';
 import { queue } from '@/server/jobs/queue';
-import { notifyNoteReaction, notifyNoteReply } from '@/server/notifications/service';
+import {
+  notifyNoteReaction,
+  notifyNoteReply,
+  notifyNoteReported,
+} from '@/server/notifications/service';
 import { audit } from '@/server/observability/audit';
 import { logger } from '@/server/observability/logger';
 import { mintArtworkGrant } from '@/server/series/artwork-grant';
+import { BLOCKED_WORD_MESSAGE, findBlockedWord } from './filter';
 
 /**
  * **Notes, written and read** (active-scope architecture § 4.3) — scope prd 3.1
@@ -92,6 +106,7 @@ export async function createNote(
   body: unknown,
 ): Promise<CreateNotePayload> {
   await requirePublished(actor, recordingId, 'note.write', NOTE_RECORDING_GONE_MESSAGE);
+  requireTermsAccepted(actor, recordingId);
 
   const fields = asObject(body, 'Send a JSON object with the note, its visibility and its moment.');
   const text = parseText(fields['text']);
@@ -99,6 +114,7 @@ export async function createNote(
 
   if (parentId === undefined || parentId === null) {
     const requested = parseTopLevel(fields);
+    if (requested.visibility === 'public') requireAllowedWords(actor, text, `recording:${recordingId}`);
     const row = await withTransaction(async (tx) => {
       const written = await insertNote(
         {
@@ -128,6 +144,8 @@ export async function createNote(
 
   const parent = await requireReplyableParent(parentId, recordingId, fields);
   await requireNoBlock(actor, parent, 'You cannot reply to this member’s notes.');
+  // A reply is always public, so it is always checked.
+  requireAllowedWords(actor, text, `note:${parent.id}`);
   const row = await withTransaction(async (tx) => {
     const written = await insertNote(
       {
@@ -192,6 +210,9 @@ export async function editNote(actor: Actor, noteId: string, body: unknown): Pro
   requireStanding(existing, NOTE_ALREADY_REMOVED_MESSAGE);
 
   const text = parseText(asObject(body, 'Send a JSON object carrying the new text.')['text']);
+  // The same floor the write applied, or an edit would be the way round it. Private text is the
+  // author's own, here as there.
+  if (existing.visibility === 'public') requireAllowedWords(actor, text, `note:${noteId}`);
   const row = await withTransaction(async (tx) => {
     const updated = await updateNoteText(noteId, text, tx);
     // New words, stale vector — the same enqueue a correction makes, for the same reason. Inside
@@ -269,6 +290,107 @@ export async function deleteNote(actor: Actor, noteId: string): Promise<NotePayl
  */
 async function enqueueEmbed(recordingId: string, tx: Executor): Promise<void> {
   await queue().enqueue({ recordingId, step: 'embed' }, tx);
+}
+
+// =================================================================================================
+// Reporting (Apple guideline 1.2, Google Play's UGC policy)
+// =================================================================================================
+
+/**
+ * **Ask an admin to look at a note**, and answer the report's id.
+ *
+ * The gates, in § 8's order: the teaching is published (`requireNote`), the actor may report
+ * (`note.report`, both roles), then the note's state — standing, public, and somebody else's.
+ * A private note is `invalid_input` for the reason a reaction on one is: nobody but its author
+ * can see it, so no interface offers the control and a request carrying it is malformed. Your own
+ * note is `invalid_input` for the same reason — the menu does not draw Report on it — rather than
+ * a policy rule, because "everything but yours" is the inverse of ownership, not an instance of it.
+ *
+ * **Not refused across a block**, unlike a reply or a reaction. Those are one member acting on
+ * another's content; a report is addressed to the group's admins about content the group can read,
+ * and a member who learned a blocked member's note id some other way has still reported it to the
+ * right people. The read paths never offer such a note, so this is academic in practice.
+ *
+ * **A second report by the same member of the same open note is the first report.** Answered with
+ * its id, `created: false`, no row written and no admin told again — a member pressing Report on a
+ * stale screen has asked for a state they are already in. Two *different* members are two reports,
+ * each with its reason, closed together when an admin decides.
+ *
+ * The admins are told after the row is committed and never as a condition of it, like every notice.
+ */
+export async function reportNote(
+  actor: Actor,
+  noteId: string,
+  body: unknown,
+): Promise<{ readonly payload: ReportNotePayload; readonly created: boolean }> {
+  const existing = await requireNote(actor, noteId, 'note.report');
+  authorise(actor, 'note.report', `note:${noteId}`);
+  requireStanding(existing, NOTE_REMOVED_MESSAGE);
+  requirePublic(existing, 'A private note cannot be reported — only its author can see it.');
+  if (existing.authorId === actor.id) {
+    throw ApiError.invalidInput('You cannot report your own note. Edit or delete it instead.');
+  }
+
+  const request = parseReport(body);
+
+  const already = await findOpenNoteReportByReporter(noteId, actor.id);
+  if (already !== null) {
+    logger.info('note.report', {
+      actorId: actor.id,
+      action: 'note.report',
+      target: `note:${noteId}`,
+      reportId: already.id,
+      repeated: true,
+    });
+    return { payload: { reportId: already.id }, created: false };
+  }
+
+  const row = await insertNoteReport({
+    noteId,
+    reporterId: actor.id,
+    reason: request.reason,
+    detail: request.detail,
+  });
+
+  // An audit-shaped line, because a report is the start of a moderation record even though it is
+  // a member's act: who flagged which note, and why — never what the note said.
+  logger.info('note.report', {
+    ...audit(actor, 'note.report', `note:${noteId}`),
+    reportId: row.id,
+    reason: row.reason,
+    recordingId: existing.recordingId,
+  });
+
+  await notifyNoteReported({
+    reportId: row.id,
+    noteId,
+    recordingId: existing.recordingId,
+    reason: row.reason,
+    noteText: existing.text ?? '',
+    reporter: actor,
+  });
+
+  return { payload: { reportId: row.id }, created: true };
+}
+
+/** The reason from the shared list, and the optional sentence trimmed and bounded. */
+function parseReport(body: unknown): { readonly reason: ReportReason; readonly detail: string | null } {
+  const fields = asObject(body, 'Send a JSON object with the reason.') as Partial<ReportNoteRequest>;
+  if (!isReportReason(fields.reason)) {
+    throw ApiError.invalidInput('Choose one of the reasons offered.');
+  }
+  const { detail } = fields;
+  if (detail === undefined || detail === null) return { reason: fields.reason, detail: null };
+  if (typeof detail !== 'string') {
+    throw ApiError.invalidInput('The detail, if given, is text.');
+  }
+  const trimmed = detail.trim();
+  if (trimmed.length > MAX_REPORT_DETAIL_LENGTH) {
+    throw ApiError.invalidInput(
+      `${MAX_REPORT_DETAIL_LENGTH.toLocaleString('en-GB')} characters maximum for the detail.`,
+    );
+  }
+  return { reason: fields.reason, detail: trimmed === '' ? null : trimmed };
 }
 
 // =================================================================================================
@@ -585,6 +707,64 @@ async function requireNoBlock(actor: Actor, row: NoteRow, message: string): Prom
   throw ApiError.blocked(message);
 }
 
+/**
+ * Refuse a note from a member whose terms acceptance is missing or stale (Google Play's UGC
+ * policy: a member accepts the terms before they post).
+ *
+ * **Every new note, public or private, and every reply** — one rule rather than one per
+ * visibility, because a reply is always public, a private note is still a post in the policy's
+ * sense, and a gate with a carve-out is a gate somebody will one day route round. **Not an edit**:
+ * editing is correcting a post that was already allowed, and the author of an existing note has
+ * been through this gate or predates it, which is the account's business and not the edit's.
+ *
+ * Asked right after the publication gate and before the body is read, so the prompt a member
+ * meets is about posting rather than about the shape of the request. `terms_required` rather than
+ * `forbidden`: the policy module said yes, and what refuses is a fact about the account the member
+ * can change in one press — which is exactly what the composer draws.
+ *
+ * The version is on the actor, read with the session this request; a member who accepts and
+ * saves again is a member whose next request carries the new version.
+ */
+function requireTermsAccepted(actor: Actor, recordingId: string): void {
+  if (termsAcceptanceIsCurrent(actor.termsAcceptedVersion)) return;
+
+  logger.warn('note.refused', {
+    actorId: actor.id,
+    action: 'note.write',
+    target: `recording:${recordingId}`,
+    reason: 'terms-not-accepted',
+    code: 'terms_required',
+    accepted: actor.termsAcceptedVersion,
+  });
+  throw ApiError.termsRequired(TERMS_REQUIRED_MESSAGE);
+}
+
+/**
+ * Refuse public text that trips the word list (Apple guideline 1.2: a method for filtering
+ * objectionable material) — see `filter.ts` for the rule and `blocked-words.ts` for the floor.
+ *
+ * **Public text only.** A private note is read by its author alone, and the filter exists so that
+ * other members never meet the words; applied to a private note it would be the product policing a
+ * person's own journal. A reply is always public, so a reply is always checked.
+ *
+ * `invalid_input`, because the member can fix it and try again, and the text is still in the box.
+ * The log carries the word that tripped it and never the note.
+ */
+function requireAllowedWords(actor: Actor, text: string, target: string): void {
+  const word = findBlockedWord(text);
+  if (word === null) return;
+
+  logger.warn('note.refused', {
+    actorId: actor.id,
+    action: 'note.write',
+    target,
+    reason: 'blocked-word',
+    code: 'invalid_input',
+    word,
+  });
+  throw ApiError.invalidInput(BLOCKED_WORD_MESSAGE);
+}
+
 // =================================================================================================
 // Describing
 // =================================================================================================
@@ -634,6 +814,8 @@ function describe(
       deleted || row.authorAvatarKey === null
         ? null
         : (avatars.get(row.authorAvatarKey) ?? null),
+    // Withheld on a tombstone for the reason the name is: a removed note names nobody.
+    authorId: deleted ? null : row.authorId,
     visibility: row.visibility,
     // Answered here rather than compared on the client: the server is the side that knows who is
     // reading, and it is the side that already decided which rows this reader may have.

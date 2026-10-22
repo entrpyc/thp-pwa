@@ -1,0 +1,112 @@
+/*
+ * The reports panel.
+ *
+ * There is no `pages/admin.png`; this panel takes the same carve-out every other admin screen has,
+ * so it is composed from docs/design-references/style-guide.md and the token layer. It **invents
+ * two things**: the quoted note, drawn as a blockquote with the guide's raised surface so an
+ * admin reads it as somebody else's words rather than as the console's own, and a link inside a
+ * meta line. Everything else `composes` from `admin.module.css`.
+ */
+
+.panel {
+  composes: panel from '../admin.module.css';
+}
+
+.section {
+  composes: section from '../admin.module.css';
+}
+
+.sectionTitle {
+  composes: sectionTitle from '../admin.module.css';
+}
+
+.sectionNote {
+  composes: sectionNote from '../admin.module.css';
+}
+
+.empty {
+  composes: empty from '../admin.module.css';
+}
+
+.failure {
+  composes: failure from '../admin.module.css';
+}
+
+.done {
+  composes: done from '../admin.module.css';
+}
+
+.list {
+  composes: list from '../admin.module.css';
+}
+
+.listRow {
+  composes: row from '../admin.module.css';
+}
+
+.rowIdentity {
+  composes: rowIdentity from '../admin.module.css';
+}
+
+.rowName {
+  composes: rowName from '../admin.module.css';
+}
+
+.rowMeta {
+  composes: rowMeta from '../admin.module.css';
+}
+
+.rowControls {
+  composes: rowControls from '../admin.module.css';
+}
+
+.chip {
+  composes: chip from '../admin.module.css';
+}
+
+.action {
+  composes: action from '../admin.module.css';
+}
+
+.actionStrong {
+  composes: actionStrong from '../admin.module.css';
+}
+
+.confirm {
+  composes: confirm from '../admin.module.css';
+}
+
+.confirmText {
+  composes: confirmText from '../admin.module.css';
+}
+
+.confirmActions {
+  composes: confirmActions from '../admin.module.css';
+}
+
+/* The reporter's sentence to the admin, under the note. */
+.rowBody {
+  margin: 0 0 var(--space-1);
+  font-size: var(--fs-body);
+  color: var(--color-text-muted);
+  white-space: pre-wrap;
+  overflow-wrap: anywhere;
+}
+
+/* The reported note, quoted: the member's words, kept whole, visibly not the console's voice. */
+.noteText {
+  margin: 0 0 var(--space-2);
+  padding: var(--space-3) var(--space-4);
+  background: var(--color-surface-raised);
+  border-left: 3px solid var(--color-border-strong);
+  border-radius: var(--radius-sm);
+  font-size: var(--fs-body);
+  color: var(--color-text);
+  white-space: pre-wrap;
+  overflow-wrap: anywhere;
+}
+
+.rowLink {
+  color: var(--color-primary-strong);
+  text-decoration: underline;
+}

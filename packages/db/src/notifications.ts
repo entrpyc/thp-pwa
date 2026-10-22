@@ -4,6 +4,7 @@ import { announcement, notification, user } from './schema';
 import {
   noteReactionNotificationTitle,
   noteReplyNotificationTitle,
+  noteReportedNotificationTitle,
   type AnnouncementKind,
   type NotificationKind,
 } from '@thp/shared';
@@ -222,7 +223,13 @@ export async function anonymiseNotificationsByActor(
     .set({ title: noteReactionNotificationTitle(placeholderName) })
     .where(and(eq(notification.actorId, actorId), eq(notification.kind, 'note_reaction')))
     .returning({ id: notification.id });
-  return replies.length + reactions.length;
+  // The third title that names a person: the admins' notice that this member reported a note.
+  const reports = await db
+    .update(notification)
+    .set({ title: noteReportedNotificationTitle(placeholderName) })
+    .where(and(eq(notification.actorId, actorId), eq(notification.kind, 'note_reported')))
+    .returning({ id: notification.id });
+  return replies.length + reactions.length + reports.length;
 }
 
 // =================================================================================================

@@ -8,9 +8,11 @@ export {
   findUserByEmail,
   findUserById,
   insertUser,
+  listActiveAdminIds,
   listUsers,
   normaliseEmail,
   reactivateUser,
+  recordTermsAcceptance,
   setAnalyticsOptOut,
   setUserAvatar,
   setUserRole,
@@ -144,6 +146,17 @@ export {
   type NoteWithAuthorRow,
   type ReassignedNotes,
 } from './notes';
+export {
+  findNoteReportById,
+  findOpenNoteReportByReporter,
+  insertNoteReport,
+  listOpenNoteReports,
+  resolveOpenReportsForNote,
+  type NewNoteReport,
+  type NoteReportRow,
+  type OpenNoteReportRow,
+  type ResolvedNoteReportRow,
+} from './note-reports';
 export {
   anonymiseNotificationsByActor,
   countUnreadNotifications,

@@ -5,6 +5,7 @@ import {
   insertNotification,
   insertNotificationForAllMembers,
   isBlockedEitherWay,
+  listActiveAdminIds,
   listAnnouncements,
   listNotificationsForUser,
   markAllNotificationsRead,
@@ -15,14 +16,19 @@ import {
   type NotificationRow,
 } from '@thp/db';
 import {
+  ADMIN_REPORTS_PAGE_PATH,
   MAX_ANNOUNCEMENT_BODY_LENGTH,
   MAX_ANNOUNCEMENT_TITLE_LENGTH,
   NOTIFICATIONS_PAGE_SIZE,
+  REPORT_DISMISSED_TITLE,
+  REPORT_REASON_LABEL,
+  REPORT_REMOVED_TITLE,
   excerptForNotification,
   isAnnouncementKind,
   isOnboardingId,
   noteReactionNotificationTitle,
   noteReplyNotificationTitle,
+  noteReportedNotificationTitle,
   onboardingPagePath,
   recordingPagePath,
   type AnnouncementListPayload,
@@ -32,6 +38,8 @@ import {
   type NotificationView,
   type NotificationsReadAllPayload,
   type OnboardingId,
+  type ReportOutcome,
+  type ReportReason,
   type SendAnnouncementPayload,
 } from '@thp/shared';
 import { ApiError } from '@/server/api/errors';
@@ -156,6 +164,91 @@ export async function notifyNoteReaction(input: {
       );
       return { notificationId: row.id, noteId: input.noteId };
     });
+  });
+}
+
+/**
+ * A member reported a public note (Apple guideline 1.2: a mechanism to report, with timely
+ * responses). **Every active admin is told, one row each**, with a press that lands on the
+ * console's queue — the bell is where an admin already learns that something waits on them.
+ *
+ * One notice per report rather than one per note, because each report is a separate request to
+ * look and the admin's inbox is the record of those requests; the queue itself is where they are
+ * read together. A reporter who is an admin is not told about their own report.
+ *
+ * **Not suppressed across a block.** The block predicate is about one member hearing of another's
+ * act on *their* content; a report is addressed to the group's admins about content the group can
+ * read, and an admin who has blocked the reporter still has a queue to work.
+ */
+export async function notifyNoteReported(input: {
+  readonly reportId: string;
+  readonly noteId: string;
+  readonly recordingId: string;
+  readonly reason: ReportReason;
+  readonly noteText: string;
+  readonly reporter: Actor;
+}): Promise<void> {
+  await raise('note.report', async () => {
+    const admins = (await listActiveAdminIds()).filter((id) => id !== input.reporter.id);
+    const body = `${REPORT_REASON_LABEL[input.reason]}: ${excerptForNotification(input.noteText)}`;
+    await Promise.all(
+      admins.map((adminId) =>
+        insertNotification(adminId, {
+          kind: 'note_reported',
+          title: noteReportedNotificationTitle(input.reporter.displayName),
+          body,
+          href: ADMIN_REPORTS_PAGE_PATH,
+          recordingId: input.recordingId,
+          noteId: input.noteId,
+          actorId: input.reporter.id,
+        }),
+      ),
+    );
+    return { reportId: input.reportId, noteId: input.noteId, recipients: admins.length };
+  });
+}
+
+/**
+ * An admin closed a report (Apple guideline 1.2's "timely responses", made visible). **Each
+ * reporter is told once**, which of the two things happened, with a press that lands on the
+ * teaching — where a removed note is now a tombstone and a kept one still reads.
+ *
+ * The notice names no admin and quotes no text: the decision is the product's answer, and the
+ * reporter already knows what they reported. A reporter whose account is gone has nobody to tell,
+ * and the admin who decided is not told about their own report.
+ */
+export async function notifyReportResolved(input: {
+  readonly reporterIds: readonly (string | null)[];
+  readonly noteId: string;
+  readonly recordingId: string;
+  readonly outcome: ReportOutcome;
+  readonly resolver: Actor;
+}): Promise<void> {
+  await raise('report.resolve', async () => {
+    const recipients = [
+      ...new Set(
+        input.reporterIds.filter(
+          (id): id is string => id !== null && id !== input.resolver.id,
+        ),
+      ),
+    ];
+    const removed = input.outcome === 'removed';
+    await Promise.all(
+      recipients.map((reporterId) =>
+        insertNotification(reporterId, {
+          kind: 'report_resolved',
+          title: removed ? REPORT_REMOVED_TITLE : REPORT_DISMISSED_TITLE,
+          body: removed
+            ? 'An admin reviewed your report and removed the note. Thank you for flagging it.'
+            : 'An admin reviewed your report and decided the note can stay. Thank you for flagging it.',
+          href: recordingPagePath(input.recordingId),
+          recordingId: input.recordingId,
+          noteId: input.noteId,
+          actorId: input.resolver.id,
+        }),
+      ),
+    );
+    return { noteId: input.noteId, outcome: input.outcome, recipients: recipients.length };
   });
 }
 
