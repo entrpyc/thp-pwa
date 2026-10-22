@@ -35,7 +35,7 @@ type OpenTab = 'chapters' | 'scripture' | 'notes' | 'transcript' | null;
  *   `pages/chapter.png` draws it, with the back control over it (scope prd 3.2.3, 3.2.7). The
  *   cover is the *series'* — a recording has none of its own — so every teaching in one study
  *   shows the same picture, and a teaching in no series keeps the flat band (scope prd 3.2.6).
- * - **A tab strip holding three tabs.** The reference draws five — `Chapter`, `Scripture`, `Notes`,
+ * - **A tab strip holding four tabs.** The reference draws five — `Chapter`, `Scripture`, `Notes`,
  *   `Transcript`, `Mindmap` — and four of them have data: `Chapters` arrived with
  *   [3.22.10](docs/project/prd.md) and `Mindmap` is still dropped rather than rendered disabled,
  *   which is the line the whole member surface draws for a deferred destination. Summary and
@@ -43,10 +43,10 @@ type OpenTab = 'chapters' | 'scripture' | 'notes' | 'transcript' | null;
  *   summary, which is what a member reads in: the chosen line about the teaching, then what was
  *   said in it. The strip is **single-select**,
  *   the way the reference reads it: opening `Notes` closes `Scripture`.
- * - **`Transcript` is hidden**, and it is the one entry missing for a reason that is not about
- *   data. `Mindmap` is absent because nothing was built; `Scripture` and `Chapters` come and go with
- *   what a teaching has. This one is a decision taken over a feature that works — so the control is
- *   commented in place at the strip rather than deleted, and everything behind it is untouched.
+ * - **`Transcript` is always drawn** (3.5.3, 3.5.4). `Mindmap` is absent because nothing was
+ *   built; `Scripture` and `Chapters` come and go with what a teaching has; the transcript is the
+ *   one thing every published teaching has, so its tab is the one entry besides `Notes` that is
+ *   always there.
  * - **`Scripture` is drawn only for a teaching that has some** (active-scope prd 3.4.4) — the same
  *   line, one step further: a destination with no data behind it is left out rather than offered
  *   empty. The recording payload carries `hasScripture` so that decision costs no request.
@@ -418,26 +418,22 @@ export function RecordingScreen({
               </button>
             ) : null}
             {/*
-              **`Transcript` is hidden**, by operator decision rather than by a rule about data —
-              which is why it is commented here rather than dropped the way `Mindmap` is. Everything
-              behind it is intact: the panel, the correction path, the route and the payload. What
-              is gone is the one control that opened it, so `openTab` can no longer take the value
-              and the panel below is unreachable until this button comes back.
-
-              Bringing it back is this element and nothing else. `transcript-screen.test.ts` and
-              `transcript-correction-screen.test.ts` are skipped while it is away, and un-skipping
-              them is the other half of that change.
-
-              <button
-                className={styles.tab}
-                type="button"
-                role="tab"
-                aria-selected={openTab === 'transcript'}
-                onClick={() => chooseTab('transcript')}
-              >
-                Transcript
-              </button>
+              `Transcript` is always drawn: every published teaching has been transcribed (3.5.1),
+              so unlike `Chapters` and `Scripture` there is no payload fact to decide it on, and the
+              panel states the empty case itself for the rare teaching whose transcript is not there
+              yet. It was hidden for a while by operator decision — commented in place rather than
+              dropped, with `transcript-screen.test.ts` and `transcript-correction-screen.test.ts`
+              skipped alongside — and bringing it back was this element and those two un-skips.
             */}
+            <button
+              className={styles.tab}
+              type="button"
+              role="tab"
+              aria-selected={openTab === 'transcript'}
+              onClick={() => chooseTab('transcript')}
+            >
+              Transcript
+            </button>
           </div>
 
           {/*
