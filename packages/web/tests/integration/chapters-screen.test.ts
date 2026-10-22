@@ -257,8 +257,8 @@ describe('the Chapters tab on the recording page (3.22.10)', () => {
     try {
       await expect.poll(() => strip(page).count(), { timeout: 30_000 }).toBe(1);
       // Another tab is there, so this is the strip having decided rather than not having drawn.
-      // `Notes` rather than `Transcript`: the transcript tab is hidden, and `Notes` is the one entry
-      // that is always present whatever a teaching holds — which is what this needs it for.
+      // `Notes`, because it is the one entry that is always present whatever a teaching holds —
+      // which is what this needs it for.
       await expect
         .poll(() => strip(page).getByRole('tab', { name: 'Notes' }).count(), { timeout: 30_000 })
         .toBe(1);
@@ -447,9 +447,9 @@ describe('the chapter page (3.22.13, 3.22.14, 3.22.15)', () => {
 
       expect(await tabs.getByRole('tab', { name: 'Notes' }).count()).toBe(1);
       expect(await tabs.getByRole('tab', { name: 'Scripture' }).count()).toBe(1);
-      // Hidden on this strip exactly as it is on the recording page's — the two are one control a
-      // member reads twice, so the entry is absent from both or from neither.
-      expect(await tabs.getByRole('tab', { name: 'Transcript' }).count()).toBe(0);
+      // Drawn on this strip exactly as it is on the recording page's — the two are one control a
+      // member reads twice, so the entry is present on both or on neither.
+      expect(await tabs.getByRole('tab', { name: 'Transcript' }).count()).toBe(1);
       expect(await tabs.getByRole('tab', { name: 'Chapters' }).count()).toBe(0);
     } finally {
       await page.context().close();
@@ -459,11 +459,10 @@ describe('the chapter page (3.22.13, 3.22.14, 3.22.15)', () => {
   /**
    * **The transcript shows that chapter's lines and stops at its boundaries** (3.22.14).
    *
-   * Skipped while the `Transcript` tab is hidden — the tab is the only way into the panel, so there
-   * is nothing to open. The scoping itself is still asserted against the API in `chapters.test.ts`;
-   * what is out of reach is the screen half. Un-skip with the tab.
+   * The screen half of a rule `chapters.test.ts` asserts against the API. It was skipped while the
+   * `Transcript` tab was hidden — the tab is the only way into the panel — and came back with it.
    */
-  it.skip('shows only this chapter’s transcript lines', async () => {
+  it('shows only this chapter’s transcript lines', async () => {
     const page = await openTeaching(chapteredId);
     try {
       await page.goto(`${baseUrl}${chapterPagePath(chapteredId, chapterIds[1]!)}`, {

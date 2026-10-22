@@ -43,9 +43,7 @@ type OpenTab = 'scripture' | 'notes' | 'transcript' | null;
  *   series' cover, exactly as it is on the recording page.
  * - **The recording's tabs sit beside them, each scoped to this chapter's span**
  *   ([3.22.14](docs/project/prd.md)). A note belongs to the chapter its timestamp falls in, a
- *   citation to the chapter its anchor falls in, and the transcript stops at the boundaries — the
- *   last of those still true of the panel, which is intact and merely unreachable while the
- *   `Transcript` tab is hidden. See the strip below.
+ *   citation to the chapter its anchor falls in, and the transcript stops at the boundaries.
  * - **It offers a route back to the recording it came from** ([3.22.13](docs/project/prd.md)) — the
  *   back control over the band, pointing at the teaching rather than at the library. The address is
  *   what decides that, so a member who arrived from a link gets the same route back as one who
@@ -300,21 +298,20 @@ export function ChapterScreen({
               Scripture
             </button>
             {/*
-              **`Transcript` is hidden**, the same operator decision the recording page's strip
-              carries and for the same reason — the two strips are one control a member reads twice,
-              and a tab that vanished on one screen and not the other would read as a bug rather
-              than as a decision. See `recording-view.tsx` for the whole of it.
-
-              <button
-                className={styles.tab}
-                type="button"
-                role="tab"
-                aria-selected={openTab === 'transcript'}
-                onClick={() => chooseTab('transcript')}
-              >
-                Transcript
-              </button>
+              Drawn whenever the recording page's strip draws it — the two strips are one control a
+              member reads twice, and a tab that vanished on one screen and not the other would read
+              as a bug rather than as a decision. It was hidden on both for a while by operator
+              decision, and came back on both; see `recording-view.tsx` for the whole of it.
             */}
+            <button
+              className={styles.tab}
+              type="button"
+              role="tab"
+              aria-selected={openTab === 'transcript'}
+              onClick={() => chooseTab('transcript')}
+            >
+              Transcript
+            </button>
           </div>
 
           {openTab === 'notes' ? (
