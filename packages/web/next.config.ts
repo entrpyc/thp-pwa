@@ -28,6 +28,18 @@ const config: NextConfig = {
     // the same `isExternalMocked` the server does.
     NEXT_PUBLIC_THP_MOCK_EXTERNAL: process.env.THP_MOCK_EXTERNAL ?? '',
   },
+  async headers() {
+    return [
+      {
+        // Apple fetches this file with no extension and refuses it unless it is served as JSON;
+        // Next would otherwise type it by extension and send an octet stream, and universal links
+        // from the store shell would silently never open the app (packages/shell/README.md).
+        // Google's assetlinks.json beside it has an extension and needs nothing.
+        source: '/.well-known/apple-app-site-association',
+        headers: [{ key: 'Content-Type', value: 'application/json' }],
+      },
+    ];
+  },
 };
 
 export default config;

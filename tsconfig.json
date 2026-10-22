@@ -10,6 +10,7 @@
     "packages/web/src/**/*.ts",
     "packages/web/src/**/*.tsx",
     "packages/web/next.config.ts",
+    "packages/shell/capacitor.config.ts",
     "packages/web/tests/**/*.ts",
     "packages/db/tests/**/*.ts",
     "packages/media/src/**/*.ts",

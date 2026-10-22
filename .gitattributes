@@ -3,3 +3,7 @@
 # the box — so these are LF regardless of anyone's core.autocrlf.
 *.sh text eol=lf
 .githooks/* text eol=lf
+
+# The Gradle wrapper is a shell script with no extension, run on whichever Mac or Linux box builds
+# the Android bundle — the same CRLF hazard as the deployment scripts above.
+packages/shell/android/gradlew text eol=lf

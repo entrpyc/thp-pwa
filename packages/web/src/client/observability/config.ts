@@ -1,5 +1,6 @@
 import type { AnalyticsInstallSource } from '@thp/shared';
 import { type EnvSource, isExternalMocked } from '@thp/shared/mock';
+import { type ShellView, shellPlatformOf } from '@/client/platform';
 
 /**
  * **What the analytics adapter reads before it does anything** — pure, so a test can hand it an
@@ -50,11 +51,13 @@ export function readAnalyticsConfigNamed(
   return { key, host: host.replace(/\/+$/, '') };
 }
 
-/** The parts of a window the install-source question reads. */
-export interface InstallSourceView {
+/**
+ * The parts of a window the install-source question reads. The Capacitor bridge is the shell
+ * reader's (`ShellView`), so that there is one place that knows what the bridge looks like.
+ */
+export interface InstallSourceView extends ShellView {
   readonly matchMedia?: (query: string) => { readonly matches: boolean };
   readonly navigator?: { readonly standalone?: boolean };
-  readonly Capacitor?: { readonly getPlatform?: () => string };
 }
 
 /**
@@ -63,7 +66,7 @@ export interface InstallSourceView {
  * browser's and count installs.
  */
 export function detectInstallSource(view: InstallSourceView): AnalyticsInstallSource {
-  const platform = view.Capacitor?.getPlatform?.();
+  const platform = shellPlatformOf(view);
   if (platform === 'ios') return 'ios_store';
   if (platform === 'android') return 'android_store';
   if (view.matchMedia?.('(display-mode: standalone)').matches === true) return 'pwa';
