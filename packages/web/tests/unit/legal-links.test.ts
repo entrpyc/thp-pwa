@@ -1,7 +1,12 @@
 import { createElement } from 'react';
 import { renderToStaticMarkup } from 'react-dom/server';
 import { describe, expect, it } from 'vitest';
-import { PRIVACY_PAGE_PATH, SUPPORT_PAGE_PATH, TERMS_PAGE_PATH } from '@thp/shared';
+import {
+  DELETE_ACCOUNT_PAGE_PATH,
+  PRIVACY_PAGE_PATH,
+  SUPPORT_PAGE_PATH,
+  TERMS_PAGE_PATH,
+} from '@thp/shared';
 import { LEGAL_LINKS, LegalLinks } from '@/app/(public)/legal-links';
 
 /**
@@ -10,13 +15,14 @@ import { LEGAL_LINKS, LegalLinks } from '@/app/(public)/legal-links';
  * not a border; and one link per entry, in the order given, when it is not.
  */
 describe('the legal links row', () => {
-  it('ships with the three pages the app stores require, policy first', () => {
+  it('ships with the four pages the app stores require, policy first', () => {
     // The paths are the vocabulary's, so the row and the store consoles cite the same ones. The
-    // deletion-request page joins this list with its own ticket, not before.
+    // deletion-request page is last: the one link a member is meant to need once.
     expect(LEGAL_LINKS).toEqual([
       { href: PRIVACY_PAGE_PATH, label: 'Privacy policy' },
       { href: TERMS_PAGE_PATH, label: 'Terms' },
       { href: SUPPORT_PAGE_PATH, label: 'Support' },
+      { href: DELETE_ACCOUNT_PAGE_PATH, label: 'Delete account' },
     ]);
   });
 

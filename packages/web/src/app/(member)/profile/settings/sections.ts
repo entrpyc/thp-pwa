@@ -1,5 +1,6 @@
 import type { ComponentType } from 'react';
 import { AnalyticsSection } from './analytics-section';
+import { DeleteAccountSection } from './delete-account-section';
 import { SessionSection } from './session-section';
 
 /**
@@ -15,15 +16,17 @@ import { SessionSection } from './session-section';
  *    with its title, its lead and its controls — `session-section.tsx` is the model.
  * 2. Add one entry below, in the order the page should show it.
  *
- * **Only a section that exists is listed.** Account deletion is coming and has no entry until it
- * does — a card that says "not yet" would be a deferred destination drawn rather than dropped,
- * which the codebase does not do. The analytics opt-out was the first to arrive this way.
+ * **Only a section that exists is listed.** A card that says "not yet" would be a deferred
+ * destination drawn rather than dropped, which the codebase does not do. The analytics opt-out was
+ * the first to arrive this way; account deletion the second.
  *
- * Analytics sits under the session rather than above it: the way out stays the first thing on
- * the page, and consent is the second thing that concerns only the account's owner.
+ * The order is the order of consequence. The way out stays the first thing on the page; consent is
+ * the second thing that concerns only the account's owner; and deleting the account is last, so
+ * the one button on the page nobody can undo is never the first one under a thumb.
  */
 export const SETTINGS_SECTIONS: readonly { readonly id: string; readonly Section: ComponentType }[] =
   [
     { id: 'session', Section: SessionSection },
     { id: 'analytics', Section: AnalyticsSection },
+    { id: 'delete-account', Section: DeleteAccountSection },
   ];

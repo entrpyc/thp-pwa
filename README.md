@@ -160,6 +160,14 @@ the address is and mails a one-hour link; `POST …/complete` takes that token *
 password** — the link proves the inbox, the password proves the person. The last active admin is
 refused with `last_admin` by the same lock deactivation uses.
 
+The screens: the *Delete account* card on `/profile/settings` is the in-app door, and `/delete-account`
+is the public page — the request form without a token, the password form with one, and a dead end
+for a link that expired or was used. Both ask for the current password and the typed word `delete`,
+both show what the erasure does in the same words
+([what-deletion-does.tsx](packages/web/src/app/(public)/delete-account/what-deletion-does.tsx)),
+and both land on `/account-deleted`. The public page's URL is what the Play listing carries; the
+store consoles' answers are in [docs/project/store-declarations.md](docs/project/store-declarations.md).
+
 Deletion is immediate and has no undo. What happens to each table — private notes deleted, public
 notes retained under a `Removed member` placeholder, other members' notifications renamed, every
 foreign key firing as declared — is one page,
