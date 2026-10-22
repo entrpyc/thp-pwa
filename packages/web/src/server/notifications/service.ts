@@ -20,6 +20,8 @@ import {
   excerptForNotification,
   isAnnouncementKind,
   isOnboardingId,
+  noteReactionNotificationTitle,
+  noteReplyNotificationTitle,
   onboardingPagePath,
   recordingPagePath,
   type AnnouncementListPayload,
@@ -92,7 +94,7 @@ export async function notifyNoteReply(input: {
   await raise('note.reply', async () => {
     const row = await insertNotification(input.authorId, {
       kind: 'note_reply',
-      title: `${input.replier.displayName} replied to your note`,
+      title: noteReplyNotificationTitle(input.replier.displayName),
       body: excerptForNotification(input.replyText),
       href: recordingPagePath(input.recordingId),
       recordingId: input.recordingId,
@@ -126,7 +128,7 @@ export async function notifyNoteReaction(input: {
         input.authorId,
         {
           kind: 'note_reaction',
-          title: `${input.reactor.displayName} reacted to your note`,
+          title: noteReactionNotificationTitle(input.reactor.displayName),
           body: excerptForNotification(input.noteText),
           href: recordingPagePath(input.recordingId),
           recordingId: input.recordingId,

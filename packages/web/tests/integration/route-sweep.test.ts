@@ -126,8 +126,10 @@ describe('every /api/v1 route not on the allowlist refuses an anonymous request'
     // Pinned, so growing the unauthenticated surface is an edit somebody had to make on purpose.
     // Eight since sign-up (docs/project/prd.md, 3.1.15): registering is how an account comes to
     // exist, which is circular in exactly the way sign-in is, and `allowlist.ts` argues it against
-    // the seven that were already here rather than beside them.
-    expect(UNAUTHENTICATED_ROUTES).toHaveLength(8);
+    // the seven that were already here rather than beside them. Eleven since account deletion
+    // (3.1.8): the stores require that deletion can be started by somebody with no session, and
+    // the three entries are the reset's three with the password required at the end.
+    expect(UNAUTHENTICATED_ROUTES).toHaveLength(11);
     for (const entry of UNAUTHENTICATED_ROUTES) {
       expect(isAllowlisted(entry.method, entry.path), `${entry.method} ${entry.path}`).toBe(true);
       expect(entry.because.length).toBeGreaterThan(20);

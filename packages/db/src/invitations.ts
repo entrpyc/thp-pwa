@@ -1,7 +1,7 @@
 import { and, desc, eq, isNull, sql } from 'drizzle-orm';
 import type { Role } from '@thp/shared';
 import { normaliseEmail } from './accounts';
-import { getDatabase, type DatabaseHandle } from './client';
+import { getDatabase, queryable, type DatabaseHandle, type Executor } from './client';
 import { invitation, user } from './schema';
 import type { UserRow } from './accounts';
 
@@ -98,6 +98,29 @@ export async function findLiveInvitationByEmail(
     )
     .limit(1);
   return (rows[0] as InvitationRow | undefined) ?? null;
+}
+
+/**
+ * **Forget every invitation ever addressed to this person** (README.md beside the schema).
+ *
+ * `invited_by` sets null when an *admin's* account goes, because the invitation is a record of
+ * something that happened to somebody else. The invitations addressed *to* the leaver are the
+ * opposite case: the only fact they hold about anybody is the leaver's address, which is personal
+ * data with no remaining owner. Deleted rather than blanked, because an invitation with no address
+ * is not a record of anything — and because the live-per-address index would otherwise keep a
+ * freed address from being invited again.
+ *
+ * Takes an executor so the erasure can pull it into its transaction.
+ */
+export async function deleteInvitationsAddressedTo(
+  email: string,
+  executor: Executor = getDatabase(),
+): Promise<number> {
+  const rows = await queryable(executor)
+    .delete(invitation)
+    .where(sql`lower(${invitation.email}) = ${normaliseEmail(email)}`)
+    .returning({ id: invitation.id });
+  return rows.length;
 }
 
 /** Every invitation, newest first. Ticket 5 renders this; ticket 3 only has to be able to answer it. */

@@ -1,4 +1,9 @@
 export {
+  deleteUserAccount,
+  type AccountDeletion,
+  type GuardedDeletion,
+} from './account-deletion';
+export {
   deactivateUser,
   findUserByEmail,
   findUserById,
@@ -10,6 +15,7 @@ export {
   setUserAvatar,
   setUserRole,
   updateDisplayName,
+  type Guarded,
   type GuardedWrite,
   type NewUser,
   type UserRow,
@@ -85,6 +91,7 @@ export {
   findInvitationByTokenHash,
   findLiveInvitationByEmail,
   insertInvitation,
+  deleteInvitationsAddressedTo,
   listInvitations,
   revokeInvitation,
   type AcceptInvitationInput,
@@ -116,6 +123,7 @@ export {
   listReactionsForNotes,
   listRepliesForNotes,
   pinNote,
+  reassignNotesOfDeletedAuthor,
   setNoteReaction,
   softDeleteNote,
   unpinNote,
@@ -125,8 +133,10 @@ export {
   type NoteReactionRow,
   type NoteRow,
   type NoteWithAuthorRow,
+  type ReassignedNotes,
 } from './notes';
 export {
+  anonymiseNotificationsByActor,
   countUnreadNotifications,
   deleteReactionNotifications,
   findAnnouncementById,
@@ -162,6 +172,14 @@ export {
   type PipelineStepRow,
   type RecordingPipelineRow,
 } from './pipeline';
+export {
+  findAccountDeletionRequestWithUser,
+  findLiveAccountDeletionRequestForUser,
+  issueAccountDeletionRequest,
+  revokeAccountDeletionRequestsForUser,
+  type AccountDeletionRequestRow,
+  type NewAccountDeletionRequest,
+} from './account-deletion-requests';
 export {
   completePasswordReset,
   findLivePasswordResetForUser,
