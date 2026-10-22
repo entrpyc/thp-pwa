@@ -34,8 +34,14 @@ import {
 } from '@thp/shared';
 import { apiFetch } from '@/client/api-client';
 import { track } from '@/client/observability/analytics';
-import { shouldRenewGrant } from '@/client/playback/renewal';
+import { shouldRenewGrant, shouldRenewPreemptively } from '@/client/playback/renewal';
 import { listenedStep, shouldWriteProgress, type ProgressEventKind } from '@/client/playback/cadence';
+import {
+  SKIP_STEP_MS,
+  mediaMetadataFor,
+  positionStateFor,
+  type MediaSessionSubject,
+} from '@/client/playback/media-session';
 
 /**
  * **The player, mounted once for the whole member surface.**
@@ -70,6 +76,11 @@ import { listenedStep, shouldWriteProgress, type ProgressEventKind } from '@/cli
  *   (3.1.2) — notes owned by the recording page would go with that page. **Fetched when the
  *   recording is opened** rather than when the tab is, because the markers are visible without the
  *   tab ever being pressed.
+ * - **What the device's lock screen shows and does** ([3.2.6](docs/project/prd.md)). The media
+ *   session is a property of the page and the element it describes is this one, so the metadata,
+ *   the declared position and the button handlers are set here, beside the events they follow,
+ *   rather than by a bar that is one surface among two (3.2.15) and could be unmounted while the
+ *   audio runs on.
  *
  * **Opening a recording never plays it.** A member who opens a teaching on a phone in company has
  * not asked for sound. The page loads the media, restores the stored position once metadata has
@@ -338,6 +349,77 @@ export function useBreadcrumbTrailValue(): BreadcrumbTrail {
 /** How often the near-expiry check runs. Cheap — it compares two numbers. */
 const RENEWAL_CHECK_MS = 15_000;
 
+/**
+ * The device's media session, or `null` where this browser has none.
+ *
+ * Tested on every use rather than captured once, and tested with `in` rather than read: the
+ * property is absent altogether on a browser without the API (and during the server render), and
+ * absent is the case every caller has to be correct for. Each one does nothing when this is
+ * `null`, which is the whole of 3.2.6's degradation — a browser without a media session plays
+ * exactly as before, with no lock-screen controls rather than a broken player.
+ */
+function mediaSession(): MediaSession | null {
+  if (typeof navigator === 'undefined' || !('mediaSession' in navigator)) return null;
+  return navigator.mediaSession;
+}
+
+/**
+ * Tell the device what is loaded ([3.2.6](docs/project/prd.md)) — or that nothing is.
+ *
+ * A function of the teaching alone, called from two places: when a teaching is opened, and again
+ * on every `loadedmetadata`. The second is the one that matters on a phone. The element's source
+ * is replaced under a listen on every grant renewal, and a `load()` is where a platform is
+ * entitled to forget what it was told about the previous source; saying it again after each one
+ * costs an object, where a lock screen naming the page's address instead of the teaching costs
+ * the feature.
+ */
+function declareLoaded(recording: MediaSessionSubject | null): void {
+  const session = mediaSession();
+  if (session === null) return;
+  // The constructor can be missing where the session is not — an older WebView — and a session
+  // with nothing to name is emptied rather than left naming the previous teaching.
+  if (recording === null || typeof MediaMetadata !== 'function') {
+    session.metadata = null;
+    return;
+  }
+  session.metadata = new MediaMetadata(mediaMetadataFor(recording));
+}
+
+/** The state the device draws a button for: `playing` draws pause, `paused` draws play. */
+function declarePlaybackState(state: MediaSessionPlaybackState): void {
+  const session = mediaSession();
+  if (session !== null) session.playbackState = state;
+}
+
+/**
+ * Tell the device where the teaching has got to, read off the element — or, given `null`, that
+ * there is nothing true to say.
+ *
+ * Called on every `timeupdate`, every seek, every rate change and when metadata arrives: the
+ * device extrapolates between declarations from the rate it was last told, so a rate it was not
+ * told about is a lock-screen clock drifting from the sound. Inside a `try` even after
+ * {@link positionStateFor} has vetted the numbers, because a browser can carry the method and
+ * still refuse — and a refusal is a lost lock-screen clock, not a reason to touch the audio.
+ */
+function declarePosition(element: HTMLMediaElement | null): void {
+  const session = mediaSession();
+  if (session === null || typeof session.setPositionState !== 'function') return;
+  const state =
+    element === null
+      ? null
+      : positionStateFor({
+          durationSeconds: element.duration,
+          positionSeconds: element.currentTime,
+          playbackRate: element.playbackRate,
+        });
+  try {
+    if (state === null) session.setPositionState();
+    else session.setPositionState(state);
+  } catch {
+    // Nothing to do: the next tick declares again.
+  }
+}
+
 export function PlayerProvider({
   initialSpeed,
   children,
@@ -524,6 +606,9 @@ export function PlayerProvider({
         element.removeAttribute('src');
         element.load();
       }
+      // The device's clock goes with the source: what it was last told describes the previous
+      // teaching, and this one's position is declared when its metadata arrives.
+      declarePosition(null);
       // Fetched **on open rather than on tab open**, because the markers (3.2.4) are visible on the
       // transport without the Notes tab ever being pressed.
       loadNotes(recording.id);
@@ -532,8 +617,9 @@ export function PlayerProvider({
       // tab whose opening could be what asks for them.
       loadChapters(recording.id);
       void pointAt(recording.id).catch(() => {
-        // Nothing to say on screen: the bar is a transport, not an error surface. The play control
-        // simply does nothing until a grant arrives, and the next renewal tick tries again.
+        // Nothing to say on screen: the bar is a transport, not an error surface. A press on play
+        // is held by `requestPlay` and honoured when a grant arrives, and the next renewal tick
+        // tries again.
       });
     },
     [loadChapters, loadNotes, pointAt],
@@ -552,27 +638,6 @@ export function PlayerProvider({
         return;
       }
       open(recording, startAtMs);
-    },
-    [open],
-  );
-
-  /**
-   * `open` with the play intent armed. The flags are set **after** `open` because `open` clears
-   * them, and they are the same pair a grant renewal uses — the press plays the teaching when
-   * `loadedmetadata` fires, however long the grant takes to arrive.
-   */
-  const openAndPlay = useCallback(
-    (recording: LoadedRecording, startAtMs: number | null): void => {
-      if (loadedRef.current?.id === recording.id) {
-        // Already the loaded teaching: this is a plain press for sound on it.
-        const element = audioRef.current;
-        wantsPlay.current = true;
-        if (element !== null) void element.play().catch(() => undefined);
-        return;
-      }
-      open(recording, startAtMs);
-      wantsPlay.current = true;
-      playOnLoad.current = true;
     },
     [open],
   );
@@ -599,6 +664,77 @@ export function PlayerProvider({
       renewing.current = false;
     }
   }, [pointAt]);
+
+  /**
+   * **Every press for sound comes through here** — the bar's play control, the recording page's
+   * on the loaded teaching, a chapter row's, and the lock screen's ([3.2.6](docs/project/prd.md)).
+   *
+   * One path, because a press has three different things it may have to do, and a lock-screen
+   * button has to do all three as well as the bar does:
+   *
+   * - **No source yet** — the grant is still on its way. The press is armed and `loadedmetadata`
+   *   honours it, the same way `openAndPlay` keeps a press through that wait.
+   * - **A stale or dead grant.** The ticker leaves a transport at rest alone
+   *   (`shouldRenewPreemptively`), so a teaching paused for most of an hour is still pointed at a
+   *   URL that is about to die or has died. Playing it would play from the buffer and fail at the
+   *   next range request; renewing first swaps the source with the position in hand and plays on
+   *   the other side, which is exactly what a mid-listen renewal does. A source that has already
+   *   failed is the same case with the failure in hand.
+   * - **Otherwise, play.**
+   *
+   * A renewal already in flight is told to play when it lands rather than being asked for again:
+   * it captured `playOnLoad` when it started, which was before this press.
+   */
+  const requestPlay = useCallback((): void => {
+    const element = audioRef.current;
+    if (element === null || loadedRef.current === null) return;
+    wantsPlay.current = true;
+    if (element.src === '' || renewing.current) {
+      playOnLoad.current = true;
+      return;
+    }
+    const held = grant.current;
+    const stale = held !== null && shouldRenewGrant({ expiresAt: held.expiresAt, now: Date.now() });
+    if (stale || element.error !== null) {
+      void renew();
+      return;
+    }
+    void element.play().catch(() => undefined);
+  }, [renew]);
+
+  /**
+   * The press for silence — the bar's, and the lock screen's `pause` and `stop`.
+   *
+   * Clears `playOnLoad` as well as the intent, because a renewal in flight captured the intent
+   * when it started: without this, a member who pressed play and then pause inside the second a
+   * swap takes would hear the teaching start on the other side of it.
+   */
+  const requestPause = useCallback((): void => {
+    const element = audioRef.current;
+    if (element === null) return;
+    wantsPlay.current = false;
+    playOnLoad.current = false;
+    element.pause();
+  }, []);
+
+  /**
+   * `open` with the play intent armed. The flags are set **after** `open` because `open` clears
+   * them, and they are the same pair a grant renewal uses — the press plays the teaching when
+   * `loadedmetadata` fires, however long the grant takes to arrive.
+   */
+  const openAndPlay = useCallback(
+    (recording: LoadedRecording, startAtMs: number | null): void => {
+      if (loadedRef.current?.id === recording.id) {
+        // Already the loaded teaching: this is a plain press for sound on it.
+        requestPlay();
+        return;
+      }
+      open(recording, startAtMs);
+      wantsPlay.current = true;
+      playOnLoad.current = true;
+    },
+    [open, requestPlay],
+  );
 
   /** Push the position, if this event and this moment call for one. */
   const pushProgress = useCallback((event: ProgressEventKind): void => {
@@ -640,6 +776,9 @@ export function PlayerProvider({
     if (element === null) return;
 
     const onLoadedMetadata = () => {
+      // Said again after every source — `declareLoaded` says why — and before the play below, so
+      // the lock screen has the teaching's name by the time sound starts.
+      declareLoaded(loadedRef.current);
       element.playbackRate = speedRef.current;
       setDurationMs(Number.isFinite(element.duration) ? Math.round(element.duration * 1000) : 0);
       // Seeking before metadata has loaded is silently clamped to zero, which is why the resume
@@ -653,6 +792,7 @@ export function PlayerProvider({
         playOnLoad.current = false;
         void element.play().catch(() => undefined);
       }
+      declarePosition(element);
     };
     // `readyState === HAVE_NOTHING` is the element after a source has been swapped or has failed;
     // its `currentTime` is zero and means nothing, so it is not recorded as a position.
@@ -671,10 +811,12 @@ export function PlayerProvider({
       });
       lastTickMs.current = currentMs;
       setCurrentMs(currentMs);
+      declarePosition(element);
       pushProgress('tick');
     };
     const onPlay = () => {
       setPlaying(true);
+      declarePlaybackState('playing');
       // The first `play` since this teaching was loaded is the unique play; every later one is a
       // resume of the same visit and reports nothing.
       const recording = loadedRef.current;
@@ -690,6 +832,7 @@ export function PlayerProvider({
     };
     const onPause = () => {
       setPlaying(false);
+      declarePlaybackState('paused');
       pushProgress('pause');
     };
     const onSeeked = () => {
@@ -698,8 +841,13 @@ export function PlayerProvider({
       // The clock restarts where the seek landed, so the distance jumped is never listening.
       lastTickMs.current = currentMs;
       setCurrentMs(currentMs);
+      declarePosition(element);
       pushProgress('seek');
     };
+    // The device extrapolates the lock screen's clock from the last rate and duration it was
+    // told, so each is re-declared the moment the element's own changes — a rate from the pill,
+    // a duration a container revises once more of the file has been read.
+    const onClockChange = () => declarePosition(element);
     // The definite signal that a grant has died — including for a reason the clock cannot know.
     const onError = () => void renew();
 
@@ -708,6 +856,8 @@ export function PlayerProvider({
     element.addEventListener('play', onPlay);
     element.addEventListener('pause', onPause);
     element.addEventListener('seeked', onSeeked);
+    element.addEventListener('ratechange', onClockChange);
+    element.addEventListener('durationchange', onClockChange);
     element.addEventListener('error', onError);
     return () => {
       element.removeEventListener('loadedmetadata', onLoadedMetadata);
@@ -715,6 +865,8 @@ export function PlayerProvider({
       element.removeEventListener('play', onPlay);
       element.removeEventListener('pause', onPause);
       element.removeEventListener('seeked', onSeeked);
+      element.removeEventListener('ratechange', onClockChange);
+      element.removeEventListener('durationchange', onClockChange);
       element.removeEventListener('error', onError);
     };
   }, [pushProgress, renew]);
@@ -728,6 +880,12 @@ export function PlayerProvider({
     document.addEventListener('visibilitychange', onHide);
     return () => document.removeEventListener('visibilitychange', onHide);
   }, [pushProgress]);
+
+  // What the lock screen names, kept in step with what the bar names ([3.2.6](docs/project/prd.md)).
+  // Said again on every `loadedmetadata` — `declareLoaded` says why twice.
+  useEffect(() => {
+    declareLoaded(loaded);
+  }, [loaded]);
 
   /*
    * **A finer clock, only while a caption is on screen.** `timeupdate` fires about four times a
@@ -798,24 +956,37 @@ export function PlayerProvider({
     };
   }, [open, pathname]);
 
-  // The pre-emptive half of renewal, so the member does not hear the gap the error path costs.
+  /*
+   * The pre-emptive half of renewal, so the member does not hear the gap the error path costs.
+   *
+   * **A transport at rest is left alone**, however stale its grant — `shouldRenewPreemptively`
+   * says why at length; in short, the swap would be `load()` on a paused element, which is what
+   * takes the lock screen's controls away ([3.2.6](docs/project/prd.md)), and the press that
+   * eventually comes swaps the grant itself (`requestPlay`). "At rest" is the element paused *and*
+   * the member not wanting sound: a press waiting on a failed renewal is not at rest, and keeps
+   * being retried here every tick as before.
+   */
   useEffect(() => {
     const timer = setInterval(() => {
       const held = grant.current;
-      if (held === null || loadedRef.current === null) return;
-      if (shouldRenewGrant({ expiresAt: held.expiresAt, now: Date.now() })) void renew();
+      const element = audioRef.current;
+      if (held === null || element === null || loadedRef.current === null) return;
+      const idle = element.paused && !wantsPlay.current;
+      if (shouldRenewPreemptively({ expiresAt: held.expiresAt, now: Date.now(), idle })) {
+        void renew();
+      }
     }, RENEWAL_CHECK_MS);
     return () => clearInterval(timer);
   }, [renew]);
 
+  // The press is what sets the intent, which is what a renewal restores — and both halves of it
+  // are the two methods the lock screen's buttons call, so the two surfaces cannot drift apart.
   const toggle = useCallback((): void => {
     const element = audioRef.current;
-    if (element === null || element.src === '') return;
-    // The press is what sets the intent, which is what a renewal restores.
-    wantsPlay.current = element.paused;
-    if (element.paused) void element.play().catch(() => undefined);
-    else element.pause();
-  }, []);
+    if (element === null) return;
+    if (element.paused) requestPlay();
+    else requestPause();
+  }, [requestPause, requestPlay]);
 
   const seekToMs = useCallback((ms: number): void => {
     const element = audioRef.current;
@@ -830,20 +1001,24 @@ export function PlayerProvider({
    * Seek there and play ([3.22.12](docs/project/prd.md)).
    *
    * The seek is written the same way `seekToMs` writes it — the element, the ref and the state
-   * together, so the scrubber does not fall back to where it came from — and `wantsPlay` is set
-   * before the play, because that is the flag a grant renewal restores. A press on a chapter is a
-   * press for sound, and it has to survive the URL under it being replaced mid-listen.
+   * together, so the scrubber does not fall back to where it came from — and the play is
+   * `requestPlay`, which sets the intent a grant renewal restores and, on a grant that has gone
+   * stale, swaps the source first with `positionRef` — written a line above — carried across the
+   * swap. A press on a chapter is a press for sound, and it has to survive the URL under it being
+   * replaced, whether mid-listen or during a long pause.
    */
-  const playFromMs = useCallback((ms: number): void => {
-    const element = audioRef.current;
-    if (element === null) return;
-    const next = Math.max(0, ms);
-    element.currentTime = next / 1000;
-    positionRef.current = next;
-    setCurrentMs(next);
-    wantsPlay.current = true;
-    void element.play().catch(() => undefined);
-  }, []);
+  const playFromMs = useCallback(
+    (ms: number): void => {
+      const element = audioRef.current;
+      if (element === null) return;
+      const next = Math.max(0, ms);
+      element.currentTime = next / 1000;
+      positionRef.current = next;
+      setCurrentMs(next);
+      requestPlay();
+    },
+    [requestPlay],
+  );
 
   const skipMs = useCallback((deltaMs: number): void => {
     const element = audioRef.current;
@@ -853,6 +1028,65 @@ export function PlayerProvider({
     positionRef.current = Math.round(next);
     setCurrentMs(Math.round(next));
   }, []);
+
+  /*
+   * **The lock screen's buttons, and the headset's** ([3.2.6](docs/project/prd.md)).
+   *
+   * Registered once for the life of the provider and reading everything through refs — the
+   * element, the grant, the loaded teaching — so a handler registered before any teaching was
+   * opened drives whichever one is loaded when the button is pressed. Without a `play` handler the
+   * button is left to the platform's default, and the default is only as good as the platform's
+   * memory of the element: iOS in particular stops honouring it once a paused page has been in the
+   * background a while, which is the ticket — a member who paused had to unlock the phone and
+   * find the app to go on listening. A registered handler is a promise the platform keeps.
+   *
+   * Each registration is tried on its own, because `setActionHandler` throws for an action a
+   * browser does not know rather than ignoring it, and one missing action must not cost the
+   * others. `previoustrack` and `nexttrack` are deliberately absent: a teaching has no neighbour
+   * the player knows about, and an unregistered button is one the platform does not draw.
+   *
+   * The seek handlers do what the bar's own controls do, by the same methods, so the two surfaces
+   * cannot disagree about what a step is — including ignoring the platform's `seekOffset`
+   * (`SKIP_STEP_MS` says why). `seekto` is the lock screen's scrubber, where a platform has one.
+   */
+  useEffect(() => {
+    const session = mediaSession();
+    if (session === null) return;
+    const bindings: readonly (readonly [MediaSessionAction, MediaSessionActionHandler])[] = [
+      ['play', () => requestPlay()],
+      ['pause', () => requestPause()],
+      // Stopping ends the sitting where it is. The position is kept (3.2.5 — the pause writes it)
+      // and the teaching stays loaded, so the bar still names it and a press plays it: a member
+      // who swiped the notification away has stopped listening, not forgotten the place.
+      ['stop', () => requestPause()],
+      ['seekbackward', () => skipMs(-SKIP_STEP_MS)],
+      ['seekforward', () => skipMs(SKIP_STEP_MS)],
+      [
+        'seekto',
+        (details) => {
+          if (details.seekTime !== undefined) seekToMs(Math.round(details.seekTime * 1000));
+        },
+      ],
+    ];
+    const registered: MediaSessionAction[] = [];
+    for (const [action, handler] of bindings) {
+      try {
+        session.setActionHandler(action, handler);
+        registered.push(action);
+      } catch {
+        // Not an action this browser has. The others still are.
+      }
+    }
+    return () => {
+      for (const action of registered) {
+        try {
+          session.setActionHandler(action, null);
+        } catch {
+          // Already gone with the session.
+        }
+      }
+    };
+  }, [requestPause, requestPlay, seekToMs, skipMs]);
 
   /**
    * A step, applied to the element first and written to the account afterwards.
