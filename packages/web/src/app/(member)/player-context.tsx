@@ -42,6 +42,7 @@ import {
   positionStateFor,
   type MediaSessionSubject,
 } from '@/client/playback/media-session';
+import { shellMediaSession, type PlayerMediaSession } from '@/client/playback/shell-media-session';
 
 /**
  * **The player, mounted once for the whole member surface.**
@@ -357,8 +358,14 @@ const RENEWAL_CHECK_MS = 15_000;
  * absent is the case every caller has to be correct for. Each one does nothing when this is
  * `null`, which is the whole of 3.2.6's degradation — a browser without a media session plays
  * exactly as before, with no lock-screen controls rather than a broken player.
+ *
+ * Inside the Android store shell the session is the native one instead (`shell-media-session.ts`
+ * says why: the WebView's own draws no lock screen). Same four members, so nothing below knows
+ * which it was handed.
  */
-function mediaSession(): MediaSession | null {
+function mediaSession(): PlayerMediaSession | null {
+  const shell = shellMediaSession();
+  if (shell !== null) return shell;
   if (typeof navigator === 'undefined' || !('mediaSession' in navigator)) return null;
   return navigator.mediaSession;
 }
