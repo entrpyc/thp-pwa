@@ -112,6 +112,16 @@ export const CORRELATION_ID_HEADER = 'x-correlation-id';
  *   onto. Names are lowercase and whitespace-collapsed before they are compared, so this refuses
  *   `Grace` when `grace` exists. Its own code rather than `invalid_input` because the name was
  *   fine and the fix is different: pick the tag that is already there, or choose another name.
+ *
+ * Member blocks add one:
+ *
+ * - `blocked` — the request is one member acting on another member's content, and there is a
+ *   block between the two, whichever of them placed it. `403` and its own code rather than
+ *   `forbidden`, because the policy module did not refuse — the actor *may* reply and react —
+ *   and rather than `not_found`, because the note is there and the screen that offered the
+ *   control may still be showing it. Its own code so the screen can say "you cannot reply to
+ *   this member" rather than "something went wrong", which is what a block is supposed to feel
+ *   like from either side: a closed door, not a broken one.
  */
 export const API_ERROR_CODES = [
   'unauthenticated',
@@ -136,6 +146,7 @@ export const API_ERROR_CODES = [
   'spend_ceiling_reached',
   'rendition_in_flight',
   'tag_exists',
+  'blocked',
   'not_found',
   'internal_error',
   'service_unavailable',

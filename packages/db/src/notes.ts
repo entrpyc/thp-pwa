@@ -1,6 +1,7 @@
 import { and, asc, desc, eq, exists, inArray, isNotNull, isNull, or, sql } from 'drizzle-orm';
 import { alias } from 'drizzle-orm/pg-core';
 import { getDatabase, queryable, type Executor } from './client';
+import { noBlockBetween } from './member-blocks';
 import { note, notePin, noteReaction, user } from './schema';
 import type { NoteVisibility } from '@thp/shared';
 
@@ -12,6 +13,14 @@ import type { NoteVisibility } from '@thp/shared';
  * predicate over `note.visibility` or `note.author_id` anywhere else, which is what turns the
  * Privacy NFR — *"a private note is excluded by the query that reads notes, not by the interface
  * that renders them"* — from a claim into something a build can fail on.
+ *
+ * **The block condition rides beside it on every read for a reader.** A note, a reply or a
+ * reaction by a member the reader has a block with — in either direction — is left out by the
+ * same `where` that leaves out a private note, through `member-blocks.ts`'s one predicate rather
+ * than a second filter somewhere above. The three reads that take a `readerId` state it; the
+ * write-path lookups (`findNoteById`) do not, for the reason given on them: the service refuses
+ * an act across a block with a sentence, and a lookup that hid the row would answer `not_found`
+ * instead.
  *
  * **What is not here is publication.** No statement in this file compares `recording.published_at`:
  * that is `visibility.ts`'s condition and tests/guards/visibility-boundary.test.ts refuses a second
@@ -156,6 +165,11 @@ export async function insertNote(
  * **The author's display name comes back with the row.** An inner join rather than a second pass
  * over the ids the first pass returned: `author_id` is `not null` and restricts on delete, so every
  * note has an author row to join to and the join can drop nothing.
+ *
+ * **A note by a member the reader has a block with is not in the list**, whichever of the two
+ * placed the block — and its whole thread goes with it, because the replies are read by the
+ * parents that survived. The reader's own reply under such a note disappears from their view
+ * too, which is the honest outcome: a reply with no note above it is half a conversation.
  */
 export async function listNotesForReader(
   recordingId: string,
@@ -176,8 +190,10 @@ export async function listNotesForReader(
         isNull(note.parentId),
         // The private-note condition. This line, and no other line in this codebase.
         or(eq(note.visibility, 'public'), eq(note.authorId, readerId)),
+        // The block condition, in both directions, stated through the one module that owns it.
+        noBlockBetween(readerId, note.authorId),
         // The tombstone rule: still standing only while it is holding a thread open.
-        or(isNull(note.deletedAt), hasLiveReply()),
+        or(isNull(note.deletedAt), hasLiveReply(readerId)),
       ),
     )
     .orderBy(asc(note.timestampMs), asc(note.createdAt));
@@ -186,20 +202,30 @@ export async function listNotesForReader(
 }
 
 /**
- * Whether this note still has a reply nobody has deleted.
+ * Whether this note still has a reply nobody has deleted **that this reader may see**.
  *
  * A correlated `exists` rather than a join or a second pass: the list read is one index scan and
  * this keeps it one, and the answer is needed as a *condition* rather than as data — the caller
  * never sees how many replies there are, only whether the tombstone still stands
  * (scope prd 3.3.9).
+ *
+ * Reader-aware because the tombstone exists to hold a thread open, and a thread whose every live
+ * reply is by a member the reader has blocked is, to that reader, no thread: the tombstone would
+ * stand over an empty list, and its tick would mark a moment with nothing at it.
  */
-function hasLiveReply() {
+function hasLiveReply(readerId: string) {
   const reply = alias(note, 'live_reply');
   return exists(
     queryable()
       .select({ one: sql`1` })
       .from(reply)
-      .where(and(eq(reply.parentId, note.id), isNull(reply.deletedAt))),
+      .where(
+        and(
+          eq(reply.parentId, note.id),
+          isNull(reply.deletedAt),
+          noBlockBetween(readerId, reply.authorId),
+        ),
+      ),
   );
 }
 
@@ -237,9 +263,14 @@ export async function findNoteById(
  * true of every row this could return and stating it would be a predicate that can never exclude
  * anything. The parent's own visibility is what decides whether a thread is reachable at all, and
  * the parent came from the read that does state the condition.
+ *
+ * **The block condition is stated, though**, because a reply has an author of its own: a thread
+ * under a note the reader may see can still hold a reply by somebody they have a block with, and
+ * that reply is left out here for the same reader the parent read was for.
  */
 export async function listRepliesForNotes(
   parentIds: readonly string[],
+  readerId: string,
   executor: Executor = getDatabase(),
 ): Promise<NoteWithAuthorRow[]> {
   if (parentIds.length === 0) return [];
@@ -252,7 +283,13 @@ export async function listRepliesForNotes(
     })
     .from(note)
     .innerJoin(user, eq(note.authorId, user.id))
-    .where(and(inArray(note.parentId, [...parentIds]), isNull(note.deletedAt)))
+    .where(
+      and(
+        inArray(note.parentId, [...parentIds]),
+        isNull(note.deletedAt),
+        noBlockBetween(readerId, note.authorId),
+      ),
+    )
     // The `(parent_id, created_at)` index exactly — the thread's order (3.3.6).
     .orderBy(asc(note.parentId), asc(note.createdAt));
 
@@ -372,6 +409,10 @@ export async function clearNoteReaction(
  *
  * **Most-chosen first, ties broken by the glyph**, so a reload does not reshuffle a row of equal
  * counts under a reader's eye.
+ *
+ * **A reaction by a member the reader has a block with is not counted** — left out before the
+ * aggregate rather than subtracted after it, so the count the reader sees is the count of
+ * responses from people they can see. An emoji chosen only by blocked members has no row.
  */
 export async function listReactionsForNotes(
   noteIds: readonly string[],
@@ -388,7 +429,12 @@ export async function listReactionsForNotes(
       mine: sql<boolean>`bool_or(${noteReaction.userId} = ${readerId})`,
     })
     .from(noteReaction)
-    .where(inArray(noteReaction.noteId, [...noteIds]))
+    .where(
+      and(
+        inArray(noteReaction.noteId, [...noteIds]),
+        noBlockBetween(readerId, noteReaction.userId),
+      ),
+    )
     .groupBy(noteReaction.noteId, noteReaction.emoji)
     .orderBy(desc(sql`count(*)`), asc(noteReaction.emoji));
 

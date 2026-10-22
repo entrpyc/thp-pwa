@@ -4,6 +4,7 @@ import {
   findNoteById,
   findVisibleRecording,
   insertNote,
+  isBlockedEitherWay,
   listNotesForReader,
   listPinnedNoteIds,
   listReactionsForNotes,
@@ -126,6 +127,7 @@ export async function createNote(
   }
 
   const parent = await requireReplyableParent(parentId, recordingId, fields);
+  await requireNoBlock(actor, parent, 'You cannot reply to this member’s notes.');
   const row = await withTransaction(async (tx) => {
     const written = await insertNote(
       {
@@ -280,6 +282,7 @@ export async function setReaction(
   body: unknown,
 ): Promise<NotePayload> {
   const existing = await requireReactable(actor, noteId);
+  await requireNoBlock(actor, existing, 'You cannot react to this member’s notes.');
   const { emoji } = asObject(body, 'Send a JSON object carrying the emoji.');
 
   // Compared against the vocabulary's exact string, which is what stops the `❤` / `❤️`
@@ -310,6 +313,11 @@ export async function setReaction(
  * Clearing when nothing is set succeeds. A member pressing the emoji they already chose and a
  * member acting on a screen that has already been cleared asked for the same end state, and both
  * have got it — refusing the second would be reporting a difference the member cannot see.
+ *
+ * **Deliberately not refused across a block.** A member taking back a reaction they left before
+ * the block is removing their mark from a note they can no longer see, which is the end state
+ * both sides of a block want; refusing it would pin a reaction in place that neither of them can
+ * reach. Setting one is the act a block refuses, and `setReaction` is where it is.
  */
 export async function clearReaction(actor: Actor, noteId: string): Promise<NotePayload> {
   const existing = await requireReactable(actor, noteId);
@@ -398,7 +406,10 @@ export async function readNotesFor(
     scope === null
       ? all
       : all.filter((row) => row.timestampMs !== null && isInChapter(scope, row.timestampMs));
-  const replies = await listRepliesForNotes(rows.map((row) => row.id));
+  const replies = await listRepliesForNotes(
+    rows.map((row) => row.id),
+    actor.id,
+  );
   const reactions = await listReactionsForNotes(
     [...rows, ...replies].map((row) => row.id),
     actor.id,
@@ -547,6 +558,33 @@ function requirePublic(row: NoteRow, message: string): void {
   if (row.visibility !== 'public') throw ApiError.invalidInput(message);
 }
 
+/**
+ * Refuse one member acting on another's note across a block, whichever of them placed it.
+ *
+ * Asked **after** the state gates rather than before, so a private note or a removed one still
+ * answers what it would have answered to anybody: a block changes nothing about what a note is,
+ * only who may reach it. `blocked` rather than `forbidden` because the policy module said yes —
+ * the actor may react, may reply — and the thing refusing is the pair; rather than `not_found`
+ * because the note is there, and the one-direction case that could still be showing it (a reply
+ * written before the block was placed) is owed a sentence that says why.
+ *
+ * The read paths never offer a blocked member's note, so for everything a member reaches through
+ * the interface this is a backstop; it is the API's refusal, not the client's, and holds against
+ * a direct request carrying an id learned some other way.
+ */
+async function requireNoBlock(actor: Actor, row: NoteRow, message: string): Promise<void> {
+  if (!(await isBlockedEitherWay(actor.id, row.authorId))) return;
+
+  logger.warn('note.refused', {
+    actorId: actor.id,
+    action: 'note.write',
+    target: `note:${row.id}`,
+    reason: 'blocked',
+    code: 'blocked',
+  });
+  throw ApiError.blocked(message);
+}
+
 // =================================================================================================
 // Describing
 // =================================================================================================
@@ -621,7 +659,7 @@ function describe(
  */
 async function describeOne(row: NoteRow, actor: Actor): Promise<NoteView> {
   const [replies, reactions, pinned] = await Promise.all([
-    listRepliesForNotes([row.id]),
+    listRepliesForNotes([row.id], actor.id),
     listReactionsForNotes([row.id], actor.id),
     listPinnedNoteIds(row.recordingId),
   ]);

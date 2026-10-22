@@ -1520,3 +1520,45 @@ export const embedding = pgTable(
     ),
   ],
 );
+
+/**
+ * **One member choosing not to see another** — the block Apple guideline 1.2 and Google Play's
+ * UGC policy require of any product with member-written content.
+ *
+ * **The primary key is the requirement.** `(blocker_id, blocked_id)` is "a pair is blocked at most
+ * once", so blocking somebody twice is one `on conflict do nothing` rather than a read-then-write,
+ * and the row is also the whole of the fact: there is no `active` flag and no `unblocked_at`,
+ * because an unblock is a delete. A block carries no reason and no note — nothing about the
+ * blocked member is stored that they did not write themselves.
+ *
+ * **Directed, and read in both directions.** The row says who pressed the control, which is what
+ * the blocked list in profile settings reads and what an unblock deletes. What a block *does* is
+ * symmetric — `member-blocks.ts`'s predicate asks "is there a row either way round" — so one row
+ * hides each member from the other rather than two rows that could disagree.
+ *
+ * **Both sides cascade**, like `note_reaction`: a block is a fact about a pairing and is meaningless
+ * without either half. A deactivated account is *not* deletion ([3.1.7](docs/project/prd.md)), so
+ * a member's blocks survive the other side leaving and still apply to what that account authored.
+ *
+ * The check refuses a self-block at the database; the service refuses it first with a sentence.
+ *
+ * `blocked_id` is indexed on its own because the predicate's second half — "has the author
+ * blocked the reader" — is looked up by the column the primary key does not lead with.
+ */
+export const memberBlock = pgTable(
+  'member_block',
+  {
+    blockerId: uuid('blocker_id')
+      .notNull()
+      .references(() => user.id, { onDelete: 'cascade' }),
+    blockedId: uuid('blocked_id')
+      .notNull()
+      .references(() => user.id, { onDelete: 'cascade' }),
+    createdAt: timestamp('created_at', { withTimezone: true }).notNull().defaultNow(),
+  },
+  (table) => [
+    primaryKey({ columns: [table.blockerId, table.blockedId] }),
+    index('member_block_blocked_idx').on(table.blockedId),
+    check('member_block_not_self', sql`${table.blockerId} <> ${table.blockedId}`),
+  ],
+);
