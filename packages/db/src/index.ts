@@ -11,6 +11,7 @@ export {
   listUsers,
   normaliseEmail,
   reactivateUser,
+  setAnalyticsOptOut,
   setUserAvatar,
   setUserRole,
   updateDisplayName,

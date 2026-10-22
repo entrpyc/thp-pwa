@@ -43,7 +43,7 @@ const MAIL_DOWN_URL = `${mailDownBaseUrl}${API_PREFIX}${FEEDBACK_PATH}`;
  * The suite sets no `FEEDBACK_MAIL_TO`, which is the case that matters: the default is the whole
  * reason that variable is optional, and a deployment that never sets one still has to deliver.
  */
-const DEFAULT_RECIPIENT = 'indepthwebsolutions@gmail.com';
+const DEFAULT_RECIPIENT = 'asen.angelov@indepthwebsolutions.com';
 
 interface Answer<T> {
   readonly status: number;

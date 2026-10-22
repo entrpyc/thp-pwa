@@ -70,6 +70,8 @@ describe('every /api/v1 route not on the allowlist refuses an anonymous request'
     expect(paths).toContain(`${API_PREFIX}/recordings/sweep-probe-value/progress`);
     expect(paths).toContain(`${API_PREFIX}/recordings/resume`);
     expect(paths).toContain(`${API_PREFIX}/users/me/playback-speed`);
+    // The analytics opt-out's one route, for the same reason.
+    expect(paths).toContain(`${API_PREFIX}/users/me/analytics`);
     // Story 5's three. Named here for the same reason Story 4's five are: a route the discovery
     // missed would be a route nothing asserted refuses an anonymous caller — and the correction
     // route is the first in the product with **two** dynamic segments, which is exactly the shape a

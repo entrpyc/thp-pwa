@@ -1,6 +1,7 @@
 'use client';
 
 import { useEffect, useState, useSyncExternalStore } from 'react';
+import { shellPlatformOf, type ShellView } from '@/client/platform';
 
 /**
  * Chrome's install event. It is not in the DOM lib because no standard describes it — only
@@ -58,10 +59,33 @@ function isAppleTouchDevice(): boolean {
   return /macintosh/i.test(navigator.userAgent) && navigator.maxTouchPoints > 1;
 }
 
-/** Already launched from the home screen — `navigator.standalone` is the older iOS spelling. */
+/** The three readings "already installed" is made of, so a test can hand in a plain object. */
+export interface InstallView extends ShellView {
+  readonly matchMedia?: (query: string) => { readonly matches: boolean };
+  readonly navigator?: { readonly standalone?: boolean };
+}
+
+/**
+ * Already running as an app, so there is nothing to offer. Three spellings of one fact:
+ *
+ * - **Inside the store shell**, read off the Capacitor bridge the shell injects. The shell's
+ *   WebView is an ordinary embedded browser — not standalone, and no `navigator.standalone` — so
+ *   without this reading the store app would tell a member to install the app they are in. On
+ *   iOS that was a row pointing at a Share button the shell does not have.
+ * - **Launched from the home screen** as the installed PWA: display-mode standalone.
+ * - `navigator.standalone`, the older iOS spelling of the same.
+ *
+ * Pure so the decision is assertable without a browser (tests/unit/install-app.test.ts), in the
+ * manner of `shellPlatformOf`.
+ */
+export function isInstalledIn(view: InstallView): boolean {
+  if (shellPlatformOf(view) !== null) return true;
+  if (view.matchMedia?.('(display-mode: standalone)').matches === true) return true;
+  return view.navigator?.standalone === true;
+}
+
 function isInstalled(): boolean {
-  if (window.matchMedia('(display-mode: standalone)').matches) return true;
-  return (navigator as Navigator & { standalone?: boolean }).standalone === true;
+  return isInstalledIn(window as unknown as InstallView);
 }
 
 /**

@@ -1,3 +1,4 @@
+import { SUPPORT_EMAIL } from '@thp/shared';
 import { isExternalMocked } from '@thp/shared/mock';
 import { normaliseOrigin } from '@/client/config';
 
@@ -127,8 +128,12 @@ export function readAppOrigin(env: EnvSource = process.env): string {
  *
  * It is a variable rather than a constant so a staging environment can point reports at a mailbox
  * somebody is actually watching — or at a throwaway one — without a code change and a deploy.
+ *
+ * The default is the address `/support` publishes, read from the vocabulary rather than spelled
+ * again here, so a member who writes a letter and a member who presses the form reach the same
+ * inbox — and a change of mailbox is one edit, not a hunt.
  */
-export const DEFAULT_FEEDBACK_RECIPIENT = 'indepthwebsolutions@gmail.com';
+export const DEFAULT_FEEDBACK_RECIPIENT = SUPPORT_EMAIL;
 
 export function readFeedbackRecipient(env: EnvSource = process.env): string {
   const value = env['FEEDBACK_MAIL_TO'];

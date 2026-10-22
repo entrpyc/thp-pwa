@@ -8,6 +8,7 @@ export * from './feedback';
 export * from './health';
 export * from './invitations';
 export * from './jobs';
+export * from './legal';
 export * from './notes';
 export * from './notifications';
 export * from './observability/analytics';

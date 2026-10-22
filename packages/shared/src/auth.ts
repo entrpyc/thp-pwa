@@ -41,6 +41,16 @@ export interface SessionIdentity {
    * preference the interface applies, and the API refuses a value outside the six whoever sends it.
    */
   readonly preferredPlaybackSpeed: number;
+  /**
+   * Whether this account has turned product analytics off (Apple guideline 5.1.1(ii)).
+   *
+   * In the session payload for the reason the speed is, with more at stake: the analytics client
+   * starts when the member surface mounts, and it has to know *before* its first event whether it
+   * may send one. A preference fetched afterwards would be a preference applied after the page
+   * view it was meant to withhold. `false` is the ordinary state — analytics on — and the member
+   * changes it from `/profile/settings`.
+   */
+  readonly analyticsOptedOut: boolean;
 }
 
 /**

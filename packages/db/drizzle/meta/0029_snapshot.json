@@ -1,106 +1,9 @@
 {
-  "id": "f99792c8-a3d5-4f24-8bbc-a072e5b3965a",
+  "id": "903a67c9-cf69-468d-a1fe-c251ee86bef1",
   "prevId": "71f50fd3-f6e7-4a65-b2fc-253a859cf698",
   "version": "7",
   "dialect": "postgresql",
   "tables": {
-    "public.account_deletion_request": {
-      "name": "account_deletion_request",
-      "schema": "",
-      "columns": {
-        "id": {
-          "name": "id",
-          "type": "uuid",
-          "primaryKey": true,
-          "notNull": true,
-          "default": "gen_random_uuid()"
-        },
-        "user_id": {
-          "name": "user_id",
-          "type": "uuid",
-          "primaryKey": false,
-          "notNull": true
-        },
-        "token_hash": {
-          "name": "token_hash",
-          "type": "text",
-          "primaryKey": false,
-          "notNull": true
-        },
-        "created_at": {
-          "name": "created_at",
-          "type": "timestamp with time zone",
-          "primaryKey": false,
-          "notNull": true,
-          "default": "now()"
-        },
-        "expires_at": {
-          "name": "expires_at",
-          "type": "timestamp with time zone",
-          "primaryKey": false,
-          "notNull": true
-        },
-        "revoked_at": {
-          "name": "revoked_at",
-          "type": "timestamp with time zone",
-          "primaryKey": false,
-          "notNull": false
-        }
-      },
-      "indexes": {
-        "account_deletion_request_token_hash_unique": {
-          "name": "account_deletion_request_token_hash_unique",
-          "columns": [
-            {
-              "expression": "token_hash",
-              "isExpression": false,
-              "asc": true,
-              "nulls": "last"
-            }
-          ],
-          "isUnique": true,
-          "concurrently": false,
-          "method": "btree",
-          "with": {}
-        },
-        "account_deletion_request_live_user_unique": {
-          "name": "account_deletion_request_live_user_unique",
-          "columns": [
-            {
-              "expression": "user_id",
-              "isExpression": false,
-              "asc": true,
-              "nulls": "last"
-            }
-          ],
-          "isUnique": true,
-          "where": "\"account_deletion_request\".\"revoked_at\" is null",
-          "concurrently": false,
-          "method": "btree",
-          "with": {}
-        }
-      },
-      "foreignKeys": {
-        "account_deletion_request_user_id_user_id_fk": {
-          "name": "account_deletion_request_user_id_user_id_fk",
-          "tableFrom": "account_deletion_request",
-          "tableTo": "user",
-          "columnsFrom": [
-            "user_id"
-          ],
-          "columnsTo": [
-            "id"
-          ],
-          "onDelete": "cascade",
-          "onUpdate": "no action"
-        }
-      },
-      "compositePrimaryKeys": {},
-      "uniqueConstraints": {},
-      "policies": {},
-      "checkConstraints": {},
-      "isRLSEnabled": false
-    },
     "public.announcement": {
       "name": "announcement",
       "schema": "",
@@ -2770,11 +2673,12 @@
           "primaryKey": false,
           "notNull": false
         },
-        "deleted_at": {
-          "name": "deleted_at",
-          "type": "timestamp with time zone",
+        "analytics_opted_out": {
+          "name": "analytics_opted_out",
+          "type": "boolean",
           "primaryKey": false,
-          "notNull": false
+          "notNull": true,
+          "default": false
         }
       },
       "indexes": {
@@ -2799,10 +2703,6 @@
       "uniqueConstraints": {},
       "policies": {},
       "checkConstraints": {
-        "user_deleted_is_deactivated": {
-          "name": "user_deleted_is_deactivated",
-          "value": "\"user\".\"deleted_at\" is null or \"user\".\"deactivated_at\" is not null"
-        },
         "user_preferred_playback_speed_allowed": {
           "name": "user_preferred_playback_speed_allowed",
           "value": "\"user\".\"preferred_playback_speed\" in (0.5, 0.75, 1, 1.25, 1.5, 1.75, 2)"

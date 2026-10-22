@@ -30,6 +30,7 @@ const admin: Actor = {
   role: ROLE.admin,
   preferredPlaybackSpeed: DEFAULT_PLAYBACK_SPEED,
   avatarKey: null,
+  analyticsOptedOut: false,
 };
 
 async function refusal(body: unknown): Promise<{ code: string; message: string }> {
