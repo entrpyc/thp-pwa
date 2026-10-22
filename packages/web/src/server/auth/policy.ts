@@ -289,6 +289,24 @@ export const POLICY_ACTIONS = [
   'block.create',
   'block.remove',
   'block.list',
+  /**
+   * **The three report actions** (Apple guideline 1.2, Google Play's UGC policy): a member
+   * reporting a public note, an admin reading the queue of open reports, and an admin closing
+   * one — by dismissing it or by removing the note through `note.moderate`'s own path.
+   *
+   * `note.report` is both roles and not owned: anybody may report anybody's public note, and
+   * reporting your own is refused by the service as `invalid_input` rather than by this table
+   * bending to say "everything but yours". `report.list` and `report.resolve` are two for the
+   * reason every pair above is — the day a Contributor may read what the group has flagged without
+   * being able to decide about it is the day the split stops being decoration.
+   *
+   * There is deliberately **no `terms.accept`**. Accepting the terms is keyed on the caller's own
+   * id at `/users/me/terms`, the shape the analytics opt-out takes: there is no resource to
+   * authorise against, so the route is behind a session and nothing more.
+   */
+  'note.report',
+  'report.list',
+  'report.resolve',
 ] as const;
 
 export type PolicyAction = (typeof POLICY_ACTIONS)[number];
@@ -329,6 +347,15 @@ export interface Actor {
    * and the progress write, which sends the one server-side event and must not for this person.
    */
   readonly analyticsOptedOut: boolean;
+  /**
+   * The terms version this account accepted, or `null` for never. Not an authorisation input and
+   * never consulted by {@link can} — the terms gate is a resource-state question the notes
+   * service asks before a write, like "is this note a tombstone". Carried because the session
+   * lookup already read the row, and a second read per note write to learn one string would be
+   * the pattern the two fields above exist to avoid. Withheld from the payload by
+   * {@link describeActor}: the client learns it by being refused, with the prompt that follows.
+   */
+  readonly termsAcceptedVersion: string | null;
 }
 
 /**
@@ -482,6 +509,11 @@ const RULES: PolicyRules = {
   'block.create': { roles: { admin: true, member: true } },
   'block.remove': { roles: { admin: true, member: true } },
   'block.list': { roles: { admin: true, member: true } },
+  // Both roles may ask an admin to look at a note. Reading the queue and deciding about it is
+  // moderation, which [3.12.10](docs/project/prd.md) keeps with the admin.
+  'note.report': { roles: { admin: true, member: true } },
+  'report.list': { roles: { admin: true, member: false } },
+  'report.resolve': { roles: { admin: true, member: false } },
 };
 
 export function isPolicyAction(value: string): value is PolicyAction {
@@ -498,6 +530,7 @@ export function toActor(row: UserRow): Actor {
     preferredPlaybackSpeed: row.preferredPlaybackSpeed,
     avatarKey: row.avatarKey,
     analyticsOptedOut: row.analyticsOptedOut,
+    termsAcceptedVersion: row.termsAcceptedVersion,
   };
 }
 

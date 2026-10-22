@@ -6,17 +6,20 @@ import {
   MINIMUM_PASSWORD_LENGTH,
   ROLE,
   SIGN_UP_PATH,
+  TERMS_VERSION,
   USERS_PATH,
   isApiErrorBody,
   type AccountListPayload,
   type InvitationListPayload,
   type SessionPayload,
 } from '@thp/shared';
+import { findUserById } from '@thp/db';
 import {
   closeTestDatabase,
   cookieFromSetCookie,
   signIn,
   signedInAccount,
+  testDatabase,
 } from '../support/accounts';
 
 /**
@@ -39,6 +42,9 @@ const SIGN_UP_URL = `${baseUrl}${API_PREFIX}${SIGN_UP_PATH}`;
 
 /** Long enough for the shipped rule, and obviously not a real password. */
 const PASSWORD = 'chosen-at-registration';
+
+/** The acceptance every registration carries (Google Play UGC policy); its own tests are below. */
+const ACCEPTED = { termsVersion: TERMS_VERSION };
 
 afterAll(async () => {
   await closeTestDatabase();
@@ -75,7 +81,7 @@ async function register(body: unknown): Promise<Answer> {
 describe('registering an account', () => {
   it('creates the account and returns a session in the same response', async () => {
     const email = freshEmail('signup');
-    const answer = await register({ email, password: PASSWORD });
+    const answer = await register({ email, password: PASSWORD, ...ACCEPTED });
 
     expect(answer.status).toBe(201);
     expect(answer.cookie).toBeTruthy();
@@ -96,7 +102,7 @@ describe('registering an account', () => {
     const email = freshEmail('roleless');
     // The request shape has no role in it. Sending one anyway must change nothing — this is the
     // assertion that a self-service route is not an admin-console bypass.
-    const answer = await register({ email, password: PASSWORD, role: ROLE.admin });
+    const answer = await register({ email, password: PASSWORD, role: ROLE.admin, ...ACCEPTED });
 
     expect(answer.status).toBe(201);
     expect((answer.body as SessionPayload).user.role).toBe(ROLE.member);
@@ -110,7 +116,7 @@ describe('registering an account', () => {
 
   it('signs in afterwards with the password that was chosen', async () => {
     const email = freshEmail('returning');
-    await register({ email, password: PASSWORD });
+    await register({ email, password: PASSWORD, ...ACCEPTED });
 
     const result = await signIn(baseUrl, email, PASSWORD);
     expect(result.status).toBe(201);
@@ -119,21 +125,21 @@ describe('registering an account', () => {
 
   it('normalises the address, so the case it was typed in does not matter', async () => {
     const email = freshEmail('shouted');
-    const answer = await register({ email: email.toUpperCase(), password: PASSWORD });
+    const answer = await register({ email: email.toUpperCase(), password: PASSWORD, ...ACCEPTED });
 
     expect(answer.status).toBe(201);
     expect((answer.body as SessionPayload).user.email).toBe(email.toLowerCase());
 
     // And the normalised address is the one that holds the account: registering again in the
     // original casing is refused.
-    expect((await register({ email, password: PASSWORD })).code).toBe('email_taken');
+    expect((await register({ email, password: PASSWORD, ...ACCEPTED })).code).toBe('email_taken');
   });
 
   it('refuses a second account for an address that already has one, and says so', async () => {
     const email = freshEmail('twice');
-    expect((await register({ email, password: PASSWORD })).status).toBe(201);
+    expect((await register({ email, password: PASSWORD, ...ACCEPTED })).status).toBe(201);
 
-    const second = await register({ email, password: 'a-completely-different-one' });
+    const second = await register({ email, password: 'a-completely-different-one', ...ACCEPTED });
     expect(second.status).toBe(409);
     expect(second.code).toBe('email_taken');
     expect(second.cookie).toBeNull();
@@ -142,8 +148,8 @@ describe('registering an account', () => {
   it('creates exactly one account when the same address registers twice at once', async () => {
     const email = freshEmail('race');
     const [first, second] = await Promise.all([
-      register({ email, password: PASSWORD }),
-      register({ email, password: PASSWORD }),
+      register({ email, password: PASSWORD, ...ACCEPTED }),
+      register({ email, password: PASSWORD, ...ACCEPTED }),
     ]);
 
     expect([first.status, second.status].sort((a, b) => a - b)).toEqual([201, 409]);
@@ -160,6 +166,16 @@ describe('registering an account', () => {
       'invalid_input',
     ],
     ['no password', JSON.stringify({ email: 'someone@example.test' }), 'weak_password'],
+    [
+      'no terms acceptance',
+      JSON.stringify({ email: 'someone@example.test', password: PASSWORD }),
+      'invalid_input',
+    ],
+    [
+      'acceptance of terms that are not the current ones',
+      JSON.stringify({ email: 'someone@example.test', password: PASSWORD, termsVersion: '2000-01-01' }),
+      'invalid_input',
+    ],
   ])('refuses %s', async (_label, raw, code) => {
     const response = await fetch(SIGN_UP_URL, {
       method: 'POST',
@@ -174,18 +190,34 @@ describe('registering an account', () => {
     const answer = await register({
       email: freshEmail('weak'),
       password: 'x'.repeat(MINIMUM_PASSWORD_LENGTH - 1),
+      ...ACCEPTED,
     });
 
     expect(answer.status).toBe(400);
     expect(answer.code).toBe('weak_password');
     expect(answer.cookie).toBeNull();
   });
+
+  it('records which terms were accepted, and when, on the account (Google Play UGC policy)', async () => {
+    const email = freshEmail('accepting');
+    const answer = await register({ email, password: PASSWORD, ...ACCEPTED });
+    expect(answer.status).toBe(201);
+    const { user } = answer.body as SessionPayload;
+
+    // The acceptance is on the row and nowhere in the session payload: the client learns about
+    // the terms by being refused, never by a flag it could hold stale.
+    expect(JSON.stringify(answer.body)).not.toContain('termsAccepted');
+    const row = await findUserById(user.id, testDatabase(databaseUrl));
+    expect(row?.termsAcceptedVersion).toBe(TERMS_VERSION);
+    expect(row?.termsAcceptedAt).toBeInstanceOf(Date);
+    expect(Date.now() - (row?.termsAcceptedAt?.getTime() ?? 0)).toBeLessThan(60_000);
+  });
 });
 
 describe('what an admin can do with a registered account', () => {
   it('lists it beside invited accounts, and can change its role', async () => {
     const email = freshEmail('promotable');
-    const registered = await register({ email, password: PASSWORD });
+    const registered = await register({ email, password: PASSWORD, ...ACCEPTED });
     const { user } = registered.body as SessionPayload;
 
     const { cookie: adminCookie } = await signedInAccount(
@@ -235,7 +267,7 @@ describe('what an admin can do with a registered account', () => {
     });
     expect(issued.status).toBe(201);
 
-    expect((await register({ email, password: PASSWORD })).status).toBe(201);
+    expect((await register({ email, password: PASSWORD, ...ACCEPTED })).status).toBe(201);
 
     const listing = await fetch(`${baseUrl}${API_PREFIX}${INVITATIONS_PATH}`, {
       headers: { cookie: adminCookie },

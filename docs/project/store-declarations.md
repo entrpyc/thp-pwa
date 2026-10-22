@@ -129,10 +129,11 @@ users. The product's answers:
 
 | Requirement | Where it is |
 | :--- | :--- |
-| Terms the user accepts before posting | `/terms`, section *Posting rules*, rendered from `POSTING_RULES` in `packages/web/src/app/(public)/terms/posting-rules.ts`. The acceptance control that shows them before the first post is a later ticket. |
-| Removal by the operator | Admins delete any public note or reply (project prd 3.12.10); a placeholder, never the text, remains (3.12.18, 3.12.19) |
-| Restricting abusive users | Admins deactivate an account, ending its sessions at once (3.1.7) |
-| Reporting content | **Not built.** A member reports a note today by the feedback form or the support address. An in-app *Report* on a note is the gap a Google review is most likely to name; it is not in this ticket. |
+| Terms the user accepts before posting | `/terms`, section *Posting rules*, rendered from `POSTING_RULES` in `packages/web/src/app/(public)/terms/posting-rules.ts`. Sign-up requires a ticked consent and records `TERMS_VERSION` (the page's date) on the account; a member whose acceptance is missing or older than the current terms is asked again, with the same rules, before their next note or reply is saved (`PUT /api/v1/users/me/terms`). |
+| Removal by the operator | Admins delete any public note or reply (project prd 3.12.10); a placeholder, never the text, remains (3.12.18, 3.12.19). The *Reports* console panel removes through the same path. |
+| Restricting abusive users | Admins deactivate an account, ending its sessions at once (3.1.7). A member blocks another from *Block* in the note actions menu, after a confirmation that names the consequence; the blocked list with Unblock is on `/profile/settings`. A block hides each member's notes, replies and reactions from the other and refuses replies and reactions across it. |
+| Reporting content | *Report* in the note actions menu on any other member's public note or reply: a reason from a fixed list and an optional sentence. Admins are notified in-app and work the queue on `/admin/reports` (dismiss, or remove the note); the reporter is notified of the outcome. |
+| Filtering objectionable material (Apple 1.2) | A server-side whole-word check against a short English list (`packages/web/src/server/notes/blocked-words.ts`) refuses a public note, reply or edit at write time. A floor, not moderation: the report path and the admin's delete are the moderation. |
 
 ## Age rating
 

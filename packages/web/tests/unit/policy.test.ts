@@ -18,6 +18,7 @@ function actorWith(role: (typeof ROLES)[number]): Actor {
     preferredPlaybackSpeed: DEFAULT_PLAYBACK_SPEED,
     avatarKey: null,
     analyticsOptedOut: false,
+    termsAcceptedVersion: null,
   };
 }
 
@@ -84,6 +85,8 @@ describe('the policy module answers (actor, action, resource)', () => {
       avatarKey: 'avatars/private-object-name.webp',
       analyticsOptedOut: true,
       deletedAt: null,
+      termsAcceptedVersion: '2026-10-22',
+      termsAcceptedAt: new Date(),
     };
 
     const actor = toActor(row);
@@ -95,12 +98,14 @@ describe('the policy module answers (actor, action, resource)', () => {
       preferredPlaybackSpeed: DEFAULT_PLAYBACK_SPEED,
       avatarKey: 'avatars/private-object-name.webp',
       analyticsOptedOut: true,
+      termsAcceptedVersion: '2026-10-22',
     });
 
     const payload = describeActor(actor);
-    // Everything but the key: the actor carries it so the accounts module can sign a URL for it,
-    // and the payload is the boundary at which it stops travelling.
-    const { avatarKey: _withheld, ...identity } = actor;
+    // Everything but the key and the terms version: the actor carries the key so the accounts
+    // module can sign a URL for it, and the version so the notes service can gate a write without
+    // a second read; the payload is the boundary at which both stop travelling.
+    const { avatarKey: _withheld, termsAcceptedVersion: _gated, ...identity } = actor;
     expect(payload).toEqual(identity);
     expect(JSON.stringify(payload)).not.toContain('private-object-name');
     // The hash must not survive the trip, however the payload is built.
@@ -126,6 +131,7 @@ describe('an owned action is answered against the resource, not only the role', 
     preferredPlaybackSpeed: DEFAULT_PLAYBACK_SPEED,
     avatarKey: null,
     analyticsOptedOut: false,
+    termsAcceptedVersion: null,
   };
   const somebodyElse: Actor = { ...owner, id: 'other-1', email: 'other@example.test' };
   const admin: Actor = { ...owner, id: 'admin-1', email: 'admin@example.test', role: ROLE.admin };
@@ -216,7 +222,8 @@ describe('the two note actions are in the table, and neither differs by role', (
     // Names nobody wrote a rule for stay denied for both roles, which is what makes adding an
     // action a visible edit rather than something a coarse rule quietly already covered.
     for (const role of ROLES) {
-      for (const absent of ['note.list', 'note.report', 'note.own', 'note.use']) {
+      // `note.report` left this list when the report actions arrived with the UGC controls.
+      for (const absent of ['note.list', 'note.flag', 'note.own', 'note.use']) {
         expect(can(actorWith(role), absent), `${absent}/${role}`).toBe(false);
       }
     }
@@ -245,6 +252,7 @@ describe('the six moderation, ownership and reaction actions', () => {
     preferredPlaybackSpeed: DEFAULT_PLAYBACK_SPEED,
     avatarKey: null,
     analyticsOptedOut: false,
+    termsAcceptedVersion: null,
   };
   const somebodyElse: Actor = { ...owner, id: 'other-1', email: 'other@example.test' };
   const admin: Actor = { ...owner, id: 'admin-1', email: 'admin@example.test', role: ROLE.admin };
@@ -459,6 +467,7 @@ describe('the three block actions are in the table, and neither differs by role 
     preferredPlaybackSpeed: DEFAULT_PLAYBACK_SPEED,
     avatarKey: null,
     analyticsOptedOut: false,
+    termsAcceptedVersion: null,
   };
   const admin: Actor = { ...member, id: 'admin-1', email: 'admin@example.test', role: ROLE.admin };
 

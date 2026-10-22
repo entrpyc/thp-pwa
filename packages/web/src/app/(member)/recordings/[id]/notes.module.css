@@ -580,3 +580,77 @@
   color: var(--color-primary-strong);
   font-size: var(--fs-meta);
 }
+
+/* ---- report, block and the terms prompt ---------------------------------------------------- */
+
+/*
+ * The report form and the block confirmation are the delete confirmation's raised panel, wider,
+ * because a reason list needs the room and a block consequence is two sentences. Capped to the
+ * viewport less the page gutter so the panel never runs off a phone, where the `···` it hangs
+ * from sits at the card's right edge.
+ */
+.moderation {
+  position: absolute;
+  top: 100%;
+  right: 0;
+  z-index: 3;
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-3);
+  width: min(24rem, calc(100vw - 2 * var(--space-4)));
+  background: var(--color-surface-raised);
+  border: 1px solid var(--color-border-strong);
+  border-radius: var(--radius-md);
+  padding: var(--space-4);
+  text-align: left;
+}
+
+.moderationTitle {
+  margin: 0;
+  color: var(--color-text);
+  font-size: var(--fs-body);
+  font-weight: 600;
+}
+
+.reasonList {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-2);
+  margin: 0;
+  padding: 0;
+  border: none;
+}
+
+.reasonOption {
+  display: flex;
+  align-items: center;
+  gap: var(--space-2);
+  color: var(--color-text);
+  font-size: var(--fs-body);
+  cursor: pointer;
+}
+
+/*
+ * The terms prompt sits where the refusal would have, in the composer's own column: the member's
+ * text stays above it, the rules read below, and accepting is one press away from saving again.
+ */
+.termsPrompt {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-3);
+  background: var(--color-surface-raised);
+  border: 1px solid var(--color-border-strong);
+  border-radius: var(--radius-md);
+  padding: var(--space-4);
+}
+
+.termsRules {
+  margin: 0;
+  padding-left: var(--space-5);
+  color: var(--color-text-muted);
+  font-size: var(--fs-meta);
+}
+
+.termsRules li + li {
+  margin-top: var(--space-1);
+}

@@ -29,11 +29,14 @@ import {
   MAX_ANNOUNCEMENT_BODY_LENGTH,
   MAX_ANNOUNCEMENT_TITLE_LENGTH,
   MAX_NOTE_LENGTH,
+  MAX_REPORT_DETAIL_LENGTH,
   MAX_SOUND_PROFILE_NOTE_LENGTH,
   MAX_TAG_LENGTH,
   NOTE_VISIBILITIES,
   NOTIFICATION_KINDS,
   PLAYBACK_SPEEDS,
+  REPORT_OUTCOMES,
+  REPORT_REASONS,
   REVIEW_KINDS,
   REVIEW_STATUSES,
   ROLES,
@@ -86,6 +89,11 @@ export const scriptureOrigin = pgEnum('scripture_origin', SCRIPTURE_ORIGINS);
 export const notificationKind = pgEnum('notification_kind', NOTIFICATION_KINDS);
 
 export const embeddingSource = pgEnum('embedding_source', EMBEDDING_SOURCE_KINDS);
+
+/** Why a member reported a note, and what an admin did about it. Both derived, never restated. */
+export const reportReason = pgEnum('report_reason', REPORT_REASONS);
+
+export const reportOutcome = pgEnum('report_outcome', REPORT_OUTCOMES);
 
 /**
  * An account. Columns arrive with the steps that use them: `deactivated_at` comes with ticket 4
@@ -176,6 +184,24 @@ export const user = pgTable(
      * the last-admin count all leave it out without being taught about a second state.
      */
     deletedAt: timestamp('deleted_at', { withTimezone: true }),
+    /**
+     * **Which terms this person agreed to, and when** (Google Play's user-generated-content policy:
+     * a member accepts the terms before they post; Apple 1.2 asks for the same in other words).
+     *
+     * The version is the terms page's "last updated" day as a `YYYY-MM-DD` string — `TERMS_VERSION`
+     * in `@thp/shared` — because that is the one thing a member can read on the page they accepted
+     * and the one thing that has to change when the terms do. Two columns rather than a boolean:
+     * a boolean says "agreed" and cannot say *to what*, so the day the terms change it would have
+     * to be reset for everybody, and the row would stop being a record of anything.
+     *
+     * **Both nullable, and `null` on every account that already exists.** Nothing is back-filled:
+     * an account that predates the column, or that came in through an invitation rather than the
+     * sign-up form, has not accepted anything and is asked before its next note — which is the
+     * honest reading of the row, and the one an app review would want. A null version with a
+     * non-null date, or the reverse, is a row that says two things; the check below refuses it.
+     */
+    termsAcceptedVersion: text('terms_accepted_version'),
+    termsAcceptedAt: timestamp('terms_accepted_at', { withTimezone: true }),
   },
   (table) => [
     uniqueIndex('user_email_lower_unique').on(sql`lower(${table.email})`),
@@ -183,6 +209,11 @@ export const user = pgTable(
     check(
       'user_deleted_is_deactivated',
       sql`${table.deletedAt} is null or ${table.deactivatedAt} is not null`,
+    ),
+    /** An acceptance is a version and a moment together, or nothing. */
+    check(
+      'user_terms_acceptance_whole',
+      sql`(${table.termsAcceptedVersion} is null) = (${table.termsAcceptedAt} is null)`,
     ),
     check(
       'user_preferred_playback_speed_allowed',
@@ -1643,5 +1674,65 @@ export const memberBlock = pgTable(
     primaryKey({ columns: [table.blockerId, table.blockedId] }),
     index('member_block_blocked_idx').on(table.blockedId),
     check('member_block_not_self', sql`${table.blockerId} <> ${table.blockedId}`),
+  ],
+);
+
+/**
+ * **A member's report on a public note** — Apple guideline 1.2's "mechanism to report offensive
+ * content" and Google Play's UGC policy, as a row an admin reads in the console.
+ *
+ * **One row per report, not one per note.** Three members reporting the same note are three
+ * requests to look, each with its own reason and its own reporter to answer; collapsing them would
+ * lose the reasons and leave two reporters unanswered. What *is* collapsed is the decision: an
+ * admin resolves a note, and the service closes every open report on it with the same outcome in
+ * one statement, because one note cannot be both removed and left up.
+ *
+ * **`resolved_at` is the whole of the state.** Null is open and the queue; set is closed, with the
+ * outcome beside it. No `status` enum to keep in step with the timestamp — the shape `review_item`
+ * chose for the same reason, and the partial index below is the queue read exactly.
+ *
+ * **Deletion follows the README**, column by column. `note_id` cascades: a report about a note the
+ * database no longer holds is about nothing (a *tombstoned* note is still a row, so its reports
+ * survive and are closed by the resolution, never by the cascade). `reporter_id` and `resolved_by`
+ * **set null**: each is a record of something that happened that this person caused — a report
+ * made, a decision taken — and the record outlives the account, exactly as `review_item.reviewed_by`
+ * does. The console prints "a former member" over a null reporter.
+ *
+ * No `recording_id`: the note knows its recording, and a second copy here could only disagree.
+ * No `detail` ceiling at the database beyond the shared constant, derived as every ceiling is.
+ */
+export const noteReport = pgTable(
+  'note_report',
+  {
+    id: uuid('id').primaryKey().defaultRandom(),
+    noteId: uuid('note_id')
+      .notNull()
+      .references(() => note.id, { onDelete: 'cascade' }),
+    reporterId: uuid('reporter_id').references(() => user.id, { onDelete: 'set null' }),
+    reason: reportReason('reason').notNull(),
+    /** The reporter's sentence to the admin, or null. Trimmed by the service; empty is stored null. */
+    detail: text('detail'),
+    createdAt: timestamp('created_at', { withTimezone: true }).notNull().defaultNow(),
+    /** Null while open. Set once, with the outcome and who decided, and never cleared. */
+    resolvedAt: timestamp('resolved_at', { withTimezone: true }),
+    outcome: reportOutcome('outcome'),
+    resolvedBy: uuid('resolved_by').references(() => user.id, { onDelete: 'set null' }),
+  },
+  (table) => [
+    /** The queue: open reports, oldest first. One index scan for the console. */
+    index('note_report_open_idx')
+      .on(table.createdAt)
+      .where(sql`${table.resolvedAt} is null`),
+    /** The resolution: every open report on one note, closed together. */
+    index('note_report_note_idx').on(table.noteId),
+    /** Closed means an outcome was recorded; open means none was. Both directions, one check. */
+    check(
+      'note_report_resolution_whole',
+      sql`(${table.resolvedAt} is null) = (${table.outcome} is null)`,
+    ),
+    check(
+      'note_report_detail_length',
+      sql`char_length(${table.detail}) <= ${sql.raw(String(MAX_REPORT_DETAIL_LENGTH))}`,
+    ),
   ],
 );

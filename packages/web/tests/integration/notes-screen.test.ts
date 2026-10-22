@@ -1318,8 +1318,13 @@ describe('a member acts on what they wrote', () => {
       expect(await menu.getByRole('button', { name: 'Edit' }).count()).toBe(1);
       expect(await menu.getByRole('button', { name: 'Delete' }).count()).toBe(1);
 
-      // A member is not an admin, so somebody else's note carries no overflow at all.
-      expect(await card(page, theirs).getByRole('button', { name: 'Note actions' }).count()).toBe(0);
+      // A member is not an admin, so somebody else's note offers neither Edit nor Delete — its
+      // overflow carries only Report and Block (ugc-controls-screen.test.ts drives those).
+      await card(page, theirs).getByRole('button', { name: 'Note actions' }).click();
+      const theirMenu = card(page, theirs).getByRole('group', { name: 'Note actions' });
+      expect(await theirMenu.getByRole('button', { name: 'Edit' }).count()).toBe(0);
+      expect(await theirMenu.getByRole('button', { name: 'Delete' }).count()).toBe(0);
+      expect(await theirMenu.getByRole('button', { name: 'Report' }).count()).toBe(1);
     } finally {
       await page.context().close();
     }
@@ -1384,8 +1389,9 @@ describe('a member acts on what they wrote', () => {
       expect(await card(page, bare).count()).toBe(1);
       expect(await card(page, bare).innerText()).toContain('Nothing hangs off this.');
 
-      // A note with replies says what will happen to them.
-      await card(page, threaded).getByRole('button', { name: 'Note actions' }).click();
+      // A note with replies says what will happen to them. The card's own overflow, not the
+      // reply's — a neighbour's reply now carries one too (Report and Block).
+      await ownControl(page, threaded, 'Note actions').click();
       await card(page, threaded).getByRole('button', { name: 'Delete' }).click();
       expect(
         await card(page, threaded).getByRole('group', { name: 'Confirm deletion' }).innerText(),
@@ -1530,7 +1536,8 @@ describe('a note removed while the member’s screen was open', () => {
     const page = await openTeaching(where);
     try {
       await openNotes(page);
-      await card(page, forEdit).getByRole('button', { name: 'Note actions' }).click();
+      // The card's own overflow: the neighbour's reply under it carries one as well.
+      await ownControl(page, forEdit, 'Note actions').click();
       await card(page, forEdit).getByRole('button', { name: 'Edit' }).click();
       await card(page, forEdit)
         .getByRole('form', { name: 'Edit this note' })
@@ -1545,7 +1552,7 @@ describe('a note removed while the member’s screen was open', () => {
         .toContain('This note has already been removed.');
 
       // The delete half, refused the same way and with the same sentence.
-      await card(page, forDelete).getByRole('button', { name: 'Note actions' }).click();
+      await ownControl(page, forDelete, 'Note actions').click();
       await card(page, forDelete).getByRole('button', { name: 'Delete' }).click();
       await softDeleteNote(forDelete, member.id, handle);
       await card(page, forDelete)

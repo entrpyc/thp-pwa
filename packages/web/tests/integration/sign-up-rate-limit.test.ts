@@ -3,6 +3,7 @@ import {
   API_PREFIX,
   CORRELATION_ID_HEADER,
   SIGN_UP_PATH,
+  TERMS_VERSION,
   isApiErrorBody,
 } from '@thp/shared';
 import { closeTestDatabase, signIn } from '../support/accounts';
@@ -62,7 +63,11 @@ interface Answer {
 }
 
 async function attempt(address: string, body: unknown = null, email?: string): Promise<Answer> {
-  const payload = body ?? { email: email ?? freshEmail('limited'), password: PASSWORD };
+  const payload = body ?? {
+    email: email ?? freshEmail('limited'),
+    password: PASSWORD,
+    termsVersion: TERMS_VERSION,
+  };
   const response = await fetch(SIGN_UP_URL, {
     method: 'POST',
     headers: { 'content-type': 'application/json', 'x-real-ip': address },

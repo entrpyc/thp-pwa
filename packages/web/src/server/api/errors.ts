@@ -265,6 +265,18 @@ export class ApiError extends Error {
     return new ApiError('blocked', 403, message);
   }
 
+  /**
+   * A note write by a member whose terms acceptance is missing or stale (Google Play UGC policy).
+   *
+   * `403` because the act is refused to this caller today, and its own code rather than
+   * `forbidden` because the policy module permitted it — what refuses is a fact about the account
+   * the member can change in one press, and the composer needs to know *that* to draw the prompt
+   * instead of a plain failure. Also distinct from `invalid_input`: the request was well-formed.
+   */
+  static termsRequired(message: string): ApiError {
+    return new ApiError('terms_required', 403, message);
+  }
+
   static notFound(message = 'The requested resource does not exist.'): ApiError {
     return new ApiError('not_found', 404, message);
   }

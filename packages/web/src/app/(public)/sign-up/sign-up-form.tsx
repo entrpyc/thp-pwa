@@ -3,35 +3,53 @@
 import Link from 'next/link';
 import { useRouter } from 'next/navigation';
 import { useId, useState, type FormEvent } from 'react';
-import { PASSWORD_RULE_TEXT, SIGN_UP_PATH, checkPassword } from '@thp/shared';
+import {
+  PASSWORD_RULE_TEXT,
+  SIGN_UP_PATH,
+  TERMS_PAGE_PATH,
+  TERMS_VERSION,
+  checkPassword,
+  type SignUpRequest,
+} from '@thp/shared';
 import { ApiClientError, apiFetch } from '@/client/api-client';
 import styles from './sign-up.module.css';
 
 /**
  * The registration form.
  *
- * It is sign-in's form with two differences, and both are about the fact that this screen *creates*
- * something:
+ * It is sign-in's form with three differences, and all are about the fact that this screen
+ * *creates* something:
  *
  * 1. **The password rule is printed before it can be broken**, read from the same shared module the
  *    API checks against — so the screen cannot promise a rule the server does not apply. The same
  *    argument `accept-form.tsx` makes: a rule you only learn by being refused is an exam.
  * 2. **`autoComplete="new-password"`**, so a password manager offers to generate and store one
  *    rather than offering the credential for an account that does not exist yet.
+ * 3. **The terms are accepted here** (Google Play's UGC policy: a member accepts the terms before
+ *    they post). A checkbox beside a sentence that links to `/terms`, unticked by default — a
+ *    pre-ticked box is not consent — and the request carries `TERMS_VERSION`, the date of the terms
+ *    the link opens, so the account records *which* terms were agreed to. The API refuses a request
+ *    without it; this screen only saves the round trip with the same sentence.
  *
  * Everything else is deliberately the same: what you typed survives a refusal, a refusal does not
  * reload the page, and the response carries the session cookie so registering lands you inside in
  * one motion rather than handing you an account and then a sign-in form.
  */
+
+/** What the screen says when the box is not ticked — the API's own sentence, so the two agree. */
+export const TERMS_UNTICKED_MESSAGE = 'Please read and accept the terms of use to create an account.';
+
 export function SignUpForm() {
   const router = useRouter();
   const emailId = useId();
   const passwordId = useId();
   const ruleId = useId();
   const errorId = useId();
+  const consentId = useId();
 
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
+  const [accepted, setAccepted] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [submitting, setSubmitting] = useState(false);
 
@@ -46,16 +64,21 @@ export function SignUpForm() {
       setError(weakness);
       return;
     }
+    if (!accepted) {
+      setError(TERMS_UNTICKED_MESSAGE);
+      return;
+    }
 
     setSubmitting(true);
     setError(null);
 
     try {
+      const request: SignUpRequest = { email, password, termsVersion: TERMS_VERSION };
       await apiFetch(SIGN_UP_PATH, {
         method: 'POST',
         credentials: 'include',
         headers: { 'content-type': 'application/json' },
-        body: JSON.stringify({ email, password }),
+        body: JSON.stringify(request),
       });
       // The session cookie is set by that response; `/` is a server component and re-reads it.
       // The member layout is what routes this first launch into the new-user onboarding.
@@ -123,6 +146,26 @@ export function SignUpForm() {
             {PASSWORD_RULE_TEXT}
           </p>
         </div>
+
+        {/*
+          Unticked by default, and a plain `<label>` round a native box: the sentence is the
+          control's accessible name, and the link inside it opens the terms in the same tab — a
+          member who reads them and comes back finds the form as they left it.
+        */}
+        <label className={styles.consent} htmlFor={consentId}>
+          <input
+            className={styles.consentBox}
+            id={consentId}
+            name="termsAccepted"
+            type="checkbox"
+            checked={accepted}
+            onChange={(event) => setAccepted(event.target.checked)}
+            {...(error === null ? {} : { 'aria-describedby': errorId })}
+          />
+          <span>
+            I have read and accept the <Link href={TERMS_PAGE_PATH}>terms of use</Link>.
+          </span>
+        </label>
 
         {error === null ? null : (
           <p className={styles.error} id={errorId} role="alert">

@@ -31,6 +31,7 @@ const admin: Actor = {
   preferredPlaybackSpeed: DEFAULT_PLAYBACK_SPEED,
   avatarKey: null,
   analyticsOptedOut: false,
+  termsAcceptedVersion: null,
 };
 
 async function refusal(body: unknown): Promise<{ code: string; message: string }> {
@@ -44,11 +45,13 @@ async function refusal(body: unknown): Promise<{ code: string; message: string }
 }
 
 describe('the vocabulary', () => {
-  it('names five kinds, two of which an admin composes, each with a label', () => {
+  it('names seven kinds, two of which an admin composes, each with a label', () => {
     expect(NOTIFICATION_KINDS).toEqual([
       'recording_published',
       'note_reply',
       'note_reaction',
+      'note_reported',
+      'report_resolved',
       'announcement',
       'new_feature',
     ]);

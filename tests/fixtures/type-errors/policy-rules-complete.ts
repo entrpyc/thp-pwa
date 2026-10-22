@@ -17,8 +17,9 @@ import type { PolicyRules } from '@/server/auth/policy';
  * from `series.update` for the reason every pair here is split. The tags scope adds five — the
  * taxonomy's list, create, rename and delete, and applying tags to a recording or a series. The
  * notifications scope adds two — sending an announcement to everybody, and listing past sends.
- * Member blocks add three — blocking, unblocking, and reading your own blocked list. The same edit
- * was required every time.
+ * Member blocks add three — blocking, unblocking, and reading your own blocked list. Reports add
+ * three more — reporting a note, reading the queue, and resolving one. The same edit was required
+ * every time.
  */
 export const rules: PolicyRules = {
   'session.read': { roles: { admin: true, member: true } },
@@ -76,4 +77,7 @@ export const rules: PolicyRules = {
   'block.create': { roles: { admin: true, member: true } },
   'block.remove': { roles: { admin: true, member: true } },
   'block.list': { roles: { admin: true, member: true } },
+  'note.report': { roles: { admin: true, member: true } },
+  'report.list': { roles: { admin: true, member: false } },
+  'report.resolve': { roles: { admin: true, member: false } },
 };

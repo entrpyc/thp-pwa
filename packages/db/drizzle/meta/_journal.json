@@ -225,6 +225,13 @@
       "when": 1792687742537,
       "tag": "0031_member_blocks",
       "breakpoints": true
+    },
+    {
+      "idx": 32,
+      "version": "7",
+      "when": 1792689699306,
+      "tag": "0032_ugc_controls",
+      "breakpoints": true
     }
   ]
 }

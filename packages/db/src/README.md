@@ -65,6 +65,10 @@ against the schema, not a second copy of it.
 - `note_pin.pinned_by`, `invitation.invited_by`, `review_item.reviewed_by`,
   `segment.corrected_by_user_id`, `announcement.sent_by`, `spend_ceiling_raise.raised_by`,
   `sound_profile.created_by` — set null.
+- `note_report.reporter_id`, `note_report.resolved_by` — set null: a report made and a decision
+  taken are records of something that happened to somebody else's note. The admins' notice that
+  this person reported a note has its title rewritten to the placeholder's name, as a reply's is.
+  `note_report.note_id` cascades with the note, which a public note's re-pointing never fires.
 - `invitation.email` — rows addressed to the person are deleted.
 - `user` itself — the placeholder is excluded from the member list (`listUsers`) and from every
   guarded admin write (`withLastAdminGuard`, `reactivateUser`), so nobody can deactivate,

@@ -8,6 +8,8 @@ import {
   NOTIFICATION_KINDS,
   REACTIONS,
   PIPELINE_STEPS,
+  REPORT_OUTCOMES,
+  REPORT_REASONS,
   REVIEW_KINDS,
   REVIEW_STATUSES,
   ROLES,
@@ -103,6 +105,18 @@ export const DOMAIN_DECLARATIONS: readonly DomainDeclaration[] = [
     members: NOTIFICATION_KINDS,
   },
   { name: 'NotificationKind', canonicalFile: 'packages/shared/src/notifications.ts' },
+  {
+    name: 'REPORT_REASONS',
+    canonicalFile: 'packages/shared/src/reports.ts',
+    members: REPORT_REASONS,
+  },
+  { name: 'ReportReason', canonicalFile: 'packages/shared/src/reports.ts' },
+  {
+    name: 'REPORT_OUTCOMES',
+    canonicalFile: 'packages/shared/src/reports.ts',
+    members: REPORT_OUTCOMES,
+  },
+  { name: 'ReportOutcome', canonicalFile: 'packages/shared/src/reports.ts' },
 ];
 
 export interface DeclarationViolation {

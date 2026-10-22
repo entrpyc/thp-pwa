@@ -21,6 +21,8 @@ import { ApiClientError, apiFetch } from '@/client/api-client';
 import { track } from '@/client/observability/analytics';
 import { useRecordingContent } from './recording-content';
 import { CharacterCount, NoteComposer } from './note-composer';
+import { BlockConfirm, ReportForm } from './note-moderation';
+import { TermsPrompt, isTermsRequired } from './terms-prompt';
 import styles from './notes.module.css';
 
 /**
@@ -483,7 +485,9 @@ function ReactionRow({
  * The `···` overflow (scope prd 5.5.1, scope prd 5.6.1).
  *
  * The author's own **Edit** and **Delete**; for an admin, **Delete** and **Pin** / **Unpin** on any
- * public note. A note that offers nothing draws no control at all rather than an empty menu.
+ * public note; on anybody else's public note, **Report** and **Block** (Apple guideline 1.2,
+ * Google Play's UGC policy — `note-moderation.tsx`). A note that offers nothing draws no control at
+ * all rather than an empty menu.
  */
 function Overflow({
   note,
@@ -499,12 +503,16 @@ function Overflow({
   const content = useRecordingContent();
   const [open, setOpen] = useState(false);
   const [confirming, setConfirming] = useState(false);
+  const [moderating, setModerating] = useState<'report' | 'block' | null>(null);
 
   // Pinning is a top-level public note's alone (3.6.8) — a reply has no moment to raise, and a
   // private note is nobody else's to read.
   const canPin = canModerate && note.timestampMs !== null && note.visibility === 'public';
   const canDelete = note.mine || (canModerate && note.visibility === 'public');
-  if (!note.mine && !canDelete && !canPin) return null;
+  // Somebody else's public note — the only kind another member can see, and so the only kind they
+  // can have anything to say about. The id is the API's answer, null only on a tombstone.
+  const otherAuthor = note.mine || note.visibility !== 'public' ? null : note.authorId;
+  if (!note.mine && !canDelete && !canPin && otherAuthor === null) return null;
 
   function act(path: string, method: 'DELETE' | 'PUT'): void {
     setOpen(false);
@@ -556,7 +564,38 @@ function Overflow({
               {note.pinned ? 'Unpin' : 'Pin'}
             </button>
           ) : null}
+          {otherAuthor === null ? null : (
+            <>
+              <button
+                className={styles.menuItem}
+                type="button"
+                onClick={() => {
+                  setOpen(false);
+                  setModerating('report');
+                }}
+              >
+                Report
+              </button>
+              <button
+                className={styles.menuItem}
+                type="button"
+                onClick={() => {
+                  setOpen(false);
+                  setModerating('block');
+                }}
+              >
+                Block
+              </button>
+            </>
+          )}
         </div>
+      ) : null}
+
+      {moderating === 'report' && otherAuthor !== null ? (
+        <ReportForm note={note} authorId={otherAuthor} onDone={() => setModerating(null)} />
+      ) : null}
+      {moderating === 'block' && otherAuthor !== null ? (
+        <BlockConfirm note={note} authorId={otherAuthor} onDone={() => setModerating(null)} />
       ) : null}
 
       {confirming ? (
@@ -694,10 +733,45 @@ function ReplyComposer({
   const [text, setText] = useState('');
   const [saving, setSaving] = useState(false);
   const [failure, setFailure] = useState<string | null>(null);
+  const [termsPrompt, setTermsPrompt] = useState(false);
   const count = text.trim().length;
   const field = useRef<HTMLTextAreaElement>(null);
 
   useEffect(() => field.current?.focus(), []);
+
+  /**
+   * One save for the submit and for the terms prompt's `onAccepted`, so accepting the terms and
+   * saving again is the press the member already made — see `terms-prompt.tsx`.
+   */
+  function save(): void {
+    setSaving(true);
+    setFailure(null);
+    setTermsPrompt(false);
+    void apiFetch(recordingNotesPath(recordingId), {
+      method: 'POST',
+      credentials: 'include',
+      headers: { 'content-type': 'application/json' },
+      body: JSON.stringify({ text: text.trim(), parentId: note.id }),
+    })
+      .then(() => {
+        setText('');
+        // A reply is always public (scope prd 3.3.3); what it said never travels.
+        track('note_created', { recording_id: recordingId, visibility: 'public', is_reply: true });
+        onDone();
+        content.refreshNotes();
+      })
+      .catch((caught: unknown) => {
+        // The terms gate is the one refusal that is not about the note: the text stays, the
+        // prompt opens, and nothing is refreshed because nothing about the list changed.
+        if (isTermsRequired(caught)) {
+          setTermsPrompt(true);
+          return;
+        }
+        setFailure(refusalMessage(caught, NOTE_REMOVED_WHILE_REPLYING_MESSAGE));
+        content.refreshNotes();
+      })
+      .finally(() => setSaving(false));
+  }
 
   return (
     <form
@@ -705,26 +779,7 @@ function ReplyComposer({
       aria-label="Write a reply"
       onSubmit={(event) => {
         event.preventDefault();
-        setSaving(true);
-        setFailure(null);
-        void apiFetch(recordingNotesPath(recordingId), {
-          method: 'POST',
-          credentials: 'include',
-          headers: { 'content-type': 'application/json' },
-          body: JSON.stringify({ text: text.trim(), parentId: note.id }),
-        })
-          .then(() => {
-            setText('');
-            // A reply is always public (scope prd 3.3.3); what it said never travels.
-            track('note_created', { recording_id: recordingId, visibility: 'public', is_reply: true });
-            onDone();
-            content.refreshNotes();
-          })
-          .catch((caught: unknown) => {
-            setFailure(removedMessage(caught, NOTE_REMOVED_WHILE_REPLYING_MESSAGE));
-            content.refreshNotes();
-          })
-          .finally(() => setSaving(false));
+        save();
       }}
     >
       <textarea
@@ -738,6 +793,8 @@ function ReplyComposer({
       />
 
       <CharacterCount count={count} />
+
+      {termsPrompt ? <TermsPrompt onAccepted={save} onDismiss={() => setTermsPrompt(false)} /> : null}
 
       {failure === null ? null : <p className={styles.cardFailure} role="status">
           {failure}
@@ -771,6 +828,17 @@ function removedMessage(caught: unknown, whenRemoved: string): string {
   return caught instanceof ApiClientError && caught.code === 'note_removed'
     ? whenRemoved
     : 'That did not go through. Try again.';
+}
+
+/**
+ * {@link removedMessage}, plus the one refusal whose sentence is the API's own: `invalid_input` on
+ * a write is the word filter or the text rules, and both are written for the person who typed —
+ * "edit the wording and try again" is more use than "that did not go through".
+ */
+function refusalMessage(caught: unknown, whenRemoved: string): string {
+  return caught instanceof ApiClientError && caught.code === 'invalid_input'
+    ? caught.message
+    : removedMessage(caught, whenRemoved);
 }
 
 /**
