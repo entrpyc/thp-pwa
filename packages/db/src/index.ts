@@ -164,6 +164,7 @@ export {
   findAnnouncementById,
   insertAnnouncement,
   insertNotification,
+  insertNotificationForActiveAdmins,
   insertNotificationForAllMembers,
   listAnnouncements,
   listNotificationsForUser,
