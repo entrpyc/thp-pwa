@@ -70,7 +70,8 @@ export async function listHighlightsFor(actor: Actor): Promise<HighlightListPayl
  *   with no line under it — no transcript, or silence after the last line — is stored as the raw
  *   position with no line; the playlist prints the moment and the transport treats a press within
  *   a few seconds as the same entry.
- * - **`note`** — the note must exist, be standing, top-level, and **one the member can read**:
+ * - **`note`** — the note must exist, be standing, and be **one the member can read** (a reply
+ *   as much as a top-level note; a reply's moment is its thread's):
  *   their own, or another member's public note with no block either way ([3.12.17](docs/project/prd.md),
  *   widened by the operator from one's own notes to any readable note); and its teaching must be
  *   visible, for the reason the notes read path refuses an unpublished one. Anything else is
@@ -135,11 +136,11 @@ async function resolveTarget(actor: Actor, body: unknown): Promise<NewHighlight>
     const noteId = parseId((body as { noteId?: unknown }).noteId, 'noteId must be a note id.');
     const row = await findNoteById(noteId);
     // One sentence for every way this is not pinnable, so nothing about a note the member cannot
-    // read — not even that the id exists — is learned here. A reply is refused too: it has no
-    // moment of its own ([3.12.7](docs/project/prd.md)), and a playlist entry is a moment. Another
-    // member's note is readable when it is public and nobody has blocked anybody, which is the
-    // notes read path's own rule.
-    if (row === null || row.deletedAt !== null || row.timestampMs === null) {
+    // read — not even that the id exists — is learned here. A reply is pinnable too, by the
+    // operator's decision: it has no moment of its own ([3.12.7](docs/project/prd.md)), so the
+    // playlist opens it at its thread's. Another member's note is readable when it is public and
+    // nobody has blocked anybody, which is the notes read path's own rule.
+    if (row === null || row.deletedAt !== null) {
       throw ApiError.notFound(NO_SUCH_NOTE);
     }
     if (row.authorId !== actor.id) {

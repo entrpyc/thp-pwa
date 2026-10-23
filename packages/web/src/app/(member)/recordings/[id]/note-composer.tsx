@@ -1,6 +1,6 @@
 'use client';
 
-import { useEffect, useState } from 'react';
+import { useEffect, useId, useState } from 'react';
 import {
   MAX_NOTE_LENGTH,
   NOTE_RECORDING_GONE_MESSAGE,
@@ -13,7 +13,7 @@ import { ApiClientError, apiFetch } from '@/client/api-client';
 import { track } from '@/client/observability/analytics';
 import { clearNoteDraft, readNoteDraft, writeNoteDraft } from '@/client/notes/draft';
 import { useRecordingContent } from './recording-content';
-import { ImageAttach, useImageAttachments } from './image-attach';
+import { ImageAttach, ImageAttachAdd, useImageAttachments } from './image-attach';
 import { TermsPrompt, isTermsRequired } from './terms-prompt';
 import styles from './notes.module.css';
 
@@ -142,7 +142,8 @@ export function NoteComposer({
   const count = text.trim().length;
   const overLimit = count > MAX_NOTE_LENGTH;
   // Pictures ([3.12.22](docs/project/prd.md)). A note of pictures alone needs no words (3.12.23),
-  // so the save is enabled by either; a picture still on its way holds the save until it lands.
+  // so the save is enabled by either; a picture still on its way holds the save until it lands.
+  const fieldId = useId();
   const attachments = useImageAttachments();
   const attached = attachments.images.filter((one) => one.status !== 'refused').length;
   const empty = count === 0 && attached === 0;
@@ -245,28 +246,34 @@ export function NoteComposer({
       */}
       <p className={styles.anchor}>At {formatTimecode(anchorMs)}</p>
 
-      <label className={styles.field}>
-        <span className={styles.fieldLabel}>Your note</span>
-        <textarea
-          className={styles.textArea}
-          rows={4}
-          placeholder="What landed at this moment?"
-          value={text}
-          onChange={(event) => {
-            // **The first character is the decision.** Every later one finds the moment already
-            // held, so this is a no-op for the rest of the note.
-            lockComposerAnchor();
-            // On a teaching the player does not hold, the moment is also kept **here**, the way a
-            // restored draft's is. The source's anchor lives with the page's own content, and the
-            // press that loads this teaching into the player swaps that source out from under the
-            // composer — at whatever moment the press named, which is not the one this note showed
-            // when it was begun. For the loaded teaching the player's own lock is the record and
-            // nothing is duplicated, so the two mounts of this composer still read one moment.
-            if (!content.current) setDraftAnchorMs((held) => held ?? anchorMs);
-            setText(event.target.value);
-          }}
-        />
-      </label>
+      <div className={styles.field}>
+        <label className={styles.fieldLabel} htmlFor={fieldId}>
+          Your note
+        </label>
+        <div className={styles.fieldRow}>
+          <textarea
+            className={styles.textArea}
+            id={fieldId}
+            rows={4}
+            placeholder="What landed at this moment?"
+            value={text}
+            onChange={(event) => {
+              // **The first character is the decision.** Every later one finds the moment already
+              // held, so this is a no-op for the rest of the note.
+              lockComposerAnchor();
+              // On a teaching the player does not hold, the moment is also kept **here**, the way a
+              // restored draft's is. The source's anchor lives with the page's own content, and the
+              // press that loads this teaching into the player swaps that source out from under the
+              // composer — at whatever moment the press named, which is not the one this note showed
+              // when it was begun. For the loaded teaching the player's own lock is the record and
+              // nothing is duplicated, so the two mounts of this composer still read one moment.
+              if (!content.current) setDraftAnchorMs((held) => held ?? anchorMs);
+              setText(event.target.value);
+            }}
+          />
+          <ImageAttachAdd attachments={attachments} disabled={saving} />
+        </div>
+      </div>
 
       {/*
         A labelled two-state control rather than a colour difference (5.1.3): whether the group will

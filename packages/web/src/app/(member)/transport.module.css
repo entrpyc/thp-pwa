@@ -694,15 +694,18 @@
   justify-content: center;
 }
 
+/*
+ * The mark itself: a square that sits inside the track rather than a dot standing proud of it —
+ * the track's own 4px tall and as wide, square-cornered — by the operator's decision. A note's
+ * is green; a highlighted moment's is orange, so the two are told apart by colour.
+ */
 .marker::before {
   content: '';
-  width: var(--space-2);
-  height: var(--space-2);
-  border-radius: var(--radius-pill);
+  width: 4px;
+  height: 4px;
   background: var(--color-notes);
 }
 
-/* A highlighted moment: the same dot in orange, so it is told from a note's green. */
 .highlightDot::before {
   background: var(--color-highlights);
 }

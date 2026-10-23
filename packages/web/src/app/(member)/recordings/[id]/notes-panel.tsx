@@ -1,6 +1,6 @@
 'use client';
 
-import { useEffect, useRef, useState } from 'react';
+import { useEffect, useId, useRef, useState } from 'react';
 import {
   MAX_NOTE_LENGTH,
   NOTE_ALREADY_REMOVED_MESSAGE,
@@ -22,7 +22,7 @@ import { ApiClientError, apiFetch } from '@/client/api-client';
 import { track } from '@/client/observability/analytics';
 import { useRecordingContent } from './recording-content';
 import { CharacterCount, NoteComposer } from './note-composer';
-import { ImageAttach, useImageAttachments } from './image-attach';
+import { ImageAttach, ImageAttachAdd, useImageAttachments } from './image-attach';
 import { NoteImages } from './note-images';
 import { BlockConfirm, ReportForm } from './note-moderation';
 import { TermsPrompt, isTermsRequired } from './terms-prompt';
@@ -438,6 +438,34 @@ function ReactionRow({
 }) {
   const content = useRecordingContent();
   const [open, setOpen] = useState(false);
+  const root = useRef<HTMLDivElement>(null);
+
+  /*
+   * An open picker closes on a press anywhere outside the row and on Escape — the rule the note
+   * actions menu and the transport's strip follow, for the same reasons given there. The row
+   * holds the chips, the `+` and the picker, so a press on any of them is left to its own handler.
+   */
+  useEffect(() => {
+    if (!open) return;
+
+    function onPointerDown(event: PointerEvent) {
+      const target = event.target;
+      if (!(target instanceof Node)) return;
+      if (root.current?.contains(target)) return;
+      setOpen(false);
+    }
+
+    function onKeyDown(event: KeyboardEvent) {
+      if (event.key === 'Escape') setOpen(false);
+    }
+
+    document.addEventListener('pointerdown', onPointerDown);
+    document.addEventListener('keydown', onKeyDown);
+    return () => {
+      document.removeEventListener('pointerdown', onPointerDown);
+      document.removeEventListener('keydown', onKeyDown);
+    };
+  }, [open]);
 
   // A private note takes no reactions, so it shows neither the row nor the control (3.4.8).
   if (note.visibility === 'private') return null;
@@ -464,7 +492,7 @@ function ReactionRow({
   }
 
   return (
-    <div className={styles.reactions}>
+    <div className={styles.reactions} ref={root}>
       {note.reactions.map((one) => (
         <button
           key={one.emoji}
@@ -583,8 +611,8 @@ function Overflow({
 
   return (
     <div className={styles.overflow} ref={root}>
-      {/* Any standing top-level note can go to Highlights (3.12.17, widened); a reply has no moment to mark. */}
-      {!note.deleted && note.timestampMs !== null ? (
+      {/* Any standing note can go to Highlights (3.12.17, widened to replies too); a reply opens at its thread's moment. */}
+      {!note.deleted ? (
         <PinNoteControl noteId={note.id} className={styles.overflowControl} />
       ) : null}
       <button
@@ -718,7 +746,8 @@ function EditForm({
   const [text, setText] = useState(note.text);
   const [saving, setSaving] = useState(false);
   const count = text.trim().length;
-  // The pictures the note has, to keep, reorder-by-removal or add to ([3.12.22](docs/project/prd.md)).
+  // The pictures the note has, to keep, reorder-by-removal or add to ([3.12.22](docs/project/prd.md)).
+  const fieldId = useId();
   const attachments = useImageAttachments(note.images);
   const attached = attachments.images.filter((one) => one.status !== 'refused').length;
 
@@ -751,15 +780,21 @@ function EditForm({
           .finally(() => setSaving(false));
       }}
     >
-      <label className={styles.field}>
-        <span className={styles.fieldLabel}>Your note</span>
-        <textarea
-          className={styles.textArea}
-          rows={4}
-          value={text}
-          onChange={(event) => setText(event.target.value)}
-        />
-      </label>
+      <div className={styles.field}>
+        <label className={styles.fieldLabel} htmlFor={fieldId}>
+          Your note
+        </label>
+        <div className={styles.fieldRow}>
+          <textarea
+            className={styles.textArea}
+            id={fieldId}
+            rows={4}
+            value={text}
+            onChange={(event) => setText(event.target.value)}
+          />
+          <ImageAttachAdd attachments={attachments} disabled={saving} />
+        </div>
+      </div>
 
       <CharacterCount count={count} />
 
@@ -861,15 +896,18 @@ function ReplyComposer({
         save();
       }}
     >
-      <textarea
-        ref={field}
-        className={styles.textArea}
-        rows={2}
-        placeholder="Write a reply"
-        aria-label="Write a reply"
-        value={text}
-        onChange={(event) => setText(event.target.value)}
-      />
+      <div className={styles.fieldRow}>
+        <textarea
+          ref={field}
+          className={styles.textArea}
+          rows={2}
+          placeholder="Write a reply"
+          aria-label="Write a reply"
+          value={text}
+          onChange={(event) => setText(event.target.value)}
+        />
+        <ImageAttachAdd attachments={attachments} disabled={saving} />
+      </div>
 
       <CharacterCount count={count} />
 

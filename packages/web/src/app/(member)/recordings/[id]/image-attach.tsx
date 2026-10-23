@@ -120,14 +120,64 @@ export function useImageAttachments(initial: readonly NoteImageView[] = []) {
 export type ImageAttachments = ReturnType<typeof useImageAttachments>;
 
 /**
- * **The strip itself**: an Add control, and for each picture a thumbnail, a description field and
- * Remove. What state a picture is in is said in words under it — "Uploading", "Will upload when
- * you are back online" — never by a spinner alone.
+ * **The strip itself**: for each picture a thumbnail, a description field and Remove. What state
+ * a picture is in is said in words under it — "Uploading", "Will upload when you are back
+ * online" — never by a spinner alone. Nothing at all while there is no picture: the way to add
+ * one is {@link ImageAttachAdd}, which the forms place beside their text box.
  */
 export function ImageAttach({ attachments, disabled = false }: { attachments: ImageAttachments; disabled?: boolean }) {
+  const { images, remove, setAlt } = attachments;
+  if (images.length === 0) return null;
+
+  return (
+    <ul className={styles.attachStrip} aria-label="Pictures on this note">
+      {images.map((image, index) => (
+        <li className={styles.attachTile} key={image.id}>
+          {image.status === 'refused' ? (
+            <p className={styles.attachRefused} role="alert">{image.complaint}</p>
+          ) : (
+            <img className={styles.attachThumb} src={image.previewUrl} alt={image.alt === '' ? `Picture ${index + 1}` : image.alt} />
+          )}
+          <input
+            className={styles.attachAlt}
+            type="text"
+            aria-label={`Describe picture ${index + 1}`}
+            placeholder="Describe it (optional)"
+            maxLength={MAX_NOTE_IMAGE_ALT_LENGTH}
+            value={image.alt}
+            disabled={disabled || image.status === 'refused'}
+            onChange={(event) => setAlt(image.id, event.target.value)}
+          />
+          <p className={styles.attachStatus}>{statusLine(image)}</p>
+          <button
+            className={styles.attachRemove}
+            type="button"
+            aria-label={`Remove picture ${index + 1}`}
+            disabled={disabled}
+            onClick={() => remove(image.id)}
+          >
+            Remove
+          </button>
+        </li>
+      ))}
+    </ul>
+  );
+}
+
+/**
+ * **The add control**: a square with a picture in it, by the operator's decision, placed on the
+ * text box's row. The words are its name and its hover title; the limit is said only when it is
+ * reached, in the title, and the input's `accept` says what the picker offers.
+ */
+export function ImageAttachAdd({ attachments, disabled = false }: { attachments: ImageAttachments; disabled?: boolean }) {
   const inputId = useId();
-  const { images, add, remove, setAlt } = attachments;
+  const { images, add } = attachments;
   const full = images.length >= MAX_NOTE_IMAGES;
+  const name = full
+    ? `${MAX_NOTE_IMAGES} is the most a note carries.`
+    : images.length === 0
+      ? 'Add a picture'
+      : 'Add another picture';
 
   function onChosen(event: ChangeEvent<HTMLInputElement>): void {
     const files = Array.from(event.target.files ?? []);
@@ -137,58 +187,37 @@ export function ImageAttach({ attachments, disabled = false }: { attachments: Im
   }
 
   return (
-    <div className={styles.attach}>
-      {images.length === 0 ? null : (
-        <ul className={styles.attachStrip} aria-label="Pictures on this note">
-          {images.map((image, index) => (
-            <li className={styles.attachTile} key={image.id}>
-              {image.status === 'refused' ? (
-                <p className={styles.attachRefused} role="alert">{image.complaint}</p>
-              ) : (
-                <img className={styles.attachThumb} src={image.previewUrl} alt={image.alt === '' ? `Picture ${index + 1}` : image.alt} />
-              )}
-              <input
-                className={styles.attachAlt}
-                type="text"
-                aria-label={`Describe picture ${index + 1}`}
-                placeholder="Describe it (optional)"
-                maxLength={MAX_NOTE_IMAGE_ALT_LENGTH}
-                value={image.alt}
-                disabled={disabled || image.status === 'refused'}
-                onChange={(event) => setAlt(image.id, event.target.value)}
-              />
-              <p className={styles.attachStatus}>{statusLine(image)}</p>
-              <button
-                className={styles.attachRemove}
-                type="button"
-                aria-label={`Remove picture ${index + 1}`}
-                disabled={disabled}
-                onClick={() => remove(image.id)}
-              >
-                Remove
-              </button>
-            </li>
-          ))}
-        </ul>
-      )}
-      <div className={styles.attachAddRow}>
-        <label className={full || disabled ? `${styles.attachAdd} ${styles.attachAddOff}` : styles.attachAdd} htmlFor={inputId}>
-          {images.length === 0 ? 'Add a picture' : 'Add another picture'}
-        </label>
-        <input
-          className={styles.attachInput}
-          id={inputId}
-          type="file"
-          accept="image/jpeg,image/png,image/webp"
-          multiple
-          disabled={full || disabled}
-          onChange={onChosen}
-        />
-        <span className={styles.attachHint}>
-          {full ? `${MAX_NOTE_IMAGES} is the most a note carries.` : `Up to ${MAX_NOTE_IMAGES}. ${ACCEPTED_ARTWORK_LABEL}.`}
-        </span>
-      </div>
-    </div>
+    <>
+      <label
+        className={full || disabled ? `${styles.attachAdd} ${styles.attachAddOff}` : styles.attachAdd}
+        htmlFor={inputId}
+        aria-label={name}
+        title={name}
+      >
+        <PictureIcon />
+      </label>
+      <input
+        className={styles.attachInput}
+        id={inputId}
+        type="file"
+        accept="image/jpeg,image/png,image/webp"
+        multiple
+        disabled={full || disabled}
+        onChange={onChosen}
+      />
+    </>
+  );
+}
+
+/** A framed landscape — a sun and a hill — in the app's line style. */
+function PictureIcon() {
+  const line = { fill: 'none', stroke: 'currentColor', strokeWidth: 1.8, strokeLinecap: 'round' as const, strokeLinejoin: 'round' as const };
+  return (
+    <svg viewBox="0 0 24 24" width="30" height="30" aria-hidden="true" focusable="false">
+      <rect x="3" y="4" width="18" height="16" rx="2" {...line} />
+      <circle cx="9" cy="9.5" r="1.6" {...line} />
+      <path d="M21 16l-5-5-7 7M3 19l4-4 3 3" {...line} />
+    </svg>
   );
 }
 

@@ -1,4 +1,5 @@
 import { and, asc, desc, eq, gt, isNull, lte, or, sql } from 'drizzle-orm';
+import { alias } from 'drizzle-orm/pg-core';
 import type { HighlightKind } from '@thp/shared';
 import { getDatabase, queryable, type Executor } from './client';
 import { highlight, note, recording, segment, series, transcript } from './schema';
@@ -35,7 +36,9 @@ export interface HighlightRow {
  * and the note it pins — one statement, so the list is never N+1.
  *
  * `segmentStartMs` and the two beside it are null for anything but a snapped `segment` entry;
- * `noteTimestampMs` and `noteText` for anything but a `note` entry. A tombstoned note never
+ * `noteTimestampMs` and `noteText` for anything but a `note` entry. A reply has no moment of its
+ * own, so `noteTimestampMs` is its thread's — the top-level note's — read through a second join
+ * on the parent. A tombstoned note never
  * reaches here (the read leaves it out), so `noteText` is the text whenever `noteId` is set.
  */
 export interface HighlightListRow extends HighlightRow {
@@ -101,6 +104,8 @@ const HIGHLIGHT_COLUMNS = {
  * a transcript replaced since the pin (which set the id null) prints the moment alone rather than
  * a line the new segmentation happens to start at the same millisecond.
  */
+const parentNote = alias(note, 'parent_note');
+
 export async function listHighlightsForMember(
   userId: string,
   executor: Executor = getDatabase(),
@@ -117,7 +122,7 @@ export async function listHighlightsForMember(
       segmentStartMs: segment.startMs,
       segmentEndMs: segment.endMs,
       segmentText: segment.text,
-      noteTimestampMs: note.timestampMs,
+      noteTimestampMs: sql<number | null>`coalesce(${note.timestampMs}, ${parentNote.timestampMs})`,
       noteText: note.text,
     })
     .from(highlight)
@@ -125,6 +130,7 @@ export async function listHighlightsForMember(
     .leftJoin(series, eq(series.id, recording.seriesId))
     .leftJoin(segment, eq(segment.id, highlight.segmentId))
     .leftJoin(note, eq(note.id, highlight.noteId))
+    .leftJoin(parentNote, eq(parentNote.id, note.parentId))
     .where(
       and(
         eq(highlight.userId, userId),

@@ -87,6 +87,28 @@
   color: var(--color-text-muted);
 }
 
+/*
+ * The text box and the add-picture control on one row, the box taking the width and the control
+ * stretched to the box's height — whatever its rows, and however it is resized — with the icon
+ * centred in it, a small gap between the two.
+ */
+.fieldRow {
+  display: flex;
+  align-items: stretch;
+  gap: var(--space-2);
+  min-width: 0;
+}
+
+.fieldRow .textArea {
+  flex: 1 1 auto;
+  min-width: 0;
+}
+
+.fieldRow .attachAdd {
+  height: auto;
+  align-self: stretch;
+}
+
 .textArea {
   width: 100%;
   background: var(--color-surface);
@@ -756,21 +778,19 @@
   cursor: pointer;
 }
 
-.attachAddRow {
-  display: flex;
-  flex-wrap: wrap;
-  align-items: center;
-  gap: var(--space-3);
-}
-
-/* The file input's visible face — the outlined pill every secondary control here wears. */
+/* The file input's visible face — a square with the picture icon in it, outlined like the controls beside it. */
 .attachAdd {
-  background: transparent;
-  border: 1px solid var(--color-border-strong);
-  border-radius: var(--radius-pill);
-  padding: var(--space-2) var(--space-5);
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  /* A 66px square — half as big again as the 44px controls — so it stands beside a four-line box. */
+  width: calc((var(--space-8) + var(--space-3)) * 1.5);
+  height: calc((var(--space-8) + var(--space-3)) * 1.5);
+  /* The text box's own surface and border, so the pair read as one row of inputs. */
+  background: var(--color-surface);
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-sm);
   color: var(--color-text-muted);
-  font-size: var(--fs-body);
   cursor: pointer;
 }
 
@@ -791,11 +811,6 @@
   height: 1px;
   opacity: 0;
   overflow: hidden;
-}
-
-.attachHint {
-  font-size: var(--fs-meta);
-  color: var(--color-text-dim);
 }
 
 .imageStrip {
