@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { PROFILE_PAGE_PATH } from '@thp/shared';
+import { NOTIFICATION_SETTINGS_PAGE_PATH, PROFILE_PAGE_PATH } from '@thp/shared';
 import { PROFILE_SECTIONS, sectionFor } from '@/app/(member)/profile/sections';
 
 /**
@@ -29,8 +29,9 @@ describe('the profile sections', () => {
     expect(distinct('label')).toBe(PROFILE_SECTIONS.length);
   });
 
-  it('list settings as the first section beside the identity page', () => {
-    expect(PROFILE_SECTIONS.map((section) => section.id)).toEqual(['identity', 'settings']);
+  it('list settings first beside the identity page, then notifications', () => {
+    expect(PROFILE_SECTIONS.map((section) => section.id)).toEqual(['identity', 'settings', 'notifications']);
+    expect(PROFILE_SECTIONS[2]?.href).toBe(NOTIFICATION_SETTINGS_PAGE_PATH);
   });
 });
 

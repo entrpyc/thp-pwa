@@ -232,6 +232,20 @@
       "when": 1792689699306,
       "tag": "0032_ugc_controls",
       "breakpoints": true
+    },
+    {
+      "idx": 33,
+      "version": "7",
+      "when": 1792737236897,
+      "tag": "0033_summary_ready",
+      "breakpoints": true
+    },
+    {
+      "idx": 34,
+      "version": "7",
+      "when": 1792737964916,
+      "tag": "0034_push_preferences_and_subscriptions",
+      "breakpoints": true
     }
   ]
 }

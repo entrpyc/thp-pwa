@@ -2,6 +2,7 @@ import { and, desc, eq, isNull, sql } from 'drizzle-orm';
 import { getDatabase, queryable, type Executor } from './client';
 import { announcement, notification, user } from './schema';
 import {
+  ROLE,
   noteReactionNotificationTitle,
   noteReplyNotificationTitle,
   noteReportedNotificationTitle,
@@ -137,13 +138,14 @@ export async function insertNotification(
  * arguably true, and is not what "all members" means at the moment of sending.
  *
  * `insert … select` rather than a fetched list and a built insert, for the reason the module
- * header gives. The `returning` is only so the count is the rows actually written, not the rows
- * the select would have matched a moment earlier.
+ * header gives. The `returning` answers the ids of the rows actually written — not the rows the
+ * select would have matched a moment earlier — and the ids rather than a count because the
+ * second delivery (push, `@thp/push`) is addressed by them; the count is their length.
  */
 export async function insertNotificationForAllMembers(
   content: NotificationContent,
   executor: Executor = getDatabase(),
-): Promise<number> {
+): Promise<string[]> {
   const written = await queryable(executor).execute(sql`
     insert into ${notification}
       (user_id, kind, title, body, href, recording_id, note_id, actor_id, announcement_id)
@@ -161,8 +163,45 @@ export async function insertNotificationForAllMembers(
     where ${user.deactivatedAt} is null
     returning ${notification.id}
   `);
-  return written.length;
+  return (written as unknown as { id: string }[]).map((row) => row.id);
 }
+
+/**
+ * Write one notification for **every active admin**, and answer how many that was.
+ *
+ * The shape a draft-ready notice takes ([3.17.10](docs/project/prd.md)): the audience is a role,
+ * not a person and not everybody. One `insert … select` over the active admins, for the reason
+ * the module header gives, and so the worker — which raises this one and has no actor list in
+ * hand — needs one statement rather than a read and a loop. A deactivated admin is skipped exactly
+ * as a deactivated member is by the broadcast above. Answers the ids written, as the broadcast
+ * does and for the same reason.
+ */
+export async function insertNotificationForActiveAdmins(
+  content: NotificationContent,
+  executor: Executor = getDatabase(),
+): Promise<string[]> {
+  const written = await queryable(executor).execute(sql`
+    insert into ${notification}
+      (user_id, kind, title, body, href, recording_id, note_id, actor_id, announcement_id)
+    select
+      ${user.id},
+      ${content.kind}::notification_kind,
+      ${content.title},
+      ${content.body},
+      ${content.href},
+      ${content.recordingId ?? null}::uuid,
+      ${content.noteId ?? null}::uuid,
+      ${content.actorId ?? null}::uuid,
+      ${content.announcementId ?? null}::uuid
+    from ${user}
+    where ${user.deactivatedAt} is null and ${roleColumn} = ${ROLE.admin}::user_role
+    returning ${notification.id}
+  `);
+  return (written as unknown as { id: string }[]).map((row) => row.id);
+}
+
+/** The column, taken off the table once — the shape `accounts.ts` uses for the same filter. */
+const { role: roleColumn } = user;
 
 /**
  * Take away the earlier notice one person's reaction left on one note, so a member who changes

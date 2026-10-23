@@ -1,4 +1,4 @@
-import { PROFILE_PAGE_PATH } from '@thp/shared';
+import { NOTIFICATION_SETTINGS_PAGE_PATH, PROFILE_PAGE_PATH } from '@thp/shared';
 
 /**
  * **The profile's sections** — the one list the section strip under *My profile* renders from.
@@ -32,6 +32,7 @@ export type ProfileSection = {
 export const PROFILE_SECTIONS: readonly ProfileSection[] = [
   { id: 'identity', label: 'Profile', href: PROFILE_PAGE_PATH },
   { id: 'settings', label: 'Settings', href: `${PROFILE_PAGE_PATH}/settings` },
+  { id: 'notifications', label: 'Notifications', href: NOTIFICATION_SETTINGS_PAGE_PATH },
 ];
 
 /**

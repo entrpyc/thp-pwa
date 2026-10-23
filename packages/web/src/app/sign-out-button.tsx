@@ -5,6 +5,7 @@ import { useState } from 'react';
 import { AUTH_SESSION_PATH } from '@thp/shared';
 import { apiFetch } from '@/client/api-client';
 import { resetAnalytics } from '@/client/observability/analytics';
+import { disablePushOnThisDevice } from '@/client/push/push-device';
 import styles from './sign-out.module.css';
 
 /**
@@ -27,6 +28,10 @@ export function SignOutButton({ className }: { className?: string | undefined })
     if (signingOut) return;
     setSigningOut(true);
     try {
+      // This device's push registration goes first, while the session still authorises the
+      // call: a phone the next member signs in on must not keep receiving this one's replies
+      // (3.17.1). Best effort — a push service being slow is not a reason to stay signed in.
+      await disablePushOnThisDevice().catch(() => undefined);
       await apiFetch(AUTH_SESSION_PATH, { method: 'DELETE', credentials: 'include' });
     } finally {
       // The next member on this browser starts anonymous rather than as this one.

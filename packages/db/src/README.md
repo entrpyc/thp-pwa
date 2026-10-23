@@ -55,6 +55,9 @@ against the schema, not a second copy of it.
   by the row going; the cookie the browser still holds resolves to nothing.
 - `playback_progress`, `user_onboarding`, `note_reaction` — cascade. Reaction counts other
   members see drop by one.
+- `notification_preference`, `push_subscription` — cascade. The person's push switches and
+  every device address they registered go; no push can reach a device after the row is gone,
+  and nothing about a device but its address was ever stored.
 - `notification.user_id` — cascade: the person's own inbox goes. `notification.actor_id` — set
   null, and the title is rewritten first to name the placeholder ("Removed member replied to
   your note"), because the title is denormalised and the other member's record of having been
@@ -119,8 +122,8 @@ What the product can promise, and what it cannot:
 
 - Deleting an account removes the account, the password hash, the display name, the address,
   every session, every private note and its search vector, listening positions and history,
-  onboarding state, reactions, the in-app inbox, and the current profile picture. It frees the
-  address for a new account.
+  onboarding state, reactions, the in-app inbox, push preferences and every registered device
+  address, and the current profile picture. It frees the address for a new account.
 - Public notes and replies the person wrote stay on the recordings they were written on, with
   their text, shown as by "Removed member". Deleting them first, one by one from the app, is how
   a person removes that text before deleting the account; a deleted note's text is kept by nobody

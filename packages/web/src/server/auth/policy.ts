@@ -307,6 +307,13 @@ export const POLICY_ACTIONS = [
   'note.report',
   'report.list',
   'report.resolve',
+  /**
+   * **Which push categories an account is offered.** There is still no `notification.read` —
+   * the switches are keyed on the caller's own id — but one of the four categories is the
+   * admin-only alerts ([3.17.10](docs/project/prd.md), the reported-note notice), and whether an
+   * account is offered that switch is a role question, which only this module answers.
+   */
+  'notification.admin-alerts',
 ] as const;
 
 export type PolicyAction = (typeof POLICY_ACTIONS)[number];
@@ -514,6 +521,9 @@ const RULES: PolicyRules = {
   'note.report': { roles: { admin: true, member: true } },
   'report.list': { roles: { admin: true, member: false } },
   'report.resolve': { roles: { admin: true, member: false } },
+  // A member is never a recipient of a draft-ready or reported-note notice, so a switch for the
+  // category would be a switch over nothing; it is offered to the role that receives them.
+  'notification.admin-alerts': { roles: { admin: true, member: false } },
 };
 
 export function isPolicyAction(value: string): value is PolicyAction {

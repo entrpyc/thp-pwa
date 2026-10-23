@@ -12,7 +12,7 @@ API routes, which is why nothing is bundled — `www/` holds one explanatory pag
 | Name               | Teaching Hub                                                                            | capacitor.config.ts, both native projects              |
 | Server origin      | `https://thp.indepthwebsolutions.com`                                                   | capacitor.config.ts (`THP_SHELL_SERVER_URL` overrides) |
 | Capacitor          | 8.5.3 (core, cli, android, ios — pinned exactly)                                        | package.json                                           |
-| Plugins            | `@capgo/capacitor-media-session` 8.1.5 (pinned exactly, here and in packages/web)       | package.json, packages/web/package.json                |
+| Plugins            | `@capgo/capacitor-media-session` 8.1.5, `@capacitor/push-notifications` 8.1.3 (pinned exactly, here and in packages/web) | package.json, packages/web/package.json                |
 | Android            | targetSdk 36, compileSdk 36, minSdk 24, versionCode 1, AGP 8.13, Gradle 8.14.3, Java 21 | android/variables.gradle, android/app/build.gradle     |
 | iOS                | deployment target 15.0, Swift Package Manager, version 1.0 (1)                          | ios/App/App.xcodeproj                                  |
 
@@ -63,6 +63,69 @@ API routes, which is why nothing is bundled — `www/` holds one explanatory pag
   app's, which sees an ordinary page load. The email links are built from `NEXT_PUBLIC_API_ORIGIN`
   (`packages/web/src/server/mail/env.ts`) and need no change: they already point at the origin
   both platforms claim. See *Deep-link values* below for what each platform verifies against.
+
+## Push notifications (project prd 3.17.1, 5.2.5)
+
+The shell contributes the native half of push and nothing more: `@capacitor/push-notifications`
+asks the OS for permission, registers with APNs or FCM, hands the token to the web app, and
+reports a press. Everything else — the switches, the registration with the server, where a press
+lands — is the web app's (`packages/web/src/client/push/push-device.ts`,
+`push-shell-listener.tsx`), and the sending is `packages/push`. The prompt is raised only from the
+*Turn on push on this device* button on `/profile/notifications`, never at launch (Apple 5.1.2).
+
+What this package carries for it:
+
+- `capacitor.config.ts` — `PushNotifications.presentationOptions`, so a push arriving while the
+  app is open is still shown by the OS.
+- **Android** — `POST_NOTIFICATIONS` in the manifest (a runtime prompt on Android 13+). FCM needs
+  `android/app/google-services.json` from the Firebase console (Project settings, your Android
+  app, *Download google-services.json*); `build.gradle` already applies the Google services
+  plugin when the file is present. The file is gitignored: it names the Firebase project and is a
+  per-deployment artefact, not source.
+- **iOS** — `aps-environment` in `App.entitlements`, and the two `AppDelegate` methods that hand
+  the APNs token to the plugin. In Xcode, *Signing & Capabilities* must list **Push
+  Notifications** (press *+ Capability* if it does not; Xcode reuses the entitlement). The server
+  signs with the `.p8` key from the developer account (`.env.example`, `APNS_*`); nothing is
+  uploaded to Firebase for iOS.
+
+**Verifying on a device** (nothing here is covered by the automated suites):
+
+1. Deploy the web app with the channel's credentials set (`APNS_*` for iOS, `FCM_SERVICE_ACCOUNT`
+   for Android) and `PUSH_TRANSPORT=real`. For a build installed from Xcode rather than
+   TestFlight, set `APNS_ENVIRONMENT=sandbox`.
+2. Android: put `google-services.json` in `android/app/`, run
+   `npm --workspace @thp/shell run sync:android`, build and install. iOS: run `sync`, open in
+   Xcode, confirm the Push Notifications capability, build to a real device — the simulator has
+   no APNs.
+3. Sign in, open the member menu, *My profile*, *Notifications*. The line reads *Push is off for
+   this device*. Press **Turn on push on this device**. The OS prompt appears **now and not
+   before** — it must not have appeared at launch or at sign-in. Allow it. The line reads *Push
+   is on for this device*; the server log shows `account.push-subscription.registered` with the
+   platform.
+4. Background the app (home button), then from another account reply to one of this member's
+   public notes. A notification appears within seconds with the replier's name and the reply's
+   first line. Tap it: the app opens on that teaching. The server log shows `push.delivered` with
+   `sent: 1`.
+5. Lock the phone and send an admin announcement from `/admin/announcements`: the notification
+   shows on the lock screen; tapping it opens the notification centre.
+6. With the app open in the foreground, send another announcement: the OS still shows it
+   (presentationOptions) and the bell's count rises without a reload.
+7. Switch *Announcements* off on `/profile/notifications` and send one more: nothing arrives, and
+   the row is in the centre regardless. Switch it back on.
+8. Sign out. The log shows `account.push-subscription.removed` with `removed: true`. Send an
+   announcement: nothing arrives on this device. Sign in as a different member on the same
+   device and press the button again: the device now receives that member's notices and not the
+   first one's.
+9. Uninstall the app, send an announcement: the log shows `push.subscriptions.removed` with
+   `provider-reported-gone` on the next delivery to that device (APNs may take one more send to
+   report it).
+10. Android only, from a terminal: `adb shell dumpsys notification --noredact | grep -A3 teachinghub`
+    lists the posted notification; `adb logcat | grep -i "PushNotifications\|FirebaseMessaging"`
+    shows the token registration and each arrival.
+
+Browser PWA: deploy with a VAPID pair (`.env.example`), open the site in Chrome, or on an iPhone
+add it to the home screen first and open it from there (Safari in a tab cannot subscribe); then
+steps 3 to 8 apply unchanged, and the service worker lands the press (`public/sw/push.js`).
 
 ## Building the Android bundle (works on Windows)
 
@@ -277,6 +340,9 @@ injected bridge script. It does not affect any item above and is not addressed h
 ## What is not done in this package
 
 - No app icons or splash screens beyond Capacitor's defaults (prd 5.2.3 is a later ticket).
-- No push notifications (5.2.5) and no download storage. The shell stays empty of product logic
-  by design; those tickets add plugins here and read `shellPlatform()` in the web app.
+- No download storage. The shell stays empty of product logic by design; that ticket adds a
+  plugin here and reads `shellPlatform()` in the web app, as push did.
+- Push has not been exercised on a device from this machine: there is no Mac for iOS, and the
+  Android build needs a Firebase project's `google-services.json` that is not in the repository.
+  The checklist above is what to run once both exist.
 - Nothing under `ios/` has been compiled: there is no Mac in the loop yet.

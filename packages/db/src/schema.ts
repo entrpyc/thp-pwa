@@ -31,10 +31,13 @@ import {
   MAX_NOTE_LENGTH,
   MAX_REPORT_DETAIL_LENGTH,
   MAX_SOUND_PROFILE_NOTE_LENGTH,
+  MAX_PUSH_ENDPOINT_LENGTH,
   MAX_TAG_LENGTH,
   NOTE_VISIBILITIES,
+  NOTIFICATION_CATEGORIES,
   NOTIFICATION_KINDS,
   PLAYBACK_SPEEDS,
+  PUSH_PLATFORMS,
   REPORT_OUTCOMES,
   REPORT_REASONS,
   REVIEW_KINDS,
@@ -87,6 +90,11 @@ export const noteVisibility = pgEnum('note_visibility', NOTE_VISIBILITIES);
 export const scriptureOrigin = pgEnum('scripture_origin', SCRIPTURE_ORIGINS);
 
 export const notificationKind = pgEnum('notification_kind', NOTIFICATION_KINDS);
+
+/** The four categories a member switches push for, and the three places a push can reach. Both derived. */
+export const notificationCategory = pgEnum('notification_category', NOTIFICATION_CATEGORIES);
+
+export const pushPlatform = pgEnum('push_platform', PUSH_PLATFORMS);
 
 export const embeddingSource = pgEnum('embedding_source', EMBEDDING_SOURCE_KINDS);
 
@@ -1472,6 +1480,85 @@ export const notification = pgTable(
     index('notification_user_unread_idx')
       .on(table.userId)
       .where(sql`${table.readAt} is null`),
+  ],
+);
+
+/**
+ * **One member's push switch for one category** ([3.17.13](docs/project/prd.md),
+ * [3.17.14](docs/project/prd.md)) — the gate in front of the second delivery of a notification.
+ *
+ * **A row says "off"; no row says "on."** The operator chose on-by-default, so the honest shape is
+ * a table of exceptions rather than a row per member per category written at registration and
+ * back-filled when a category is added. `push_enabled` is still a column rather than the row's
+ * existence, so a member turning a category back on is an update the section can read back,
+ * and so a later default of "off" for a new category is one line in the reader
+ * (`coalesce(push_enabled, <default>)`) rather than a migration over every member.
+ *
+ * Gates push only. The in-app centre reads `notification` and never this table, which is what
+ * makes "the centre receives everything" a property of the schema rather than of a check.
+ *
+ * Cascades: a fact about the person and nothing else (README.md beside this file).
+ */
+export const notificationPreference = pgTable(
+  'notification_preference',
+  {
+    userId: uuid('user_id')
+      .notNull()
+      .references(() => user.id, { onDelete: 'cascade' }),
+    category: notificationCategory('category').notNull(),
+    pushEnabled: boolean('push_enabled').notNull(),
+    updatedAt: timestamp('updated_at', { withTimezone: true }).notNull().defaultNow(),
+  },
+  (table) => [primaryKey({ columns: [table.userId, table.category] })],
+);
+
+/**
+ * **One device a member can be reached on** ([3.17.1](docs/project/prd.md),
+ * [5.2.5](docs/project/prd.md)) — a Web Push endpoint with its two keys, or an APNs or FCM
+ * device token, under the account that registered it.
+ *
+ * **The endpoint is unique across the table, not per member.** A device belongs to whoever signed
+ * in on it last: a phone that one member signs out of and another signs into must not go on
+ * receiving the first member's replies, so registering an endpoint re-points its row rather than
+ * adding a second. Sign-out deletes the row for the same reason, and a provider answering that
+ * the device is gone deletes it too — so what is left is only ever an address that was recently
+ * known to work.
+ *
+ * `p256dh` and `auth` are the Web Push encryption keys and exist exactly on a web row: the check
+ * says so, because a web row without them would be an address nothing can be encrypted to, and a
+ * token row with them would be two keys for nothing.
+ *
+ * Cascades: a device registration is meaningless without the person (README.md beside this file).
+ * Nothing about the device is stored but its address — no user agent, no name.
+ */
+export const pushSubscription = pgTable(
+  'push_subscription',
+  {
+    id: uuid('id').primaryKey().defaultRandom(),
+    userId: uuid('user_id')
+      .notNull()
+      .references(() => user.id, { onDelete: 'cascade' }),
+    platform: pushPlatform('platform').notNull(),
+    /** The Web Push endpoint URL, or the device token. */
+    endpoint: text('endpoint').notNull(),
+    p256dh: text('p256dh'),
+    auth: text('auth'),
+    createdAt: timestamp('created_at', { withTimezone: true }).notNull().defaultNow(),
+    /** Moved on every re-registration, so a row that has not been seen for a year is tellable. */
+    lastSeenAt: timestamp('last_seen_at', { withTimezone: true }).notNull().defaultNow(),
+  },
+  (table) => [
+    uniqueIndex('push_subscription_endpoint_idx').on(table.endpoint),
+    /** Delivery: every device of each recipient. */
+    index('push_subscription_user_idx').on(table.userId),
+    check(
+      'push_subscription_keys_on_web',
+      sql`(${table.platform} = 'web') = (${table.p256dh} is not null and ${table.auth} is not null)`,
+    ),
+    check(
+      'push_subscription_endpoint_length',
+      sql`char_length(${table.endpoint}) between 1 and ${sql.raw(String(MAX_PUSH_ENDPOINT_LENGTH))}`,
+    ),
   ],
 );
 

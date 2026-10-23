@@ -7,6 +7,7 @@ import { analyticsPerson, can } from '@/server/auth/policy';
 import { AnalyticsProvider } from '@/client/observability/analytics-provider';
 import { NotificationsProvider } from './notifications-context';
 import { PlayerProvider } from './player-context';
+import { PushShellListener } from './push-shell-listener';
 import { TopNavigation } from './top-navigation';
 import { TransportBar } from './transport-bar';
 import styles from './member.module.css';
@@ -53,6 +54,9 @@ export default async function MemberLayout({ children }: { children: ReactNode }
           so the centre — a page under this layout — reads the same list the bell counts from.
         */}
         <NotificationsProvider>
+          {/* Inside the notifications provider because a push arriving in the open app refreshes
+              the bell. Mounts nothing outside a store shell. */}
+          <PushShellListener />
           <div className={styles.screen}>
             <div className={styles.shell}>
               <TopNavigation canSeeConsole={can(actor, 'account.list')} />
