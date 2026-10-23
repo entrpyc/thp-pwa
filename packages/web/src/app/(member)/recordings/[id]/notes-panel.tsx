@@ -23,6 +23,7 @@ import { useRecordingContent } from './recording-content';
 import { CharacterCount, NoteComposer } from './note-composer';
 import { BlockConfirm, ReportForm } from './note-moderation';
 import { TermsPrompt, isTermsRequired } from './terms-prompt';
+import { PinNoteMenuItem } from '../../highlights/pin-note-menu-item';
 import styles from './notes.module.css';
 
 /**
@@ -549,6 +550,8 @@ function Overflow({
               Edit
             </button>
           ) : null}
+          {/* One's own top-level note can go to Highlights (3.12.17); a reply has no moment to pin. */}
+          {note.mine && note.timestampMs !== null ? <PinNoteMenuItem noteId={note.id} className={styles.menuItem} onDone={() => setOpen(false)} /> : null}
           {canDelete ? (
             <button className={styles.menuItem} type="button" onClick={() => setConfirming(true)}>
               Delete

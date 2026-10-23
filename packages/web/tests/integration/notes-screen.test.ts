@@ -1666,18 +1666,18 @@ describe('the group reads the raised notes first', () => {
       await ownControl(page, open, 'Note actions').click();
       const menu = card(page, open).getByRole('group', { name: 'Note actions' });
       expect(await menu.getByRole('button', { name: 'Delete' }).count()).toBe(1);
-      expect(await menu.getByRole('button', { name: 'Pin' }).count()).toBe(1);
+      expect(await menu.getByRole('button', { name: 'Pin', exact: true }).count()).toBe(1);
       // Moderation is deletion, never rewriting: no Edit on a note the admin did not write.
       expect(await menu.getByRole('button', { name: 'Edit' }).count()).toBe(0);
 
       // A reply has no moment to raise, and a private note is nobody else's to read (3.6.8).
       await card(page, reply).getByRole('button', { name: 'Note actions' }).click();
       expect(
-        await card(page, reply).getByRole('group', { name: 'Note actions' }).getByRole('button', { name: 'Pin' }).count(),
+        await card(page, reply).getByRole('group', { name: 'Note actions' }).getByRole('button', { name: 'Pin', exact: true }).count(),
       ).toBe(0);
       await card(page, secret).getByRole('button', { name: 'Note actions' }).click();
       expect(
-        await card(page, secret).getByRole('group', { name: 'Note actions' }).getByRole('button', { name: 'Pin' }).count(),
+        await card(page, secret).getByRole('group', { name: 'Note actions' }).getByRole('button', { name: 'Pin', exact: true }).count(),
       ).toBe(0);
     } finally {
       await page.context().close();
@@ -1694,7 +1694,7 @@ describe('the group reads the raised notes first', () => {
 
       // Pinning acts on the press — neither pin action is destructive and both undo in one (5.6.3).
       await card(page, note).getByRole('button', { name: 'Note actions' }).click();
-      await card(page, note).getByRole('button', { name: 'Pin' }).click();
+      await card(page, note).getByRole('button', { name: 'Pin', exact: true }).click();
       await expect
         .poll(() => page.getByRole('list', { name: 'Pinned' }).getByRole('listitem').count(), {
           timeout: 30_000,

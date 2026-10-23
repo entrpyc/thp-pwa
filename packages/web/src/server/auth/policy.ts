@@ -314,6 +314,20 @@ export const POLICY_ACTIONS = [
    * account is offered that switch is a role question, which only this module answers.
    */
   'notification.admin-alerts',
+  /**
+   * **The three highlight actions** ([3.15](docs/project/prd.md)): pinning an entry, removing one,
+   * and reading your own playlist. Three rather than one `highlight.manage`, the split every group
+   * above takes.
+   *
+   * Both roles, and no ownership flag on any of the three, for the reason the block actions have
+   * none: every entry is on the caller's own list by construction — the route is
+   * `/users/me/highlights` — and 3.15.9's "not visible to admins" is the absence of any route that
+   * could list another account's, not a rule here. An admin pinning is a member pinning: their
+   * playlist is as private as anybody's.
+   */
+  'highlight.create',
+  'highlight.remove',
+  'highlight.list',
 ] as const;
 
 export type PolicyAction = (typeof POLICY_ACTIONS)[number];
@@ -524,6 +538,10 @@ const RULES: PolicyRules = {
   // A member is never a recipient of a draft-ready or reported-note notice, so a switch for the
   // category would be a switch over nothing; it is offered to the role that receives them.
   'notification.admin-alerts': { roles: { admin: true, member: false } },
+  // Both roles, over their own list only. A playlist is a member's own ([3.15.9](docs/project/prd.md)).
+  'highlight.create': { roles: { admin: true, member: true } },
+  'highlight.remove': { roles: { admin: true, member: true } },
+  'highlight.list': { roles: { admin: true, member: true } },
 };
 
 export function isPolicyAction(value: string): value is PolicyAction {

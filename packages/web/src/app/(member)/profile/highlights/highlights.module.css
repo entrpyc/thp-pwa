@@ -1,0 +1,113 @@
+/*
+ * The playlist ([3.15.6](docs/project/prd.md)): rows in the profile card, each a link to the
+ * teaching at the entry's moment, with the series beside it and the two controls — play and
+ * Remove — in a strip of their own. The row is the settings page's blocked-member row grown a
+ * line: title, the pinned description, the meta line.
+ */
+
+.list {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+}
+
+.entry {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  grid-template-areas:
+    'open controls'
+    'series controls';
+  align-items: center;
+  column-gap: var(--space-4);
+  padding: var(--space-3) 0;
+  border-top: 1px solid var(--color-border);
+  min-width: 0;
+}
+
+.open {
+  grid-area: open;
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-1);
+  min-width: 0;
+  text-decoration: none;
+  color: var(--color-text);
+}
+
+.open:hover .title {
+  text-decoration: underline;
+}
+
+.kind {
+  font-size: var(--fs-meta);
+  font-weight: 600;
+  letter-spacing: 0.02em;
+  text-transform: uppercase;
+  color: var(--color-primary-strong);
+}
+
+.title {
+  font-size: var(--fs-body);
+  font-weight: 600;
+  overflow-wrap: anywhere;
+}
+
+/* The note's text or the line that was pinned: two lines, then an ellipsis — the row is a list, not the note. */
+.description {
+  font-size: var(--fs-body);
+  color: var(--color-text-muted);
+  display: -webkit-box;
+  -webkit-box-orient: vertical;
+  -webkit-line-clamp: 2;
+  line-clamp: 2;
+  overflow: hidden;
+  overflow-wrap: anywhere;
+}
+
+.meta {
+  font-size: var(--fs-meta);
+  color: var(--color-text-dim);
+}
+
+.series {
+  grid-area: series;
+  justify-self: start;
+  margin-top: var(--space-1);
+  font-size: var(--fs-meta);
+  font-weight: 500;
+  color: var(--color-primary-strong);
+  text-decoration: none;
+}
+
+.series:hover {
+  text-decoration: underline;
+}
+
+.controls {
+  grid-area: controls;
+  display: flex;
+  align-items: center;
+  gap: var(--space-3);
+}
+
+/* The one filled circle per row — the same play the recording header draws, at the row's scale. */
+.play {
+  flex: none;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: var(--space-8);
+  height: var(--space-8);
+  background: var(--color-primary);
+  border: none;
+  border-radius: var(--radius-pill);
+  color: var(--color-text);
+  font-size: var(--fs-meta);
+  cursor: pointer;
+}
+
+.play:hover {
+  background: var(--color-primary-strong);
+}
