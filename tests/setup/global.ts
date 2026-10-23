@@ -4,6 +4,7 @@ import type { TestProject } from 'vitest/node';
 import { runMigrations } from '@thp/db';
 import {
   MAIL_DIR,
+  PUSH_DIR,
   REPO_ROOT,
   buildNextApp,
   freePort,
@@ -166,6 +167,19 @@ function captureMail(name: string): Record<string, string> {
   };
 }
 
+/**
+ * Push, for every server the suite starts: captured to a file the tests read, exactly as mail is.
+ * No VAPID, APNs or FCM credential is ever configured here — what the suite proves is that the
+ * right rows reach the dispatcher with the right switches applied, which the capture shows
+ * completely; a real push service in the loop would prove something else.
+ */
+function capturePush(name: string): Record<string, string> {
+  return {
+    PUSH_TRANSPORT: 'capture',
+    PUSH_CAPTURE_PATH: resolve(PUSH_DIR, `${name}.jsonl`),
+  };
+}
+
 export default async function setup(project: TestProject): Promise<() => Promise<void>> {
   const configuredUrl = process.env['DATABASE_URL'];
   if (!configuredUrl) {
@@ -214,14 +228,14 @@ export default async function setup(project: TestProject): Promise<() => Promise
       // time ([3.10.2](docs/project/prd.md)): without it a machine with no `.env` would send every
       // search to a paid provider behind a key nobody set, and every search would fall back to
       // words alone for a reason that has nothing to do with the test.
-      env: { ...media, ...TEST_BIBLE, ...TEST_EMBEDDER, ...UNLIMITED_SIGN_UP, ...UNLIMITED_SIGN_IN, ...UNLIMITED_PASSWORD_RESET, ...UNLIMITED_ACCOUNT_DELETION, ...captureMail('primary') },
+      env: { ...media, ...TEST_BIBLE, ...TEST_EMBEDDER, ...UNLIMITED_SIGN_UP, ...UNLIMITED_SIGN_IN, ...UNLIMITED_PASSWORD_RESET, ...UNLIMITED_ACCOUNT_DELETION, ...captureMail('primary'), ...capturePush('primary') },
     });
     servers.push(primary);
 
     const broken = await startNextServer({
       name: 'broken-db',
       databaseUrl: UNREACHABLE_DATABASE_URL,
-      env: { ...media, ...TEST_BIBLE, ...TEST_EMBEDDER, ...UNLIMITED_SIGN_UP, ...UNLIMITED_SIGN_IN, ...UNLIMITED_PASSWORD_RESET, ...UNLIMITED_ACCOUNT_DELETION, ...captureMail('broken-db') },
+      env: { ...media, ...TEST_BIBLE, ...TEST_EMBEDDER, ...UNLIMITED_SIGN_UP, ...UNLIMITED_SIGN_IN, ...UNLIMITED_PASSWORD_RESET, ...UNLIMITED_ACCOUNT_DELETION, ...captureMail('broken-db'), ...capturePush('broken-db') },
     });
     servers.push(broken);
 
@@ -230,7 +244,7 @@ export default async function setup(project: TestProject): Promise<() => Promise
     const mailDown = await startNextServer({
       name: 'mail-down',
       databaseUrl: appDatabase.url,
-      env: { ...media, ...TEST_BIBLE, ...TEST_EMBEDDER, ...UNLIMITED_SIGN_UP, ...UNLIMITED_SIGN_IN, ...UNLIMITED_PASSWORD_RESET, ...UNLIMITED_ACCOUNT_DELETION, ...FAILING_MAIL },
+      env: { ...media, ...TEST_BIBLE, ...TEST_EMBEDDER, ...UNLIMITED_SIGN_UP, ...UNLIMITED_SIGN_IN, ...UNLIMITED_PASSWORD_RESET, ...UNLIMITED_ACCOUNT_DELETION, ...FAILING_MAIL, ...capturePush('mail-down') },
     });
     servers.push(mailDown);
 
@@ -249,6 +263,7 @@ export default async function setup(project: TestProject): Promise<() => Promise
         ...TIGHT_ACCOUNT_DELETION,
         ...TIGHT_SPEND_CEILING,
         ...captureMail('rate-limited'),
+        ...capturePush('rate-limited'),
       },
     });
     servers.push(rateLimited);
@@ -281,6 +296,7 @@ export default async function setup(project: TestProject): Promise<() => Promise
       Number(TIGHT_SPEND_CEILING.SPEND_CEILING_USD_PER_DAY),
     );
     project.provide('mailCapturePath', resolve(MAIL_DIR, 'primary.jsonl'));
+    project.provide('pushCapturePath', resolve(PUSH_DIR, 'primary.jsonl'));
     project.provide('databaseUrl', appDatabase.url);
     project.provide('mediaSettings', media);
   } catch (error) {
@@ -319,6 +335,8 @@ declare module 'vitest' {
     rateLimitedSpendCeilingUsd: number;
     /** JSON-lines file the primary server appends every outgoing message to. */
     mailCapturePath: string;
+    /** JSON-lines file the primary server appends every would-be push to — one line per device. */
+    pushCapturePath: string;
     /** The suite's own database, not the one in `.env`. Dropped when the run ends. */
     databaseUrl: string;
     /**

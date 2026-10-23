@@ -453,7 +453,8 @@ describe('a member writes a note from the transport, on any screen', () => {
 
       await page.getByRole('button', { name: 'More player controls' }).click();
       // Two items now, where the strip shipped holding one.
-      expect(await toolbar.getByRole('button').count()).toBe(2);
+      // The Highlights pin, the composer and CC.
+      expect(await toolbar.getByRole('button').count()).toBe(3);
 
       await page.getByRole('button', { name: 'Write a note' }).click();
       await expect.poll(() => page.getByRole('form', { name: 'Write a note' }).count()).toBe(1);

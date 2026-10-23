@@ -123,6 +123,19 @@ export {
   type BlockedMemberRow,
   type MemberBlockRow,
 } from './member-blocks';
+export {
+  countHighlightsForMember,
+  deleteHighlightForMember,
+  deleteHighlightsOfNote,
+  findHighlightByTarget,
+  findHighlightForMember,
+  findSegmentAt,
+  insertHighlight,
+  listHighlightsForMember,
+  type HighlightListRow,
+  type HighlightRow,
+  type NewHighlight,
+} from './highlights';
 export { MIGRATIONS_DIR, runMigrations, type RunMigrationsOptions } from './migrate';
 export {
   clearNoteReaction,
@@ -164,6 +177,7 @@ export {
   findAnnouncementById,
   insertAnnouncement,
   insertNotification,
+  insertNotificationForActiveAdmins,
   insertNotificationForAllMembers,
   listAnnouncements,
   listNotificationsForUser,
@@ -194,6 +208,19 @@ export {
   type PipelineStepRow,
   type RecordingPipelineRow,
 } from './pipeline';
+export {
+  deletePushSubscription,
+  deletePushSubscriptionsById,
+  listPushDeliveries,
+  listPushPreferences,
+  listPushSubscriptionsForUser,
+  setPushPreference,
+  upsertPushSubscription,
+  type NewPushSubscription,
+  type PushDeliveryRow,
+  type PushPreferenceRow,
+  type PushSubscriptionRow,
+} from './push';
 export {
   findAccountDeletionRequestWithUser,
   findLiveAccountDeletionRequestForUser,
@@ -269,6 +296,12 @@ export {
   updateSummaryContent,
   type SummaryRow,
 } from './summaries';
+export {
+  findSyncReceipts,
+  insertSyncReceipt,
+  type NewSyncReceipt,
+  type SyncReceiptRow,
+} from './sync';
 export {
   deleteTag,
   ensureTags,

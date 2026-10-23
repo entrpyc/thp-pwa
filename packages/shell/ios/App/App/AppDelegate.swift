@@ -33,6 +33,19 @@ class AppDelegate: UIResponder, UIApplicationDelegate {
         // Called when the application is about to terminate. Save data if appropriate. See also applicationDidEnterBackground:.
     }
 
+    // Push (project prd 3.17.1, 5.2.5). iOS hands the APNs token to the app delegate and to
+    // nothing else; the Capacitor push plugin listens for these two notifications to turn it into
+    // the `registration` event the web app awaits. Without the pair, `register()` never answers
+    // and the settings section times out saying it could not turn push on. Registration itself
+    // is requested by the plugin only when the web app asks — never at launch.
+    func application(_ application: UIApplication, didRegisterForRemoteNotificationsWithDeviceToken deviceToken: Data) {
+        NotificationCenter.default.post(name: .capacitorDidRegisterForRemoteNotifications, object: deviceToken)
+    }
+
+    func application(_ application: UIApplication, didFailToRegisterForRemoteNotificationsWithError error: Error) {
+        NotificationCenter.default.post(name: .capacitorDidFailToRegisterForRemoteNotifications, object: error)
+    }
+
     func application(_ application: UIApplication,
                      configurationForConnecting connectingSceneSession: UISceneSession,
                      options: UIScene.ConnectionOptions) -> UISceneConfiguration {

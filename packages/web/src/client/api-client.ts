@@ -29,24 +29,59 @@ export interface ApiFetchOptions extends RequestInit {
   readonly correlationId?: string;
 }
 
+/**
+ * **What answers when the server cannot be reached** ([3.18.13](docs/project/prd.md)).
+ *
+ * `fetch` rejecting — no connection, not a refusal — is the one moment this client hands the
+ * request to somebody else: the offline module, which answers reads about downloaded teachings
+ * from the device and keeps a note written offline in the outbox. It is a hook rather than an
+ * import so this file stays what it is, a thin fetch, and so the offline module is installed by
+ * the member surface alone — the admin console and the sign-in screen never answer from a device.
+ * `null` from the hook means "nothing to say", and the original failure is rethrown.
+ *
+ * The success side is a hook for the same reason: every answer about a downloaded teaching that
+ * passes through here refreshes the copy stored with it, without the screens knowing.
+ */
+export interface OfflineHooks {
+  fallback(input: { readonly path: string; readonly init: RequestInit }): Promise<Response | null>;
+  observe(input: { readonly path: string; readonly method: string; readonly body: unknown }): void;
+}
+
+let offlineHooks: OfflineHooks | null = null;
+
+export function installOfflineHooks(hooks: OfflineHooks | null): void {
+  offlineHooks = hooks;
+}
+
 export async function apiFetch<TPayload>(
   path: string,
   options: ApiFetchOptions = {},
 ): Promise<TPayload> {
   const { origin, correlationId, headers, ...init } = options;
   const url = origin === undefined ? buildApiUrl(path) : buildApiUrl(path, origin);
-
-  const response = await fetch(url, {
+  const request: RequestInit = {
     ...init,
     headers: {
       accept: 'application/json',
       ...(correlationId ? { [CORRELATION_ID_HEADER]: correlationId } : {}),
       ...headers,
     },
-  });
+  };
+
+  let response: Response;
+  try {
+    response = await fetch(url, request);
+  } catch (caught) {
+    const answered = offlineHooks === null ? null : await offlineHooks.fallback({ path, init: request });
+    if (answered === null) throw caught;
+    response = answered;
+  }
 
   const responseCorrelationId = response.headers.get(CORRELATION_ID_HEADER);
   const body: unknown = await response.json().catch(() => undefined);
+  if (response.ok && offlineHooks !== null && response.headers.get('x-thp-offline') === null) {
+    offlineHooks.observe({ path, method: (init.method ?? 'GET').toUpperCase(), body });
+  }
 
   if (!response.ok) {
     if (isApiErrorBody(body)) {

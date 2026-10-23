@@ -11,6 +11,7 @@
     "@thp/bible": "*",
     "@thp/db": "*",
     "@thp/media": "*",
+    "@thp/push": "*",
     "@thp/shared": "*"
   }
 }

@@ -102,3 +102,6 @@ app/src/main/res/xml/config.xml
 
 # Android Studio project state, which it rewrites on every open
 .idea/
+
+# The Firebase project file for FCM push (packages/shell/README.md). Per deployment, never source.
+app/google-services.json

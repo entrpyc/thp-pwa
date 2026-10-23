@@ -55,6 +55,9 @@ against the schema, not a second copy of it.
   by the row going; the cookie the browser still holds resolves to nothing.
 - `playback_progress`, `user_onboarding`, `note_reaction` — cascade. Reaction counts other
   members see drop by one.
+- `notification_preference`, `push_subscription` — cascade. The person's push switches and
+  every device address they registered go; no push can reach a device after the row is gone,
+  and nothing about a device but its address was ever stored.
 - `notification.user_id` — cascade: the person's own inbox goes. `notification.actor_id` — set
   null, and the title is rewritten first to name the placeholder ("Removed member replied to
   your note"), because the title is denormalised and the other member's record of having been
@@ -69,6 +72,13 @@ against the schema, not a second copy of it.
   taken are records of something that happened to somebody else's note. The admins' notice that
   this person reported a note has its title rewritten to the placeholder's name, as a reply's is.
   `note_report.note_id` cascades with the note, which a public note's re-pointing never fires.
+- `highlight.user_id` — cascade: a member's Highlights playlist is a fact about the person and
+  nothing else, and 3.1.9 names it among what goes with the account. `highlight.note_id` cascades
+  with the note — never fired by a public note's re-pointing, and a private note's hard delete
+  takes its entry with it.
+- `sync_receipt.user_id` — cascade: a receipt for an outbox entry flushed from the person's own
+  device is a fact about them and nothing else. `sync_receipt.note_id` — set null with the note,
+  so the receipt outlives a deleted note the way a log line does.
 - `invitation.email` — rows addressed to the person are deleted.
 - `user` itself — the placeholder is excluded from the member list (`listUsers`) and from every
   guarded admin write (`withLastAdminGuard`, `reactivateUser`), so nobody can deactivate,
@@ -118,9 +128,10 @@ that bounds it. No other log line written after the deletion can name them.
 What the product can promise, and what it cannot:
 
 - Deleting an account removes the account, the password hash, the display name, the address,
-  every session, every private note and its search vector, listening positions and history,
-  onboarding state, reactions, the in-app inbox, and the current profile picture. It frees the
-  address for a new account.
+  every session, every private note and its search vector, the Highlights playlist, listening
+  positions and history, onboarding state, reactions, the in-app inbox, push preferences and
+  every registered device address, and the current profile picture. It frees the address for a
+  new account.
 - Public notes and replies the person wrote stay on the recordings they were written on, with
   their text, shown as by "Removed member". Deleting them first, one by one from the app, is how
   a person removes that text before deleting the account; a deleted note's text is kept by nobody

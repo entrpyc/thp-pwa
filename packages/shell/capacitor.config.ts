@@ -29,6 +29,13 @@ const config: CapacitorConfig = {
     // host — Spotify, a Bible source, anything in an email — opens in the system browser, where
     // the member has a URL bar and a way back.
   },
+  plugins: {
+    // A push that arrives while the app is open is still shown by the OS (project prd 3.17.1):
+    // without this iOS swallows foreground pushes, and a member reading one teaching would never
+    // learn of a reply on another until the bell polled. The web app refreshes the bell on the
+    // same event (push-shell-listener.tsx), so both happen.
+    PushNotifications: { presentationOptions: ['badge', 'sound', 'alert'] },
+  },
 };
 
 export default config;

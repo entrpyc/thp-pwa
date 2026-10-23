@@ -1,5 +1,5 @@
 {
-  "id": "f0f47765-8b9f-4988-a776-f93669d410e4",
+  "id": "ea2c8ead-1b12-44f0-b6bb-ff38622279bb",
   "prevId": "fe4c4e88-2125-4ecf-b1fa-baf0506c8410",
   "version": "7",
   "dialect": "postgresql",
@@ -443,21 +443,6 @@
           "isUnique": false,
           "concurrently": false,
           "method": "hnsw",
-          "with": {}
-        },
-        "embedding_text_search_idx": {
-          "name": "embedding_text_search_idx",
-          "columns": [
-            {
-              "expression": "to_tsvector('english', \"text\")",
-              "asc": true,
-              "isExpression": true,
-              "nulls": "last"
-            }
-          ],
-          "isUnique": false,
-          "concurrently": false,
-          "method": "gin",
           "with": {}
         }
       },
@@ -3242,6 +3227,7 @@
         "note_reaction",
         "note_reported",
         "report_resolved",
+        "summary_ready",
         "announcement",
         "new_feature"
       ]

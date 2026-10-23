@@ -162,6 +162,7 @@ export const API_ERROR_CODES = [
   'deletion_expired',
   'blocked',
   'terms_required',
+  'highlights_full',
   'not_found',
   'internal_error',
   'service_unavailable',

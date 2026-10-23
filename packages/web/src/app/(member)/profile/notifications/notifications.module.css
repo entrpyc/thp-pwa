@@ -1,0 +1,109 @@
+/*
+ * The push card's own pieces: the category rows and the switch. Everything else the card uses
+ * — the card, the lead, the buttons, the status line — is the profile's recipe, imported where
+ * it is used, so this file holds only what no other section has.
+ */
+
+.switchList {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+}
+
+.switchRow {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--space-3);
+  padding: var(--space-3) 0;
+  border-top: 1px solid var(--color-border);
+  min-width: 0;
+}
+
+.switchText {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-1);
+  min-width: 0;
+  flex: 1 1 16rem;
+}
+
+.switchLabel {
+  margin: 0;
+  font-size: var(--fs-body);
+  font-weight: 600;
+  color: var(--color-text);
+}
+
+/*
+ * The switch: a pill with a knob, the one accent when on and outlined when off — the same two
+ * states the bell's badge and the centre's dot already use. The word beside it is for a reader
+ * who cannot tell left from right at a glance, and for a screen reader the role says the rest.
+ */
+.switch {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--space-2);
+  margin: 0;
+  padding: 0;
+  background: transparent;
+  border: 0;
+  color: var(--color-text-muted);
+  font-family: inherit;
+  font-size: var(--fs-meta);
+  font-weight: 600;
+  cursor: pointer;
+}
+
+.switch:disabled {
+  cursor: not-allowed;
+}
+
+.switchKnob {
+  position: relative;
+  display: inline-block;
+  width: var(--space-8);
+  height: var(--space-5);
+  border-radius: var(--radius-pill);
+  border: 1px solid var(--color-border-strong);
+  background: transparent;
+  transition: background 120ms ease, border-color 120ms ease;
+}
+
+.switchKnob::after {
+  content: '';
+  position: absolute;
+  top: 2px;
+  left: 2px;
+  width: calc(var(--space-5) - 6px);
+  height: calc(var(--space-5) - 6px);
+  border-radius: var(--radius-pill);
+  background: var(--color-text-muted);
+  transition: transform 120ms ease, background 120ms ease;
+}
+
+.switch[aria-checked='true'] {
+  color: var(--color-text);
+}
+
+.switch[aria-checked='true'] .switchKnob {
+  background: var(--color-primary);
+  border-color: var(--color-primary);
+}
+
+.switch[aria-checked='true'] .switchKnob::after {
+  background: var(--color-text);
+  transform: translateX(calc(var(--space-8) - var(--space-5)));
+}
+
+.switch:focus-visible .switchKnob {
+  outline: 2px solid var(--color-primary-strong);
+  outline-offset: 2px;
+}
+
+.switchState {
+  min-width: 2ch;
+}

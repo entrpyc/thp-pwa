@@ -1,0 +1,180 @@
+/*
+ * Downloads and offline (PRD 3.18): the controls, the mark, the status strip and the profile
+ * section. Composes the member furniture and the profile's two button shapes; what is new here
+ * is a progress bar and a small mark, both drawn from tokens. Nothing spells a colour.
+ */
+
+.card {
+  composes: card from '../screens.module.css';
+}
+
+.cardTitle {
+  composes: cardTitle from '../screens.module.css';
+}
+
+.quiet {
+  composes: quiet from '../screens.module.css';
+}
+
+.failure {
+  composes: failure from '../screens.module.css';
+}
+
+.rows {
+  composes: rows from '../screens.module.css';
+}
+
+.rowGroup {
+  composes: rowGroup from '../screens.module.css';
+}
+
+.rowText {
+  composes: rowText from '../screens.module.css';
+}
+
+.rowTitle {
+  composes: rowTitle from '../screens.module.css';
+}
+
+.rowMeta {
+  composes: rowMeta from '../screens.module.css';
+}
+
+.primary {
+  composes: primary from '../profile/profile.module.css';
+}
+
+.secondary {
+  composes: secondary from '../profile/profile.module.css';
+}
+
+.actions {
+  composes: actions from '../profile/profile.module.css';
+}
+
+.scrim {
+  composes: scrim from '../profile/profile.module.css';
+}
+
+.sheet {
+  composes: sheet from '../profile/profile.module.css';
+}
+
+/* The recording page's control sits under the header, in the pill shape the tabs use. */
+.control {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: var(--space-3);
+}
+
+.pill {
+  composes: tab from '../screens.module.css';
+  display: inline-flex;
+  align-items: center;
+  gap: var(--space-2);
+}
+
+.pill:disabled {
+  cursor: default;
+}
+
+/* A thin track and a fill, like the transport's, at the width of its row. */
+.track {
+  flex: 1 1 8rem;
+  height: var(--space-1);
+  min-width: 6rem;
+  border-radius: var(--radius-pill);
+  background: var(--color-surface-raised);
+  overflow: hidden;
+}
+
+.fill {
+  height: 100%;
+  border-radius: var(--radius-pill);
+  background: var(--color-primary-icon);
+}
+
+/* The downloaded mark: a small outlined circle in the meta voice, wherever a teaching appears. */
+.mark {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--space-1);
+  font-size: var(--fs-meta);
+  color: var(--color-text-muted);
+  white-space: nowrap;
+}
+
+.markIcon {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: var(--space-4);
+  height: var(--space-4);
+  border: 1px solid var(--color-primary-icon);
+  border-radius: var(--radius-pill);
+  color: var(--color-primary-icon);
+  font-size: 0.625rem;
+  line-height: 1;
+}
+
+/* The status strip: one line under the navigation, drawn only while there is something to say. */
+.status {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-2);
+  margin: 0 0 var(--space-4);
+}
+
+.statusLine {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--space-3);
+  margin: 0;
+  padding: var(--space-3) var(--space-4);
+  background: var(--color-bg-deep);
+  border: 1px solid var(--color-border-strong);
+  border-radius: var(--radius-md);
+  font-size: var(--fs-body);
+  color: var(--color-text);
+}
+
+.dismiss {
+  background: transparent;
+  border: none;
+  padding: 0;
+  color: var(--color-text-muted);
+  font-family: inherit;
+  font-size: var(--fs-meta);
+  cursor: pointer;
+}
+
+.dismiss:hover {
+  color: var(--color-text);
+}
+
+.rowActions {
+  display: flex;
+  align-items: center;
+  gap: var(--space-3);
+  padding: var(--space-4) var(--space-5);
+}
+
+.total {
+  margin: 0;
+  font-size: var(--fs-body);
+  color: var(--color-text-muted);
+}
+
+.sheetList {
+  margin: 0;
+  padding: 0;
+  list-style: none;
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-2);
+  font-size: var(--fs-body);
+  color: var(--color-text-muted);
+}
