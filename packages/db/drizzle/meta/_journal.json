@@ -253,6 +253,13 @@
       "when": 1792740630853,
       "tag": "0035_highlights",
       "breakpoints": true
+    },
+    {
+      "idx": 36,
+      "version": "7",
+      "when": 1792742828321,
+      "tag": "0036_offline_sync",
+      "breakpoints": true
     }
   ]
 }

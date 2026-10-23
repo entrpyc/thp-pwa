@@ -32,7 +32,8 @@ import {
   type TranscriptPayload,
   type TranscriptSegmentView,
 } from '@thp/shared';
-import { apiFetch } from '@/client/api-client';
+import { ApiClientError, apiFetch } from '@/client/api-client';
+import { SYNCED_EVENT, offlineManager } from '@/client/offline/manager';
 import { track } from '@/client/observability/analytics';
 import { shouldRenewGrant, shouldRenewPreemptively } from '@/client/playback/renewal';
 import { listenedStep, shouldWriteProgress, type ProgressEventKind } from '@/client/playback/cadence';
@@ -453,6 +454,13 @@ export function PlayerProvider({
 
   /** The live grant. A ref because the renewal ticker reads it without re-subscribing. */
   const grant = useRef<PlaybackGrantPayload | null>(null);
+  /**
+   * The local URL the element is playing a **download** from, or `null` while it streams
+   * ([3.18.1](docs/project/prd.md)). Held so the object URL can be released when the element moves
+   * on, and so a renewal knows there is nothing to renew: a download has no grant to expire, and
+   * `grant` is `null` while this is set.
+   */
+  const localUrl = useRef<string | null>(null);
   /** Where to seek once metadata arrives — a resume position, or a position being restored. */
   const seekOnLoad = useRef<number | null>(null);
   /** Whether to resume playing once metadata arrives, after a grant swap mid-listen. */
@@ -504,15 +512,34 @@ export function PlayerProvider({
    */
   const transcriptAskedFor = useRef<string | null>(null);
 
+  /**
+   * Point the element at a teaching: **the download when there is one, the grant otherwise**
+   * ([3.18.1](docs/project/prd.md)). The download is asked for first, online or not — it is the
+   * same bytes, already paid for, and playing it costs the member nothing on a metered plan and
+   * the product nothing in egress. Speed and the resume position are the element's and the
+   * `loadedmetadata` handler's, so they apply to a local source exactly as to a streamed one.
+   */
   const pointAt = useCallback(async (recordingId: string): Promise<void> => {
     const element = audioRef.current;
     if (element === null) return;
+    const previous = localUrl.current;
+    const local = await offlineManager().localSourceFor(recordingId).catch(() => null);
+    if (local !== null) {
+      grant.current = null;
+      localUrl.current = local;
+      element.src = local;
+      element.load();
+      if (previous !== null && previous !== local) offlineManager().releaseSource(previous);
+      return;
+    }
     const minted = await apiFetch<PlaybackGrantPayload>(recordingPlaybackPath(recordingId), {
       credentials: 'include',
     });
     grant.current = minted;
+    localUrl.current = null;
     element.src = minted.url;
     element.load();
+    if (previous !== null) offlineManager().releaseSource(previous);
   }, []);
 
   /**
@@ -761,18 +788,22 @@ export function PlayerProvider({
     const listenedMs = Math.round(listenedSinceWrite.current);
     listenedSinceWrite.current = 0;
     const durationMs = Number.isFinite(element.duration) ? Math.round(element.duration * 1000) : 0;
+    const body = {
+      positionMs,
+      ...(listenedMs > 0 ? { listenedMs } : {}),
+      ...(durationMs > 0 ? { durationMs } : {}),
+    };
     void apiFetch(recordingProgressPath(recording.id), {
       method: 'PUT',
       credentials: 'include',
       headers: { 'content-type': 'application/json' },
-      body: JSON.stringify({
-        positionMs,
-        ...(listenedMs > 0 ? { listenedMs } : {}),
-        ...(durationMs > 0 ? { durationMs } : {}),
-      }),
-    }).catch(() => {
-      // A dropped position costs the member a few seconds of re-listening. Retrying it would be
-      // the outbox [§3.18](docs/project/prd.md) defers, so it is dropped deliberately.
+      body: JSON.stringify(body),
+    }).catch((caught: unknown) => {
+      // The server answered and refused: a dropped position costs a few seconds of re-listening,
+      // and the next tick writes again. The server could not be reached at all: the position goes
+      // to the outbox ([3.18.14](docs/project/prd.md)) and lands on the next reconnect.
+      if (caught instanceof ApiClientError) return;
+      void offlineManager().keepProgress(recording.id, body).catch(() => undefined);
     });
   }, []);
 
@@ -887,6 +918,23 @@ export function PlayerProvider({
     document.addEventListener('visibilitychange', onHide);
     return () => document.removeEventListener('visibilitychange', onHide);
   }, [pushProgress]);
+
+  /*
+   * **After a sync, the notes are read again** ([3.18.15](docs/project/prd.md)). A note written
+   * offline was drawn from the outbox as a pending copy; once the flush has landed it, the
+   * server's list is what should be on the track and in the panel. Only when the loaded teaching
+   * was touched, so an idle transport costs nothing.
+   */
+  useEffect(() => {
+    const onSynced = (event: Event) => {
+      const touched = (event as CustomEvent<readonly string[]>).detail;
+      const recording = loadedRef.current;
+      if (recording === null || !Array.isArray(touched) || !touched.includes(recording.id)) return;
+      loadNotes(recording.id);
+    };
+    window.addEventListener(SYNCED_EVENT, onSynced);
+    return () => window.removeEventListener(SYNCED_EVENT, onSynced);
+  }, [loadNotes]);
 
   // What the lock screen names, kept in step with what the bar names ([3.2.6](docs/project/prd.md)).
   // Said again on every `loadedmetadata` — `declareLoaded` says why twice.

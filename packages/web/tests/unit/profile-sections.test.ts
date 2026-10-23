@@ -29,12 +29,13 @@ describe('the profile sections', () => {
     expect(distinct('label')).toBe(PROFILE_SECTIONS.length);
   });
 
-  it('lists highlights, settings and notifications beside the identity page, in that order', () => {
+  it('lists highlights, settings, notifications and downloads beside the identity page, in that order', () => {
     expect(PROFILE_SECTIONS.map((section) => section.id)).toEqual([
       'identity',
       'highlights',
       'settings',
       'notifications',
+      'downloads',
     ]);
     expect(PROFILE_SECTIONS[3]?.href).toBe(NOTIFICATION_SETTINGS_PAGE_PATH);
   });
@@ -53,7 +54,7 @@ describe('which section an address is in', () => {
   });
 
   it('is nothing for an address no section claims — a deferred destination is dropped, not guessed', () => {
-    expect(sectionFor(`${PROFILE_PAGE_PATH}/downloads`)).toBeNull();
+    expect(sectionFor(`${PROFILE_PAGE_PATH}/questionnaires`)).toBeNull();
     expect(sectionFor(`${PROFILE_PAGE_PATH}/settingsx`)).toBeNull();
     expect(sectionFor('/recordings')).toBeNull();
   });

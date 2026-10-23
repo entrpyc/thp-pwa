@@ -11,6 +11,8 @@ import {
 } from '@thp/shared';
 import { ApiClientError, apiFetch } from '@/client/api-client';
 import { useBreadcrumbTrail } from '../../player-context';
+import { DownloadAllControl } from '../../downloads/download-all-control';
+import { DownloadedMark } from '../../downloads/downloaded-mark';
 import { PinRecordingControl } from '../../highlights/pin-recording-control';
 import { seriesMeta } from '../series-listing';
 import { TagLabels } from '../../tag-labels';
@@ -149,6 +151,8 @@ export function SeriesScreen({ seriesId }: { seriesId: string }) {
             <TagLabels tags={payload.series.tags} />
           </header>
 
+          <DownloadAllControl seriesId={seriesId} />
+
           <ul className={styles.rows} aria-label="Recordings">
             {payload.recordings.map((recording, index) => (
               <li key={recording.id} className={styles.rowGroup}>
@@ -166,6 +170,7 @@ export function SeriesScreen({ seriesId }: { seriesId: string }) {
                         ? formatDay(recording.recordedAt)
                         : `Resume at ${formatTimecode(recording.positionMs)}`}
                     </span>
+                    <DownloadedMark recordingId={recording.id} />
                   </span>
                   <span className={styles.rowChevron} aria-hidden="true">
                     ›

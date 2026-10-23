@@ -76,6 +76,9 @@ against the schema, not a second copy of it.
   nothing else, and 3.1.9 names it among what goes with the account. `highlight.note_id` cascades
   with the note — never fired by a public note's re-pointing, and a private note's hard delete
   takes its entry with it.
+- `sync_receipt.user_id` — cascade: a receipt for an outbox entry flushed from the person's own
+  device is a fact about them and nothing else. `sync_receipt.note_id` — set null with the note,
+  so the receipt outlives a deleted note the way a log line does.
 - `invitation.email` — rows addressed to the person are deleted.
 - `user` itself — the placeholder is excluded from the member list (`listUsers`) and from every
   guarded admin write (`withLastAdminGuard`, `reactivateUser`), so nobody can deactivate,

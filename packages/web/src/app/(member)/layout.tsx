@@ -5,6 +5,7 @@ import { currentActor } from '@/server/auth/current-actor';
 import { pendingOnboardingFor } from '@/server/onboarding/completion';
 import { analyticsPerson, can } from '@/server/auth/policy';
 import { AnalyticsProvider } from '@/client/observability/analytics-provider';
+import { OfflineStatus } from './downloads/offline-status';
 import { NotificationsProvider } from './notifications-context';
 import { PlayerProvider } from './player-context';
 import { PushShellListener } from './push-shell-listener';
@@ -60,7 +61,11 @@ export default async function MemberLayout({ children }: { children: ReactNode }
           <div className={styles.screen}>
             <div className={styles.shell}>
               <TopNavigation canSeeConsole={can(actor, 'account.list')} />
-              <main className={styles.content}>{children}</main>
+              <main className={styles.content}>
+                {/* The offline and pending-sync strip (3.18.16); also what keys downloads to this account. */}
+                <OfflineStatus userId={actor.id} />
+                {children}
+              </main>
             </div>
             <TransportBar />
           </div>
