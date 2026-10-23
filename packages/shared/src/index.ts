@@ -26,6 +26,7 @@ export * from './reports';
 export * from './reviews';
 export * from './roles';
 export * from './scripture';
+export * from './search';
 export * from './segment';
 export * from './series';
 export * from './sound-profile';

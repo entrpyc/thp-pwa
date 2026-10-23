@@ -12,6 +12,7 @@ import {
   type RunningServer,
 } from './next-server';
 import { TEST_BIBLE } from './bible';
+import { TEST_EMBEDDER } from './embedder';
 import { createThrowawayDatabase, type ThrowawayDatabase } from './throwaway-db';
 import { TEST_MEDIA, ensureTestBucket, type MediaEnvironment } from './media-bucket';
 
@@ -223,14 +224,18 @@ export default async function setup(project: TestProject): Promise<() => Promise
       name: 'primary',
       databaseUrl: appDatabase.url,
       port: primaryPort,
-      env: { ...media, ...TEST_BIBLE, ...UNLIMITED_SIGN_UP, ...UNLIMITED_SIGN_IN, ...UNLIMITED_PASSWORD_RESET, ...UNLIMITED_ACCOUNT_DELETION, ...captureMail('primary'), ...capturePush('primary') },
+      // The embedder reaches the servers too, now that the API embeds a search query at request
+      // time ([3.10.2](docs/project/prd.md)): without it a machine with no `.env` would send every
+      // search to a paid provider behind a key nobody set, and every search would fall back to
+      // words alone for a reason that has nothing to do with the test.
+      env: { ...media, ...TEST_BIBLE, ...TEST_EMBEDDER, ...UNLIMITED_SIGN_UP, ...UNLIMITED_SIGN_IN, ...UNLIMITED_PASSWORD_RESET, ...UNLIMITED_ACCOUNT_DELETION, ...captureMail('primary'), ...capturePush('primary') },
     });
     servers.push(primary);
 
     const broken = await startNextServer({
       name: 'broken-db',
       databaseUrl: UNREACHABLE_DATABASE_URL,
-      env: { ...media, ...TEST_BIBLE, ...UNLIMITED_SIGN_UP, ...UNLIMITED_SIGN_IN, ...UNLIMITED_PASSWORD_RESET, ...UNLIMITED_ACCOUNT_DELETION, ...captureMail('broken-db'), ...capturePush('broken-db') },
+      env: { ...media, ...TEST_BIBLE, ...TEST_EMBEDDER, ...UNLIMITED_SIGN_UP, ...UNLIMITED_SIGN_IN, ...UNLIMITED_PASSWORD_RESET, ...UNLIMITED_ACCOUNT_DELETION, ...captureMail('broken-db'), ...capturePush('broken-db') },
     });
     servers.push(broken);
 
@@ -239,7 +244,7 @@ export default async function setup(project: TestProject): Promise<() => Promise
     const mailDown = await startNextServer({
       name: 'mail-down',
       databaseUrl: appDatabase.url,
-      env: { ...media, ...TEST_BIBLE, ...UNLIMITED_SIGN_UP, ...UNLIMITED_SIGN_IN, ...UNLIMITED_PASSWORD_RESET, ...UNLIMITED_ACCOUNT_DELETION, ...FAILING_MAIL, ...capturePush('mail-down') },
+      env: { ...media, ...TEST_BIBLE, ...TEST_EMBEDDER, ...UNLIMITED_SIGN_UP, ...UNLIMITED_SIGN_IN, ...UNLIMITED_PASSWORD_RESET, ...UNLIMITED_ACCOUNT_DELETION, ...FAILING_MAIL, ...capturePush('mail-down') },
     });
     servers.push(mailDown);
 
@@ -251,6 +256,7 @@ export default async function setup(project: TestProject): Promise<() => Promise
       env: {
         ...media,
         ...TEST_BIBLE,
+        ...TEST_EMBEDDER,
         ...TIGHT_SIGN_UP,
         ...TIGHT_SIGN_IN,
         ...TIGHT_PASSWORD_RESET,

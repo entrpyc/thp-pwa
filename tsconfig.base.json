@@ -31,6 +31,8 @@
       "@thp/media/*": ["./packages/media/src/*"],
       "@thp/bible": ["./packages/bible/src/index.ts"],
       "@thp/bible/*": ["./packages/bible/src/*"],
+      "@thp/embed": ["./packages/embed/src/index.ts"],
+      "@thp/embed/*": ["./packages/embed/src/*"],
       "@/*": ["./packages/web/src/*"]
     }
   }

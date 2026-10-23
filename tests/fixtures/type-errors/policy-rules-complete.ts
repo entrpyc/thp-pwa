@@ -84,4 +84,5 @@ export const rules: PolicyRules = {
   'highlight.create': { roles: { admin: true, member: true } },
   'highlight.remove': { roles: { admin: true, member: true } },
   'highlight.list': { roles: { admin: true, member: true } },
+  'search.query': { roles: { admin: true, member: true } },
 };

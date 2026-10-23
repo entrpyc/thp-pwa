@@ -197,6 +197,15 @@ export const POLICY_ACTIONS = [
   'note.read',
   'note.write',
   /**
+   * **Searching the library** ([3.10.1](docs/project/prd.md)). Its own action rather than a reuse
+   * of `recording.browse`, because what it spends is different: a browse reads rows, a search
+   * embeds the member's words with a paid provider first — and a budget is hung on this action
+   * (`server/api/actor-limits.ts`) that a browse does not carry. What a search may *return* is not
+   * decided here at all: that is the visibility predicate inside the query, the same for both
+   * roles ([3.10.9](docs/project/prd.md), NFR 6.7).
+   */
+  'search.query',
+  /**
    * **The six the rest of the scope needs** (active-scope architecture § 8), and the split is the
    * habit every group above follows rather than an exception to it.
    *
@@ -492,6 +501,8 @@ const RULES: PolicyRules = {
   // moderation actions this scope adds later are where the roles part.
   'note.read': { roles: { admin: true, member: true } },
   'note.write': { roles: { admin: true, member: true } },
+  // Every signed-in account may search; an admin searching sees what a member sees.
+  'search.query': { roles: { admin: true, member: true } },
   // Both roles, and only over what they wrote. `requiresOwnership` is what refuses **an admin**
   // editing a member's note (3.5.6, 3.6.2) with no special case written anywhere: moderation is
   // deletion, never rewriting somebody's words.

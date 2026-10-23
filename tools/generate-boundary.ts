@@ -64,6 +64,10 @@ export const GENERATE_ADAPTER_FILES: readonly string[] = [
   // the embedding port (project tdd 5.5) is a sibling of the generation port, behind the same
   // rule — one file per provider, named here, so a third door is an edit to this list.
   'packages/worker/src/embed/openai.ts',
+  // The same adapter as a package, so the API can embed a search query ([3.10](docs/project/prd.md))
+  // without importing the worker. Two entries for one adapter is the transitional state
+  // `packages/embed/src/index.ts` describes; when the worker adopts the package, the line above goes.
+  'packages/embed/src/openai.ts',
 ];
 
 /** The port the rest of the application calls instead. */

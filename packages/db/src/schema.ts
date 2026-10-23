@@ -1714,6 +1714,23 @@ export const embedding = pgTable(
      * of that trade.
      */
     index('embedding_vector_hnsw_idx').using('hnsw', table.embedding.op('vector_cosine_ops')),
+    /**
+     * **The full-text half of search** (project tdd 4.5), over the same `text` the vector was
+     * computed from — so the two arms of a hybrid query read one set of sources and a row found by
+     * either is the same row ([3.10.5](docs/project/prd.md)).
+     *
+     * An expression index rather than a generated `tsvector` column, so the table's shape is what
+     * the embed step wrote and nothing else: the step is not taught about full-text, and a reader
+     * of the row sees words, not lexemes. GIN because the index is read far more than written, the
+     * same trade the HNSW index above makes. `english` is the configuration the search query must
+     * spell identically — `search.ts` names it once and the index names it here — because a
+     * `to_tsvector` under any other configuration would not use this index and would rank by a
+     * different stemming.
+     */
+    index('embedding_text_search_idx').using(
+      'gin',
+      sql`to_tsvector('english', ${table.text})`,
+    ),
     /** A series has no recording; everything else has exactly one. */
     check(
       'embedding_recording_per_kind',

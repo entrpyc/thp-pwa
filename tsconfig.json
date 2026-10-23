@@ -17,6 +17,7 @@
     "packages/media/tests/**/*.ts",
     "packages/bible/src/**/*.ts",
     "packages/bible/tests/**/*.ts",
+    "packages/embed/src/**/*.ts",
     "packages/worker/tests/**/*.ts",
     "packages/worker/src/**/*.ts",
     "tools/**/*.ts",
