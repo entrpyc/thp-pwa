@@ -37,7 +37,7 @@ export function PinNoteControl({
       disabled={highlights === null || busy}
       onClick={() => void toggle(existing, { kind: 'note', noteId })}
     >
-      <MarkerIcon marked={pinned} size={16} />
+      <MarkerIcon marked={pinned} size={20} />
     </button>
   );
 }

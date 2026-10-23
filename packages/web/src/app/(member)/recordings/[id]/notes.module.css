@@ -511,18 +511,19 @@
   gap: var(--space-2);
 }
 
+/* A 40px round control — the marker and the `···` — a thumb's target, by the operator's decision. */
 .overflowControl {
   display: inline-flex;
   align-items: center;
   justify-content: center;
-  min-width: var(--space-6);
-  min-height: var(--space-6);
+  min-width: calc(var(--space-8) + var(--space-2));
+  min-height: calc(var(--space-8) + var(--space-2));
   background: transparent;
   border: 1px solid var(--color-border);
   border-radius: var(--radius-pill);
   color: var(--color-primary-icon);
   font-family: inherit;
-  font-size: var(--fs-meta);
+  font-size: var(--fs-body);
   cursor: pointer;
 }
 

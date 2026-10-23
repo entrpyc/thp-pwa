@@ -39,9 +39,6 @@
   color: var(--color-text-muted);
 }
 
-.secondary {
-  composes: secondary from '../feedback/feedback.module.css';
-}
 
 .list {
   list-style: none;
@@ -53,10 +50,11 @@
 
 .entry {
   display: grid;
-  grid-template-columns: minmax(0, 1fr) auto;
+  /* Play at the left, the text in the middle, the eraser at the top right. */
+  grid-template-columns: auto minmax(0, 1fr) auto;
   grid-template-areas:
-    'open controls'
-    'series controls';
+    'play open remove'
+    'play series remove';
   align-items: center;
   column-gap: var(--space-4);
   padding: var(--space-3) 0;
@@ -129,29 +127,41 @@
   text-decoration: underline;
 }
 
-.controls {
-  grid-area: controls;
-  display: flex;
-  align-items: center;
-  gap: var(--space-3);
-}
-
-/* The one filled circle per row — the same play the recording header draws, at the row's scale. */
-.play {
-  flex: none;
+/* Remove, as the eraser alone in a 40px outlined circle at the row's top right; the words are its name. */
+.remove {
+  grid-area: remove;
+  align-self: start;
   display: inline-flex;
   align-items: center;
   justify-content: center;
-  width: var(--space-8);
-  height: var(--space-8);
-  background: var(--color-primary);
-  border: none;
+  width: calc(var(--space-8) + var(--space-2));
+  height: calc(var(--space-8) + var(--space-2));
+  background: transparent;
+  border: 1px solid var(--color-border-strong);
   border-radius: var(--radius-pill);
+  color: var(--color-text-muted);
+  cursor: pointer;
+}
+
+.remove:hover {
+  border-color: var(--color-primary-strong);
   color: var(--color-text);
-  font-size: var(--fs-meta);
+}
+
+.remove:disabled {
+  cursor: not-allowed;
+  opacity: 0.6;
+}
+
+/* Play, at the row's left: the resume card's own 64px circle, so the two read as one control. */
+.play {
+  composes: resumePlay from '../screens.module.css';
+  grid-area: play;
+  font-family: inherit;
   cursor: pointer;
 }
 
 .play:hover {
-  background: var(--color-primary-strong);
+  border-color: var(--color-primary-strong);
+  color: var(--color-text);
 }

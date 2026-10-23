@@ -59,6 +59,27 @@ function describe(entry: HighlightView): string | null {
   return entry.recording.description;
 }
 
+/** Lucide's eraser — the shape the operator chose for taking an entry off the list. */
+function EraserIcon() {
+  return (
+    <svg
+      viewBox="0 0 24 24"
+      width="20"
+      height="20"
+      fill="none"
+      stroke="currentColor"
+      strokeWidth="2"
+      strokeLinecap="round"
+      strokeLinejoin="round"
+      aria-hidden="true"
+      focusable="false"
+    >
+      <path d="M21 21H8a2 2 0 0 1-1.42-.587l-3.994-3.999a2 2 0 0 1 0-2.828l10-10a2 2 0 0 1 2.829 0l5.999 6a2 2 0 0 1 0 2.828L12.834 21" />
+      <path d="m5.082 11.09 8.828 8.828" />
+    </svg>
+  );
+}
+
 function kindLabel(entry: HighlightView): string {
   switch (entry.kind) {
     case 'note':
@@ -141,6 +162,15 @@ export function HighlightsPlaylist() {
               const title = entry.recording.title;
               return (
                 <li className={styles.entry} key={entry.id}>
+                  {/* Play at the left, the resume card's own circle — the one press that is for sound. */}
+                  <button
+                    className={styles.play}
+                    type="button"
+                    aria-label={`Play ${title}`}
+                    onClick={() => void play(entry)}
+                  >
+                    <span aria-hidden="true">▶</span>
+                  </button>
                   <Link
                     className={styles.open}
                     href={highlightHref(entry.recording.id, entry.positionMs)}
@@ -162,25 +192,17 @@ export function HighlightsPlaylist() {
                       {entry.recording.series.title}
                     </Link>
                   )}
-                  <div className={styles.controls}>
-                    <button
-                      className={styles.play}
-                      type="button"
-                      aria-label={`Play ${title}`}
-                      onClick={() => void play(entry)}
-                    >
-                      <span aria-hidden="true">▶</span>
-                    </button>
-                    <button
-                      className={styles.secondary}
-                      type="button"
-                      aria-label={`Remove ${title} from Highlights`}
-                      disabled={busy}
-                      onClick={() => void unpin(entry.id).catch(() => undefined)}
-                    >
-                      Remove
-                    </button>
-                  </div>
+                  {/* The eraser at the top right, clear of the text. */}
+                  <button
+                    className={styles.remove}
+                    type="button"
+                    aria-label={`Remove ${title} from Highlights`}
+                    title="Remove from Highlights"
+                    disabled={busy}
+                    onClick={() => void unpin(entry.id).catch(() => undefined)}
+                  >
+                    <EraserIcon />
+                  </button>
                 </li>
               );
             })}

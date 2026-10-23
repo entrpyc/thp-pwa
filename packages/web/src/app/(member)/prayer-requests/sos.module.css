@@ -431,10 +431,16 @@
 .quietAction {
   background: transparent;
   border: none;
-  padding: 0;
+  /* A 40px target in the body size, by the operator's decision. */
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  padding: var(--space-2);
+  min-width: calc(var(--space-8) + var(--space-2));
+  min-height: calc(var(--space-8) + var(--space-2));
   color: var(--color-text-muted);
   font-family: inherit;
-  font-size: var(--fs-meta);
+  font-size: var(--fs-body);
   cursor: pointer;
   text-decoration: underline;
 }
