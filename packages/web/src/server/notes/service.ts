@@ -1,6 +1,7 @@
 import {
   clearNoteReaction,
   deleteEmbeddingsForSources,
+  deleteHighlightsOfNote,
   findNoteById,
   findOpenNoteReportByReporter,
   findVisibleRecording,
@@ -266,6 +267,10 @@ export async function deleteNote(actor: Actor, noteId: string): Promise<NotePayl
     // words: between the delete and a later run, a search would otherwise still surface the text
     // the tombstone says is gone.
     await deleteEmbeddingsForSources('note', [noteId], tx);
+    // The author's Highlights entry for it goes the same way and for the same reason
+    // ([3.15.3](docs/project/prd.md)): a soft delete fires no cascade, and an entry whose note
+    // now reads "removed" has nothing left to show.
+    await deleteHighlightsOfNote(noteId, tx);
     return deleted;
   });
   if (row === null) throw ApiError.noteRemoved(NOTE_ALREADY_REMOVED_MESSAGE);

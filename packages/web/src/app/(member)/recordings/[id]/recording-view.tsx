@@ -15,6 +15,8 @@ import {
 import { ApiClientError, apiFetch } from '@/client/api-client';
 import { track } from '@/client/observability/analytics';
 import { useBreadcrumbTrail, usePlayer } from '../../player-context';
+import { openAtFromAddress } from '../../highlights/open-at';
+import { PinRecordingControl } from '../../highlights/pin-recording-control';
 import { ChaptersPanel } from './chapters-panel';
 import { CollapsibleProse } from './collapsible-prose';
 import { NotesPanel } from './notes-panel';
@@ -227,12 +229,14 @@ export function RecordingScreen({
       ]);
       if (!live) return;
       setRecording(payload.recording);
-      setStartAtMs(progress.positionMs);
+      // A highlight's address names a moment ([3.15.7](docs/project/prd.md)); otherwise the stored position.
+      const startMs = openAtFromAddress() ?? progress.positionMs;
+      setStartAtMs(startMs);
       setFailure(null);
       // `openIfIdle`, not `open`: arriving on the page loads the teaching into the transport only
       // when doing so silences nothing. A member listening to something else keeps hearing it, and
       // this teaching takes the player over at the play control instead.
-      openIfIdle(toLoaded(payload.recording), progress.positionMs);
+      openIfIdle(toLoaded(payload.recording), startMs);
     }
 
     void load().catch((caught: unknown) => {
@@ -391,6 +395,7 @@ export function RecordingScreen({
               */}
               <TagLabels tags={recording.tags} />
             </div>
+            <PinRecordingControl recordingId={recordingId} placement="header" />
           </header>
 
           {/*

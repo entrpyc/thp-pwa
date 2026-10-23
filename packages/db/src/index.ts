@@ -123,6 +123,19 @@ export {
   type BlockedMemberRow,
   type MemberBlockRow,
 } from './member-blocks';
+export {
+  countHighlightsForMember,
+  deleteHighlightForMember,
+  deleteHighlightsOfNote,
+  findHighlightByTarget,
+  findHighlightForMember,
+  findSegmentAt,
+  insertHighlight,
+  listHighlightsForMember,
+  type HighlightListRow,
+  type HighlightRow,
+  type NewHighlight,
+} from './highlights';
 export { MIGRATIONS_DIR, runMigrations, type RunMigrationsOptions } from './migrate';
 export {
   clearNoteReaction,

@@ -1,0 +1,64 @@
+/*
+ * The pin controls ([3.15.4](docs/project/prd.md)) — one recipe, three placements.
+ *
+ * A pin is a secondary control everywhere it appears: the page's one filled circle is play, and a
+ * second filled control beside it would make two things on the screen claim to be the main one.
+ * So the pin is the outlined pill the profile's secondary buttons already are, and its pressed
+ * state is the transport tool's — the soft primary wash with the strong border — so "this is
+ * pinned" reads the same on the header, the series row and the transport.
+ */
+
+.pin {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--space-2);
+  background: transparent;
+  border: 1px solid var(--color-border-strong);
+  border-radius: var(--radius-pill);
+  padding: var(--space-2) var(--space-4);
+  color: var(--color-text);
+  font-family: inherit;
+  font-size: var(--fs-meta);
+  font-weight: 600;
+  line-height: 1.2;
+  cursor: pointer;
+  white-space: nowrap;
+}
+
+.pin:hover {
+  border-color: var(--color-primary-strong);
+}
+
+.pin[aria-pressed='true'] {
+  border-color: var(--color-primary-strong);
+  background: var(--color-primary-soft);
+}
+
+.pin:disabled {
+  cursor: not-allowed;
+  color: var(--color-text-muted);
+}
+
+/* On a detail header, at the far end of the row, clear of the title. */
+.headerPin {
+  flex: none;
+  margin-left: auto;
+  align-self: flex-start;
+}
+
+/*
+ * On a series row: a strip under the row link, the shape the library gives a row's series link —
+ * so a row with a pin and a row without read as one list. A strip rather than a button inside the
+ * link, because a button inside an anchor is not a thing a browser agrees to.
+ */
+.rowPin {
+  display: flex;
+  justify-content: flex-end;
+  border-top: 1px solid var(--color-border);
+  padding: var(--space-2) var(--space-4);
+}
+
+.icon {
+  font-size: var(--fs-body);
+  line-height: 1;
+}

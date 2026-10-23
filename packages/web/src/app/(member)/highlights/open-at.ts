@@ -1,0 +1,31 @@
+import { HIGHLIGHT_AT_PARAM, recordingPagePath } from '@thp/shared';
+
+/**
+ * **Opening a teaching at a highlight's moment** ([3.15.7](docs/project/prd.md)), without sound
+ * ([3.2.12](docs/project/prd.md)).
+ *
+ * The playlist row links to `/recordings/{id}?at=<ms>`, and the recording page reads the parameter
+ * at mount and hands it to the player in place of the stored position. Read off the document's
+ * own address rather than through `useSearchParams`, so the one line the recording page changes
+ * stays inside the effect it already has, with no new dependency to list; the page mounts once per
+ * address, which is the one moment the parameter means anything. Nothing writes it back: the
+ * address a bookmark holds keeps meaning the same moment.
+ */
+
+/** The row's address: the teaching, at the entry's moment — or just the teaching, for a whole one. */
+export function highlightHref(recordingId: string, positionMs: number | null): string {
+  const path = recordingPagePath(recordingId);
+  return positionMs === null ? path : `${path}?${HIGHLIGHT_AT_PARAM}=${positionMs}`;
+}
+
+/**
+ * The moment the current address asks the page to open at, or `null` when it asks nothing —
+ * including on the server, where there is no address to read, and for a value that is not a
+ * whole non-negative number of milliseconds, which is a bookmark somebody edited by hand.
+ */
+export function openAtFromAddress(): number | null {
+  if (typeof window === 'undefined') return null;
+  const raw = new URLSearchParams(window.location.search).get(HIGHLIGHT_AT_PARAM);
+  if (raw === null || !/^\d{1,12}$/.test(raw)) return null;
+  return Number(raw);
+}

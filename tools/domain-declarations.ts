@@ -3,6 +3,7 @@ import { relative, resolve, sep } from 'node:path';
 import {
   BIBLE_BOOKS,
   FEEDBACK_KINDS,
+  HIGHLIGHT_KINDS,
   JOB_STATUSES,
   NOTE_VISIBILITIES,
   NOTIFICATION_CATEGORIES,
@@ -127,6 +128,12 @@ export const DOMAIN_DECLARATIONS: readonly DomainDeclaration[] = [
     members: REPORT_OUTCOMES,
   },
   { name: 'ReportOutcome', canonicalFile: 'packages/shared/src/reports.ts' },
+  {
+    name: 'HIGHLIGHT_KINDS',
+    canonicalFile: 'packages/shared/src/highlights.ts',
+    members: HIGHLIGHT_KINDS,
+  },
+  { name: 'HighlightKind', canonicalFile: 'packages/shared/src/highlights.ts' },
 ];
 
 export interface DeclarationViolation {

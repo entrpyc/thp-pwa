@@ -24,6 +24,7 @@ import {
   DEFAULT_PLAYBACK_SPEED,
   EMBEDDING_DIMENSIONS,
   EMBEDDING_SOURCE_KINDS,
+  HIGHLIGHT_KINDS,
   JOB_STATUSES,
   JOB_STEPS,
   MAX_ANNOUNCEMENT_BODY_LENGTH,
@@ -102,6 +103,8 @@ export const embeddingSource = pgEnum('embedding_source', EMBEDDING_SOURCE_KINDS
 export const reportReason = pgEnum('report_reason', REPORT_REASONS);
 
 export const reportOutcome = pgEnum('report_outcome', REPORT_OUTCOMES);
+
+export const highlightKind = pgEnum('highlight_kind', HIGHLIGHT_KINDS);
 
 /**
  * An account. Columns arrive with the steps that use them: `deactivated_at` comes with ticket 4
@@ -1820,6 +1823,90 @@ export const noteReport = pgTable(
     check(
       'note_report_detail_length',
       sql`char_length(${table.detail}) <= ${sql.raw(String(MAX_REPORT_DETAIL_LENGTH))}`,
+    ),
+  ],
+);
+
+/**
+ * **One entry in a member's Highlights** ([3.15](docs/project/prd.md); [4.14](docs/project/prd.md)):
+ * a whole teaching, one line of it, or a note of the member's own, with the date it was pinned.
+ *
+ * **One row per target per member**, and the target's shape depends on the kind, so uniqueness
+ * is three partial indexes rather than one: a teaching once, a line once by its position, a note
+ * once. A whole-teaching pin and a line of the same teaching are two entries, because they are two
+ * things a member said ([3.15.1](docs/project/prd.md) and [3.15.2](docs/project/prd.md) are two
+ * requirements). The check beneath them is what makes the kind honest: a `segment` row has a
+ * position and no note, a `note` row has a note and no position, a `recording` row has neither.
+ *
+ * **A line is a position, snapped.** The service snaps "this moment" to the start of the transcript
+ * line playing there and stores both the position and the line's id. The position is the identity
+ * and the thing that opens the player; the id is only how the playlist reads the line's text. It
+ * **sets null** when the transcript is replaced — the segments cascade with it — so a re-run takes
+ * the description off an entry and never the entry: the moment the member chose is still the
+ * moment, whatever the new segmentation calls it.
+ *
+ * **A note's moment is not stored here.** 4.14 says a note entry has a timestamp, and it does:
+ * the note's own, read at answer time. A second copy could only disagree with the first. The
+ * composite foreign key beneath is what makes `recording_id` honest on a note entry — it must be
+ * the note's recording — and it is why the schema keeps `note_recording_id_unique`.
+ *
+ * **Deletion follows the README.** `user_id` cascades: a playlist is a fact about the person and
+ * nothing else, and 3.1.9 names Highlights among what goes with an account. `recording_id`
+ * cascades: a highlight of a teaching the database no longer holds is of nothing. `note_id`
+ * cascades — which a *soft* delete never fires, so the notes service removes a tombstoned note's
+ * entries itself in the delete's transaction, and the list read leaves tombstones out besides.
+ *
+ * No `title`, no `description`: the playlist reads them off the teaching and the note at answer
+ * time, so a renamed teaching is renamed in the playlist too.
+ */
+export const highlight = pgTable(
+  'highlight',
+  {
+    id: uuid('id').primaryKey().defaultRandom(),
+    userId: uuid('user_id')
+      .notNull()
+      .references(() => user.id, { onDelete: 'cascade' }),
+    recordingId: uuid('recording_id')
+      .notNull()
+      .references(() => recording.id, { onDelete: 'cascade' }),
+    kind: highlightKind('kind').notNull(),
+    /** The moment, in milliseconds — non-null exactly on a `segment` entry. */
+    positionMs: integer('position_ms'),
+    /**
+     * The transcript line the position was snapped to, or null: a teaching with no transcript, a
+     * position after its last line, or a line a later run replaced. Never the identity — see above.
+     */
+    segmentId: uuid('segment_id').references(() => segment.id, { onDelete: 'set null' }),
+    /** The member's own note — non-null exactly on a `note` entry. */
+    noteId: uuid('note_id'),
+    createdAt: timestamp('created_at', { withTimezone: true }).notNull().defaultNow(),
+  },
+  (table) => [
+    /** The playlist's order exactly (3.15.6: newest pinned first), one index scan per member. */
+    index('highlight_user_created_idx').on(table.userId, table.createdAt),
+    /** The three identities, one per kind. */
+    uniqueIndex('highlight_recording_unique')
+      .on(table.userId, table.recordingId)
+      .where(sql`${table.kind} = 'recording'`),
+    uniqueIndex('highlight_segment_unique')
+      .on(table.userId, table.recordingId, table.positionMs)
+      .where(sql`${table.kind} = 'segment'`),
+    uniqueIndex('highlight_note_unique')
+      .on(table.userId, table.noteId)
+      .where(sql`${table.kind} = 'note'`),
+    /** A note entry names the note's own recording, and goes with the note. */
+    foreignKey({
+      columns: [table.recordingId, table.noteId],
+      foreignColumns: [note.recordingId, note.id],
+      name: 'highlight_note_recording_fk',
+    }).onDelete('cascade'),
+    /** The kind says what the row holds; both directions, one check. */
+    check(
+      'highlight_shape',
+      sql`(${table.kind} = 'segment') = (${table.positionMs} is not null)
+        and (${table.kind} = 'note') = (${table.noteId} is not null)
+        and (${table.segmentId} is null or ${table.kind} = 'segment')
+        and (${table.positionMs} is null or ${table.positionMs} >= 0)`,
     ),
   ],
 );

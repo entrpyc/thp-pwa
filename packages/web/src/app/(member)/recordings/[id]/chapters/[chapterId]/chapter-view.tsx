@@ -3,6 +3,7 @@
 import Link from 'next/link';
 import { useSearchParams } from 'next/navigation';
 import { useEffect, useState } from 'react';
+import { PinMomentControl } from '../../../../highlights/pin-moment-control';
 import {
   formatTimecode,
   memberRecordingPath,
@@ -289,6 +290,8 @@ export function ChapterScreen({
                 {formatTimecode(chapter.endMs)}
               </p>
             </div>
+            {/* Pin this chapter — its opening moment — to Highlights (3.15.2, 3.15.4). */}
+            <PinMomentControl recordingId={recordingId} positionMs={chapter.startMs} label="this chapter" />
           </header>
 
           {/*

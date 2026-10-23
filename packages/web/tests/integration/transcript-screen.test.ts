@@ -373,7 +373,8 @@ describe('captions float above the transport on any member screen', () => {
       await expect.poll(() => toolbar.count(), { timeout: 30_000 }).toBe(1);
       // The reference draws seven icons; two have data — CC, and the notes scope's speech bubble
       // (active-scope prd 3.1.2). The other five are dropped rather than rendered disabled.
-      expect(await toolbar.getByRole('button').count()).toBe(2);
+      // The Highlights pin, the composer and CC.
+      expect(await toolbar.getByRole('button').count()).toBe(3);
       expect(await toolbar.getByRole('button', { name: 'Write a note' }).count()).toBe(1);
       await toolbar.getByRole('button', { name: 'Captions' }).click();
 
