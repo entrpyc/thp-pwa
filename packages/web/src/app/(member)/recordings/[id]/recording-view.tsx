@@ -15,6 +15,7 @@ import {
 import { ApiClientError, apiFetch } from '@/client/api-client';
 import { track } from '@/client/observability/analytics';
 import { useBreadcrumbTrail, usePlayer } from '../../player-context';
+import { DownloadControl } from '../../downloads/download-control';
 import { openAtFromAddress } from '../../highlights/open-at';
 import { PinRecordingControl } from '../../highlights/pin-recording-control';
 import { ChaptersPanel } from './chapters-panel';
@@ -397,6 +398,8 @@ export function RecordingScreen({
             </div>
             <PinRecordingControl recordingId={recordingId} placement="header" />
           </header>
+
+          <DownloadControl recordingId={recordingId} title={recording.title} />
 
           {/*
             **Description first, then summary.** The description is what an admin wrote *about* this

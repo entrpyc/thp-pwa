@@ -10,6 +10,7 @@ import {
   type RecordingView,
 } from '@thp/shared';
 import { ApiClientError, apiFetch } from '@/client/api-client';
+import { DownloadedMark } from '../downloads/downloaded-mark';
 import styles from '../screens.module.css';
 
 /**
@@ -118,6 +119,7 @@ export function Library() {
                     <span className={styles.rowDescription}>{recording.description}</span>
                   )}
                   <span className={styles.rowMeta}>{formatDay(recording.recordedAt)}</span>
+                  <DownloadedMark recordingId={recording.id} />
                 </span>
                 <span className={styles.rowChevron} aria-hidden="true">
                   ›

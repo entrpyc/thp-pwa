@@ -14,6 +14,7 @@ export * from './legal';
 export * from './notes';
 export * from './notifications';
 export * from './observability/analytics';
+export * from './offline';
 export * from './onboarding';
 export * from './passwords';
 export * from './playback';

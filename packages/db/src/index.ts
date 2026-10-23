@@ -290,6 +290,12 @@ export {
   type SummaryRow,
 } from './summaries';
 export {
+  findSyncReceipts,
+  insertSyncReceipt,
+  type NewSyncReceipt,
+  type SyncReceiptRow,
+} from './sync';
+export {
   deleteTag,
   ensureTags,
   findTagById,

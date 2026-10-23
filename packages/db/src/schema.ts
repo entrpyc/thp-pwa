@@ -46,6 +46,8 @@ import {
   ROLES,
   SCRIPTURE_ORIGINS,
   SOUND_PROFILE_BOUNDS,
+  SYNC_ENTRY_KINDS,
+  SYNC_RESULT_STATUSES,
   UNFINISHED_JOB_STATUSES,
 } from '@thp/shared';
 
@@ -1908,5 +1910,63 @@ export const highlight = pgTable(
         and (${table.segmentId} is null or ${table.kind} = 'segment')
         and (${table.positionMs} is null or ${table.positionMs} >= 0)`,
     ),
+  ],
+);
+
+/**
+ * **A receipt for one outbox entry** ([3.18.14](docs/project/prd.md), [3.18.15](docs/project/prd.md);
+ * project tdd 5.3) — the one table offline sync needs, and it holds no member content.
+ *
+ * The outbox is flushed over a connection that was just lost and may be lost again: a phone that
+ * sent its entries and never saw the answer sends them again. The client id on each entry (tdd 5.3)
+ * is what makes the second flush harmless, and this row is where the server remembers having seen
+ * it. The write itself landed where every live write lands — `playback_progress`, `note` — so a
+ * receipt is a record that *this flush was handled*, not a second copy of what it wrote. What it
+ * keeps beside the id is what a replay has to answer with: the status, the refusal if there was
+ * one, and for a note the row it became, so a client that missed the first answer can still swap
+ * its pending copy for the real note.
+ *
+ * Keyed on `(user_id, client_id)` rather than on the client id alone: a client id is minted on a
+ * device, and two members' devices are two sources of ids with no reason to agree. A member cannot
+ * collide with themselves — one outbox per account per device, and a uuid per entry.
+ *
+ * `kind`, `status` and `code` are text with a check rather than enums, because they are the wire
+ * vocabulary of `@thp/shared`'s offline contract and a retired status is a row nobody reads again —
+ * the argument `user_onboarding` makes for its id. The checks still derive from the shared lists,
+ * so the column cannot hold a word the contract does not.
+ *
+ * **Deletion follows the README**: `user_id` cascades — a receipt is a fact about the person's own
+ * device and means nothing without them; `note_id` sets null when the note goes, because the
+ * receipt outlives a deleted note the way a log line does, and a replay after the deletion answers
+ * `applied` with no note, which the client reads as "already handled, nothing to show".
+ */
+export const syncReceipt = pgTable(
+  'sync_receipt',
+  {
+    userId: uuid('user_id')
+      .notNull()
+      .references(() => user.id, { onDelete: 'cascade' }),
+    /** The id the device minted for the entry; uuid-shaped, checked by the service, stored as text. */
+    clientId: text('client_id').notNull(),
+    kind: text('kind').notNull(),
+    status: text('status').notNull(),
+    /** The API error code the entry was refused with, or null when it was applied. */
+    code: text('code'),
+    message: text('message'),
+    noteId: uuid('note_id').references(() => note.id, { onDelete: 'set null' }),
+    appliedAt: timestamp('applied_at', { withTimezone: true }).notNull().defaultNow(),
+  },
+  (table) => [
+    primaryKey({ columns: [table.userId, table.clientId] }),
+    check(
+      'sync_receipt_kind',
+      sql`${table.kind} in (${sql.raw(SYNC_ENTRY_KINDS.map((kind) => `'${kind}'`).join(', '))})`,
+    ),
+    check(
+      'sync_receipt_status',
+      sql`${table.status} in (${sql.raw(SYNC_RESULT_STATUSES.filter((status) => status !== 'duplicate').map((status) => `'${status}'`).join(', '))})`,
+    ),
+    /** A refusal names its reason; an application has none. */
+    check('sync_receipt_refusal_whole', sql`(${table.status} = 'refused') = (${table.code} is not null)`),
   ],
 );
