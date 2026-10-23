@@ -306,12 +306,14 @@ export function SignalView({ signalId, canModerate }: { signalId: string; canMod
             />
           ) : null}
           {canModerate ? (
-            <div className={styles.actions}>
-              <button className={styles.secondary} type="button" disabled={busy} onClick={() => void remove()}>
-                Remove prayer request
-              </button>
-              <span className={styles.when}>Admin only. Deletes it and its replies for everybody.</span>
-            </div>
+            <button
+              className={`${styles.secondary} ${styles.raiseFull}`}
+              type="button"
+              disabled={busy}
+              onClick={() => void remove()}
+            >
+              Remove prayer request
+            </button>
           ) : null}
         </section>
       ) : null}
@@ -424,14 +426,14 @@ function CloseForm({
 
   if (!opened) {
     return (
-      <div className={styles.actions}>
-        <button className={styles.secondary} type="button" disabled={busy} onClick={() => setOpened(true)}>
-          Close this prayer request
-        </button>
-        <span className={styles.when}>
-          {withNote ? 'When the situation is resolved. You can leave a closing note.' : 'Admin: ends it for everybody.'}
-        </span>
-      </div>
+      <button
+        className={`${styles.secondary} ${styles.raiseFull}`}
+        type="button"
+        disabled={busy}
+        onClick={() => setOpened(true)}
+      >
+        Close this prayer request
+      </button>
     );
   }
 

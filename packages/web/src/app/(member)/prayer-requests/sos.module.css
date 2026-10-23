@@ -230,7 +230,8 @@
   border-color: var(--color-primary-strong);
 }
 
-/* The submit on the raise form: the primary pill, the full width of the card. */
+/* A pill the full width of its card: the raise form's submit, and the Close and Remove buttons
+ * on a request's page. */
 .raiseFull {
   display: block;
   width: 100%;
