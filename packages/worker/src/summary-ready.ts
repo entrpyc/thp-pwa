@@ -1,4 +1,5 @@
 import { insertNotificationForActiveAdmins, type Executor } from '@thp/db';
+import { deliverPush } from '@thp/push';
 import { ADMIN_REVIEWS_PAGE_PATH, SUMMARY_READY_TITLE } from '@thp/shared';
 import { logger } from '@thp/shared/observability/logger';
 
@@ -26,7 +27,7 @@ export async function notifySummaryReady(
   executor?: Executor,
 ): Promise<void> {
   try {
-    const recipients = await insertNotificationForActiveAdmins(
+    const written = await insertNotificationForActiveAdmins(
       {
         kind: 'summary_ready',
         title: SUMMARY_READY_TITLE,
@@ -39,8 +40,11 @@ export async function notifySummaryReady(
     logger.info('notification.raised', {
       event: 'summary.ready',
       recordingId: input.recordingId,
-      recipients,
+      recipients: written.length,
     });
+    // The second delivery, to each admin's devices (3.17.1). Through the same executor the rows
+    // were written with, so a test handle sees its own rows; it throws nothing.
+    await deliverPush(written, executor === undefined ? {} : { executor });
   } catch (caught) {
     logger.error('notification.failed', {
       event: 'summary.ready',

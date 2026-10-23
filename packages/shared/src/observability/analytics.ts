@@ -56,7 +56,7 @@ export type AnalyticsInstallSource = (typeof ANALYTICS_INSTALL_SOURCES)[number];
 
 const TABS = ['chapters', 'scripture', 'notes', 'transcript'] as const;
 const TAB_SURFACES = ['recording', 'chapter'] as const;
-const NOTIFICATION_CHANNELS = ['in_app'] as const;
+const NOTIFICATION_CHANNELS = ['in_app', 'push'] as const;
 
 /**
  * The route patterns a page view may name — the member-area page files as they stand, with the

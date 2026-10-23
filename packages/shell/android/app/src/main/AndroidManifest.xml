@@ -55,4 +55,10 @@
          lock screen stays empty. Neither needs a runtime prompt, and a media-session notification
          is exempt from Android 13's notification permission. -->
     <uses-permission android:name="android.permission.FOREGROUND_SERVICE_MEDIA_PLAYBACK" />
+    <!-- Push (project prd 3.17.1, 5.2.5). Android 13+ shows no notification without this
+         permission, and it is a runtime prompt: the Capacitor push plugin raises it from
+         requestPermissions(), which the web app calls only from the settings section's button —
+         never on launch (Apple 5.1.2 is the same rule on the other store). FCM itself needs
+         google-services.json beside build.gradle, which stays out of git; see README.md. -->
+    <uses-permission android:name="android.permission.POST_NOTIFICATIONS" />
 </manifest>

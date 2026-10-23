@@ -502,6 +502,44 @@ already had one. `useServiceWorkerUpdate()` in
 `{ updateAvailable }` for a banner or a reload offer; nothing in the UI reads it yet, and nothing
 reloads on its own.
 
+## Push notifications
+
+One event model, two deliveries (project prd 3.17, tdd 6.5). Every notification is a row the
+in-app centre lists; push is a **second delivery of the same row** to each registered device of
+its recipient, gated by the recipient's per-category switch. The centre receives everything
+whatever the switches say (3.17.13), and an admin announcement can be muted like anything else
+(3.17.14).
+
+- **Categories, switches, devices.** [packages/shared/src/push.ts](packages/shared/src/push.ts)
+  declares the four categories (recordings, notes, announcements, admin alerts — the last listed
+  to admins only), maps every notification kind onto one, and states the rule: push is allowed
+  unless the kind's category is switched off. Switches are **on by default** and live on the
+  account (`notification_preference`); devices live in `push_subscription`, one row per endpoint
+  or token, re-pointed to whoever signs in on the device last and deleted on sign-out and when a
+  provider says the device is gone. Both cascade with the account (packages/db/src/README.md).
+- **The section.** `/profile/notifications` shows this device's state, the one button that asks
+  for permission — *Turn on push on this device*, which is the only place the platform prompt is
+  ever raised, never on a page load (Apple guideline 5.1.2) — and a switch per category.
+- **Delivery.** [packages/push](packages/push/src/index.ts) is the dispatcher, server-only like
+  `@thp/db`: `deliverPush(ids)` joins the rows to the devices with the switches applied (one
+  query), sends with bounded concurrency through Web Push, APNs (HTTP/2 with a `.p8` token key)
+  or FCM (HTTP v1), removes devices reported gone, and **throws nothing** — a push service being
+  down is a log line, never a refused reply. The API's notifications service calls it after every
+  raise; the worker calls it for the draft-ready notice. `tools/push-boundary.ts` pins the three
+  sender files as the only ones that reach a provider.
+- **On the device.** In a browser, `public/sw/push.js` shows the notification and lands a press on
+  the row's path (an open tab is focused and navigated, else a window is opened; anything but a
+  path on this origin lands on the centre). In a store shell the OS shows it and
+  `push-shell-listener.tsx` lands the press and refreshes the bell for a push that arrives while
+  the app is open.
+- **Configuration.** Three channels, each optional, all free — see `.env.example` under *Push
+  notifications*. Unset means that channel is skipped with one `push.unconfigured` line per
+  process. `PUSH_TRANSPORT=capture` (what the suite uses, and what `THP_MOCK_EXTERNAL=true`
+  forces) appends every would-be push to `PUSH_CAPTURE_PATH` as JSON lines.
+- **Testing on a device** is manual; packages/shell/README.md has the steps for both stores, and
+  for a browser: deploy with a VAPID pair, open `/profile/notifications`, press the button, then
+  have another account reply to one of your notes.
+
 ## Deployment
 
 The one deployment: **`https://thp.indepthwebsolutions.com`**, on a Contabo Ubuntu VPS at

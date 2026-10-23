@@ -8,5 +8,10 @@
 	<array>
 		<string>applinks:thp.indepthwebsolutions.com</string>
 	</array>
+	<!-- Push (project prd 3.17.1, 5.2.5). `production` is what an App Store or TestFlight build
+	     must carry; Xcode rewrites it to `development` for a build it installs directly, and the
+	     server's APNS_ENVIRONMENT=sandbox is the matching half for testing such a build. -->
+	<key>aps-environment</key>
+	<string>production</string>
 </dict>
 </plist>

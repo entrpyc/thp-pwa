@@ -42,6 +42,7 @@ import {
   type ReportReason,
   type SendAnnouncementPayload,
 } from '@thp/shared';
+import { deliverPush } from '@thp/push';
 import { ApiError } from '@/server/api/errors';
 import type { Actor } from '@/server/auth/policy';
 import { audit } from '@/server/observability/audit';
@@ -69,6 +70,13 @@ import { logger } from '@/server/observability/logger';
  * simply never written: push is a second delivery of the same rows, so a notice that does not
  * exist is never pushed either.
  *
+ * **Every raise ends with the second delivery.** Once the rows are written — and once any
+ * transaction around them has committed — their ids go to `deliverPush` in `@thp/push`, which
+ * reaches every registered device of each recipient whose switch for the kind's category is on
+ * ([3.17.1](docs/project/prd.md), [3.17.13](docs/project/prd.md)). It throws nothing, so a push
+ * service being down is a log line and never a refused reply. The block rule above costs push
+ * nothing extra: a row that is never written is never pushed.
+ *
  * The **reading** half is always about the caller's own rows. The account comes from the session
  * and never from the request, which is why the routes behind it are `SESSION` and no policy action
  * exists for them: there is nothing to authorise that the `where` clause is not already deciding.
@@ -94,7 +102,8 @@ export async function notifyRecordingPublished(input: {
       href: recordingPagePath(input.recordingId),
       recordingId: input.recordingId,
     });
-    return { recordingId: input.recordingId, recipients: written };
+    await deliverPush(written);
+    return { recordingId: input.recordingId, recipients: written.length };
   });
 }
 
@@ -123,6 +132,7 @@ export async function notifyNoteReply(input: {
       noteId: input.noteId,
       actorId: input.replier.id,
     });
+    await deliverPush([row.id]);
     return { notificationId: row.id, noteId: input.noteId };
   });
 }
@@ -144,7 +154,7 @@ export async function notifyNoteReaction(input: {
     if (await isBlockedEitherWay(input.authorId, input.reactor.id)) {
       return { noteId: input.noteId, suppressed: 'blocked' };
     }
-    return withTransaction(async (tx) => {
+    const written = await withTransaction(async (tx) => {
       await deleteReactionNotifications(
         { userId: input.authorId, noteId: input.noteId, actorId: input.reactor.id },
         tx,
@@ -164,6 +174,9 @@ export async function notifyNoteReaction(input: {
       );
       return { notificationId: row.id, noteId: input.noteId };
     });
+    // After the transaction, so a push is never sent for a row a rollback then removed.
+    await deliverPush([written.notificationId]);
+    return written;
   });
 }
 
@@ -191,7 +204,7 @@ export async function notifyNoteReported(input: {
   await raise('note.report', async () => {
     const admins = (await listActiveAdminIds()).filter((id) => id !== input.reporter.id);
     const body = `${REPORT_REASON_LABEL[input.reason]}: ${excerptForNotification(input.noteText)}`;
-    await Promise.all(
+    const rows = await Promise.all(
       admins.map((adminId) =>
         insertNotification(adminId, {
           kind: 'note_reported',
@@ -204,6 +217,7 @@ export async function notifyNoteReported(input: {
         }),
       ),
     );
+    await deliverPush(rows.map((row) => row.id));
     return { reportId: input.reportId, noteId: input.noteId, recipients: admins.length };
   });
 }
@@ -233,7 +247,7 @@ export async function notifyReportResolved(input: {
       ),
     ];
     const removed = input.outcome === 'removed';
-    await Promise.all(
+    const rows = await Promise.all(
       recipients.map((reporterId) =>
         insertNotification(reporterId, {
           kind: 'report_resolved',
@@ -248,6 +262,7 @@ export async function notifyReportResolved(input: {
         }),
       ),
     );
+    await deliverPush(rows.map((row) => row.id));
     return { noteId: input.noteId, outcome: input.outcome, recipients: recipients.length };
   });
 }
@@ -361,9 +376,14 @@ export async function sendAnnouncementFor(
       },
       tx,
     );
-    await setAnnouncementRecipientCount(sent.id, recipients, tx);
-    return { ...sent, recipientCount: recipients };
+    await setAnnouncementRecipientCount(sent.id, recipients.length, tx);
+    return { ...sent, recipientCount: recipients.length, written: recipients };
   });
+
+  // Outside the transaction, so a push never goes out for a send that then rolled back — and
+  // inside `raise`'s rule rather than the route's: the send has happened whether or not the
+  // devices were reached, and `deliverPush` throws nothing anyway.
+  await deliverPush(row.written);
 
   logger.info('announcement.send', {
     ...audit(actor, 'announcement.send', `announcement:${row.id}`),
