@@ -195,13 +195,18 @@ export interface SosReplyView {
   readonly mine: boolean;
   /** ISO 8601. */
   readonly createdAt: string;
+  /**
+   * The thread under a top-level reply, oldest first — one level deep, so a reply inside a thread
+   * always carries an empty list. Removing the top-level reply removes the thread with it.
+   */
+  readonly replies: readonly SosReplyView[];
 }
 
 /** One signal in full — the signal page. */
 export interface SosSignalDetailView extends SosSignalView {
   /** The display names of everybody praying, in the order they pressed. */
   readonly prayingNames: readonly string[];
-  /** Oldest first — a conversation reads downwards. */
+  /** The top-level replies, oldest first — a conversation reads downwards; each carries its thread. */
   readonly replies: readonly SosReplyView[];
 }
 
@@ -237,9 +242,13 @@ export interface CloseSosRequest {
   readonly note?: string | null;
 }
 
-/** Body of `POST /api/v1/sos/{id}/replies`. */
+/**
+ * Body of `POST /api/v1/sos/{id}/replies`. `parentId` names the reply this one answers; absent or
+ * null, it answers the signal itself. Naming a reply inside a thread attaches to the thread's top.
+ */
 export interface ReplyToSosRequest {
   readonly text: string;
+  readonly parentId?: string | null;
 }
 
 // =================================================================================================
@@ -260,6 +269,11 @@ export function sosRaisedNotificationTitle(displayName: string, urgency: SosUrge
  */
 export function sosReplyNotificationTitle(displayName: string): string {
   return `${displayName} replied to your prayer request`;
+}
+
+/** The title a reply's author reads when somebody answers in their thread. */
+export function sosThreadReplyNotificationTitle(displayName: string): string {
+  return `${displayName} replied to you on a prayer request`;
 }
 
 /** What a member reads when the cap refuses an eleventh signal. */

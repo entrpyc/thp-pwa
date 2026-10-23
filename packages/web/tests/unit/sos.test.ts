@@ -9,6 +9,7 @@ import {
   sosPagePath,
   sosRaisedNotificationTitle,
   sosReplyNotificationTitle,
+  sosThreadReplyNotificationTitle,
   sosUrgencyRank,
 } from '@thp/shared';
 
@@ -61,6 +62,7 @@ describe('the cap and the sentences', () => {
   it('names the member and the colour when a signal is raised, and the member on a reply', () => {
     expect(sosRaisedNotificationTitle('Ana', 'red')).toBe('Ana raised a red prayer request');
     expect(sosReplyNotificationTitle('Ben')).toBe('Ben replied to your prayer request');
+    expect(sosThreadReplyNotificationTitle('Cara')).toBe('Cara replied to you on a prayer request');
   });
 
   it('lands a notification on the signal`s page and files both kinds under one switch (3.17.14)', () => {

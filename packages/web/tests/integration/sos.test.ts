@@ -15,6 +15,7 @@ import {
   sosRaisedNotificationTitle,
   sosRepliesPath,
   sosReplyNotificationTitle,
+  sosThreadReplyNotificationTitle,
   sosReplyPath,
   type NotificationListPayload,
   type NotificationView,
@@ -292,6 +293,62 @@ describe('replies', () => {
     expect((await call(sosReplyPath(signal.id, carasReply.id), { method: 'DELETE', cookie: admin.cookie })).code).toBe('not_found');
 
     expect((await call(sosRepliesPath(signal.id), { method: 'POST', cookie: ben.cookie, body: { text: '' } })).code).toBe('invalid_input');
+  });
+
+  it('thread one level deep under a top-level reply, tell the thread`s author, and go with the reply they answer', async () => {
+    const signal = await raised(ana, 'green', `Thread ${RUN}`);
+
+    const top = await call<SosSignalPayload>(sosRepliesPath(signal.id), {
+      method: 'POST',
+      cookie: ben.cookie,
+      body: { text: `Praying ${RUN}` },
+    });
+    const bensReply = top.body.signal.replies[0]!;
+
+    // Cara answers Ben inside his thread.
+    const answered = await call<SosSignalPayload>(sosRepliesPath(signal.id), {
+      method: 'POST',
+      cookie: cara.cookie,
+      body: { text: `Me too ${RUN}`, parentId: bensReply.id },
+    });
+    expect(answered.status).toBe(201);
+    expect(answered.body.signal.replies).toHaveLength(1);
+    expect(answered.body.signal.replies[0]?.replies.map((one) => one.text)).toEqual([`Me too ${RUN}`]);
+    expect(answered.body.signal.replyCount).toBe(2);
+    const carasAnswer = answered.body.signal.replies[0]!.replies[0]!;
+
+    // Answering the answer attaches to the thread's top, so threads stay one level deep.
+    const deeper = await call<SosSignalPayload>(sosRepliesPath(signal.id), {
+      method: 'POST',
+      cookie: ana.cookie,
+      body: { text: `Thank you ${RUN}`, parentId: carasAnswer.id },
+    });
+    expect(deeper.body.signal.replies).toHaveLength(1);
+    expect(deeper.body.signal.replies[0]?.replies.map((one) => one.text)).toEqual([
+      `Me too ${RUN}`,
+      `Thank you ${RUN}`,
+    ]);
+
+    // Ben is told of Cara's answer in his thread and of Ana's; Ana, the author, is told of both replies by others.
+    const bens = about(await inbox(ben), signal.id).filter((one) => one.kind === 'sos_reply');
+    expect(bens.map((one) => one.title).sort()).toEqual(
+      [sosThreadReplyNotificationTitle(cara.displayName), sosThreadReplyNotificationTitle(ana.displayName)].sort(),
+    );
+    const anas = about(await inbox(ana), signal.id).filter((one) => one.kind === 'sos_reply');
+    expect(anas.map((one) => one.title).sort()).toEqual(
+      [sosReplyNotificationTitle(ben.displayName), sosReplyNotificationTitle(cara.displayName)].sort(),
+    );
+
+    // A parent that is not this signal's reply, or not a reply at all, is refused.
+    const other = await raised(cara, 'green', `Other ${RUN}`);
+    expect((await call(sosRepliesPath(other.id), { method: 'POST', cookie: ben.cookie, body: { text: 'x', parentId: bensReply.id } })).code).toBe('invalid_input');
+    expect((await call(sosRepliesPath(signal.id), { method: 'POST', cookie: ben.cookie, body: { text: 'x', parentId: 'nope' } })).code).toBe('invalid_input');
+
+    // Removing the top-level reply takes its thread with it.
+    const removed = await call<SosSignalPayload>(sosReplyPath(signal.id, bensReply.id), { method: 'DELETE', cookie: ben.cookie });
+    expect(removed.status).toBe(200);
+    expect(removed.body.signal.replies).toEqual([]);
+    expect(removed.body.signal.replyCount).toBe(0);
   });
 });
 

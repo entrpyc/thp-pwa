@@ -2,7 +2,7 @@
 
 import Link from 'next/link';
 import { useRouter } from 'next/navigation';
-import { useEffect, useId, useState, type FormEvent } from 'react';
+import { useEffect, useId, useState, type FormEvent, type ReactNode } from 'react';
 import {
   MAX_SOS_CLOSING_NOTE_LENGTH,
   MAX_SOS_REPLY_LENGTH,
@@ -17,6 +17,7 @@ import {
   type CloseSosRequest,
   type ReplyToSosRequest,
   type SosRemovedPayload,
+  type SosReplyView,
   type SosSignalDetailView,
   type SosSignalPayload,
 } from '@thp/shared';
@@ -50,6 +51,8 @@ export function SignalView({ signalId, canModerate }: { signalId: string; canMod
   const [failure, setFailure] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
   const [termsNeeded, setTermsNeeded] = useState(false);
+  /** The top-level reply whose thread has the inline reply box open, if any. */
+  const [answering, setAnswering] = useState<string | null>(null);
 
   useBreadcrumbTrail(
     signal === null ? 'Prayer request' : `${SOS_URGENCY_LABEL[signal.urgency]} prayer request`,
@@ -94,6 +97,29 @@ export function SignalView({ signalId, canModerate }: { signalId: string; canMod
     } finally {
       setBusy(false);
     }
+  }
+
+  /** A reply to the signal, or into one top-level reply's thread. The thread's box closes once sent. */
+  async function sendReply(text: string, parentId: string | null): Promise<boolean> {
+    const sent = await write(sosRepliesPath(signalId), {
+      method: 'POST',
+      body: { text, parentId } satisfies ReplyToSosRequest,
+    });
+    if (sent && parentId !== null) setAnswering(null);
+    return sent;
+  }
+
+  /** Removing a top-level reply takes its thread with it, so one with a thread asks first. */
+  async function removeReply(reply: SosReplyView): Promise<void> {
+    if (busy) return;
+    if (reply.replies.length > 0) {
+      const under =
+        reply.replies.length === 1
+          ? 'the reply under it'
+          : `the ${reply.replies.length} replies under it`;
+      if (!window.confirm(`Remove this reply and ${under}? This cannot be undone.`)) return;
+    }
+    await write(sosReplyPath(signalId, reply.id), { method: 'DELETE' });
   }
 
   async function remove(): Promise<void> {
@@ -205,22 +231,49 @@ export function SignalView({ signalId, canModerate }: { signalId: string; canMod
           <ul className={styles.replies}>
             {signal.replies.map((reply) => (
               <li className={styles.reply} key={reply.id}>
-                <div className={styles.replyHead}>
-                  <AuthorLine author={reply.author} at={reply.createdAt} />
-                  {reply.mine || canModerate ? (
-                    <button
-                      className={styles.quietAction}
-                      type="button"
-                      disabled={busy}
-                      onClick={() =>
-                        void write(sosReplyPath(signalId, reply.id), { method: 'DELETE' })
-                      }
-                    >
-                      Remove
-                    </button>
-                  ) : null}
-                </div>
-                <p className={styles.text}>{reply.text}</p>
+                <ReplyBlock
+                  reply={reply}
+                  busy={busy}
+                  canModerate={canModerate}
+                  onRemove={() => void removeReply(reply)}
+                  action={
+                    open && !termsNeeded && answering !== reply.id ? (
+                      <button
+                        className={styles.quietAction}
+                        type="button"
+                        disabled={busy}
+                        onClick={() => setAnswering(reply.id)}
+                      >
+                        Reply
+                      </button>
+                    ) : null
+                  }
+                />
+                {reply.replies.length === 0 && answering !== reply.id ? null : (
+                  <ul className={styles.thread} aria-label={`Replies to ${reply.author.displayName}`}>
+                    {reply.replies.map((answer) => (
+                      <li className={styles.threadReply} key={answer.id}>
+                        <ReplyBlock
+                          reply={answer}
+                          busy={busy}
+                          canModerate={canModerate}
+                          onRemove={() => void removeReply(answer)}
+                          action={null}
+                        />
+                      </li>
+                    ))}
+                    {answering === reply.id ? (
+                      <li className={styles.threadReply}>
+                        <ReplyForm
+                          busy={busy}
+                          label={`Reply to ${reply.author.displayName}`}
+                          onCancel={() => setAnswering(null)}
+                          onSend={(text) => sendReply(text, reply.id)}
+                        />
+                      </li>
+                    ) : null}
+                  </ul>
+                )}
               </li>
             ))}
           </ul>
@@ -228,7 +281,11 @@ export function SignalView({ signalId, canModerate }: { signalId: string; canMod
         {termsNeeded ? (
           <TermsPrompt onAccepted={() => setTermsNeeded(false)} onDismiss={() => setTermsNeeded(false)} />
         ) : open ? (
-          <ReplyForm busy={busy} onSend={(text) => write(sosRepliesPath(signalId), { method: 'POST', body: { text } satisfies ReplyToSosRequest })} />
+          <ReplyForm
+            busy={busy}
+            label="A word of encouragement or scripture"
+            onSend={(text) => sendReply(text, null)}
+          />
         ) : (
           <p className={styles.quiet}>This prayer request has been resolved. Replies are closed.</p>
         )}
@@ -262,12 +319,49 @@ export function SignalView({ signalId, canModerate }: { signalId: string; canMod
   );
 }
 
+/** One reply as drawn — who, when, the text, and the quiet actions at the right: Reply and Remove. */
+function ReplyBlock({
+  reply,
+  busy,
+  canModerate,
+  action,
+  onRemove,
+}: {
+  reply: SosReplyView;
+  busy: boolean;
+  canModerate: boolean;
+  action: ReactNode;
+  onRemove: () => void;
+}) {
+  return (
+    <>
+      <div className={styles.replyHead}>
+        <AuthorLine author={reply.author} at={reply.createdAt} />
+        <span className={styles.replyActions}>
+          {action}
+          {reply.mine || canModerate ? (
+            <button className={styles.quietAction} type="button" disabled={busy} onClick={onRemove}>
+              Remove
+            </button>
+          ) : null}
+        </span>
+      </div>
+      <p className={styles.text}>{reply.text}</p>
+    </>
+  );
+}
+
 function ReplyForm({
   busy,
+  label,
   onSend,
+  onCancel,
 }: {
   busy: boolean;
+  label: string;
   onSend: (text: string) => Promise<boolean>;
+  /** Present on the inline box inside a thread, which can be closed again unsent. */
+  onCancel?: () => void;
 }) {
   const id = useId();
   const [text, setText] = useState('');
@@ -281,9 +375,9 @@ function ReplyForm({
   }
 
   return (
-    <form className={styles.field} onSubmit={onSubmit} aria-label="Reply">
+    <form className={styles.field} onSubmit={onSubmit} aria-label={label}>
       <label className={styles.fieldLabel} htmlFor={id}>
-        A word of encouragement or scripture
+        {label}
       </label>
       <textarea
         className={styles.textArea}
@@ -291,6 +385,7 @@ function ReplyForm({
         rows={3}
         value={text}
         placeholder="Everybody will read it."
+        autoFocus={onCancel !== undefined}
         onChange={(event) => setText(event.target.value)}
       />
       <p className={over ? styles.countOver : styles.count}>
@@ -302,6 +397,11 @@ function ReplyForm({
         <button className={styles.primary} type="submit" disabled={busy || count === 0 || over}>
           Reply
         </button>
+        {onCancel === undefined ? null : (
+          <button className={styles.secondary} type="button" disabled={busy} onClick={onCancel}>
+            Cancel
+          </button>
+        )}
       </div>
     </form>
   );

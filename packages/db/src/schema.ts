@@ -18,6 +18,7 @@ import {
   uniqueIndex,
   uuid,
   vector,
+  type AnyPgColumn,
 } from 'drizzle-orm/pg-core';
 import {
   ANNOUNCEMENT_KINDS,
@@ -2182,11 +2183,17 @@ export const sosPraying = pgTable(
 );
 
 /**
- * **A word of encouragement or scripture under a signal** ([3.16.6](docs/project/prd.md)). Flat —
- * no threads, no edits ([3.16.6](docs/project/prd.md) asks for a short message, and the operator
- * decided a reply is deleted or left, never rewritten), so the row is the text, who wrote it and
- * when. Cascades with the signal and with its author: a reply is addressed to one person's request
- * and is nothing once either the request or the replier is gone.
+ * **A word of encouragement or scripture under a signal** ([3.16.6](docs/project/prd.md)). No
+ * edits ([3.16.6](docs/project/prd.md) asks for a short message, and the operator decided a reply
+ * is deleted or left, never rewritten), so the row is the text, who wrote it and when. Cascades
+ * with the signal and with its author: a reply is addressed to one person's request and is
+ * nothing once either the request or the replier is gone.
+ *
+ * **One level of threads**, by the operator's later decision: `parent_id` names the reply this
+ * one answers, or is null for a reply to the signal itself. The service keeps every parent a
+ * top-level reply — a reply to a reply inside a thread is attached to the thread's top — so the
+ * column is a single self-reference rather than `note`'s generated-column fence. A removed reply
+ * takes its thread with it, through the cascade.
  */
 export const sosReply = pgTable(
   'sos_reply',
@@ -2198,12 +2205,18 @@ export const sosReply = pgTable(
     authorId: uuid('author_id')
       .notNull()
       .references(() => user.id, { onDelete: 'cascade' }),
+    /** The top-level reply this one answers, or null for a reply to the signal itself. */
+    parentId: uuid('parent_id').references((): AnyPgColumn => sosReply.id, {
+      onDelete: 'cascade',
+    }),
     text: text('text').notNull(),
     createdAt: timestamp('created_at', { withTimezone: true }).notNull().defaultNow(),
   },
   (table) => [
     /** The conversation's order: one signal's replies, oldest first. */
     index('sos_reply_signal_created_idx').on(table.signalId, table.createdAt),
+    /** A thread's order: one reply's answers, oldest first. */
+    index('sos_reply_parent_created_idx').on(table.parentId, table.createdAt),
     check(
       'sos_reply_text_length',
       sql`char_length(${table.text}) between 1 and ${sql.raw(String(MAX_SOS_REPLY_LENGTH))}`,

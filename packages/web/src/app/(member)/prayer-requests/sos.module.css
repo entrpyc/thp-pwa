@@ -401,6 +401,31 @@
   gap: var(--space-3);
 }
 
+.replyActions {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--space-3);
+  flex-shrink: 0;
+}
+
+/* The thread under a top-level reply: stepped in behind a rule, so the answers read as answers
+ * to the reply above rather than as replies to the signal. The inline reply box is its last item. */
+.thread {
+  list-style: none;
+  margin: var(--space-2) 0 0;
+  padding: 0 0 0 var(--space-4);
+  border-left: 2px solid var(--color-border);
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-4);
+}
+
+.threadReply {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-2);
+}
+
 /* A row's one quiet action — Remove on a reply. Text, not a button shape. */
 .quietAction {
   background: transparent;

@@ -64,6 +64,8 @@ export interface SosReplyRow {
   readonly id: string;
   readonly signalId: string;
   readonly authorId: string;
+  /** The top-level reply this one answers, or null for a reply to the signal itself. */
+  readonly parentId: string | null;
   readonly text: string;
   readonly createdAt: Date;
   readonly authorDisplayName: string;
@@ -73,6 +75,7 @@ export interface SosReplyRow {
 export interface NewSosReply {
   readonly signalId: string;
   readonly authorId: string;
+  readonly parentId: string | null;
   readonly text: string;
 }
 
@@ -91,6 +94,7 @@ const REPLY_COLUMNS = {
   id: sosReply.id,
   signalId: sosReply.signalId,
   authorId: sosReply.authorId,
+  parentId: sosReply.parentId,
   text: sosReply.text,
   createdAt: sosReply.createdAt,
   authorDisplayName: user.displayName,
@@ -313,7 +317,12 @@ export async function insertSosReply(
 ): Promise<SosReplyRow> {
   const inserted = await queryable(executor)
     .insert(sosReply)
-    .values({ signalId: input.signalId, authorId: input.authorId, text: input.text })
+    .values({
+      signalId: input.signalId,
+      authorId: input.authorId,
+      parentId: input.parentId,
+      text: input.text,
+    })
     .returning({ id: sosReply.id });
   const id = inserted[0]?.id;
   if (id === undefined) throw new Error('insertSosReply returned no row');

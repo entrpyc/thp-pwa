@@ -35,6 +35,7 @@ import {
   sosPagePath,
   sosRaisedNotificationTitle,
   sosReplyNotificationTitle,
+  sosThreadReplyNotificationTitle,
   type AnnouncementListPayload,
   type AnnouncementView,
   type NotificationListPayload,
@@ -320,6 +321,36 @@ export async function notifySosReply(input: {
     const row = await insertNotification(input.authorId, {
       kind: 'sos_reply',
       title: sosReplyNotificationTitle(input.replier.displayName),
+      body: excerptForNotification(input.replyText),
+      href: sosPagePath(input.signalId),
+      actorId: input.replier.id,
+      sosSignalId: input.signalId,
+    });
+    await deliverPush([row.id]);
+    return { notificationId: row.id, signalId: input.signalId };
+  });
+}
+
+/**
+ * A reply inside a thread tells the thread's author too — unless they are the replier, or the
+ * signal's author, who {@link notifySosReply} has already told. Same kind, same landing.
+ */
+export async function notifySosThreadReply(input: {
+  readonly signalId: string;
+  readonly signalAuthorId: string;
+  readonly threadAuthorId: string;
+  readonly replier: Actor;
+  readonly replyText: string;
+}): Promise<void> {
+  if (input.threadAuthorId === input.replier.id) return;
+  if (input.threadAuthorId === input.signalAuthorId) return;
+  await raise('sos.thread_reply', async () => {
+    if (await isBlockedEitherWay(input.threadAuthorId, input.replier.id)) {
+      return { signalId: input.signalId, suppressed: 'blocked' };
+    }
+    const row = await insertNotification(input.threadAuthorId, {
+      kind: 'sos_reply',
+      title: sosThreadReplyNotificationTitle(input.replier.displayName),
       body: excerptForNotification(input.replyText),
       href: sosPagePath(input.signalId),
       actorId: input.replier.id,

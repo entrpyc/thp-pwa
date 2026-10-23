@@ -40,7 +40,11 @@ import { ApiError } from '@/server/api/errors';
 import { authorise } from '@/server/auth/authorise';
 import { can, type Actor } from '@/server/auth/policy';
 import { BLOCKED_WORD_MESSAGE, findBlockedWord } from '@/server/notes/filter';
-import { notifySosRaised, notifySosReply } from '@/server/notifications/service';
+import {
+  notifySosRaised,
+  notifySosReply,
+  notifySosThreadReply,
+} from '@/server/notifications/service';
 import { audit } from '@/server/observability/audit';
 import { logger } from '@/server/observability/logger';
 import { mintArtworkGrant } from '@/server/series/artwork-grant';
@@ -163,6 +167,11 @@ export async function clearPrayingFor(actor: Actor, signalId: string): Promise<S
  * Reply ([3.16.6](docs/project/prd.md)). The author is told ([3.16.7](docs/project/prd.md)) unless
  * the author is the one replying. The block rule needs no second question here: a signal by a
  * member either side of a block is one `requireVisible` already answered `not_found` for.
+ *
+ * **In a thread**, when the body names a parent: the parent must be one of this signal's replies,
+ * and a parent that is itself inside a thread stands for the thread's top, so threads stay one
+ * level deep whatever the client sends. The thread's author is told too, unless they are the
+ * replier or the signal's author.
  */
 export async function replyFor(actor: Actor, signalId: string, body: unknown): Promise<SosSignalPayload> {
   authorise(actor, 'sos.respond', `sos:${signalId}`);
@@ -177,11 +186,24 @@ export async function replyFor(actor: Actor, signalId: string, body: unknown): P
     field: 'reply',
   });
   requireAllowedWords(actor, text, 'sos.respond', `sos:${signalId}`);
+  const thread = await parseParent(fields['parentId'], signalId);
 
-  await insertSosReply({ signalId, authorId: actor.id, text });
-  logger.info('sos.reply', audit(actor, 'sos.respond', `sos:${signalId}`));
+  await insertSosReply({ signalId, authorId: actor.id, parentId: thread?.id ?? null, text });
+  logger.info('sos.reply', {
+    ...audit(actor, 'sos.respond', `sos:${signalId}`),
+    parentId: thread?.id ?? null,
+  });
 
   await notifySosReply({ signalId, authorId: signal.authorId, replier: actor, replyText: text });
+  if (thread !== null) {
+    await notifySosThreadReply({
+      signalId,
+      signalAuthorId: signal.authorId,
+      threadAuthorId: thread.authorId,
+      replier: actor,
+      replyText: text,
+    });
+  }
 
   return { signal: await detail(await requireVisible(actor, signalId), actor) };
 }
@@ -335,8 +357,35 @@ async function detail(row: SosSignalListRow, actor: Actor): Promise<SosSignalDet
   return {
     ...describeSignal(row, actor, avatars),
     prayingNames,
-    replies: replies.map((reply) => describeReply(reply, actor, avatars)),
+    replies: threaded(replies, actor, avatars),
   };
+}
+
+/**
+ * The flat, oldest-first list as threads: each top-level reply carrying the replies that answer
+ * it. A reply whose parent the viewer may not see (a block hides it) is listed at the top level
+ * rather than dropped, so the count on the row and the replies under it still agree.
+ */
+function threaded(
+  rows: readonly SosReplyRow[],
+  reader: Actor,
+  avatars: ReadonlyMap<string, string>,
+): SosReplyView[] {
+  const tops = new Map<string, { view: SosReplyView; replies: SosReplyView[] }>();
+  const orphans: SosReplyView[] = [];
+  for (const row of rows) {
+    if (row.parentId === null) {
+      const replies: SosReplyView[] = [];
+      tops.set(row.id, { view: describeReply(row, reader, avatars, replies), replies });
+    }
+  }
+  for (const row of rows) {
+    if (row.parentId === null) continue;
+    const top = tops.get(row.parentId);
+    if (top === undefined) orphans.push(describeReply(row, reader, avatars, []));
+    else top.replies.push(describeReply(row, reader, avatars, []));
+  }
+  return [...[...tops.values()].map((top) => top.view), ...orphans];
 }
 
 function describeSignal(
@@ -359,13 +408,19 @@ function describeSignal(
   };
 }
 
-function describeReply(row: SosReplyRow, reader: Actor, avatars: ReadonlyMap<string, string>): SosReplyView {
+function describeReply(
+  row: SosReplyRow,
+  reader: Actor,
+  avatars: ReadonlyMap<string, string>,
+  replies: SosReplyView[],
+): SosReplyView {
   return {
     id: row.id,
     text: row.text,
     author: author(row.authorId, row.authorDisplayName, row.authorAvatarKey, avatars),
     mine: row.authorId === reader.id,
     createdAt: row.createdAt.toISOString(),
+    replies,
   };
 }
 
@@ -401,6 +456,27 @@ async function signAvatars(keys: readonly (string | null)[]): Promise<ReadonlyMa
 function parseStatus(value: string): SosStatus {
   if (isSosStatus(value)) return value;
   throw ApiError.invalidInput('Ask for the open prayer requests or the resolved ones.');
+}
+
+const UUID_PATTERN = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
+
+/**
+ * The reply a new one answers, or `null` for a reply to the signal itself. Must be one of this
+ * signal's; a parent inside a thread stands for the thread's top.
+ */
+async function parseParent(value: unknown, signalId: string): Promise<SosReplyRow | null> {
+  if (value === undefined || value === null) return null;
+  if (typeof value !== 'string' || !UUID_PATTERN.test(value)) {
+    throw ApiError.invalidInput('Name the reply to answer, or leave it out.');
+  }
+  const named = await findSosReplyById(value);
+  if (named === null || named.signalId !== signalId) {
+    throw ApiError.invalidInput('The reply to answer is not on this prayer request.');
+  }
+  if (named.parentId === null) return named;
+  const top = await findSosReplyById(named.parentId);
+  if (top === null) throw ApiError.invalidInput('The reply to answer is not on this prayer request.');
+  return top;
 }
 
 function asObject(body: unknown, complaint: string): Record<string, unknown> {
