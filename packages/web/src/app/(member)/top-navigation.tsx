@@ -1,17 +1,20 @@
 'use client';
 
 import Link from 'next/link';
-import { useEffect, useRef, useState } from 'react';
+import { useRouter } from 'next/navigation';
+import { useEffect, useRef, useState, type FormEvent } from 'react';
 import {
   ADMIN_PAGE_PATH,
   DASHBOARD_PAGE_PATH,
   FEEDBACK_PAGE_PATH,
+  MAX_SEARCH_QUERY_LENGTH,
   MEMBER_LIBRARY_PAGE_PATH,
   MEMBER_SERIES_PAGE_PATH,
   NEW_USER_ONBOARDING_ID,
   NOTIFICATIONS_PAGE_PATH,
   PROFILE_PAGE_PATH,
   onboardingPagePath,
+  searchPagePath,
 } from '@thp/shared';
 import { SignOutButton } from '../sign-out-button';
 import { InstallApp } from './install-app';
@@ -22,12 +25,18 @@ import styles from './member.module.css';
 /**
  * **The top navigation** — `top-navigation/default.png` and `top-navigation/menu-opened.png`.
  *
- * One dark rounded bar: home icon, chevron separators, the current item in the accent, and the menu
- * boxed on the right. What the references show and this does **not** render is the point of the
- * component:
+ * One dark rounded bar: home icon, chevron separators, the current item in the accent, and the
+ * magnifier and the menu boxed on the right. What the references show and this does **not** render
+ * is the point of the component:
  *
- * - **No search control.** [§3.10](docs/project/prd.md) is deferred whole, and a magnifier that
- *   opened nothing would be a promise this epic cannot keep.
+ * - **The search control arrived with [§3.10](docs/project/prd.md)** — `top-navigation/search.png`.
+ *   The magnifier opens a second bar under the first, the reference's own shape: magnifier, the
+ *   query, a clear control at the right. Enter goes to the results page; nothing is searched until
+ *   then, because every search is one provider call and the operator chose a search that runs on
+ *   Enter over one that runs on every pause in typing. The reference also draws a preview result
+ *   and *View all results* under the box, and that is what the Enter-only decision drops: the box
+ *   here is a way to the results page, and the page is where results are. A search box on every
+ *   screen is [3.10.1](docs/project/prd.md)'s "from anywhere in the app".
  * - **No *All chapters*.** Chapters have no model in this epic at all. *All series* **arrived in
  *   Story 6** and sits where the reference puts it — between *Dashboard* and *All recordings* —
  *   which is what the dropped-not-disabled rule buys: a destination lands in a slot that already
@@ -113,6 +122,86 @@ function Bell() {
   );
 }
 
+function SearchIcon() {
+  return (
+    <svg viewBox="0 0 24 24" width="18" height="18" aria-hidden="true" focusable="false">
+      <circle cx="11" cy="11" r="6.5" fill="none" stroke="currentColor" strokeWidth="1.8" />
+      <path d="M16 16l4.5 4.5" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" />
+    </svg>
+  );
+}
+
+function ClearIcon() {
+  return (
+    <svg viewBox="0 0 24 24" width="14" height="14" aria-hidden="true" focusable="false">
+      <path d="M6 6l12 12M18 6L6 18" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" />
+    </svg>
+  );
+}
+
+/**
+ * **The search bar** — `top-navigation/search.png`'s second bar, drawn under the first while the
+ * magnifier is open. One field, submitted on Enter to the results page; the clear control at the
+ * right empties the field when it holds something and closes the bar when it does not, which is
+ * the two things an × on a search field means.
+ *
+ * The field is focused the moment the bar opens, because a member who pressed a magnifier has
+ * said what they want to do next. Escape closes it, as it closes the menu.
+ */
+function SearchBar({ onClose }: { onClose: () => void }) {
+  const router = useRouter();
+  const [query, setQuery] = useState('');
+  const fieldRef = useRef<HTMLInputElement>(null);
+
+  useEffect(() => {
+    fieldRef.current?.focus();
+  }, []);
+
+  function submit(event: FormEvent<HTMLFormElement>) {
+    event.preventDefault();
+    const trimmed = query.trim();
+    if (trimmed === '') return;
+    router.push(searchPagePath({ query: trimmed }));
+    onClose();
+  }
+
+  return (
+    <form className={styles.searchBar} role="search" onSubmit={submit}>
+      <span className={styles.searchGlyph} aria-hidden="true">
+        <SearchIcon />
+      </span>
+      <input
+        ref={fieldRef}
+        className={styles.searchField}
+        type="search"
+        name="q"
+        aria-label="Search the library"
+        placeholder="Search the library"
+        value={query}
+        maxLength={MAX_SEARCH_QUERY_LENGTH}
+        autoComplete="off"
+        enterKeyHint="search"
+        onChange={(event) => setQuery(event.target.value)}
+      />
+      <button
+        className={styles.searchClear}
+        type="button"
+        aria-label={query === '' ? 'Close search' : 'Clear search'}
+        onClick={() => {
+          if (query === '') {
+            onClose();
+          } else {
+            setQuery('');
+            fieldRef.current?.focus();
+          }
+        }}
+      >
+        <ClearIcon />
+      </button>
+    </form>
+  );
+}
+
 function MenuIcon() {
   return (
     <svg viewBox="0 0 24 24" width="18" height="18" aria-hidden="true" focusable="false">
@@ -129,6 +218,7 @@ function MenuIcon() {
 
 export function TopNavigation({ canSeeConsole }: { canSeeConsole: boolean }) {
   const [open, setOpen] = useState(false);
+  const [searching, setSearching] = useState(false);
   const { ancestors, current } = useBreadcrumbTrailValue();
   const regionRef = useRef<HTMLDivElement>(null);
 
@@ -137,18 +227,26 @@ export function TopNavigation({ canSeeConsole }: { canSeeConsole: boolean }) {
    * of a menu, and the only way out on touch, where there is no Escape. `pointerdown` rather than
    * `click`, so the menu is gone before the press lands on whatever was underneath it, and the
    * listeners exist only while the menu is open.
+   *
+   * The search bar closes the same two ways, for the same reasons — and the two are one effect
+   * because they are one behaviour: whatever the bar has open goes away on a press elsewhere.
    */
   useEffect(() => {
-    if (!open) return;
+    if (!open && !searching) return;
+
+    function closeAll() {
+      setOpen(false);
+      setSearching(false);
+    }
 
     function onPointerDown(event: PointerEvent) {
       const target = event.target;
       if (target instanceof Node && regionRef.current?.contains(target)) return;
-      setOpen(false);
+      closeAll();
     }
 
     function onKeyDown(event: KeyboardEvent) {
-      if (event.key === 'Escape') setOpen(false);
+      if (event.key === 'Escape') closeAll();
     }
 
     document.addEventListener('pointerdown', onPointerDown);
@@ -157,7 +255,7 @@ export function TopNavigation({ canSeeConsole }: { canSeeConsole: boolean }) {
       document.removeEventListener('pointerdown', onPointerDown);
       document.removeEventListener('keydown', onKeyDown);
     };
-  }, [open]);
+  }, [open, searching]);
 
   return (
     <div className={styles.navRegion} ref={regionRef}>
@@ -196,18 +294,40 @@ export function TopNavigation({ canSeeConsole }: { canSeeConsole: boolean }) {
         </ol>
 
         <div className={styles.navControls}>
+          {/*
+            The magnifier, where `search.png` boxes it: left of the menu, the bell's own shape. A
+            toggle — pressing it again closes the bar — and opening it closes the menu, so the two
+            panels never hang under the bar at once.
+          */}
+          <button
+            className={styles.searchButton}
+            type="button"
+            aria-expanded={searching}
+            aria-label="Search"
+            onClick={() => {
+              setSearching((was) => !was);
+              setOpen(false);
+            }}
+          >
+            <SearchIcon />
+          </button>
           <Bell />
           <button
             className={styles.menuButton}
             type="button"
             aria-expanded={open}
             aria-label="Menu"
-            onClick={() => setOpen((was) => !was)}
+            onClick={() => {
+              setOpen((was) => !was);
+              setSearching(false);
+            }}
           >
             <MenuIcon />
           </button>
         </div>
       </nav>
+
+      {searching ? <SearchBar onClose={() => setSearching(false)} /> : null}
 
       {open ? (
         <div className={styles.menuPanel}>

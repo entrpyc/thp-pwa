@@ -1,0 +1,220 @@
+/*
+ * The results page ([3.10](docs/project/prd.md)) — `top-navigation/search.png`'s result card,
+ * repeated: an accent rail at the left, a kind label in the accent, the title with the moment at
+ * the right, and the passage under it. Everything is the token layer; the one solid fill is the
+ * submit control, as it is on every form in the product.
+ */
+
+.searchForm {
+  display: flex;
+  align-items: stretch;
+  gap: var(--space-3);
+}
+
+.queryField {
+  flex: 1 1 auto;
+  min-width: 0;
+  display: flex;
+}
+
+.srOnly {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  overflow: hidden;
+  clip: rect(0 0 0 0);
+  white-space: nowrap;
+}
+
+/* The bar's own recipe, so the box on the page and the box under the navigation are one thing. */
+.queryInput {
+  width: 100%;
+  background: var(--color-bg-deep);
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-lg);
+  padding: var(--space-3) var(--space-4);
+  color: var(--color-text);
+  font-family: inherit;
+  font-size: var(--fs-card-title);
+}
+
+.queryInput::placeholder {
+  color: var(--color-text-dim);
+}
+
+.queryInput:focus {
+  outline: none;
+  border-color: var(--color-primary-strong);
+}
+
+.submit {
+  flex: none;
+  background: var(--color-primary);
+  color: var(--color-text);
+  border: 1px solid var(--color-primary);
+  border-radius: var(--radius-lg);
+  padding: var(--space-3) var(--space-5);
+  font-family: inherit;
+  font-size: var(--fs-body);
+  font-weight: 600;
+  cursor: pointer;
+}
+
+/* ---------------------------------------------------------------------------------- the filters */
+
+/*
+ * One row that wraps: five narrow controls and a switch. A `fieldset` because they are one
+ * question — how far to narrow — and the browser's default frame is removed so they read as a
+ * row of pills rather than a boxed form.
+ */
+.filters {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: flex-end;
+  gap: var(--space-3);
+  margin: 0;
+  padding: 0;
+  border: none;
+  min-width: 0;
+}
+
+.filter {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-1);
+  flex: 1 1 9rem;
+  min-width: 0;
+}
+
+.filterLabel {
+  font-size: var(--fs-meta);
+  color: var(--color-text-muted);
+}
+
+.select {
+  width: 100%;
+  background: var(--color-surface-raised);
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-sm);
+  padding: var(--space-2) var(--space-3);
+  color: var(--color-text);
+  font-family: inherit;
+  font-size: var(--fs-body);
+  line-height: 1.4;
+  color-scheme: dark;
+}
+
+.select:hover {
+  border-color: var(--color-border-strong);
+}
+
+.toggle {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--space-2);
+  padding: var(--space-2) 0;
+  color: var(--color-text);
+  font-size: var(--fs-body);
+  cursor: pointer;
+}
+
+/* The words-only notice: a status, not a failure — the quiet voice on the raised surface. */
+.notice {
+  margin: 0;
+  background: var(--color-surface-raised);
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-md);
+  padding: var(--space-3) var(--space-4);
+  font-size: var(--fs-meta);
+  color: var(--color-text-muted);
+}
+
+/* ---------------------------------------------------------------------------------- the results */
+
+.results {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-3);
+}
+
+/* `search.png`'s card: the surface, with the accent rail down its left edge. */
+.result {
+  background: var(--color-surface);
+  border: 1px solid var(--color-border);
+  border-left: 3px solid var(--color-primary);
+  border-radius: var(--radius-md);
+  overflow: hidden;
+}
+
+.hit {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-1);
+  padding: var(--space-4) var(--space-5);
+  text-decoration: none;
+  color: inherit;
+}
+
+.hit:hover {
+  background: var(--color-surface-raised);
+}
+
+.hitHead {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: var(--space-3);
+}
+
+/* `RECORDING`, in the accent, small caps by letter-spacing rather than by a second font. */
+.hitKind {
+  font-size: var(--fs-meta);
+  font-weight: 600;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  color: var(--color-primary);
+}
+
+.hitTime {
+  font-size: var(--fs-body);
+  color: var(--color-text-muted);
+  font-variant-numeric: tabular-nums;
+}
+
+.hitTitle {
+  font-size: var(--fs-card-title);
+  font-weight: 600;
+  color: var(--color-text);
+}
+
+.hitMeta {
+  font-size: var(--fs-meta);
+  color: var(--color-text-dim);
+}
+
+/*
+ * The passage in context ([3.10.6](docs/project/prd.md)): the neighbouring lines in the dim
+ * voice, the matched line in the body voice, run together as the sentence they are. Clamped to a
+ * few lines so a long note does not become the page.
+ */
+.passage {
+  margin-top: var(--space-2);
+  font-size: var(--fs-body);
+  line-height: 1.5;
+  display: -webkit-box;
+  -webkit-box-orient: vertical;
+  -webkit-line-clamp: 4;
+  overflow: hidden;
+  overflow-wrap: anywhere;
+}
+
+.context {
+  color: var(--color-text-dim);
+}
+
+.match {
+  color: var(--color-text);
+}

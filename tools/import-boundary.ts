@@ -32,8 +32,12 @@ const DATABASE_PACKAGES = ['@thp/db'];
  * lives beside both rather than inside either (scope plan 3.1.1).
  * A client that imported it would be a client holding the source's configuration and calling the
  * source from the browser — which is neither cached nor authorised.
+ *
+ * `@thp/embed` joined with semantic search ([3.10](docs/project/prd.md)), by the same route again:
+ * the worker embeds the rows and the API embeds the query, so the adapter sits between them. It
+ * reads the provider key, and a client that imported it would ship that key to the browser.
  */
-const SERVER_ONLY_PACKAGES = ['@thp/media', '@thp/bible'];
+const SERVER_ONLY_PACKAGES = ['@thp/media', '@thp/bible', '@thp/embed'];
 const DATABASE_DRIVERS = ['postgres', 'pg', 'pg-native', 'drizzle-orm', 'drizzle-kit'];
 
 /** `import x from 'y'`, `export * from 'y'`, `import('y')`, `require('y')` — specifier in group 1 or 2. */

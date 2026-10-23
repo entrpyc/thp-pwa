@@ -80,4 +80,5 @@ export const rules: PolicyRules = {
   'note.report': { roles: { admin: true, member: true } },
   'report.list': { roles: { admin: true, member: false } },
   'report.resolve': { roles: { admin: true, member: false } },
+  'search.query': { roles: { admin: true, member: true } },
 };
