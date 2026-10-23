@@ -165,42 +165,6 @@
   background: var(--color-sos-green);
 }
 
-/* The board's and the card's heading row: a title, and the way to raise one at its right. */
-.boardHead {
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  gap: var(--space-4);
-  flex-wrap: wrap;
-}
-
-/* The four counts on the card — one chip per colour, the dot and the number. */
-.chips {
-  display: flex;
-  flex-wrap: wrap;
-  gap: var(--space-2);
-  list-style: none;
-  margin: 0;
-  padding: 0;
-}
-
-.chip {
-  display: inline-flex;
-  align-items: center;
-  gap: var(--space-2);
-  border: 1px solid var(--color-border);
-  border-radius: var(--radius-pill);
-  padding: var(--space-1) var(--space-3);
-  font-size: var(--fs-meta);
-  color: var(--color-text-muted);
-  font-variant-numeric: tabular-nums;
-}
-
-.chipCount {
-  color: var(--color-text);
-  font-weight: 600;
-}
-
 /* A row's first line: the dot, the urgency word and the author, read as one phrase. */
 .rowLead {
   display: flex;
@@ -226,15 +190,50 @@
 }
 
 /* The card's link into the board, carrying the accent as the landing's other way-in does. */
-.wayIn {
+/* The two ways out of the home card, drawn as full-width pills: Raise a prayer request in the
+ * primary fill, See all outlined. They are links in the markup but buttons to the eye, so the
+ * browser's link underline is turned off. Written out rather than composed, so the classes
+ * cannot stack into a pill inside a pill. */
+.cardAction {
+  display: block;
+  width: 100%;
+  box-sizing: border-box;
+  border-radius: var(--radius-pill);
+  padding: var(--space-3) var(--space-6);
+  color: var(--color-text);
   font-size: var(--fs-body);
-  font-weight: 500;
-  color: var(--color-primary-strong);
+  font-weight: 600;
+  text-align: center;
   text-decoration: none;
 }
 
-.wayIn:hover {
-  text-decoration: underline;
+.cardAction:hover {
+  text-decoration: none;
+}
+
+.cardActionPrimary {
+  background: var(--color-primary);
+  border: 1px solid var(--color-primary);
+}
+
+.cardActionPrimary:hover {
+  background: var(--color-primary-strong);
+  border-color: var(--color-primary-strong);
+}
+
+.cardActionSecondary {
+  background: transparent;
+  border: 1px solid var(--color-border-strong);
+}
+
+.cardActionSecondary:hover {
+  border-color: var(--color-primary-strong);
+}
+
+/* The submit on the raise form: the primary pill, the full width of the card. */
+.raiseFull {
+  display: block;
+  width: 100%;
 }
 
 /* ----------------------------------------------------------------------------- the signal page */
@@ -374,13 +373,17 @@
 }
 
 /* The replies: one panel, rows divided by hairlines, as every list in the product is. */
+/* Each reply opens with a rule; the list closes with one too, so the last reply and the reply box
+ * under it read as two things. The list is only drawn when there are replies, so the rule never
+ * sits under the heading alone. */
 .replies {
   list-style: none;
   margin: 0;
-  padding: 0;
+  padding: 0 0 var(--space-4);
   display: flex;
   flex-direction: column;
   gap: var(--space-4);
+  border-bottom: 1px solid var(--color-border);
 }
 
 .reply {

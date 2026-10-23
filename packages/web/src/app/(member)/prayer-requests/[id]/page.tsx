@@ -5,7 +5,7 @@ import { SignalView } from './signal-view';
 export const dynamic = 'force-dynamic';
 
 /**
- * `/sos/:id` — one signal ([3.16.5](docs/project/prd.md)–[3.16.9](docs/project/prd.md)). The page
+ * `/prayer-requests/:id` — one signal ([3.16.5](docs/project/prd.md)–[3.16.9](docs/project/prd.md)). The page
  * learns once whether this account moderates, so the view can *show* Close and Remove on
  * somebody else's signal; the API is what permits them.
  */

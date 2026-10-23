@@ -92,8 +92,8 @@ export const NOTIFICATION_KIND_LABEL: Record<NotificationKind, string> = {
   note_reported: 'Report',
   report_resolved: 'Report reviewed',
   summary_ready: 'Summary ready',
-  sos_raised: 'SOS',
-  sos_reply: 'SOS reply',
+  sos_raised: 'Prayer request',
+  sos_reply: 'Prayer request reply',
   announcement: 'Announcement',
   new_feature: 'New feature',
 };

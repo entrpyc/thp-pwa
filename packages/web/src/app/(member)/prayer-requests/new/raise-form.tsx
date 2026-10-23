@@ -1,6 +1,5 @@
 'use client';
 
-import Link from 'next/link';
 import { useRouter } from 'next/navigation';
 import { useId, useState, type FormEvent } from 'react';
 import {
@@ -37,10 +36,10 @@ import styles from '../sos.module.css';
 
 const CEILING_LABEL = MAX_SOS_DESCRIPTION_LENGTH.toLocaleString('en-GB');
 
-const FAILED_MESSAGE = 'Could not raise the signal. Your text is still here — try again in a moment.';
+const FAILED_MESSAGE = 'Could not raise the prayer request. Your text is still here — try again in a moment.';
 
 export function RaiseForm() {
-  useBreadcrumbTrail('Raise SOS', [{ label: 'SOS', href: SOS_PAGE_PATH }]);
+  useBreadcrumbTrail('Raise a prayer request', [{ label: 'Prayer requests', href: SOS_PAGE_PATH }]);
   const router = useRouter();
   const descriptionId = useId();
   const errorId = useId();
@@ -79,7 +78,7 @@ export function RaiseForm() {
   return (
     <>
       <header className={styles.pageHead}>
-        <h1 className={styles.pageTitle}>Raise SOS</h1>
+        <h1 className={styles.pageTitle}>Raise a prayer request</h1>
         <p className={styles.pageLead}>
           Everybody in the group is told, whatever the colour. Say how urgent it is and what prayer
           is needed.
@@ -91,7 +90,7 @@ export function RaiseForm() {
           <TermsPrompt onAccepted={() => setTermsNeeded(false)} onDismiss={() => setTermsNeeded(false)} />
         </section>
       ) : (
-        <form className={styles.card} onSubmit={onSubmit} aria-label="Raise SOS">
+        <form className={styles.card} onSubmit={onSubmit} aria-label="Raise a prayer request">
           <div className={styles.kinds} role="group" aria-label="Urgency">
             {SOS_URGENCIES.map((one) => (
               <button
@@ -135,18 +134,13 @@ export function RaiseForm() {
             </p>
           )}
 
-          <div className={styles.actions}>
-            <button
-              className={styles.primary}
-              type="submit"
-              disabled={sending || count === 0 || overLimit}
-            >
-              {sending ? 'Raising…' : 'Raise SOS'}
-            </button>
-            <Link className={styles.link} href={SOS_PAGE_PATH}>
-              Back to the board
-            </Link>
-          </div>
+          <button
+            className={`${styles.primary} ${styles.raiseFull}`}
+            type="submit"
+            disabled={sending || count === 0 || overLimit}
+          >
+            {sending ? 'Raising…' : 'Raise'}
+          </button>
         </form>
       )}
     </>

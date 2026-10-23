@@ -13,7 +13,7 @@ import {
 import { apiFetch } from '@/client/api-client';
 import { DownloadedMark } from './downloads/downloaded-mark';
 import { usePlayer } from './player-context';
-import { SosCard } from './sos/sos-card';
+import { SosCard } from './prayer-requests/sos-card';
 import styles from './screens.module.css';
 
 /**
@@ -22,7 +22,8 @@ import styles from './screens.module.css';
  * The reference has three cards. One ships:
  *
  * - **Resume recording** — Story 4's, and the marquee behaviour behind it.
- * - **View all series**. Story 4 shipped this row pointing at the library, because series did not
+ * - **View all series** — first on the screen, above the cards, by the operator's decision.
+ *   Story 4 shipped this row pointing at the library, because series did not
  *   exist yet; Story 6 gives it the destination the reference draws. *All recordings* did not
  *   disappear with it — it is an entry in the menu, beside *All series*, which is where
  *   `top-navigation/menu-opened.png` puts both.
@@ -86,6 +87,13 @@ export function Landing() {
       */}
       <h1 className={styles.hiddenTitle}>Dashboard</h1>
 
+      <Link className={styles.wayIn} href={MEMBER_SERIES_PAGE_PATH}>
+        <span className={styles.wayInLabel}>View all series</span>
+        <span className={styles.wayInArrow} aria-hidden="true">
+          →
+        </span>
+      </Link>
+
       {/*
         `loaded` is only the gate on the *fetched* row — it is what stops a card appearing and then
         being replaced a moment later. A teaching already in the player needs no such wait: it is
@@ -113,13 +121,6 @@ export function Landing() {
       ) : null}
 
       <SosCard />
-
-      <Link className={styles.wayIn} href={MEMBER_SERIES_PAGE_PATH}>
-        <span className={styles.wayInLabel}>View all series</span>
-        <span className={styles.wayInArrow} aria-hidden="true">
-          →
-        </span>
-      </Link>
     </>
   );
 }

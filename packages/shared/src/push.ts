@@ -80,7 +80,7 @@ export const NOTIFICATION_CATEGORY_LABEL: Record<NotificationCategory, string> =
   notes: 'Your notes',
   announcements: 'Announcements',
   admin_alerts: 'Admin alerts',
-  sos: 'SOS signals',
+  sos: 'Prayer requests',
 };
 
 export const NOTIFICATION_CATEGORY_DESCRIPTION: Record<NotificationCategory, string> = {
@@ -88,7 +88,7 @@ export const NOTIFICATION_CATEGORY_DESCRIPTION: Record<NotificationCategory, str
   notes: 'When somebody replies or reacts to one of your notes, and when a report you made is reviewed.',
   announcements: 'Messages from the admins, and what is new in the app.',
   admin_alerts: 'When a summary is ready for review, and when a member reports a note.',
-  sos: 'When a member raises an SOS signal, and when somebody replies to yours.',
+  sos: 'When a member raises a prayer request, and when somebody replies to yours.',
 };
 
 /**

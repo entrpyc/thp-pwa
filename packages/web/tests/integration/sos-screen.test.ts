@@ -48,18 +48,18 @@ describe('from the home card to a resolved signal', () => {
     // The author: the card, the form, the signal page.
     const page = await signInAs(author);
     try {
-      const card = page.getByRole('region', { name: 'SOS' });
+      const card = page.getByRole('region', { name: 'Prayer requests' });
       await expect.poll(() => card.count(), { timeout: 60_000 }).toBe(1);
-      await card.getByRole('link', { name: 'Raise SOS' }).click();
+      await card.getByRole('link', { name: 'Raise a prayer request' }).click();
       await page.waitForURL(`${baseUrl}${SOS_NEW_PAGE_PATH}`, { timeout: 30_000 });
 
       await page.getByRole('button', { name: 'Orange' }).click();
       await page.getByLabel('What prayer is needed').fill(description);
-      await page.getByRole('button', { name: 'Raise SOS' }).click();
+      await page.getByRole('button', { name: 'Raise' }).click();
       await page.waitForURL(new RegExp(`${SOS_PAGE_PATH}/[0-9a-f-]{36}$`), { timeout: 30_000 });
 
       await expect
-        .poll(() => page.getByRole('heading', { name: 'Orange SOS' }).count(), { timeout: 30_000 })
+        .poll(() => page.getByRole('heading', { name: 'Orange prayer request' }).count(), { timeout: 30_000 })
         .toBe(1);
       expect(await page.getByText(description).count()).toBe(1);
       expect(await page.getByText('Open', { exact: true }).count()).toBe(1);
@@ -90,8 +90,8 @@ describe('from the home card to a resolved signal', () => {
         .poll(() => theirs.getByText(`Standing with you ${RUN}`).count(), { timeout: 30_000 })
         .toBe(1);
       // No Close for somebody else's signal, and no Remove for a member.
-      expect(await theirs.getByRole('button', { name: 'Close this signal' }).count()).toBe(0);
-      expect(await theirs.getByRole('button', { name: 'Remove signal' }).count()).toBe(0);
+      expect(await theirs.getByRole('button', { name: 'Close this prayer request' }).count()).toBe(0);
+      expect(await theirs.getByRole('button', { name: 'Remove prayer request' }).count()).toBe(0);
     } finally {
       await theirs.context().close();
     }
@@ -105,7 +105,7 @@ describe('from the home card to a resolved signal', () => {
         .toBe(1);
       expect(await back.getByText(friend.displayName).count()).toBeGreaterThan(0);
 
-      await back.getByRole('button', { name: 'Close this signal' }).click();
+      await back.getByRole('button', { name: 'Close this prayer request' }).click();
       await back.getByLabel('Closing note (optional)').fill(`Resolved, thank you ${RUN}`);
       await back.getByRole('button', { name: 'Mark as resolved' }).click();
       await expect

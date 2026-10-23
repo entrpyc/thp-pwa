@@ -7,15 +7,12 @@ import {
   SOS_PATH,
   SOS_STATUSES,
   SOS_STATUS_PARAM,
-  SOS_URGENCIES,
-  SOS_URGENCY_LABEL,
   type SosListPayload,
   type SosStatus,
 } from '@thp/shared';
 import { apiFetch } from '@/client/api-client';
 import { useBreadcrumbTrail } from '../player-context';
 import { SignalRow } from './signal-row';
-import { UrgencyDot } from './urgency-dot';
 import styles from './sos.module.css';
 
 /**
@@ -25,14 +22,14 @@ import styles from './sos.module.css';
  *
  * Two tabs and one list rather than two lists: a member comes here for what is open now, and the
  * resolved ones are a record to look back on, not a second feed. Each tab is its own read — the
- * API answers one status at a time — and the four counts over the list come with either, so
- * switching tabs never changes the chips.
+ * API answers one status at a time. The four counts by colour are the home card's; here the list
+ * speaks for itself, and the way to raise one is a full-width button between the tabs and it.
  */
 
 const STATUS_LABEL: Record<SosStatus, string> = { open: 'Open', resolved: 'Resolved' };
 
 export function SosBoard() {
-  useBreadcrumbTrail('SOS');
+  useBreadcrumbTrail('Prayer requests');
   const [status, setStatus] = useState<SosStatus>('open');
   const [payload, setPayload] = useState<SosListPayload | null>(null);
   const [failed, setFailed] = useState(false);
@@ -59,30 +56,13 @@ export function SosBoard() {
   return (
     <>
       <header className={styles.pageHead}>
-        <div className={styles.boardHead}>
-          <h1 className={styles.pageTitle}>SOS</h1>
-          <Link className={styles.primary} href={SOS_NEW_PAGE_PATH}>
-            Raise SOS
-          </Link>
-        </div>
+        <h1 className={styles.pageTitle}>Prayer requests</h1>
         <p className={styles.pageLead}>
           A prayer emergency channel. Anyone can reach the whole group, and the group can respond.
         </p>
       </header>
 
-      {payload === null ? null : (
-        <ul className={styles.chips} aria-label="Open signals by urgency">
-          {SOS_URGENCIES.map((urgency) => (
-            <li className={styles.chip} key={urgency}>
-              <UrgencyDot urgency={urgency} />
-              <span>{SOS_URGENCY_LABEL[urgency]}</span>
-              <span className={styles.chipCount}>{payload.openCounts[urgency]}</span>
-            </li>
-          ))}
-        </ul>
-      )}
-
-      <div className={styles.tabs} role="tablist" aria-label="Signals">
+      <div className={styles.tabs} role="tablist" aria-label="Prayer requests">
         {SOS_STATUSES.map((one) => (
           <button
             key={one}
@@ -97,20 +77,24 @@ export function SosBoard() {
         ))}
       </div>
 
+      <Link className={`${styles.cardAction} ${styles.cardActionPrimary}`} href={SOS_NEW_PAGE_PATH}>
+        Raise a prayer request
+      </Link>
+
       {failed && listed === null ? (
         <p className={styles.failure} role="alert">
-          Could not load the signals. Reload the page to try again.
+          Could not load the prayer requests. Reload the page to try again.
         </p>
       ) : listed === null ? (
         <p className={styles.quiet}>Loading…</p>
       ) : listed.length === 0 ? (
         <p className={styles.quiet}>
           {status === 'open'
-            ? 'No open signals. When somebody raises one, it will be listed here.'
+            ? 'No open prayer requests. When somebody raises one, it will be listed here.'
             : 'Nothing has been resolved yet.'}
         </p>
       ) : (
-        <ul className={styles.rows} aria-label={`${STATUS_LABEL[status]} signals`}>
+        <ul className={styles.rows} aria-label={`${STATUS_LABEL[status]} prayer requests`}>
           {listed.map((signal) => (
             <li className={styles.rowGroup} key={signal.id}>
               <SignalRow signal={signal} />

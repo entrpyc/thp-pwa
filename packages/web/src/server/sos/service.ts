@@ -146,7 +146,7 @@ export async function raiseSignalFor(actor: Actor, body: unknown): Promise<SosSi
 export async function setPrayingFor(actor: Actor, signalId: string): Promise<SosSignalPayload> {
   authorise(actor, 'sos.respond', `sos:${signalId}`);
   const signal = await requireVisible(actor, signalId);
-  requireOpen(signal, 'This signal has been closed, so there is nothing more to pray for here.');
+  requireOpen(signal, 'This prayer request has been closed, so there is nothing more to pray for here.');
   await setSosPraying({ signalId, userId: actor.id });
   return { signal: await detail(await requireVisible(actor, signalId), actor) };
 }
@@ -167,7 +167,7 @@ export async function clearPrayingFor(actor: Actor, signalId: string): Promise<S
 export async function replyFor(actor: Actor, signalId: string, body: unknown): Promise<SosSignalPayload> {
   authorise(actor, 'sos.respond', `sos:${signalId}`);
   const signal = await requireVisible(actor, signalId);
-  requireOpen(signal, 'This signal has been closed. Thank the author on a new one if you like.');
+  requireOpen(signal, 'This prayer request has been closed. Thank the author on a new one if you like.');
   requireTermsAccepted(actor, 'sos.respond', `sos:${signalId}`);
 
   const fields = asObject(body, 'Send a JSON object with the reply text.');
@@ -230,14 +230,14 @@ export async function closeSignalFor(actor: Actor, signalId: string, body: unkno
   const signal = await requireVisible(actor, signalId);
   const moderating = !can(actor, 'sos.close', { kind: 'sos', id: signalId, ownerId: signal.authorId });
   if (moderating) authorise(actor, 'sos.moderate', `sos:${signalId}`);
-  requireOpen(signal, 'This signal has already been closed.');
+  requireOpen(signal, 'This prayer request has already been closed.');
 
   const fields = body === null || body === undefined ? {} : asObject(body, 'Send a JSON object, or nothing.');
   const rawNote = fields['note'];
   let note: string | null = null;
   if (rawNote !== undefined && rawNote !== null && rawNote !== '') {
     if (moderating) {
-      throw ApiError.invalidInput('Only the member who raised a signal can leave a closing note.');
+      throw ApiError.invalidInput('Only the member who raised a prayer request can leave a closing note.');
     }
     note = parseText(rawNote, {
       empty: 'Write the closing note, or leave it out.',
@@ -248,7 +248,7 @@ export async function closeSignalFor(actor: Actor, signalId: string, body: unkno
   }
 
   const closed = await closeSosSignal({ signalId, closedBy: actor.id, note });
-  if (closed === null) throw ApiError.invalidInput('This signal has already been closed.');
+  if (closed === null) throw ApiError.invalidInput('This prayer request has already been closed.');
 
   logger.info(moderating ? 'sos.moderate' : 'sos.close', {
     ...audit(actor, moderating ? 'sos.moderate' : 'sos.close', `sos:${signalId}`),
@@ -264,7 +264,7 @@ export async function closeSignalFor(actor: Actor, signalId: string, body: unkno
 export async function removeSignalFor(actor: Actor, signalId: string): Promise<SosRemovedPayload> {
   authorise(actor, 'sos.moderate', `sos:${signalId}`);
   const signal = await findSosSignalById(signalId);
-  if (signal === null) throw ApiError.notFound('There is no such signal.');
+  if (signal === null) throw ApiError.notFound('There is no such prayer request.');
   await deleteSosSignal(signalId);
   logger.info('sos.moderate', {
     ...audit(actor, 'sos.moderate', `sos:${signalId}`),
@@ -281,7 +281,7 @@ export async function removeSignalFor(actor: Actor, signalId: string): Promise<S
 /** The signal as this member may read it, or `not_found` — for a missing id and a hidden row alike. */
 async function requireVisible(actor: Actor, signalId: string): Promise<SosSignalListRow> {
   const row = await findSosSignalForViewer(signalId, actor.id);
-  if (row === null) throw ApiError.notFound('There is no such signal.');
+  if (row === null) throw ApiError.notFound('There is no such prayer request.');
   return row;
 }
 
@@ -400,7 +400,7 @@ async function signAvatars(keys: readonly (string | null)[]): Promise<ReadonlyMa
 
 function parseStatus(value: string): SosStatus {
   if (isSosStatus(value)) return value;
-  throw ApiError.invalidInput('Ask for the open signals or the resolved ones.');
+  throw ApiError.invalidInput('Ask for the open prayer requests or the resolved ones.');
 }
 
 function asObject(body: unknown, complaint: string): Record<string, unknown> {

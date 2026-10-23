@@ -52,8 +52,8 @@ export function SignalView({ signalId, canModerate }: { signalId: string; canMod
   const [termsNeeded, setTermsNeeded] = useState(false);
 
   useBreadcrumbTrail(
-    signal === null ? 'Signal' : `${SOS_URGENCY_LABEL[signal.urgency]} SOS`,
-    [{ label: 'SOS', href: SOS_PAGE_PATH }],
+    signal === null ? 'Prayer request' : `${SOS_URGENCY_LABEL[signal.urgency]} prayer request`,
+    [{ label: 'Prayer requests', href: SOS_PAGE_PATH }],
   );
 
   useEffect(() => {
@@ -98,7 +98,7 @@ export function SignalView({ signalId, canModerate }: { signalId: string; canMod
 
   async function remove(): Promise<void> {
     if (busy) return;
-    if (!window.confirm('Remove this signal for everybody? Its replies go with it. This cannot be undone.')) {
+    if (!window.confirm('Remove this prayer request for everybody? Its replies go with it. This cannot be undone.')) {
       return;
     }
     setBusy(true);
@@ -116,7 +116,7 @@ export function SignalView({ signalId, canModerate }: { signalId: string; canMod
     return (
       <>
         <header className={styles.pageHead}>
-          <h1 className={styles.pageTitle}>No such signal</h1>
+          <h1 className={styles.pageTitle}>No such prayer request</h1>
           <p className={styles.pageLead}>It may have been removed.</p>
         </header>
         <Link className={styles.link} href={SOS_PAGE_PATH}>
@@ -144,13 +144,13 @@ export function SignalView({ signalId, canModerate }: { signalId: string; canMod
       <header className={styles.pageHead}>
         <div className={styles.signalHead}>
           <UrgencyDot urgency={signal.urgency} />
-          <h1 className={styles.pageTitle}>{SOS_URGENCY_LABEL[signal.urgency]} SOS</h1>
+          <h1 className={styles.pageTitle}>{SOS_URGENCY_LABEL[signal.urgency]} prayer request</h1>
           <span className={styles.status}>{open ? 'Open' : 'Resolved'}</span>
         </div>
         <p className={styles.pageLead}>{SOS_URGENCY_MEANING[signal.urgency]}</p>
       </header>
 
-      <section className={styles.card} aria-label="The signal">
+      <section className={styles.card} aria-label="The prayer request">
         <AuthorLine author={signal.author} at={signal.raisedAt} />
         <p className={styles.text}>{signal.description}</p>
         {signal.closedAt === null ? null : (
@@ -174,13 +174,11 @@ export function SignalView({ signalId, canModerate }: { signalId: string; canMod
           >
             🙏 {signal.praying ? 'Praying' : 'I am praying'}
           </button>
-          <span className={styles.prayingCount}>
-            {signal.prayingCount === 0
-              ? 'Nobody has pressed yet'
-              : signal.prayingCount === 1
-                ? '1 member praying'
-                : `${signal.prayingCount} members praying`}
-          </span>
+          {signal.prayingCount === 0 ? null : (
+            <span className={styles.prayingCount}>
+              {signal.prayingCount === 1 ? '1 member praying' : `${signal.prayingCount} members praying`}
+            </span>
+          )}
         </div>
         {signal.prayingNames.length === 0 ? null : (
           <p className={styles.names} aria-label="Who is praying">
@@ -232,12 +230,12 @@ export function SignalView({ signalId, canModerate }: { signalId: string; canMod
         ) : open ? (
           <ReplyForm busy={busy} onSend={(text) => write(sosRepliesPath(signalId), { method: 'POST', body: { text } satisfies ReplyToSosRequest })} />
         ) : (
-          <p className={styles.quiet}>This signal has been resolved. Replies are closed.</p>
+          <p className={styles.quiet}>This prayer request has been resolved. Replies are closed.</p>
         )}
       </section>
 
       {mayClose || canModerate ? (
-        <section className={styles.card} aria-label="Ending the signal">
+        <section className={styles.card} aria-label="Ending the prayer request">
           {mayClose ? (
             <CloseForm
               busy={busy}
@@ -253,7 +251,7 @@ export function SignalView({ signalId, canModerate }: { signalId: string; canMod
           {canModerate ? (
             <div className={styles.actions}>
               <button className={styles.secondary} type="button" disabled={busy} onClick={() => void remove()}>
-                Remove signal
+                Remove prayer request
               </button>
               <span className={styles.when}>Admin only. Deletes it and its replies for everybody.</span>
             </div>
@@ -328,7 +326,7 @@ function CloseForm({
     return (
       <div className={styles.actions}>
         <button className={styles.secondary} type="button" disabled={busy} onClick={() => setOpened(true)}>
-          Close this signal
+          Close this prayer request
         </button>
         <span className={styles.when}>
           {withNote ? 'When the situation is resolved. You can leave a closing note.' : 'Admin: ends it for everybody.'}
@@ -340,14 +338,14 @@ function CloseForm({
   return (
     <form
       className={styles.field}
-      aria-label="Close this signal"
+      aria-label="Close this prayer request"
       onSubmit={(event) => {
         event.preventDefault();
         if (busy || over) return;
         void onClose(withNote && count > 0 ? note.trim() : null);
       }}
     >
-      <h2 className={styles.sectionTitle}>Close this signal</h2>
+      <h2 className={styles.sectionTitle}>Close this prayer request</h2>
       {withNote ? (
         <>
           <label className={styles.fieldLabel} htmlFor={id}>
@@ -368,7 +366,7 @@ function CloseForm({
           </p>
         </>
       ) : (
-        <p className={styles.quiet}>The signal moves to the resolved list. The replies stay with it.</p>
+        <p className={styles.quiet}>The prayer request moves to the resolved list. The replies stay with it.</p>
       )}
       <div className={styles.actions}>
         <button className={styles.primary} type="submit" disabled={busy || over}>

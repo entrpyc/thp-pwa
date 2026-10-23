@@ -144,7 +144,7 @@ export function sosReplyPath(signalId: string, replyId: string): string {
 }
 
 /** The board, on the web origin — where the home card goes ([3.16.4](docs/project/prd.md)). */
-export const SOS_PAGE_PATH = '/sos';
+export const SOS_PAGE_PATH = '/prayer-requests';
 
 /** The form that raises a signal ([3.16.1](docs/project/prd.md)). */
 export const SOS_NEW_PAGE_PATH = `${SOS_PAGE_PATH}/new`;
@@ -251,7 +251,7 @@ export interface ReplyToSosRequest {
  * member and the colour, because the colour is the one word that says how to read the rest.
  */
 export function sosRaisedNotificationTitle(displayName: string, urgency: SosUrgency): string {
-  return `${displayName} raised a ${SOS_URGENCY_LABEL[urgency].toLowerCase()} SOS`;
+  return `${displayName} raised a ${SOS_URGENCY_LABEL[urgency].toLowerCase()} prayer request`;
 }
 
 /**
@@ -259,8 +259,8 @@ export function sosRaisedNotificationTitle(displayName: string, urgency: SosUrge
  * like the note titles, so account deletion can rewrite it with the placeholder's name.
  */
 export function sosReplyNotificationTitle(displayName: string): string {
-  return `${displayName} replied to your SOS`;
+  return `${displayName} replied to your prayer request`;
 }
 
 /** What a member reads when the cap refuses an eleventh signal. */
-export const SOS_LIMIT_MESSAGE = `You already have ${MAX_OPEN_SOS_PER_MEMBER} open signals. Close one before raising another.`;
+export const SOS_LIMIT_MESSAGE = `You already have ${MAX_OPEN_SOS_PER_MEMBER} open prayer requests. Close one before raising another.`;
