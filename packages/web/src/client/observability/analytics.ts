@@ -1,6 +1,11 @@
 import posthog from 'posthog-js';
 import { sanitiseAnalyticsProperties, type AnalyticsPerson, type TrackFunction } from '@thp/shared';
-import { detectInstallSource, readAnalyticsConfig, stripUrlProperties } from './config';
+import {
+  ANALYTICS_PROXY_PATH,
+  detectInstallSource,
+  readAnalyticsConfig,
+  stripUrlProperties,
+} from './config';
 
 /**
  * **The only file that imports `posthog-js`** (docs/project/observability.md § 6.1;
@@ -56,7 +61,10 @@ export function initAnalytics(): boolean {
       return false;
     }
     posthog.init(config.key, {
-      api_host: config.host,
+      // The app's own origin, forwarded to `config.host` by nginx — see ANALYTICS_PROXY_PATH. The
+      // host itself is still read and validated so that a build with no EU host configured
+      // refuses to start rather than forwarding to nowhere.
+      api_host: ANALYTICS_PROXY_PATH,
       // The project settings say the same (observability.md § 5.5); the client says it too, so a
       // setting changed by hand in the browser does not change what leaves the product.
       autocapture: false,

@@ -21,6 +21,23 @@ import { type ShellView, shellPlatformOf } from '@/client/platform';
 export const ANALYTICS_KEY_VARIABLE = 'NEXT_PUBLIC_POSTHOG_KEY';
 /** The one value of `NODE_ENV` under which analytics may be on. */
 export const ANALYTICS_PRODUCTION_ENVIRONMENT = 'production';
+
+/**
+ * **Where the browser sends events: a path on the app's own origin, not PostHog's host.**
+ *
+ * Content blockers work from lists of third-party hosts, and `eu.i.posthog.com` is on them, so a
+ * browser with one installed sends nothing and the member insights undercount everyone who runs
+ * one. nginx forwards this path to the EU host (`deploy/nginx/thp.conf`), which makes every
+ * analytics request same-origin; `NEXT_PUBLIC_POSTHOG_HOST` names the upstream nginx forwards to,
+ * and the client never names it in a request.
+ *
+ * The word is deliberately bland. Filter lists match paths too, and `/analytics`, `/ingest`,
+ * `/posthog`, `/track` and `/collect` are all on them.
+ *
+ * Named once, here, and held equal to the nginx `location` by
+ * `tests/guards/analytics-proxy.test.ts`, so the two cannot drift apart.
+ */
+export const ANALYTICS_PROXY_PATH = '/relay';
 export const ANALYTICS_HOST_VARIABLE = 'NEXT_PUBLIC_POSTHOG_HOST';
 
 export interface AnalyticsConfig {

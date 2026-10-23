@@ -320,6 +320,13 @@ into is a second admin. So:
   but their adapter files — the same shape as `asr-boundary.test.ts`.
 - **PostHog project settings:** *Discard client IP data* on; autocapture off; session replay off;
   *Mask all text and inputs* on in case replay is ever enabled; `$pageview` sends the route pattern.
+- **First-party path.** The browser sends events to `/relay/` on the app's own origin and nginx
+  forwards them to the EU host (`deploy/nginx/thp.conf`), so a content blocker that drops
+  `eu.i.posthog.com` by name drops nothing. nginx strips the session cookie and the Referer before
+  forwarding and adds no `X-Forwarded-For`. The path is named once in the client
+  (`ANALYTICS_PROXY_PATH`) and `tests/guards/analytics-proxy.test.ts` holds it equal to the nginx
+  block. Store builds never needed this — content blockers do not reach a Capacitor web view — so
+  the gain is browser and installed-web-app traffic.
 - **Grafana** sees the host and the database, never the application. Metric labels carry no ids.
 - **The privacy policy** the store listings need (project prd 5.2.3) names PostHog and Grafana Labs
   as processors, both in the EU.
@@ -448,6 +455,7 @@ recreate them, and the HogQL query is recorded there verbatim.
 | `alloy` | The `alloy` systemd unit is active, its `/-/ready` endpoint on `127.0.0.1:12345` answers, and every component in `/api/v0/web/components` reports itself healthy — which is how a wrong Postgres password or a dead Grafana token shows up. |
 | `backup-pings` | `/etc/thp/healthchecks.env` names an `https` URL for all three pings, and the *installed* `thp-backup` and `thp-backup-check` units carry the `ExecStartPost` that sends theirs. |
 | `analytics` | The built client chunks under `packages/web/.next` carry a `phc_` key and the EU host — read from disk, because the adapter is in the member layout's chunk and an anonymous fetch of the origin is handed the sign-in page — and `POSTHOG_KEY` is set for the API. |
+| `analytics-proxy` | An empty POST to `/relay/e/` on the origin is answered by PostHog's JSON validation error rather than by Next — which is what a live nginx block that was never given the `location /relay/` would do, silently losing every event. |
 | `heartbeat` | `HEALTHCHECK_WORKER_URL` is set and the worker's pm2 log carries a `worker.heartbeat.sent` line in the last 10 min. |
 | `not-mocked` | Already exists; unchanged — `THP_MOCK_EXTERNAL` is not `true` on the box. |
 
@@ -461,7 +469,7 @@ development machine leaves `THP_MOCK_EXTERNAL=true` and none of them is read.
 | Variable | Read by | Meaning |
 | :--- | :--- | :--- |
 | `NEXT_PUBLIC_POSTHOG_KEY` | Client | The project's public key. Inlined at build time like `NEXT_PUBLIC_API_ORIGIN`, and subject to the same "build after `.env`" rule. |
-| `NEXT_PUBLIC_POSTHOG_HOST` | Client | `https://eu.i.posthog.com`. |
+| `NEXT_PUBLIC_POSTHOG_HOST` | Client | `https://eu.i.posthog.com` — the upstream nginx forwards `/relay/` to. The browser itself sends to `/relay/` on the app's origin (section 5.5). |
 | `POSTHOG_KEY`, `POSTHOG_HOST` | API | The same key and host, for `posthog-node`. |
 | `HEALTHCHECK_WORKER_URL` | Worker | The worker heartbeat's ping URL. Absent means no ping, logged once at boot. |
 

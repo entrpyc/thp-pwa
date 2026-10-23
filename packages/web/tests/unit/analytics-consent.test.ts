@@ -66,7 +66,11 @@ describe('at start', () => {
 
     expect(adapter.initAnalytics()).toBe(true);
     expect(sdk.init).toHaveBeenCalledOnce();
-    expect(sdk.init.mock.calls[0]?.[1]).toMatchObject({ opt_out_capturing_by_default: true });
+    expect(sdk.init.mock.calls[0]?.[1]).toMatchObject({
+      opt_out_capturing_by_default: true,
+      // The app's own origin, not the EU host — see ANALYTICS_PROXY_PATH.
+      api_host: '/relay',
+    });
 
     adapter.identifyAnalytics(PERSON);
     adapter.track('$pageview', { route: '/', recording_id: null, series_id: null });

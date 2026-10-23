@@ -653,9 +653,11 @@ listen_addresses = 'localhost'
 ```
 
 **3 — nginx.** Diff the live block against [deploy/nginx/thp.conf](deploy/nginx/thp.conf), copy
-across the `proxy_set_header` lines and `client_max_body_size`, then
-`sudo nginx -t && sudo systemctl reload nginx`. `X-Forwarded-Proto` is the one that matters most:
-without it every request looks like plain HTTP to the process behind the proxy.
+across the `proxy_set_header` lines, `client_max_body_size` and the whole `location /relay/`
+block, then `sudo nginx -t && sudo systemctl reload nginx`. `X-Forwarded-Proto` is the one that
+matters most: without it every request looks like plain HTTP to the process behind the proxy. The
+`/relay/` block is where the browser's analytics events go — without it they fall through to Next's
+404 page and are lost; `npm run verify:production -- --remote-only` says so under `analytics-proxy`.
 
 **4 — Buckets and keys.** In the Cloudflare dashboard, two buckets and two tokens:
 

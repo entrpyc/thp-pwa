@@ -614,6 +614,26 @@ const CHECKS: readonly Check[] = [
     },
   },
   {
+    name: 'analytics-proxy',
+    reach: 'remote',
+    async run() {
+      // The browser sends events to a path on the app's own origin that nginx forwards to PostHog
+      // (deploy/nginx/thp.conf, `location /relay/`). If the live nginx block was never updated the
+      // path falls through to Next, which answers an unknown route with its 404 page, and every
+      // event would be lost with nothing in any log to say so. An empty POST to the capture
+      // endpoint is enough to tell the two apart: PostHog refuses it with a JSON validation error,
+      // Next with HTML.
+      const target = `${origin()}/relay/e/`;
+      const response = await fetch(target, { method: 'POST', body: '', redirect: 'manual' });
+      const contentType = response.headers.get('content-type') ?? '';
+      if (response.status === 404) return bad(`${target} is a 404 — nginx is not forwarding /relay/ to PostHog`);
+      if (response.status >= 300 && response.status < 400) return bad(`${target} redirects — nginx is not forwarding it`);
+      if (response.headers.has('x-powered-by')) return bad(`${target} was answered by Next, not by PostHog`);
+      if (!contentType.includes('json')) return bad(`${target} answered ${response.status} ${contentType || '(no content type)'} — not PostHog`);
+      return ok(`${target} is answered by PostHog (${response.status})`);
+    },
+  },
+  {
     name: 'diagnostics',
     reach: 'remote',
     async run() {
