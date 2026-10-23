@@ -3,6 +3,7 @@
 import Link from 'next/link';
 import { useEffect, useState } from 'react';
 import {
+  HIGHLIGHTS_PAGE_PATH,
   MEMBER_SERIES_PAGE_PATH,
   RESUME_PATH,
   formatTimecode,
@@ -27,6 +28,8 @@ import styles from './screens.module.css';
  *   exist yet; Story 6 gives it the destination the reference draws. *All recordings* did not
  *   disappear with it — it is an entry in the menu, beside *All series*, which is where
  *   `top-navigation/menu-opened.png` puts both.
+ * - **View highlights** — the same line, under it, to the member's own playlist
+ *   ([3.15.5](docs/project/prd.md)), by the operator's decision when the playlist left the profile.
  * - **My notes** — [§3.12](docs/project/prd.md) is deferred whole, so the card is **dropped**
  *   rather than rendered empty. An empty card is a promise; a missing one is a screen that will
  *   grow.
@@ -89,6 +92,13 @@ export function Landing() {
 
       <Link className={styles.wayIn} href={MEMBER_SERIES_PAGE_PATH}>
         <span className={styles.wayInLabel}>View all series</span>
+        <span className={styles.wayInArrow} aria-hidden="true">
+          →
+        </span>
+      </Link>
+
+      <Link className={styles.wayIn} href={HIGHLIGHTS_PAGE_PATH}>
+        <span className={styles.wayInLabel}>View highlights</span>
         <span className={styles.wayInArrow} aria-hidden="true">
           →
         </span>

@@ -29,15 +29,14 @@ describe('the profile sections', () => {
     expect(distinct('label')).toBe(PROFILE_SECTIONS.length);
   });
 
-  it('lists highlights, settings, notifications and downloads beside the identity page, in that order', () => {
+  it('lists settings, notifications and downloads beside the identity page, in that order', () => {
     expect(PROFILE_SECTIONS.map((section) => section.id)).toEqual([
       'identity',
-      'highlights',
       'settings',
       'notifications',
       'downloads',
     ]);
-    expect(PROFILE_SECTIONS[3]?.href).toBe(NOTIFICATION_SETTINGS_PAGE_PATH);
+    expect(PROFILE_SECTIONS[2]?.href).toBe(NOTIFICATION_SETTINGS_PAGE_PATH);
   });
 });
 

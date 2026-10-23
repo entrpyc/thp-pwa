@@ -1,5 +1,4 @@
 import {
-  HIGHLIGHTS_PAGE_PATH,
   NOTIFICATION_SETTINGS_PAGE_PATH,
   PROFILE_DOWNLOADS_PAGE_PATH,
   PROFILE_PAGE_PATH,
@@ -36,7 +35,6 @@ export type ProfileSection = {
 
 export const PROFILE_SECTIONS: readonly ProfileSection[] = [
   { id: 'identity', label: 'Profile', href: PROFILE_PAGE_PATH },
-  { id: 'highlights', label: 'Highlights', href: HIGHLIGHTS_PAGE_PATH },
   { id: 'settings', label: 'Settings', href: `${PROFILE_PAGE_PATH}/settings` },
   { id: 'notifications', label: 'Notifications', href: NOTIFICATION_SETTINGS_PAGE_PATH },
   // Downloads arrived with 3.18: what this device holds for this account, deleted per row.

@@ -531,6 +531,37 @@ function Overflow({
   const [open, setOpen] = useState(false);
   const [confirming, setConfirming] = useState(false);
   const [moderating, setModerating] = useState<'report' | 'block' | null>(null);
+  const root = useRef<HTMLDivElement>(null);
+
+  /*
+   * An open menu closes on a press anywhere outside it and on Escape — the tap-away a member
+   * expects of a menu, and the transport's own rule for its `···` strip. The wrapper holds both
+   * the button and the menu, so a press on either is left to them: the button is its own toggle,
+   * and closing here first would let the press that shuts the menu re-open it. `pointerdown`
+   * rather than `click`, so the menu is gone before the press lands on what was under it, and
+   * the listeners exist only while it is open.
+   */
+  useEffect(() => {
+    if (!open) return;
+
+    function onPointerDown(event: PointerEvent) {
+      const target = event.target;
+      if (!(target instanceof Node)) return;
+      if (root.current?.contains(target)) return;
+      setOpen(false);
+    }
+
+    function onKeyDown(event: KeyboardEvent) {
+      if (event.key === 'Escape') setOpen(false);
+    }
+
+    document.addEventListener('pointerdown', onPointerDown);
+    document.addEventListener('keydown', onKeyDown);
+    return () => {
+      document.removeEventListener('pointerdown', onPointerDown);
+      document.removeEventListener('keydown', onKeyDown);
+    };
+  }, [open]);
 
   // Pinning is a top-level public note's alone (3.6.8) — a reply has no moment to raise, and a
   // private note is nobody else's to read.
@@ -551,7 +582,7 @@ function Overflow({
   }
 
   return (
-    <div className={styles.overflow}>
+    <div className={styles.overflow} ref={root}>
       {/* Any standing top-level note can go to Highlights (3.12.17, widened); a reply has no moment to mark. */}
       {!note.deleted && note.timestampMs !== null ? (
         <PinNoteControl noteId={note.id} className={styles.overflowControl} />

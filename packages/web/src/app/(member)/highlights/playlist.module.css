@@ -1,9 +1,47 @@
 /*
- * The playlist ([3.15.6](docs/project/prd.md)): rows in the profile card, each a link to the
- * teaching at the entry's moment, with the series beside it and the two controls — play and
+ * The playlist ([3.15.6](docs/project/prd.md)): its own page, with rows in a card, each a link to
+ * the teaching at the entry's moment, with the series beside it and the two controls — play and
  * Remove — in a strip of their own. The row is the settings page's blocked-member row grown a
  * line: title, the pinned description, the meta line.
+ *
+ * The page's own classes compose from the shared screen recipe, as every member page's do; the
+ * profile's classes stayed with the profile when this page moved out of it.
  */
+
+.pageHead {
+  composes: pageHead from '../screens.module.css';
+}
+
+.pageTitle {
+  composes: pageTitle from '../screens.module.css';
+}
+
+.pageLead {
+  composes: pageLead from '../screens.module.css';
+}
+
+.card {
+  composes: card from '../screens.module.css';
+}
+
+.quiet {
+  composes: quiet from '../screens.module.css';
+}
+
+.failure {
+  composes: failure from '../screens.module.css';
+}
+
+/* The empty state: a sentence in the body size, not the quiet one — it is the page's content. */
+.done {
+  margin: 0;
+  font-size: var(--fs-body);
+  color: var(--color-text-muted);
+}
+
+.secondary {
+  composes: secondary from '../feedback/feedback.module.css';
+}
 
 .list {
   list-style: none;
@@ -24,6 +62,12 @@
   padding: var(--space-3) 0;
   border-top: 1px solid var(--color-border);
   min-width: 0;
+}
+
+/* The rule divides entries from each other; the first has nothing above it to be divided from. */
+.entry:first-child {
+  border-top: none;
+  padding-top: 0;
 }
 
 .open {

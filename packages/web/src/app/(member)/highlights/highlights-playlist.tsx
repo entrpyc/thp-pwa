@@ -10,11 +10,10 @@ import {
   type PlaybackProgressPayload,
 } from '@thp/shared';
 import { apiFetch } from '@/client/api-client';
-import { useHighlights } from '../../highlights/highlights-store';
-import { highlightHref } from '../../highlights/open-at';
-import { usePlayer } from '../../player-context';
-import profile from '../profile.module.css';
-import styles from './highlights.module.css';
+import { useBreadcrumbTrail, usePlayer } from '../player-context';
+import { useHighlights } from './highlights-store';
+import { highlightHref } from './open-at';
+import styles from './playlist.module.css';
 
 /**
  * **The playlist** ([3.15.6](docs/project/prd.md)) — every entry the member pinned, newest first,
@@ -73,6 +72,7 @@ function kindLabel(entry: HighlightView): string {
 
 export function HighlightsPlaylist() {
   const player = usePlayer();
+  useBreadcrumbTrail('Highlights');
   const { highlights, busy, failure, unpin } = useHighlights();
   const [playFailure, setPlayFailure] = useState<string | null>(null);
 
@@ -112,75 +112,84 @@ export function HighlightsPlaylist() {
   }
 
   return (
-    <section className={profile.card} aria-label="Highlights playlist">
-      {highlights === null && failure === null ? (
-        <p className={profile.quiet} role="status">
-          Loading…
+    <>
+      <header className={styles.pageHead}>
+        <h1 className={styles.pageTitle}>Highlights</h1>
+        <p className={styles.pageLead}>
+          The moments, chapters and notes you highlighted. Only you can see this list.
         </p>
-      ) : null}
+      </header>
 
-      {highlights !== null && highlights.length === 0 ? (
-        <p className={profile.done} role="status">
-          Nothing highlighted yet. Highlight a moment from the player, a chapter from its page, or a
-          note from the marker beside it.
-        </p>
-      ) : null}
+      <section className={styles.card} aria-label="Highlights playlist">
+        {highlights === null && failure === null ? (
+          <p className={styles.quiet} role="status">
+            Loading…
+          </p>
+        ) : null}
 
-      {highlights !== null && highlights.length > 0 ? (
-        <ol className={styles.list} aria-label="Highlighted entries">
-          {highlights.map((entry) => {
-            const description = describe(entry);
-            const title = entry.recording.title;
-            return (
-              <li className={styles.entry} key={entry.id}>
-                <Link
-                  className={styles.open}
-                  href={highlightHref(entry.recording.id, entry.positionMs)}
-                  aria-label={`Open ${title}${entry.positionMs === null ? '' : ` at ${formatTimecode(entry.positionMs)}`}`}
-                >
-                  <span className={styles.kind}>{kindLabel(entry)}</span>
-                  <span className={styles.title}>{title}</span>
-                  {description === null ? null : (
-                    <span className={styles.description}>{description}</span>
-                  )}
-                  <span className={styles.meta}>
-                    {entry.positionMs === null ? null : `${formatTimecode(entry.positionMs)} · `}
-                    Highlighted {pinnedOn(entry.pinnedAt)}
-                  </span>
-                </Link>
-                {/* The series as its own link, beside the row rather than inside it (the library's shape). */}
-                {entry.recording.series === null ? null : (
-                  <Link className={styles.series} href={seriesPagePath(entry.recording.series.id)}>
-                    {entry.recording.series.title}
+        {highlights !== null && highlights.length === 0 ? (
+          <p className={styles.done} role="status">
+            Nothing highlighted yet. Highlight a moment from the player, a chapter from its page, or a
+            note from the marker beside it.
+          </p>
+        ) : null}
+
+        {highlights !== null && highlights.length > 0 ? (
+          <ol className={styles.list} aria-label="Highlighted entries">
+            {highlights.map((entry) => {
+              const description = describe(entry);
+              const title = entry.recording.title;
+              return (
+                <li className={styles.entry} key={entry.id}>
+                  <Link
+                    className={styles.open}
+                    href={highlightHref(entry.recording.id, entry.positionMs)}
+                    aria-label={`Open ${title}${entry.positionMs === null ? '' : ` at ${formatTimecode(entry.positionMs)}`}`}
+                  >
+                    <span className={styles.kind}>{kindLabel(entry)}</span>
+                    <span className={styles.title}>{title}</span>
+                    {description === null ? null : (
+                      <span className={styles.description}>{description}</span>
+                    )}
+                    <span className={styles.meta}>
+                      {entry.positionMs === null ? null : `${formatTimecode(entry.positionMs)} · `}
+                      Highlighted {pinnedOn(entry.pinnedAt)}
+                    </span>
                   </Link>
-                )}
-                <div className={styles.controls}>
-                  <button
-                    className={styles.play}
-                    type="button"
-                    aria-label={`Play ${title}`}
-                    onClick={() => void play(entry)}
-                  >
-                    <span aria-hidden="true">▶</span>
-                  </button>
-                  <button
-                    className={profile.secondary}
-                    type="button"
-                    aria-label={`Remove ${title} from Highlights`}
-                    disabled={busy}
-                    onClick={() => void unpin(entry.id).catch(() => undefined)}
-                  >
-                    Remove
-                  </button>
-                </div>
-              </li>
-            );
-          })}
-        </ol>
-      ) : null}
+                  {/* The series as its own link, beside the row rather than inside it (the library's shape). */}
+                  {entry.recording.series === null ? null : (
+                    <Link className={styles.series} href={seriesPagePath(entry.recording.series.id)}>
+                      {entry.recording.series.title}
+                    </Link>
+                  )}
+                  <div className={styles.controls}>
+                    <button
+                      className={styles.play}
+                      type="button"
+                      aria-label={`Play ${title}`}
+                      onClick={() => void play(entry)}
+                    >
+                      <span aria-hidden="true">▶</span>
+                    </button>
+                    <button
+                      className={styles.secondary}
+                      type="button"
+                      aria-label={`Remove ${title} from Highlights`}
+                      disabled={busy}
+                      onClick={() => void unpin(entry.id).catch(() => undefined)}
+                    >
+                      Remove
+                    </button>
+                  </div>
+                </li>
+              );
+            })}
+          </ol>
+        ) : null}
 
-      {failure === null ? null : <p className={profile.failure}>{failure}</p>}
-      {playFailure === null ? null : <p className={profile.failure}>{playFailure}</p>}
-    </section>
+        {failure === null ? null : <p className={styles.failure}>{failure}</p>}
+        {playFailure === null ? null : <p className={styles.failure}>{playFailure}</p>}
+      </section>
+    </>
   );
 }

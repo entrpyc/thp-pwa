@@ -7,6 +7,7 @@ import {
   ADMIN_PAGE_PATH,
   DASHBOARD_PAGE_PATH,
   FEEDBACK_PAGE_PATH,
+  HIGHLIGHTS_PAGE_PATH,
   MAX_SEARCH_QUERY_LENGTH,
   MEMBER_LIBRARY_PAGE_PATH,
   MEMBER_SERIES_PAGE_PATH,
@@ -354,6 +355,12 @@ export function TopNavigation({ canSeeConsole }: { canSeeConsole: boolean }) {
                 onClick={() => setOpen(false)}
               >
                 All recordings
+              </Link>
+            </li>
+            {/* The member's own playlist (3.15.5) — its own page since the operator moved it out of the profile. */}
+            <li>
+              <Link className={styles.menuLink} href={HIGHLIGHTS_PAGE_PATH} onClick={() => setOpen(false)}>
+                Highlights
               </Link>
             </li>
             {canSeeConsole ? (

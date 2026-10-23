@@ -365,7 +365,7 @@ It is built as a Progressive Web App on a single codebase, reachable from any br
 - 📝 **3.15.2** Any member can pin a specific segment of a recording, capturing the moment rather than the whole teaching.
 - 📝 **3.15.3** Members can pin timestamp notes they can read — their own, or another member's public note (3.12.17).
 - 📝 **3.15.4** Pinning is available while listening, from the transport bar; from a chapter's page; and on one's own notes. (The recording page's header and the series view's rows carried a whole-teaching pin until the operator removed both.)
-- 📝 **3.15.5** Highlights are accessible as a dedicated section from the member's profile.
+- 📝 **3.15.5** Highlights are accessible as their own page, from the navigation menu and from a *View highlights* line on the dashboard. (A section of the member's profile until the operator moved it out.)
 - 📝 **3.15.6** Highlights display as a playlist, each entry showing its title, series, date pinned, and either a brief description or the note text if a note was pinned.
 - 📝 **3.15.7** Playing an entry from Highlights opens the recording at the relevant timestamp.
 - 📝 **3.15.8** Members can remove any entry at any time.

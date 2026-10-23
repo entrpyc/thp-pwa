@@ -34,7 +34,7 @@ import { uploadTestAudio } from '../support/audio';
  *   writing the row the API would (the recording header and a series row carried one too, until
  *   the operator took them off);
  * - whether the chapter page pins the chapter's opening moment;
- * - whether `/profile/highlights` lists the entries newest first with title, series, date and the
+ * - whether `/highlights` lists the entries newest first with title, series, date and the
  *   note's text, whether Remove takes a row away, whether opening a row lands on the teaching **at
  *   the moment and silent** ([3.15.7](docs/project/prd.md), [3.2.12](docs/project/prd.md)), and
  *   whether the row's play control plays.
@@ -264,7 +264,7 @@ describe('the chapter page', () => {
   });
 });
 
-describe('/profile/highlights', () => {
+describe('/highlights', () => {
   it('lists newest first with title, series, date and note text; removes; opens silent at the moment; plays', async () => {
     const study = await insertSeries({ title: `Playlist study ${RUN}`, description: null }, handle);
     const where = await publishedTeaching(`Playlist ${RUN}`);
@@ -285,10 +285,7 @@ describe('/profile/highlights', () => {
     const page = await signInAs(curator);
     try {
       await page.goto(`${baseUrl}${HIGHLIGHTS_PAGE_PATH}`, { waitUntil: 'domcontentloaded' });
-      // The profile strip knows the section and marks it current.
-      expect(
-        await page.getByRole('navigation', { name: 'Profile sections' }).getByRole('link', { name: 'Highlights' }).getAttribute('aria-current'),
-      ).toBe('page');
+      await expect.poll(() => page.getByRole('heading', { level: 1, name: 'Highlights' }).count(), { timeout: 60_000 }).toBe(1);
 
       const rows = page.getByRole('list', { name: 'Highlighted entries' }).getByRole('listitem');
       await expect.poll(() => rows.count(), { timeout: 60_000 }).toBe(3);

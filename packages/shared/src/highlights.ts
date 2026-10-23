@@ -74,8 +74,11 @@ export function highlightPath(highlightId: string): string {
   return `${HIGHLIGHTS_PATH}/${highlightId}`;
 }
 
-/** The playlist's page on the web origin — the profile's dedicated section ([3.15.5](docs/project/prd.md)). */
-export const HIGHLIGHTS_PAGE_PATH = '/profile/highlights';
+/**
+ * The playlist's page on the web origin — its own page, reached from the menu and the dashboard
+ * ([3.15.5](docs/project/prd.md); a profile section until the operator moved it out).
+ */
+export const HIGHLIGHTS_PAGE_PATH = '/highlights';
 
 /**
  * **The address parameter a playlist row opens a teaching with**: `/recordings/{id}?at=<ms>`.
