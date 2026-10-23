@@ -367,7 +367,7 @@ It is built as a Progressive Web App on a single codebase, reachable from any br
 - 📝 **3.15.8** Members can remove any entry at any time.
 - 📝 **3.15.9** Highlights are private to the member and are not visible to other members or to admins.
 
-### 📝 3.16 SOS signal
+### ✅ 3.16 SOS signal
 
 *A prayer emergency channel. Any member can reach the whole group, and the group can respond.*
 
@@ -380,19 +380,19 @@ It is built as a Progressive Web App on a single codebase, reachable from any br
 
 **Functional requirements**
 
-- 📝 **3.16.1** Any member can raise an SOS signal, selecting one of the four urgency colours above.
-- 📝 **3.16.2** A signal carries a short free-text description of what prayer is needed.
-- 📝 **3.16.3** Raising a signal broadcasts it to the entire group through the notification system (3.17.2), at every urgency level.
-- 📝 **3.16.4** Signals appear in a dedicated SOS section listing all open signals, most urgent and most recent first.
-- 📝 **3.16.5** Members can acknowledge a signal with a single "praying" response, and the signal shows how many members have done so.
-- 📝 **3.16.6** Members can reply to a signal with a short message of encouragement or scripture.
-- 📝 **3.16.7** The member who raised a signal is notified when someone replies to it.
-- 📝 **3.16.8** The author can close their own signal when the situation is resolved, optionally adding a closing note.
-- 📝 **3.16.9** An admin can close any signal.
-- 📝 **3.16.10** Closed signals move out of the open list into a resolved view, where they remain visible to the group rather than being deleted.
-- 📝 **3.16.11** An admin can remove a signal entirely if it is inappropriate or raised in error.
-- 📝 **3.16.12** A member can have a limited number of open signals at once, so the channel keeps its urgency.
-- 📝 **3.16.13** Signals and their replies are visible to all members. There is no private or anonymous SOS.
+- ✅ **3.16.1** Any member can raise an SOS signal, selecting one of the four urgency colours above.
+- ✅ **3.16.2** A signal carries a short free-text description of what prayer is needed.
+- ✅ **3.16.3** Raising a signal broadcasts it to the entire group through the notification system (3.17.2), at every urgency level.
+- ✅ **3.16.4** Signals appear in a dedicated SOS section listing all open signals, most urgent and most recent first. The way in is a card on the member landing — the open count at each colour, the three most urgent signals and a Raise control — rather than an entry in the main navigation.
+- ✅ **3.16.5** Members can acknowledge a signal with a single "praying" response, and the signal shows how many members have done so. The press is a toggle, and the signal's page names who is praying.
+- ✅ **3.16.6** Members can reply to a signal with a short message of encouragement or scripture. A reply is not edited after posting; its author can delete it, and an admin can delete any.
+- ✅ **3.16.7** The member who raised a signal is notified when someone replies to it.
+- ✅ **3.16.8** The author can close their own signal when the situation is resolved, optionally adding a closing note.
+- ✅ **3.16.9** An admin can close any signal, without a closing note — the note is the author's.
+- ✅ **3.16.10** Closed signals move out of the open list into a resolved view, where they remain visible to the group rather than being deleted.
+- ✅ **3.16.11** An admin can remove a signal entirely if it is inappropriate or raised in error. Removal deletes the signal, its replies and its acknowledgements outright, and the notifications that pointed at it go with it.
+- ✅ **3.16.12** A member can have a limited number of open signals at once, so the channel keeps its urgency. The limit is ten; the eleventh is refused with a sentence saying to close one first.
+- ✅ **3.16.13** Signals and their replies are visible to all members. There is no private or anonymous SOS.
 
 ### 🔨 3.17 Notifications
 
@@ -420,7 +420,7 @@ It is built as a Progressive Web App on a single codebase, reachable from any br
 | 3.17.16 | Note reaction             | Another member reacts to your public note (3.12.21)     | Note author                  |
 | 3.17.17 | New feature announcement  | An admin announces a feature the product has gained (3.17.18) | All members            |
 
-Five rows reach the in-app centre today — 3.17.4, 3.17.6, 3.17.9, 3.17.16 and 3.17.17. Push (3.17.1) is unbuilt for every row. *All members* means every active account at the moment of the event: a deactivated account is not written to, and reactivating it does not back-fill what it missed.
+Seven rows reach the in-app centre today — 3.17.4, 3.17.6, 3.17.7, 3.17.8, 3.17.9, 3.17.16 and 3.17.17. Push (3.17.1) is unbuilt for every row. *All members* means every active account at the moment of the event: a deactivated account is not written to, and reactivating it does not back-fill what it missed.
 
 **Preferences**
 
@@ -479,7 +479,7 @@ Five rows reach the in-app centre today — 3.17.4, 3.17.6, 3.17.9, 3.17.16 and 
 - ✅ **3.19.9** User management: invitations, role assignment, deactivation and the member list (3.1.3–3.1.7). The list is every account, however it arrived — registered (3.1.15) and invited accounts are one list with one set of controls, because an admin managing roles is not interested in which door somebody came through.
 - 📝 **3.19.10** Audio processing settings and sound profile configuration (3.4.6).
 - 📝 **3.19.11** External publishing status and queues (3.20.6).
-- 📝 **3.19.12** SOS oversight: view open signals, close them, remove them (3.16.9, 3.16.11).
+- ✅ **3.19.12** SOS oversight: close any signal, remove any signal, remove any reply (3.16.9, 3.16.11). The controls are on the signal's own page in the member app, shown to an admin and refused by the API to anybody else, rather than a panel on the dashboard — the operator's decision when 3.16 shipped, because an admin reading a signal is already where the decision is made.
 - ✅ **3.19.13** Every automated step records what it cost to run — provider, model, billed quantity, spend and the provider's own request id — against the recording that caused it, so the running cost of the library is measured rather than estimated.
 - ✅ **3.19.14** Chapter editing on a recording — retitling, rewriting a summary, moving a boundary, splitting and merging (3.22.7). It is not an entry in the Pending Reviews queue, because chapters carry no gate of their own (3.22.6).
 - ✅ **3.19.15** Tag management (3.3.12): every tag with its counts, and the controls to create, rename and delete one. Applying a tag is a control on the recording's and the series' own rows (3.3.11), not on this panel.

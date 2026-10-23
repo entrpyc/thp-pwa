@@ -44,16 +44,25 @@ describe('the private-note condition is written once', () => {
     expect(violations.map((violation) => violation.file)).toContain('packages/db/src/notes.ts');
   });
 
-  it('names schema.ts as the only other exemption, and for a reason that is not a read', () => {
+  it('names schema.ts and sos.ts as the only other exemptions, each for a reason that is not a read of notes', () => {
     // A widened exemption list is how a guard quietly stops guarding. Stating it here makes adding
-    // a third file an edit somebody has to justify rather than a line nobody notices.
-    expect([...NOTE_PRIVACY_EXEMPT_FILES]).toEqual(['packages/db/src/schema.ts']);
+    // a fourth file an edit somebody has to justify rather than a line nobody notices.
+    expect([...NOTE_PRIVACY_EXEMPT_FILES]).toEqual([
+      'packages/db/src/schema.ts',
+      'packages/db/src/sos.ts',
+    ]);
     const schema = readFileSync(resolve(REPO_ROOT, 'packages/db/src/schema.ts'), 'utf8');
     // What it is exempt *for*: a check constraint on what may be stored. It issues no query, and
     // the guard would be reporting the table's own rule about replies, not a read of anybody's
     // notes.
     expect(schema).toContain('note_reply_is_public');
     expect(schema).not.toContain('listNotesForReader');
+    // And the SOS module: its `author_id` comparisons are over `sos_signal` and `sos_reply`, which
+    // the identifier-shaped pattern cannot tell from `note`'s. It never touches the note table and
+    // has no visibility to state (3.16.13: nothing private, nothing anonymous).
+    const sos = readFileSync(resolve(REPO_ROOT, 'packages/db/src/sos.ts'), 'utf8');
+    expect(sos).not.toMatch(/\bnote\./);
+    expect(sos).not.toContain('visibility');
   });
 });
 

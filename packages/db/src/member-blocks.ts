@@ -25,12 +25,12 @@ import { memberBlock, user } from './schema';
  *
  * - **SOS signals** ([3.16](docs/project/prd.md)): the list of open and resolved signals, the
  *   replies under a signal and the "praying" count are reads of member content, so each `where`
- *   takes `not(blockBetween(viewerId, <author column>))` exactly as `notes.ts` does. Raising a
- *   signal broadcasts to everybody (3.16.3) — the *broadcast* is not filtered, because an SOS is
- *   the one place a member asks the whole group; the signal itself is then hidden from anybody
- *   blocked either way by the list read. A reply to a signal is a write aimed at its author, so
- *   the service asks {@link isBlockedEitherWay} and refuses `blocked`, and 3.16.7's notification
- *   is suppressed on the same answer.
+ *   takes `not(blockBetween(viewerId, <author column>))` exactly as `sos.ts` does. Raising a
+ *   signal broadcasts to everybody (3.16.3) **less anybody blocked either way with the author**
+ *   (`insertNotificationForSosAudience`): the list read hides the signal from them, so a notice
+ *   would be a press that lands on nothing. A reply to a signal is a write aimed at its author;
+ *   the signal is already `not_found` to a member blocked either way, and 3.16.7's notification
+ *   asks {@link isBlockedEitherWay} once more before it is written.
  * - **Push notifications** ([3.17.1](docs/project/prd.md)): push is a second delivery of the same
  *   rows the in-app centre already writes, so the suppression in
  *   `packages/web/src/server/notifications/service.ts` already covers it — a notification that is

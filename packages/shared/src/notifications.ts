@@ -30,8 +30,8 @@ export const ANNOUNCEMENT_KINDS = ['announcement', 'new_feature'] as const;
 export type AnnouncementKind = (typeof ANNOUNCEMENT_KINDS)[number];
 
 /**
- * Every event the centre lists. Three are raised by what members and admins do in the product;
- * the last two are the announcement kinds an admin composes.
+ * Every event the centre lists. All but the last two are raised by what members and admins do in
+ * the product; the last two are the announcement kinds an admin composes.
  */
 export const NOTIFICATION_KINDS = [
   /** An admin published a teaching ([3.17.4](docs/project/prd.md)). Everybody. */
@@ -63,6 +63,10 @@ export const NOTIFICATION_KINDS = [
    * raises would be a deferred destination drawn rather than dropped.
    */
   'summary_ready',
+  /** A member raised an SOS signal ([3.17.7](docs/project/prd.md), [3.16.3](docs/project/prd.md)). Everybody but the member. */
+  'sos_raised',
+  /** Somebody replied to your SOS signal ([3.17.8](docs/project/prd.md), [3.16.7](docs/project/prd.md)). The author. */
+  'sos_reply',
   ...ANNOUNCEMENT_KINDS,
 ] as const;
 
@@ -88,6 +92,8 @@ export const NOTIFICATION_KIND_LABEL: Record<NotificationKind, string> = {
   note_reported: 'Report',
   report_resolved: 'Report reviewed',
   summary_ready: 'Summary ready',
+  sos_raised: 'SOS',
+  sos_reply: 'SOS reply',
   announcement: 'Announcement',
   new_feature: 'New feature',
 };

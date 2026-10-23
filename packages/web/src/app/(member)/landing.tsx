@@ -13,6 +13,7 @@ import {
 import { apiFetch } from '@/client/api-client';
 import { DownloadedMark } from './downloads/downloaded-mark';
 import { usePlayer } from './player-context';
+import { SosCard } from './sos/sos-card';
 import styles from './screens.module.css';
 
 /**
@@ -28,6 +29,9 @@ import styles from './screens.module.css';
  * - **My notes** — [§3.12](docs/project/prd.md) is deferred whole, so the card is **dropped**
  *   rather than rendered empty. An empty card is a promise; a missing one is a screen that will
  *   grow.
+ * - **SOS** — not in the reference, and added by the operator's decision when
+ *   [§3.16](docs/project/prd.md) shipped: the prayer emergency channel's way in is a card here
+ *   rather than a navigation entry, with the open counts, the most urgent signals and Raise SOS.
  *
  * **Elapsed only.** The reference prints `01:23 / 02:30`, and the second half of that is a number
  * this epic has nowhere: nothing inspects the media and `recording` has no duration column. So the
@@ -107,6 +111,8 @@ export function Landing() {
           </Link>
         </section>
       ) : null}
+
+      <SosCard />
 
       <Link className={styles.wayIn} href={MEMBER_SERIES_PAGE_PATH}>
         <span className={styles.wayInLabel}>View all series</span>

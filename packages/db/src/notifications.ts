@@ -1,11 +1,13 @@
 import { and, desc, eq, isNull, sql } from 'drizzle-orm';
 import { getDatabase, queryable, type Executor } from './client';
+import { noBlockBetween } from './member-blocks';
 import { announcement, notification, user } from './schema';
 import {
   ROLE,
   noteReactionNotificationTitle,
   noteReplyNotificationTitle,
   noteReportedNotificationTitle,
+  sosReplyNotificationTitle,
   type AnnouncementKind,
   type NotificationKind,
 } from '@thp/shared';
@@ -42,6 +44,7 @@ export interface NotificationRow {
   readonly noteId: string | null;
   readonly actorId: string | null;
   readonly announcementId: string | null;
+  readonly sosSignalId: string | null;
   readonly createdAt: Date;
   readonly readAt: Date | null;
 }
@@ -56,6 +59,7 @@ export interface NotificationContent {
   readonly noteId?: string | null;
   readonly actorId?: string | null;
   readonly announcementId?: string | null;
+  readonly sosSignalId?: string | null;
 }
 
 /** One `announcement` row, with the sender's name joined for the console's list. */
@@ -90,6 +94,7 @@ const NOTIFICATION_COLUMNS = {
   noteId: notification.noteId,
   actorId: notification.actorId,
   announcementId: notification.announcementId,
+  sosSignalId: notification.sosSignalId,
   createdAt: notification.createdAt,
   readAt: notification.readAt,
 } as const;
@@ -121,6 +126,7 @@ export async function insertNotification(
       noteId: content.noteId ?? null,
       actorId: content.actorId ?? null,
       announcementId: content.announcementId ?? null,
+      sosSignalId: content.sosSignalId ?? null,
     })
     .returning(NOTIFICATION_COLUMNS);
   const row = rows[0] as NotificationRow | undefined;
@@ -161,6 +167,42 @@ export async function insertNotificationForAllMembers(
       ${content.announcementId ?? null}::uuid
     from ${user}
     where ${user.deactivatedAt} is null
+    returning ${notification.id}
+  `);
+  return (written as unknown as { id: string }[]).map((row) => row.id);
+}
+
+/**
+ * Write one notification for **every active account but the author's, less anybody either side
+ * of a block with them** — the shape an SOS takes ([3.17.7](docs/project/prd.md),
+ * [3.16.3](docs/project/prd.md)).
+ *
+ * The author was there. A member blocked either way would be handed a bell entry that opens onto
+ * a signal the list read hides from them (`member-blocks.ts`), which is a press that lands on
+ * nothing; the row is simply never written, and so never pushed. One `insert … select`, for the
+ * reason the module header gives, and the signal's id on every row so an admin's removal takes
+ * the notices with it.
+ */
+export async function insertNotificationForSosAudience(
+  content: NotificationContent & { readonly sosSignalId: string },
+  authorId: string,
+  executor: Executor = getDatabase(),
+): Promise<string[]> {
+  const written = await queryable(executor).execute(sql`
+    insert into ${notification}
+      (user_id, kind, title, body, href, actor_id, sos_signal_id)
+    select
+      ${user.id},
+      ${content.kind}::notification_kind,
+      ${content.title},
+      ${content.body},
+      ${content.href},
+      ${authorId}::uuid,
+      ${content.sosSignalId}::uuid
+    from ${user}
+    where ${user.deactivatedAt} is null
+      and ${user.id} <> ${authorId}::uuid
+      and ${noBlockBetween(authorId, user.id)}
     returning ${notification.id}
   `);
   return (written as unknown as { id: string }[]).map((row) => row.id);
@@ -268,7 +310,15 @@ export async function anonymiseNotificationsByActor(
     .set({ title: noteReportedNotificationTitle(placeholderName) })
     .where(and(eq(notification.actorId, actorId), eq(notification.kind, 'note_reported')))
     .returning({ id: notification.id });
-  return replies.length + reactions.length + reports.length;
+  // The fourth: the title an SOS author read when this member replied to their signal. A raised
+  // signal's own notices need no rewrite — the signal cascades with its author, and the notices
+  // cascade with the signal.
+  const sosReplies = await db
+    .update(notification)
+    .set({ title: sosReplyNotificationTitle(placeholderName) })
+    .where(and(eq(notification.actorId, actorId), eq(notification.kind, 'sos_reply')))
+    .returning({ id: notification.id });
+  return replies.length + reactions.length + reports.length + sosReplies.length;
 }
 
 // =================================================================================================

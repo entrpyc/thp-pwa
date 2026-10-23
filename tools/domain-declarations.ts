@@ -18,6 +18,7 @@ import {
   REVIEW_STATUSES,
   ROLES,
   SCRIPTURE_ORIGINS,
+  SOS_URGENCIES,
 } from '@thp/shared';
 import { walkFiles } from './fs-walk';
 
@@ -141,6 +142,12 @@ export const DOMAIN_DECLARATIONS: readonly DomainDeclaration[] = [
     members: HIGHLIGHT_KINDS,
   },
   { name: 'HighlightKind', canonicalFile: 'packages/shared/src/highlights.ts' },
+  {
+    name: 'SOS_URGENCIES',
+    canonicalFile: 'packages/shared/src/sos.ts',
+    members: SOS_URGENCIES,
+  },
+  { name: 'SosUrgency', canonicalFile: 'packages/shared/src/sos.ts' },
 ];
 
 export interface DeclarationViolation {

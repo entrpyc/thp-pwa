@@ -84,5 +84,11 @@ export const rules: PolicyRules = {
   'highlight.create': { roles: { admin: true, member: true } },
   'highlight.remove': { roles: { admin: true, member: true } },
   'highlight.list': { roles: { admin: true, member: true } },
+  'sos.read': { roles: { admin: true, member: true } },
+  'sos.raise': { roles: { admin: true, member: true } },
+  'sos.respond': { roles: { admin: true, member: true } },
+  'sos.close': { roles: { admin: true, member: true }, requiresOwnership: true },
+  'sos.reply.delete': { roles: { admin: true, member: true }, requiresOwnership: true },
+  'sos.moderate': { roles: { admin: true, member: false } },
   'search.query': { roles: { admin: true, member: true } },
 };

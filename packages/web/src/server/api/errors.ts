@@ -288,6 +288,15 @@ export class ApiError extends Error {
     return new ApiError('highlights_full', 409, message);
   }
 
+  /**
+   * A signal that would take a member past `MAX_OPEN_SOS_PER_MEMBER` open ones
+   * ([3.16.12](docs/project/prd.md)). `409` for the reason `highlights_full` is: permitted,
+   * well-formed, and refused by a state the member can change in one press by closing a signal.
+   */
+  static sosLimit(message: string): ApiError {
+    return new ApiError('sos_limit', 409, message);
+  }
+
   static notFound(message = 'The requested resource does not exist.'): ApiError {
     return new ApiError('not_found', 404, message);
   }

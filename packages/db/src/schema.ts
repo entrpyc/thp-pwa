@@ -32,6 +32,9 @@ import {
   MAX_ANNOUNCEMENT_TITLE_LENGTH,
   MAX_NOTE_LENGTH,
   MAX_REPORT_DETAIL_LENGTH,
+  MAX_SOS_CLOSING_NOTE_LENGTH,
+  MAX_SOS_DESCRIPTION_LENGTH,
+  MAX_SOS_REPLY_LENGTH,
   MAX_SOUND_PROFILE_NOTE_LENGTH,
   MAX_PUSH_ENDPOINT_LENGTH,
   MAX_TAG_LENGTH,
@@ -46,6 +49,7 @@ import {
   REVIEW_STATUSES,
   ROLES,
   SCRIPTURE_ORIGINS,
+  SOS_URGENCIES,
   SOUND_PROFILE_BOUNDS,
   SYNC_ENTRY_KINDS,
   SYNC_RESULT_STATUSES,
@@ -110,6 +114,8 @@ export const reportOutcome = pgEnum('report_outcome', REPORT_OUTCOMES);
 /** Why two moments are linked ([3.9.3](docs/project/prd.md)). Derived, never restated. */
 export const crossReferenceBasis = pgEnum('cross_reference_basis', CROSS_REFERENCE_BASES);
 export const highlightKind = pgEnum('highlight_kind', HIGHLIGHT_KINDS);
+/** The four SOS colours ([3.16.1](docs/project/prd.md)), derived from the shared tuple. */
+export const sosUrgency = pgEnum('sos_urgency', SOS_URGENCIES);
 
 /**
  * An account. Columns arrive with the steps that use them: `deactivated_at` comes with ticket 4
@@ -1477,6 +1483,12 @@ export const notification = pgTable(
     announcementId: uuid('announcement_id').references(() => announcement.id, {
       onDelete: 'cascade',
     }),
+    /**
+     * The SOS signal a notice is about ([3.17.7](docs/project/prd.md), [3.17.8](docs/project/prd.md)).
+     * Cascades: an admin's removal of a signal ([3.16.11](docs/project/prd.md)) is a hard delete,
+     * and a bell entry that opens onto nothing is worse than no entry.
+     */
+    sosSignalId: uuid('sos_signal_id').references(() => sosSignal.id, { onDelete: 'cascade' }),
     createdAt: timestamp('created_at', { withTimezone: true }).notNull().defaultNow(),
     /** Null while unread. Set once, by the member it is for, and never cleared. */
     readAt: timestamp('read_at', { withTimezone: true }),
@@ -2074,5 +2086,125 @@ export const syncReceipt = pgTable(
     ),
     /** A refusal names its reason; an application has none. */
     check('sync_receipt_refusal_whole', sql`(${table.status} = 'refused') = (${table.code} is not null)`),
+  ],
+);
+
+/**
+ * **A member's call on the whole group for prayer** ([3.16](docs/project/prd.md);
+ * [4.15](docs/project/prd.md)) — one row per signal, open until `closed_at` is set.
+ *
+ * **Status is two columns, not an enum.** [4.15](docs/project/prd.md) names three statuses — open,
+ * closed, removed — and only two are states a row can be in: an admin's removal
+ * ([3.16.11](docs/project/prd.md)) is the operator's decision to delete the row outright, replies,
+ * acknowledgements and the notices that pointed at it going with it through the cascades below. So
+ * "open" is `closed_at is null`, "closed" is the timestamp, and `closed_by` says whether the author
+ * or an admin ended it — which the member screen does not print, and the audit line does.
+ *
+ * **`closing_note` belongs to a closed signal** ([3.16.8](docs/project/prd.md)): the check refuses
+ * a note on an open one, so the service cannot leave a "resolved" sentence on a signal still
+ * standing. Its ceiling and the description's derive from the shared constants rather than being
+ * restated.
+ *
+ * **Deletion follows the README.** `author_id` cascades: a signal is one person's own need laid
+ * before the group, and when the person goes their request goes with them — the same answer a
+ * highlight gives, and deliberately not a note's `restrict`, because a tombstone holds a thread's
+ * shape for other members' study and a prayer request has no such afterlife. `closed_by` sets
+ * null: who closed it is a record about somebody else's signal.
+ */
+export const sosSignal = pgTable(
+  'sos_signal',
+  {
+    id: uuid('id').primaryKey().defaultRandom(),
+    authorId: uuid('author_id')
+      .notNull()
+      .references(() => user.id, { onDelete: 'cascade' }),
+    urgency: sosUrgency('urgency').notNull(),
+    description: text('description').notNull(),
+    raisedAt: timestamp('raised_at', { withTimezone: true }).notNull().defaultNow(),
+    /** Null while open ([3.16.10](docs/project/prd.md)). Set once; a closed signal is not reopened. */
+    closedAt: timestamp('closed_at', { withTimezone: true }),
+    closedBy: uuid('closed_by').references(() => user.id, { onDelete: 'set null' }),
+    closingNote: text('closing_note'),
+  },
+  (table) => [
+    /**
+     * The board's two reads: the open list and the resolved list, each in urgency-then-recency
+     * order ([3.16.4](docs/project/prd.md)). `closed_at` leads so each list is one range of the
+     * index; the ordering columns follow so neither needs a sort.
+     */
+    index('sos_signal_board_idx').on(table.closedAt, table.urgency, table.raisedAt),
+    /** The cap ([3.16.12](docs/project/prd.md)) is a count of this author's open rows. */
+    index('sos_signal_author_open_idx')
+      .on(table.authorId)
+      .where(sql`${table.closedAt} is null`),
+    check(
+      'sos_signal_description_length',
+      sql`char_length(${table.description}) between 1 and ${sql.raw(String(MAX_SOS_DESCRIPTION_LENGTH))}`,
+    ),
+    check(
+      'sos_signal_closing_note_length',
+      sql`${table.closingNote} is null or char_length(${table.closingNote}) between 1 and ${sql.raw(String(MAX_SOS_CLOSING_NOTE_LENGTH))}`,
+    ),
+    /** A closing note is a closed signal's; an open one has none. */
+    check(
+      'sos_signal_note_when_closed',
+      sql`${table.closingNote} is null or ${table.closedAt} is not null`,
+    ),
+    /** Who closed it is known exactly when it is closed. */
+    check(
+      'sos_signal_closer_when_closed',
+      sql`${table.closedBy} is null or ${table.closedAt} is not null`,
+    ),
+  ],
+);
+
+/**
+ * **"Praying"** ([3.16.5](docs/project/prd.md)) — one row per member per signal, and no row for a
+ * member who has not pressed. The primary key is the requirement, exactly as `note_reaction`'s is:
+ * pressing twice is `on conflict do nothing`, and the count the signal shows is the row count.
+ * Both sides cascade — a fact about a pairing, meaningless without either half.
+ */
+export const sosPraying = pgTable(
+  'sos_praying',
+  {
+    signalId: uuid('signal_id')
+      .notNull()
+      .references(() => sosSignal.id, { onDelete: 'cascade' }),
+    userId: uuid('user_id')
+      .notNull()
+      .references(() => user.id, { onDelete: 'cascade' }),
+    /** The order the names are listed in on the signal's page. */
+    prayedAt: timestamp('prayed_at', { withTimezone: true }).notNull().defaultNow(),
+  },
+  (table) => [primaryKey({ columns: [table.signalId, table.userId] })],
+);
+
+/**
+ * **A word of encouragement or scripture under a signal** ([3.16.6](docs/project/prd.md)). Flat —
+ * no threads, no edits ([3.16.6](docs/project/prd.md) asks for a short message, and the operator
+ * decided a reply is deleted or left, never rewritten), so the row is the text, who wrote it and
+ * when. Cascades with the signal and with its author: a reply is addressed to one person's request
+ * and is nothing once either the request or the replier is gone.
+ */
+export const sosReply = pgTable(
+  'sos_reply',
+  {
+    id: uuid('id').primaryKey().defaultRandom(),
+    signalId: uuid('signal_id')
+      .notNull()
+      .references(() => sosSignal.id, { onDelete: 'cascade' }),
+    authorId: uuid('author_id')
+      .notNull()
+      .references(() => user.id, { onDelete: 'cascade' }),
+    text: text('text').notNull(),
+    createdAt: timestamp('created_at', { withTimezone: true }).notNull().defaultNow(),
+  },
+  (table) => [
+    /** The conversation's order: one signal's replies, oldest first. */
+    index('sos_reply_signal_created_idx').on(table.signalId, table.createdAt),
+    check(
+      'sos_reply_text_length',
+      sql`char_length(${table.text}) between 1 and ${sql.raw(String(MAX_SOS_REPLY_LENGTH))}`,
+    ),
   ],
 );

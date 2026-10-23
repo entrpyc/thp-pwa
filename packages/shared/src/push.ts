@@ -44,6 +44,8 @@ export const NOTIFICATION_CATEGORIES = [
   'announcements',
   /** What waits on an admin — a draft, a reported note. Listed for admins only. */
   'admin_alerts',
+  /** SOS signals raised, and replies to your own ([3.16](docs/project/prd.md), [3.17.14](docs/project/prd.md)). */
+  'sos',
 ] as const;
 
 export type NotificationCategory = (typeof NOTIFICATION_CATEGORIES)[number];
@@ -68,6 +70,8 @@ export const NOTIFICATION_CATEGORY_OF_KIND: Record<NotificationKind, Notificatio
   new_feature: 'announcements',
   note_reported: 'admin_alerts',
   summary_ready: 'admin_alerts',
+  sos_raised: 'sos',
+  sos_reply: 'sos',
 };
 
 /** The line the section prints over each switch, and the sentence under it. */
@@ -76,6 +80,7 @@ export const NOTIFICATION_CATEGORY_LABEL: Record<NotificationCategory, string> =
   notes: 'Your notes',
   announcements: 'Announcements',
   admin_alerts: 'Admin alerts',
+  sos: 'SOS signals',
 };
 
 export const NOTIFICATION_CATEGORY_DESCRIPTION: Record<NotificationCategory, string> = {
@@ -83,6 +88,7 @@ export const NOTIFICATION_CATEGORY_DESCRIPTION: Record<NotificationCategory, str
   notes: 'When somebody replies or reacts to one of your notes, and when a report you made is reviewed.',
   announcements: 'Messages from the admins, and what is new in the app.',
   admin_alerts: 'When a summary is ready for review, and when a member reports a note.',
+  sos: 'When a member raises an SOS signal, and when somebody replies to yours.',
 };
 
 /**

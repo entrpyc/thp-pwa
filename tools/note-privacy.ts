@@ -41,7 +41,14 @@ export interface NotePrivacyViolation {
  * the table's own constraints and issues no query at all.
  */
 export const NOTE_PRIVACY_MODULE_FILES: readonly string[] = ['packages/db/src/notes.ts'];
-export const NOTE_PRIVACY_EXEMPT_FILES: readonly string[] = ['packages/db/src/schema.ts'];
+export const NOTE_PRIVACY_EXEMPT_FILES: readonly string[] = [
+  'packages/db/src/schema.ts',
+  // The SOS tables have an `author_id` of their own and no visibility at all (3.16.13: nothing
+  // private, nothing anonymous). The comparisons there are over `sos_signal` and `sos_reply`,
+  // which the identifier-shaped pattern cannot tell from `note`'s; the block rule they do state
+  // is `member-blocks.ts`'s, and `visibility-boundary` already watches that one.
+  'packages/db/src/sos.ts',
+];
 
 /**
  * A predicate over either half of the condition, in both spellings this codebase writes queries in.

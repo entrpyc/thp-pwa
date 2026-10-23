@@ -28,7 +28,7 @@ import { pushOffset, readCapturedPush, waitForCapturedPush } from '../support/pu
  *
  * Five claims:
  *
- * 1. **Switches are on by default and per account.** A member reads three categories, an admin
+ * 1. **Switches are on by default and per account.** A member reads four categories, an admin
  *    four; a member cannot set the admin one; a set switch reads back on a fresh request.
  * 2. **A device registers once.** The same endpoint registered twice is one row; registered by
  *    another account it moves; a web registration without keys is refused; `DELETE` forgets it
@@ -146,9 +146,9 @@ afterAll(async () => {
 // =================================================================================================
 
 describe('the switches', () => {
-  it('read as on by default: three categories for a member, four for an admin', async () => {
+  it('read as on by default: four categories for a member, five for an admin', async () => {
     const mine = await preferences(author);
-    expect(mine.categories.map((one) => one.category)).toEqual(['recordings', 'notes', 'announcements']);
+    expect(mine.categories.map((one) => one.category)).toEqual(['recordings', 'notes', 'announcements', 'sos']);
     expect(mine.categories.every((one) => one.pushEnabled)).toBe(true);
     // The suite's servers carry no VAPID pair, so a browser is told there is nothing to subscribe to.
     expect(mine.webPush).toBeNull();

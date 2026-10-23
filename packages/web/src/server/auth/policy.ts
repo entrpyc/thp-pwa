@@ -337,6 +337,20 @@ export const POLICY_ACTIONS = [
   'highlight.create',
   'highlight.remove',
   'highlight.list',
+  /**
+   * The SOS channel ([3.16](docs/project/prd.md)). Both roles read the board, raise a signal and
+   * respond to one — a praying press or a reply — because the channel is the whole group's
+   * (3.16.13). `sos.close` is **owned**: an author ends their own signal (3.16.8), and an admin
+   * ends anybody's through `sos.moderate`, which is also the one action behind removing a signal
+   * (3.16.11) and removing another member's reply. `sos.reply.delete` is owned for the same
+   * reason `note.delete` is: a member takes back their own words and nobody else's.
+   */
+  'sos.read',
+  'sos.raise',
+  'sos.respond',
+  'sos.close',
+  'sos.moderate',
+  'sos.reply.delete',
 ] as const;
 
 export type PolicyAction = (typeof POLICY_ACTIONS)[number];
@@ -553,6 +567,15 @@ const RULES: PolicyRules = {
   'highlight.create': { roles: { admin: true, member: true } },
   'highlight.remove': { roles: { admin: true, member: true } },
   'highlight.list': { roles: { admin: true, member: true } },
+  // The whole group reads, raises and responds ([3.16.1](docs/project/prd.md), 3.16.5, 3.16.6).
+  'sos.read': { roles: { admin: true, member: true } },
+  'sos.raise': { roles: { admin: true, member: true } },
+  'sos.respond': { roles: { admin: true, member: true } },
+  // Your own signal, and your own reply ([3.16.8](docs/project/prd.md)).
+  'sos.close': { roles: { admin: true, member: true }, requiresOwnership: true },
+  'sos.reply.delete': { roles: { admin: true, member: true }, requiresOwnership: true },
+  // Anybody's signal — close or remove — and anybody's reply ([3.16.9](docs/project/prd.md), 3.16.11).
+  'sos.moderate': { roles: { admin: true, member: false } },
 };
 
 export function isPolicyAction(value: string): value is PolicyAction {

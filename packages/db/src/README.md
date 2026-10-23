@@ -76,6 +76,13 @@ against the schema, not a second copy of it.
   nothing else, and 3.1.9 names it among what goes with the account. `highlight.note_id` cascades
   with the note — never fired by a public note's re-pointing, and a private note's hard delete
   takes its entry with it.
+- `sos_signal.author_id`, `sos_reply.author_id`, `sos_praying.user_id` — cascade: a signal is
+  one person's own need laid before the group and goes with them (3.1.9's spirit, and
+  deliberately not a note's `restrict` — a prayer request has no thread to hold open for others'
+  study); a reply and a "praying" are facts about a pairing. `sos_signal.closed_by` — set null.
+  `notification.sos_signal_id` cascades with the signal, which is also what an admin's removal
+  (3.16.11) relies on. The SOS reply notices this person caused have their title rewritten to the
+  placeholder's name, as a note reply's is.
 - `sync_receipt.user_id` — cascade: a receipt for an outbox entry flushed from the person's own
   device is a fact about them and nothing else. `sync_receipt.note_id` — set null with the note,
   so the receipt outlives a deleted note the way a log line does.

@@ -27,6 +27,12 @@
   --color-notes: #22C55E;
   --color-notes-bg: #03352B;
 
+  /* SOS urgency (prd 3.16.1) */
+  --color-sos-red: #EF4444;
+  --color-sos-orange: #F97316;
+  --color-sos-yellow: #EAB308;
+  --color-sos-green: #22C55E;
+
   /* text */
   --color-text: #FCFCFC;
   --color-text-muted: #8A97AC;

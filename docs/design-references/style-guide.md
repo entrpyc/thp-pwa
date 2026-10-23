@@ -45,6 +45,17 @@ Backgrounds vary a little screen to screen (`#00162B`–`#040D1C`). Pick one can
 | `--color-notes` | `#22C55E` | Notes icon stroke |
 | `--color-notes-bg` | `#03352B` | Notes icon tile fill |
 
+### SOS urgency (prd 3.16.1)
+
+The one place the product carries red, orange, yellow and a second green: the four urgency colours of an SOS signal. Each is drawn as a **dot beside the word for it** — "Red", "Orange" — never as a hue alone, so the urgency reads without the colour. Nothing else in the product uses these tokens; principle 5 (green means notes) still holds everywhere but the SOS surfaces.
+
+| Token | Hex | Use |
+|---|---|---|
+| `--color-sos-red` | `#EF4444` | Immediate crisis |
+| `--color-sos-orange` | `#F97316` | Serious, needs prompt prayer |
+| `--color-sos-yellow` | `#EAB308` | Difficult but not urgent |
+| `--color-sos-green` | `#22C55E` | General request, no urgency |
+
 ### Text
 
 | Token | Hex | Use |
@@ -224,6 +235,12 @@ Floating rounded-rectangle strip docked to the right edge, evenly spaced purple 
   /* category */
   --color-notes: #22C55E;
   --color-notes-bg: #03352B;
+
+  /* SOS urgency (prd 3.16.1) */
+  --color-sos-red: #EF4444;
+  --color-sos-orange: #F97316;
+  --color-sos-yellow: #EAB308;
+  --color-sos-green: #22C55E;
 
   /* text */
   --color-text: #FCFCFC;

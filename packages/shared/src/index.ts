@@ -30,6 +30,7 @@ export * from './scripture';
 export * from './search';
 export * from './segment';
 export * from './series';
+export * from './sos';
 export * from './sound-profile';
 export * from './tags';
 export * from './transcripts';

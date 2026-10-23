@@ -4,6 +4,7 @@ import {
   insertAnnouncement,
   insertNotification,
   insertNotificationForAllMembers,
+  insertNotificationForSosAudience,
   isBlockedEitherWay,
   listActiveAdminIds,
   listAnnouncements,
@@ -31,6 +32,9 @@ import {
   noteReportedNotificationTitle,
   onboardingPagePath,
   recordingPagePath,
+  sosPagePath,
+  sosRaisedNotificationTitle,
+  sosReplyNotificationTitle,
   type AnnouncementListPayload,
   type AnnouncementView,
   type NotificationListPayload,
@@ -41,6 +45,7 @@ import {
   type ReportOutcome,
   type ReportReason,
   type SendAnnouncementPayload,
+  type SosUrgency,
 } from '@thp/shared';
 import { deliverPush } from '@thp/push';
 import { ApiError } from '@/server/api/errors';
@@ -264,6 +269,64 @@ export async function notifyReportResolved(input: {
     );
     await deliverPush(rows.map((row) => row.id));
     return { noteId: input.noteId, outcome: input.outcome, recipients: recipients.length };
+  });
+}
+
+/**
+ * A member raised an SOS signal ([3.17.7](docs/project/prd.md), [3.16.3](docs/project/prd.md)).
+ * **Everybody active is told, at every urgency** — less the author, who was there, and less
+ * anybody either side of a block with them, who would be handed a press that lands on a signal
+ * the board hides from them. The title carries the colour, the body the request, and the press
+ * lands on the signal's own page.
+ */
+export async function notifySosRaised(input: {
+  readonly signalId: string;
+  readonly urgency: SosUrgency;
+  readonly description: string;
+  readonly author: Actor;
+}): Promise<void> {
+  await raise('sos.raise', async () => {
+    const written = await insertNotificationForSosAudience(
+      {
+        kind: 'sos_raised',
+        title: sosRaisedNotificationTitle(input.author.displayName, input.urgency),
+        body: excerptForNotification(input.description),
+        href: sosPagePath(input.signalId),
+        sosSignalId: input.signalId,
+      },
+      input.author.id,
+    );
+    await deliverPush(written);
+    return { signalId: input.signalId, urgency: input.urgency, recipients: written.length };
+  });
+}
+
+/**
+ * Somebody replied to an SOS signal ([3.17.8](docs/project/prd.md), [3.16.7](docs/project/prd.md)).
+ * The author is told — unless the author is the one replying, who was there — and never across a
+ * block, for the reason the module comment gives.
+ */
+export async function notifySosReply(input: {
+  readonly signalId: string;
+  readonly authorId: string;
+  readonly replier: Actor;
+  readonly replyText: string;
+}): Promise<void> {
+  if (input.authorId === input.replier.id) return;
+  await raise('sos.reply', async () => {
+    if (await isBlockedEitherWay(input.authorId, input.replier.id)) {
+      return { signalId: input.signalId, suppressed: 'blocked' };
+    }
+    const row = await insertNotification(input.authorId, {
+      kind: 'sos_reply',
+      title: sosReplyNotificationTitle(input.replier.displayName),
+      body: excerptForNotification(input.replyText),
+      href: sosPagePath(input.signalId),
+      actorId: input.replier.id,
+      sosSignalId: input.signalId,
+    });
+    await deliverPush([row.id]);
+    return { notificationId: row.id, signalId: input.signalId };
   });
 }
 

@@ -113,6 +113,13 @@ export const CORRELATION_ID_HEADER = 'x-correlation-id';
  *   `Grace` when `grace` exists. Its own code rather than `invalid_input` because the name was
  *   fine and the fix is different: pick the tag that is already there, or choose another name.
  *
+ * The SOS channel ([3.16.12](docs/project/prd.md)) adds one, on the same argument `highlights_full`
+ * was made on:
+ *
+ * - `sos_limit` — the member already holds `MAX_OPEN_SOS_PER_MEMBER` open signals. `409`: the
+ *   caller was permitted and the request was well-formed, and what refuses is a state the member
+ *   can change in one press by closing a signal.
+ *
  * Account deletion ([3.1.8](docs/project/prd.md)) adds three:
  *
  * - `password_incorrect` — a signed-in member confirmed a destructive action with a password that
@@ -163,6 +170,7 @@ export const API_ERROR_CODES = [
   'blocked',
   'terms_required',
   'highlights_full',
+  'sos_limit',
   'not_found',
   'internal_error',
   'service_unavailable',

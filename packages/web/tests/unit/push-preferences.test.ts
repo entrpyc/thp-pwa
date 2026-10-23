@@ -62,7 +62,7 @@ describe('the categories', () => {
   });
 
   it('are offered without the admin-only one unless the policy says so, in the declared order', () => {
-    expect(categoriesVisibleTo(false)).toEqual(['recordings', 'notes', 'announcements']);
+    expect(categoriesVisibleTo(false)).toEqual(['recordings', 'notes', 'announcements', 'sos']);
     expect(categoriesVisibleTo(true)).toEqual([...NOTIFICATION_CATEGORIES]);
     expect(ADMIN_ONLY_CATEGORIES).toEqual(['admin_alerts']);
   });

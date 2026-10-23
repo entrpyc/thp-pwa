@@ -70,8 +70,8 @@ describe('the notifications section', () => {
       const strip = page.getByRole('navigation', { name: 'Profile sections' });
       expect(await strip.getByRole('link', { name: 'Notifications' }).getAttribute('aria-current')).toBe('page');
 
-      await expect.poll(() => switches(page).count(), { timeout: 30_000 }).toBe(3);
-      expect(await switches(page).evaluateAll((nodes) => nodes.map((node) => node.getAttribute('aria-checked')))).toEqual(['true', 'true', 'true']);
+      await expect.poll(() => switches(page).count(), { timeout: 30_000 }).toBe(4);
+      expect(await switches(page).evaluateAll((nodes) => nodes.map((node) => node.getAttribute('aria-checked')))).toEqual(['true', 'true', 'true', 'true']);
       expect(await card(page).getByText('New recordings').count()).toBe(1);
       expect(await card(page).getByText('Announcements').count()).toBe(1);
       expect(await card(page).getByText('Admin alerts').count()).toBe(0);
@@ -87,7 +87,7 @@ describe('the notifications section', () => {
   it('lists the admin-only category for an admin', async () => {
     const page = await freshSessionOn(admin);
     try {
-      await expect.poll(() => switches(page).count(), { timeout: 30_000 }).toBe(4);
+      await expect.poll(() => switches(page).count(), { timeout: 30_000 }).toBe(5);
       expect(await card(page).getByText('Admin alerts').count()).toBe(1);
     } finally {
       await page.context().close();
@@ -97,7 +97,7 @@ describe('the notifications section', () => {
   it('turns a category off on one press, holds across a fresh sign-in, and comes back on the same way', async () => {
     const first = await freshSessionOn(member);
     try {
-      await expect.poll(() => switches(first).count(), { timeout: 30_000 }).toBe(3);
+      await expect.poll(() => switches(first).count(), { timeout: 30_000 }).toBe(4);
       const recordings = card(first).getByRole('switch', { name: 'New recordings' });
       await recordings.click();
       await expect.poll(() => recordings.getAttribute('aria-checked'), { timeout: 30_000 }).toBe('false');
