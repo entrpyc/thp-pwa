@@ -397,9 +397,8 @@ export function RecordingScreen({
               */}
               <TagLabels tags={recording.tags} />
             </div>
+            <DownloadControl recordingId={recordingId} title={recording.title} />
           </header>
-
-          <DownloadControl recordingId={recordingId} title={recording.title} />
 
           {/*
             **Description first, then summary.** The description is what an admin wrote *about* this

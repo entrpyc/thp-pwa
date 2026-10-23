@@ -60,7 +60,78 @@
   composes: sheet from '../profile/profile.module.css';
 }
 
-/* The recording page's control sits under the header, in the pill shape the tabs use. */
+/*
+ * The icon control at the right of a title — the recording page's download, the series page's
+ * Download all. A column: the round button, then the thin bar while a transfer runs, then a note
+ * when there is one to read. `margin-left: auto` is what puts it at the header's far end.
+ */
+.headerControl {
+  flex: none;
+  margin-left: auto;
+  align-self: flex-start;
+  display: flex;
+  flex-direction: column;
+  align-items: flex-end;
+  gap: var(--space-1);
+}
+
+.iconButton {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  min-width: calc(var(--space-8) + var(--space-3));
+  min-height: calc(var(--space-8) + var(--space-3));
+  background: transparent;
+  border: 1px solid var(--color-border-strong);
+  /* A rounded square rather than the pill, as the operator drew it. */
+  border-radius: var(--radius-md);
+  color: var(--color-text);
+  cursor: pointer;
+}
+
+.iconButton:hover {
+  border-color: var(--color-primary-strong);
+}
+
+.iconButton[aria-pressed='true'] {
+  border-color: var(--color-primary-strong);
+  background: var(--color-primary-soft);
+  color: var(--color-primary-icon);
+}
+
+.iconButton:disabled {
+  cursor: not-allowed;
+  color: var(--color-text-muted);
+}
+
+/* The transfer's bar, the width of the button it sits under. */
+.iconTrack {
+  width: calc(var(--space-8) + var(--space-3));
+  height: var(--space-1);
+  border-radius: var(--radius-pill);
+  background: var(--color-surface-raised);
+  overflow: hidden;
+}
+
+/* A sentence under the icon — the failure, or that downloads need a connection — kept narrow. */
+.iconNote {
+  max-width: 12rem;
+  text-align: right;
+  font-size: var(--fs-meta);
+  color: var(--color-text-muted);
+}
+
+/* Words for the screen reader that the icon says to the eye: the size held, the transfer's state. */
+.hiddenText {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  overflow: hidden;
+  clip: rect(0 0 0 0);
+  white-space: nowrap;
+}
+
+/* The pill-shaped control, kept for the profile's downloads page. */
 .control {
   display: flex;
   flex-wrap: wrap;

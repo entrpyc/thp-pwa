@@ -89,13 +89,13 @@ async function countOf(locator: Locator, expected: number, timeout = 30_000): Pr
   await expect.poll(() => locator.count(), { timeout }).toBe(expected);
 }
 
-async function downloadFromRecordingPage(page: Page, id: string): Promise<Locator> {
+async function downloadFromRecordingPage(page: Page, id: string): Promise<void> {
   await page.goto(`${baseUrl}${recordingPagePath(id)}`, { waitUntil: 'domcontentloaded' });
   const control = page.getByLabel('Download', { exact: true });
   await countOf(control.getByRole('button', { name: 'Download' }), 1);
   await control.getByRole('button', { name: 'Download' }).click();
-  await countOf(control.getByText(/Downloaded · /), 1, 60_000);
-  return control;
+  // Held, the control is gone: the profile's Downloads page is where it is listed and removed.
+  await countOf(control, 0, 60_000);
 }
 
 async function deleteEveryDownload(page: Page): Promise<void> {
@@ -118,8 +118,7 @@ describe('downloading a teaching', () => {
   it('fetches it on one tap, marks it everywhere it appears, and lists it in the profile with its size', async () => {
     const { context, page } = await signedIn();
     try {
-      const control = await downloadFromRecordingPage(page, recordingId);
-      expect(await textOf(control)).toContain(describeBytes(bytes));
+      await downloadFromRecordingPage(page, recordingId);
 
       await page.goto(`${baseUrl}${MEMBER_LIBRARY_PAGE_PATH}`, { waitUntil: 'domcontentloaded' });
       const rows = page.getByRole('list', { name: 'Recordings' });
@@ -127,8 +126,10 @@ describe('downloading a teaching', () => {
       await countOf(rows.getByRole('listitem').filter({ hasText: `Held teaching ${RUN}` }).getByLabel('Downloaded'), 1);
       await countOf(rows.getByRole('listitem').filter({ hasText: `Streamed teaching ${RUN}` }).getByLabel('Downloaded'), 0);
 
+      // The series page draws no mark on its rows, by the operator's decision.
       await page.goto(`${baseUrl}${seriesPagePath(seriesId)}`, { waitUntil: 'domcontentloaded' });
-      await countOf(page.getByRole('list', { name: 'Recordings' }).getByLabel('Downloaded'), 1);
+      await countOf(page.getByRole('list', { name: 'Recordings' }).getByRole('listitem'), 2);
+      await countOf(page.getByRole('list', { name: 'Recordings' }).getByLabel('Downloaded'), 0);
 
       await page.goto(`${baseUrl}${PROFILE_DOWNLOADS_PAGE_PATH}`, { waitUntil: 'domcontentloaded' });
       const current = page.getByRole('navigation', { name: 'Profile sections' }).getByRole('link', { name: 'Downloads' });
@@ -167,7 +168,8 @@ describe('downloading a teaching', () => {
       await page.getByRole('button', { name: 'Download all' }).click();
       await countOf(sheet, 1);
       await sheet.getByRole('button', { name: /^Download \d/ }).click();
-      await countOf(page.getByRole('list', { name: 'Recordings' }).getByLabel('Downloaded'), 2, 90_000);
+      // Every recording held: the series has nothing left to ask for, so the control goes.
+      await countOf(page.getByRole('button', { name: 'Download all' }), 0, 90_000);
 
       await page.goto(`${baseUrl}${PROFILE_DOWNLOADS_PAGE_PATH}`, { waitUntil: 'domcontentloaded' });
       await countOf(page.getByRole('list', { name: 'Downloads' }).getByRole('listitem'), 2);

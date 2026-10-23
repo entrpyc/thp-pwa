@@ -12,7 +12,6 @@ import {
   type ResumeView,
 } from '@thp/shared';
 import { apiFetch } from '@/client/api-client';
-import { DownloadedMark } from './downloads/downloaded-mark';
 import { usePlayer } from './player-context';
 import { SosCard } from './prayer-requests/sos-card';
 import styles from './screens.module.css';
@@ -124,7 +123,6 @@ export function Landing() {
               <span className={styles.resumeAt}>
                 Resume at {formatTimecode(card.positionMs)}
               </span>
-              <DownloadedMark recordingId={card.recordingId} />
             </span>
           </Link>
         </section>

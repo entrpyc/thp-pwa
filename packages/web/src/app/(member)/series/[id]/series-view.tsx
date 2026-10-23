@@ -12,7 +12,6 @@ import {
 import { ApiClientError, apiFetch } from '@/client/api-client';
 import { useBreadcrumbTrail } from '../../player-context';
 import { DownloadAllControl } from '../../downloads/download-all-control';
-import { DownloadedMark } from '../../downloads/downloaded-mark';
 import { seriesMeta } from '../series-listing';
 import { TagLabels } from '../../tag-labels';
 import styles from '../../screens.module.css';
@@ -140,17 +139,21 @@ export function SeriesScreen({ seriesId }: { seriesId: string }) {
         ) : null
       ) : (
         <>
-          <header className={styles.detailText}>
-            <h1 className={styles.detailTitle}>{payload.series.title}</h1>
-            {payload.series.description === null ? null : (
-              <p className={styles.seriesDescription}>{payload.series.description}</p>
-            )}
-            <p className={styles.detailMeta}>{seriesMeta(payload.series)}</p>
-            {/* The study's own tags, as labels ([4.7](docs/project/prd.md)); nothing when it has none. */}
-            <TagLabels tags={payload.series.tags} />
+          <header className={styles.detailHead}>
+            <div className={styles.detailText}>
+              <h1 className={styles.detailTitle}>{payload.series.title}</h1>
+              {payload.series.description === null ? null : (
+                <p className={styles.seriesDescription}>{payload.series.description}</p>
+              )}
+              <p className={styles.detailMeta}>{seriesMeta(payload.series)}</p>
+              {/* The study's own tags, as labels ([4.7](docs/project/prd.md)); nothing when it has none. */}
+              <TagLabels tags={payload.series.tags} />
+            </div>
+            <DownloadAllControl
+              seriesId={seriesId}
+              recordingIds={payload.recordings.map((recording) => recording.id)}
+            />
           </header>
-
-          <DownloadAllControl seriesId={seriesId} />
 
           <ul className={styles.rows} aria-label="Recordings">
             {payload.recordings.map((recording, index) => (
@@ -169,7 +172,6 @@ export function SeriesScreen({ seriesId }: { seriesId: string }) {
                         ? formatDay(recording.recordedAt)
                         : `Resume at ${formatTimecode(recording.positionMs)}`}
                     </span>
-                    <DownloadedMark recordingId={recording.id} />
                   </span>
                   <span className={styles.rowChevron} aria-hidden="true">
                     ›

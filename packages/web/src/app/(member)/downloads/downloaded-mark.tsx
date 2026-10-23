@@ -5,7 +5,8 @@ import styles from './downloads.module.css';
 
 /**
  * **The downloaded mark** ([3.18.9](docs/project/prd.md)) — a small outlined tick wherever a
- * teaching appears: library rows, series rows, the landing's resume card. Renders nothing for a
+ * teaching appears: the library's rows (the series page's rows and the landing's resume card
+ * carried it too, until the operator took it off both). Renders nothing for a
  * teaching that is not held, so a row costs nothing until it is. A span, never a link, because it
  * sits inside rows that are whole-row links.
  */

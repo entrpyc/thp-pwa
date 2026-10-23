@@ -6,6 +6,7 @@ import { ApiClientError } from '@/client/api-client';
 import { offlineManager } from '@/client/offline/manager';
 import type { SeriesPlan } from '@/client/offline/queue';
 import { useOffline } from '@/client/offline/hooks';
+import { DownloadIcon } from './download-icon';
 import styles from './downloads.module.css';
 
 /**
@@ -19,9 +20,19 @@ import styles from './downloads.module.css';
  * words it. In a store build there is no free-space figure and the sheet is the confirmation
  * alone. What is already held or queued is not asked for again.
  *
- * Self-contained, so the series page imports it on one line.
+ * Self-contained, so the series page imports it on one line. The download icon at the right of
+ * the series title, by the operator's decision — it was a worded pill under the header — and
+ * drawn only while something in the series is not yet on the device: a series held whole has
+ * nothing left to ask for.
  */
-export function DownloadAllControl({ seriesId }: { seriesId: string }) {
+export function DownloadAllControl({
+  seriesId,
+  recordingIds,
+}: {
+  seriesId: string;
+  /** Every recording in the series; the control goes once all of them are held. */
+  recordingIds: readonly string[];
+}) {
   const offline = useOffline();
   const manager = offlineManager();
   const [plan, setPlan] = useState<SeriesPlan | null>(null);
@@ -49,18 +60,24 @@ export function DownloadAllControl({ seriesId }: { seriesId: string }) {
     setPlan(null);
   }
 
+  const allHeld =
+    recordingIds.length > 0 &&
+    recordingIds.every((id) => offline.downloads.some((one) => one.recordingId === id));
+  if (allHeld) return null;
+
   return (
-    <div className={styles.control}>
+    <div className={styles.headerControl}>
       <button
-        className={styles.pill}
+        className={styles.iconButton}
         type="button"
         disabled={!offline.online || sizing}
+        aria-label="Download all"
+        title={!offline.online ? 'Downloads need a connection.' : sizing ? 'Sizing up…' : 'Download all'}
         onClick={() => void open()}
       >
-        <span aria-hidden="true">↓</span>
-        {sizing ? 'Sizing up…' : 'Download all'}
+        <DownloadIcon held={false} />
       </button>
-      {failure === null ? null : <span className={styles.rowMeta}>{failure}</span>}
+      {failure === null ? null : <span className={styles.iconNote}>{failure}</span>}
 
       {plan === null ? null : (
         <div className={styles.scrim} role="presentation" onClick={() => setPlan(null)}>
