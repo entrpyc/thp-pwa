@@ -4,6 +4,7 @@ export * from './artwork';
 export * from './auth';
 export * from './blocks';
 export * from './chapters';
+export * from './cross-references';
 export * from './embeddings';
 export * from './feedback';
 export * from './health';

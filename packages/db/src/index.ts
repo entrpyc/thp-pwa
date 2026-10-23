@@ -54,6 +54,18 @@ export {
   type NewChapter,
 } from './chapters';
 export {
+  deleteCrossReferencesTouching,
+  findNearestSegments,
+  listCrossReferencesComputedFor,
+  listCrossReferencesTouching,
+  listOutgoingCrossReferences,
+  replaceCrossReferencesForRun,
+  type CrossReferenceRow,
+  type NearestSegmentRow,
+  type NewCrossReference,
+  type OutgoingCrossReferenceRow,
+} from './cross-references';
+export {
   deleteEmbeddingsForSources,
   findEmbeddingsForSources,
   listEmbeddingsForRecording,

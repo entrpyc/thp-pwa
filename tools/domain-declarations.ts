@@ -2,6 +2,7 @@ import { readFileSync } from 'node:fs';
 import { relative, resolve, sep } from 'node:path';
 import {
   BIBLE_BOOKS,
+  CROSS_REFERENCE_BASES,
   FEEDBACK_KINDS,
   JOB_STATUSES,
   NOTE_VISIBILITIES,
@@ -43,6 +44,12 @@ export const DOMAIN_DECLARATIONS: readonly DomainDeclaration[] = [
     members: PIPELINE_STEPS,
   },
   { name: 'PipelineStep', canonicalFile: 'packages/shared/src/pipeline.ts' },
+  {
+    name: 'CROSS_REFERENCE_BASES',
+    canonicalFile: 'packages/shared/src/cross-references.ts',
+    members: CROSS_REFERENCE_BASES,
+  },
+  { name: 'CrossReferenceBasis', canonicalFile: 'packages/shared/src/cross-references.ts' },
   {
     name: 'JOB_STATUSES',
     canonicalFile: 'packages/shared/src/jobs.ts',

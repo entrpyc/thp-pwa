@@ -21,6 +21,7 @@ import {
 } from 'drizzle-orm/pg-core';
 import {
   ANNOUNCEMENT_KINDS,
+  CROSS_REFERENCE_BASES,
   DEFAULT_PLAYBACK_SPEED,
   EMBEDDING_DIMENSIONS,
   EMBEDDING_SOURCE_KINDS,
@@ -94,6 +95,9 @@ export const embeddingSource = pgEnum('embedding_source', EMBEDDING_SOURCE_KINDS
 export const reportReason = pgEnum('report_reason', REPORT_REASONS);
 
 export const reportOutcome = pgEnum('report_outcome', REPORT_OUTCOMES);
+
+/** Why two moments are linked ([3.9.3](docs/project/prd.md)). Derived, never restated. */
+export const crossReferenceBasis = pgEnum('cross_reference_basis', CROSS_REFERENCE_BASES);
 
 /**
  * An account. Columns arrive with the steps that use them: `deactivated_at` comes with ticket 4
@@ -1733,6 +1737,92 @@ export const noteReport = pgTable(
     check(
       'note_report_detail_length',
       sql`char_length(${table.detail}) <= ${sql.raw(String(MAX_REPORT_DETAIL_LENGTH))}`,
+    ),
+  ],
+);
+
+/**
+ * **A link from a moment of one teaching to a moment of another** ([3.9](docs/project/prd.md);
+ * project tdd 3.3) — the derived edge table over segment pairs, written by the worker's
+ * `cross_reference` step and read by the recording page while a member listens.
+ *
+ * **Directed, and written in both directions.** [3.9.6](docs/project/prd.md) asks that a new
+ * teaching link into the library *and* that the library gain links back to it, and the read on a
+ * recording page is "the links out of this teaching". So every link the step finds is two rows,
+ * one from each side, and a page reads one `where source_recording_id = ?` with no union and no
+ * column swap. The price is a table twice the size of the undirected one, and the table is small:
+ * three links per chapter per run (`CROSS_REFERENCES_PER_CHAPTER`), both ways.
+ *
+ * **`computed_for` is which run owns the row.** A run for teaching A writes rows under A's
+ * segments and under B's; a later run for A has to replace exactly those and not the rows B's own
+ * run wrote under the same segments. Keyed by the recording rather than the job because the ledger
+ * is append-only and a re-run is a new job: "A's current links" is a fact about A. The unique
+ * index is over the pair *and* the run, so A's run and B's run may both find the same pair — they
+ * are two opinions with two scores, deduplicated by the read — while one run writing it twice is
+ * refused, which is what makes the step's replace idempotent under at-least-once dispatch.
+ *
+ * **Every key cascades, and that is most of the lifecycle.** A re-transcription replaces the
+ * transcript, which deletes its segments, which takes every link anchored to them on either side
+ * — the chain then re-runs this step and writes fresh ones. Deleting a recording takes its rows
+ * both ways. What cascades cannot do is **unpublishing** ([3.2.11](docs/project/prd.md)), which
+ * deletes nothing: the publication route removes every row touching the recording in the same
+ * transaction, and the read gates targets on publication besides, so a link to an unpublished
+ * teaching is never shown even in the moment between the two.
+ *
+ * **No reference to `user`**, so the account-deletion convention in [README.md](./README.md) has
+ * nothing to ask of it: a link is a fact about two teachings and about no person.
+ *
+ * `score` is cosine similarity in `0..1`, a `real` because four significant figures is more than
+ * a ranking needs and the table is read far more than its precision is. The two checks refuse the
+ * rows no run should write: a link from a teaching to itself, and a row owned by a run for a
+ * recording that is on neither end of it.
+ */
+export const crossReference = pgTable(
+  'cross_reference',
+  {
+    id: uuid('id').primaryKey().defaultRandom(),
+    sourceRecordingId: uuid('source_recording_id')
+      .notNull()
+      .references(() => recording.id, { onDelete: 'cascade' }),
+    sourceSegmentId: uuid('source_segment_id')
+      .notNull()
+      .references(() => segment.id, { onDelete: 'cascade' }),
+    targetRecordingId: uuid('target_recording_id')
+      .notNull()
+      .references(() => recording.id, { onDelete: 'cascade' }),
+    targetSegmentId: uuid('target_segment_id')
+      .notNull()
+      .references(() => segment.id, { onDelete: 'cascade' }),
+    /** Cosine similarity, 0..1. The whole of the ranking. */
+    score: real('score').notNull(),
+    basis: crossReferenceBasis('basis').notNull(),
+    /** The recording whose run wrote this row — the unit a re-run replaces. */
+    computedFor: uuid('computed_for')
+      .notNull()
+      .references(() => recording.id, { onDelete: 'cascade' }),
+    createdAt: timestamp('created_at', { withTimezone: true }).notNull().defaultNow(),
+  },
+  (table) => [
+    /** One run says a pair once. Two runs may both say it; the read keeps the stronger. */
+    uniqueIndex('cross_reference_pair_per_run_unique').on(
+      table.sourceSegmentId,
+      table.targetSegmentId,
+      table.computedFor,
+    ),
+    /** The read: every link out of this teaching. */
+    index('cross_reference_source_recording_idx').on(table.sourceRecordingId),
+    /** Unpublishing: every row pointing at this teaching, which the source index does not find. */
+    index('cross_reference_target_recording_idx').on(table.targetRecordingId),
+    /** The replace: every row this teaching's run owns. */
+    index('cross_reference_computed_for_idx').on(table.computedFor),
+    check('cross_reference_score_range', sql`${table.score} between 0 and 1`),
+    check(
+      'cross_reference_across_recordings',
+      sql`${table.sourceRecordingId} <> ${table.targetRecordingId}`,
+    ),
+    check(
+      'cross_reference_owned_by_an_end',
+      sql`${table.computedFor} in (${table.sourceRecordingId}, ${table.targetRecordingId})`,
     ),
   ],
 );

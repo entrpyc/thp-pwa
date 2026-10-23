@@ -531,3 +531,31 @@ export async function listVisibleEmbeddings(
     .where(embeddingVisibleTo(readerId));
   return rows as VisibleEmbeddingRow[];
 }
+
+// =================================================================================================
+// The recording gate as a fragment, for a query over some other table (cross-referencing).
+// =================================================================================================
+
+/**
+ * **"That recording is published", as a `where` fragment** over a column or expression that holds
+ * a recording id — what cross-referencing ([3.9](docs/project/prd.md)) puts beside its `<=>` and
+ * beside its read.
+ *
+ * It exists because that feature asks the gate of a recording that is *not the row being
+ * selected*: the candidate on the other end of a link, found through the embedding table, and the
+ * target of a stored link, found through `cross_reference`. Neither read selects from `recording`,
+ * and a predicate the caller spelled itself would be the second copy this file exists to refuse.
+ * So the gate is spelled here, once more, as the same `is not null` the lists above compare, and
+ * handed out as SQL — the shape {@link embeddingVisibleTo} already takes.
+ *
+ * The *first* gate only. A cross-reference is a link between transcript segments, which carry no
+ * gate of their own ([3.5](docs/project/prd.md)): a published teaching's transcript is readable
+ * whole, so a link to one of its sentences needs nothing beyond the recording's publication. A
+ * caller that wanted a summary's second gate would use {@link embeddingVisibleTo} instead.
+ */
+export function recordingIsPublished(recordingId: SQL): SQL {
+  return sql`exists (
+    select 1 from ${recording}
+    where ${recording.id} = ${recordingId} and ${recording.publishedAt} is not null
+  )`;
+}
