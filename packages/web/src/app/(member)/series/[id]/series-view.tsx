@@ -71,7 +71,7 @@ export function SeriesScreen({ seriesId }: { seriesId: string }) {
   const [payload, setPayload] = useState<SeriesPayload | null>(null);
   const [failure, setFailure] = useState<string | null>(null);
 
-  useBreadcrumbTrail(payload?.series.title ?? null);
+  useBreadcrumbTrail(payload?.series.title ?? null, [], 'series');
 
   /**
    * The band is drawn before the payload arrives — it holds the back control, which has to be

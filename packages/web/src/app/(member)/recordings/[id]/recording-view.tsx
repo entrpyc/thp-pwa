@@ -212,7 +212,8 @@ export function RecordingScreen({
     recording?.title ?? null,
     recording?.series == null
       ? []
-      : [{ label: recording.series.title, href: seriesPagePath(recording.series.id) }],
+      : [{ label: recording.series.title, href: seriesPagePath(recording.series.id), kind: 'series' }],
+    'recording',
   );
 
   const { openIfIdle } = player;

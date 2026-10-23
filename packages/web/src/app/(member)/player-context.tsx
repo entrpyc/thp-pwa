@@ -286,20 +286,30 @@ const PlayerContext = createContext<PlayerApi | null>(null);
  * way it would be spoken: study, then teaching, then the chapter you are on. A page with none keeps
  * the two-segment trail the library and the landing have always drawn.
  */
+/**
+ * What a segment names, for the narrow bar: a phone's width has no room for a study's title, a
+ * teaching's and a chapter's in one line, so there each of these is drawn as its icon with the
+ * title kept for the screen reader. A segment with no kind — Highlights, Search — is a word
+ * short enough to stay one.
+ */
+export type BreadcrumbKind = 'series' | 'recording' | 'chapter';
+
 export interface BreadcrumbParent {
   readonly label: string;
   readonly href: string;
+  readonly kind?: BreadcrumbKind;
 }
 
 export interface BreadcrumbTrail {
   /** Outermost first. Every one is a link; the current page is the only segment that is not. */
   readonly ancestors: readonly BreadcrumbParent[];
   readonly current: string | null;
+  readonly currentKind: BreadcrumbKind | null;
 }
 
 const NO_ANCESTORS: readonly BreadcrumbParent[] = [];
 
-const EMPTY_TRAIL: BreadcrumbTrail = { ancestors: NO_ANCESTORS, current: null };
+const EMPTY_TRAIL: BreadcrumbTrail = { ancestors: NO_ANCESTORS, current: null, currentKind: null };
 
 const BreadcrumbContext = createContext<{
   readonly trail: BreadcrumbTrail;
@@ -326,6 +336,7 @@ export function usePlayer(): PlayerApi {
 export function useBreadcrumbTrail(
   current: string | null,
   ancestors: readonly BreadcrumbParent[] = NO_ANCESTORS,
+  currentKind: BreadcrumbKind | null = null,
 ): void {
   const context = useContext(BreadcrumbContext);
   const setTrail = context?.setTrail;
@@ -334,15 +345,17 @@ export function useBreadcrumbTrail(
   // or a path — so no two different trails collide on one key, which a readable separator like
   // `|` would eventually let them do. Written as escapes: a literal control character in source
   // is invisible in every editor and is lost by the first tool that trims the line.
-  const key = ancestors.map((one) => `${one.label}\u0000${one.href}`).join('\u0001');
+  const key = ancestors
+    .map((one) => `${one.label}\u0000${one.href}\u0000${one.kind ?? ''}`)
+    .join('\u0001');
 
   const latest = useRef(ancestors);
   latest.current = ancestors;
 
   useEffect(() => {
-    setTrail?.({ ancestors: latest.current, current });
+    setTrail?.({ ancestors: latest.current, current, currentKind });
     return () => setTrail?.(EMPTY_TRAIL);
-  }, [setTrail, current, key]);
+  }, [setTrail, current, currentKind, key]);
 }
 
 export function useBreadcrumbTrailValue(): BreadcrumbTrail {

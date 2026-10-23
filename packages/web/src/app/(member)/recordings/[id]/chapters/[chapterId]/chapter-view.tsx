@@ -157,9 +157,10 @@ export function ChapterScreen({
       : [
           ...(recording.series == null
             ? []
-            : [{ label: recording.series.title, href: seriesPagePath(recording.series.id) }]),
-          { label: recording.title, href: recordingPagePath(recordingId) },
+            : [{ label: recording.series.title, href: seriesPagePath(recording.series.id), kind: 'series' as const }]),
+          { label: recording.title, href: recordingPagePath(recordingId), kind: 'recording' as const },
         ],
+    'chapter',
   );
 
   const { openIfIdle } = player;

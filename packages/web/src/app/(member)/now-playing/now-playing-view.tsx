@@ -34,7 +34,7 @@ export function NowPlayingScreen() {
   const router = useRouter();
   const loaded = player.loaded;
 
-  useBreadcrumbTrail(loaded?.title ?? null);
+  useBreadcrumbTrail(loaded?.title ?? null, [], 'recording');
 
   return (
     <section className={styles.view} aria-label="Now playing">

@@ -161,6 +161,66 @@
 }
 
 /*
+ * A study, a teaching or a chapter in the trail: its icon on a phone, its title from 641px up —
+ * the width the transport takes one row at, so the two bars change shape together. The title is
+ * never removed, only taken off the screen, so the trail reads the same to a screen reader and the
+ * segment's accessible name stays its title.
+ */
+.crumbLink,
+.crumbCurrent {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--space-2);
+  min-width: 0;
+}
+
+.crumbIcon {
+  flex: none;
+  display: none;
+}
+
+.crumbLabel {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+@media (max-width: 640px) {
+  /* Each segment is the home link's 44px square with its icon centred, one gap between each and the next. */
+  .crumb {
+    min-width: 0;
+  }
+
+  .crumbLink,
+  .crumbCurrent {
+    justify-content: center;
+    min-width: calc(var(--space-8) + var(--space-3));
+    min-height: calc(var(--space-8) + var(--space-3));
+  }
+
+  /* The arrow between two icons stands as tall as their boxes, and no wider than itself. */
+  .separator {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    min-height: calc(var(--space-8) + var(--space-3));
+  }
+
+  .crumbIcon {
+    display: block;
+  }
+
+  .crumbLabel {
+    position: absolute;
+    width: 1px;
+    height: 1px;
+    overflow: hidden;
+    clip: rect(0 0 0 0);
+    white-space: nowrap;
+  }
+}
+
+/*
  * Boxed on the right, as the reference has it. There is deliberately no search control beside it:
  * §3.10 is deferred, and a magnifier that opens nothing is a promise this epic cannot keep.
  */

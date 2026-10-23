@@ -20,7 +20,7 @@ import {
 import { SignOutButton } from '../sign-out-button';
 import { InstallApp } from './install-app';
 import { useNotifications } from './notifications-context';
-import { useBreadcrumbTrailValue } from './player-context';
+import { useBreadcrumbTrailValue, type BreadcrumbKind } from './player-context';
 import styles from './member.module.css';
 
 /**
@@ -78,6 +78,44 @@ function HomeIcon() {
         strokeLinejoin="round"
       />
     </svg>
+  );
+}
+
+/**
+ * **A segment's icon, for the narrow bar** — a study, a teaching, a chapter — in the home icon's
+ * line style. Drawn beside the title always; the stylesheet decides which of the two is seen.
+ */
+function CrumbIcon({ kind }: { kind: BreadcrumbKind }) {
+  const stroke = { fill: 'none', stroke: 'currentColor', strokeWidth: 1.6, strokeLinejoin: 'round' as const };
+  return (
+    <svg className={styles.crumbIcon} viewBox="0 0 24 24" width="18" height="18" aria-hidden="true" focusable="false">
+      {kind === 'series' ? (
+        // A stack: the study's recordings, one behind another.
+        <>
+          <rect x="4" y="9" width="16" height="11" rx="1.5" {...stroke} />
+          <path d="M7 6h10M9 3h6" {...stroke} strokeLinecap="round" />
+        </>
+      ) : kind === 'recording' ? (
+        // A microphone: one teaching.
+        <>
+          <rect x="9" y="3" width="6" height="11" rx="3" {...stroke} />
+          <path d="M6 11a6 6 0 0 0 12 0M12 17v4M9 21h6" {...stroke} strokeLinecap="round" />
+        </>
+      ) : (
+        // A bookmark: one chapter of it.
+        <path d="M7 3h10a1 1 0 0 1 1 1v17l-6-4-6 4V4a1 1 0 0 1 1-1z" {...stroke} />
+      )}
+    </svg>
+  );
+}
+
+/** A segment's words, beside its icon when it has one. */
+function CrumbText({ label, kind }: { label: string; kind: BreadcrumbKind | undefined }) {
+  return (
+    <>
+      {kind === undefined ? null : <CrumbIcon kind={kind} />}
+      <span className={kind === undefined ? undefined : styles.crumbLabel}>{label}</span>
+    </>
   );
 }
 
@@ -220,7 +258,7 @@ function MenuIcon() {
 export function TopNavigation({ canSeeConsole }: { canSeeConsole: boolean }) {
   const [open, setOpen] = useState(false);
   const [searching, setSearching] = useState(false);
-  const { ancestors, current } = useBreadcrumbTrailValue();
+  const { ancestors, current, currentKind } = useBreadcrumbTrailValue();
   const regionRef = useRef<HTMLDivElement>(null);
 
   /*
@@ -278,7 +316,7 @@ export function TopNavigation({ canSeeConsole }: { canSeeConsole: boolean }) {
                 ›
               </span>
               <Link className={styles.crumbLink} href={ancestor.href}>
-                {ancestor.label}
+                <CrumbText label={ancestor.label} kind={ancestor.kind} />
               </Link>
             </li>
           ))}
@@ -288,7 +326,7 @@ export function TopNavigation({ canSeeConsole }: { canSeeConsole: boolean }) {
                 ›
               </span>
               <span className={styles.crumbCurrent} aria-current="page">
-                {current}
+                <CrumbText label={current} kind={currentKind ?? undefined} />
               </span>
             </li>
           )}
