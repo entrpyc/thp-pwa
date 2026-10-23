@@ -218,13 +218,21 @@ describe('the publish control', () => {
 
     // Everything behind the recording is exactly where it was — one write of `null` and nothing
     // else, which is the whole reason `published_at` is a nullable timestamp rather than a status.
+    // The ledger holds one row more than was seeded, and it is the publish's rather than the
+    // unpublish's: publishing enqueues `cross_reference` ([3.9](docs/project/prd.md)), because a
+    // teaching gives and receives links only once it is live, and the ledger is append-only so
+    // taking the teaching down leaves that row where it is.
     const [counts] = await sql<{ items: string; jobs: string; transcripts: string }[]>`
       select
         (select count(*)::text from review_item where recording_id = ${recordingId}) as items,
         (select count(*)::text from job where recording_id = ${recordingId}) as jobs,
         (select count(*)::text from transcript where recording_id = ${recordingId}) as transcripts
     `;
-    expect(counts).toEqual({ items: '1', jobs: '1', transcripts: '1' });
+    expect(counts).toEqual({ items: '1', jobs: '2', transcripts: '1' });
+    const steps = await sql<{ step: string }[]>`
+      select step::text as step from job where recording_id = ${recordingId} order by enqueued_at, id
+    `;
+    expect(steps.map((row) => row.step)).toEqual(['generate_draft', 'cross_reference']);
     expect((await findSummaryByRecording(recordingId, handle))?.content).toBe(
       'The approved summary.',
     );

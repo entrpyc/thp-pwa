@@ -36,6 +36,18 @@ import { RECORDINGS_PATH } from './recordings';
  * transcript correction ([3.5.5](docs/project/prd.md)), a chapter edit
  * ([3.22.7](docs/project/prd.md)) or a note written on the teaching each enqueue it again, and
  * none of those should regenerate a chapter list a human has edited.
+ *
+ * `cross_reference` is the step [3.9](docs/project/prd.md) is made of: the teaching's sentences
+ * run against every other published teaching's sentences in the index `embed` just brought up to
+ * date, and the strongest matches written as links ([3.9.1](docs/project/prd.md),
+ * [3.9.6](docs/project/prd.md)). It runs **last**, after `embed`, because it reads vectors and a
+ * vector that is about to be replaced would produce a link to a sentence that no longer says that.
+ * It is its own step rather than a tail on `embed` because its triggers are a superset of
+ * `embed`'s — publishing a teaching enqueues it alone, since a draft neither gives nor receives
+ * links — and because it spends nothing, so an admin re-running it should not be confirmed or
+ * metered as a paid step would be. It is also the one step whose work is **about other
+ * recordings**: it writes rows under their ids too, which is why unpublishing one removes rows
+ * rather than waiting for a run.
  */
 export const PIPELINE_STEPS = [
   'process_audio',
@@ -43,6 +55,7 @@ export const PIPELINE_STEPS = [
   'generate_draft',
   'generate_chapters',
   'embed',
+  'cross_reference',
 ] as const;
 
 export type PipelineStep = (typeof PIPELINE_STEPS)[number];
@@ -106,6 +119,11 @@ export const FIRST_PIPELINE_STEP: PipelineStep = PIPELINE_STEPS[0];
  * `embed` is on the list although a teaching costs well under a cent to embed: a step that bills
  * anything is a step the ledger has to be able to add up, and a step the ceiling could not stop
  * is a step a runaway loop could spend through unmetered.
+ *
+ * `cross_reference` is **not** on it: it reads vectors already paid for and asks Postgres, never a
+ * provider. A ceiling that could stop it would stop the one step that costs nothing, and every
+ * other read of this list — the spend split on the pipeline view, the ceiling check before a job
+ * starts — would be wrong by a step.
  */
 export const SPENDING_STEPS: readonly PipelineStep[] = [
   'transcribe',

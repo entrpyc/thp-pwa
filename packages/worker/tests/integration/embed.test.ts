@@ -463,9 +463,11 @@ describe('re-embedding after a correction (3.5.5) and a chapter edit (3.22.7)', 
   });
 });
 
-describe('the chain ends here', () => {
-  it('is the last step of the pipeline, enqueued when generate_chapters succeeds', async () => {
-    expect(PIPELINE_STEPS[PIPELINE_STEPS.length - 1]).toBe('embed');
+describe('its place in the chain', () => {
+  it('follows generate_chapters and hands on to cross_reference', async () => {
+    // After the chapters, because it embeds them; before cross-referencing, which reads what it
+    // wrote ([3.9](docs/project/prd.md)). The successor is asserted by running it below.
+    expect(PIPELINE_STEPS.indexOf('embed')).toBe(PIPELINE_STEPS.indexOf('generate_chapters') + 1);
 
     const seeded = await teaching();
     const generated = await run(await claimed(seeded.recordingId, 'generate_chapters'));
@@ -480,15 +482,22 @@ describe('the chain ends here', () => {
       ['embed', 'pending'],
     ]);
 
-    // Run what it enqueued, and the chain stops without treating that as a failure.
+    // Run what it enqueued, and it hands on to cross-referencing in turn.
     const pending = await findUnfinishedJob(seeded.recordingId, 'embed', handle);
     expect(pending).not.toBeNull();
     expect(pending?.correlationId).toBe(generated.correlationId);
     await sql`update job set status = 'running', started_at = now() where id = ${pending?.id as string}`;
     const row = await run({ ...(pending as JobRow), status: 'running', startedAt: new Date() });
     expect(row.status).toBe('succeeded');
-    const after = await sql<{ step: string }[]>`select step::text as step from job where recording_id = ${seeded.recordingId}`;
-    expect(after).toHaveLength(2);
+    const after = await sql<{ step: string; status: string }[]>`
+      select step::text as step, status::text as status from job
+      where recording_id = ${seeded.recordingId} order by enqueued_at, id
+    `;
+    expect(after.map((one) => [one.step, one.status])).toEqual([
+      ['generate_chapters', 'succeeded'],
+      ['embed', 'succeeded'],
+      ['cross_reference', 'pending'],
+    ]);
     expect((await rowsOf(seeded.recordingId)).size).toBeGreaterThan(0);
   });
 

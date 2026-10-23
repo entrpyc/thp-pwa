@@ -485,6 +485,7 @@ describe('running one step again', () => {
       ['generate_draft', 'succeeded', 1],
       ['generate_chapters', 'succeeded', 1],
       ['embed', 'succeeded', 1],
+      ['cross_reference', 'succeeded', 1],
     ]);
   }, 180_000);
 

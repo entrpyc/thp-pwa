@@ -82,6 +82,7 @@ const STEP_LABEL: Record<PipelineStep, string> = {
   generate_draft: 'Generate draft',
   generate_chapters: 'Generate chapters',
   embed: 'Embed',
+  cross_reference: 'Cross-reference',
 };
 
 /**
@@ -117,6 +118,9 @@ const CONFIRMS_RERUN: Record<PipelineStep, boolean> = {
   // Re-embedding replaces vectors with vectors of the same words. Nothing a human wrote is lost
   // and the cost is a fraction of a cent, so a confirmation would be friction with no guardrail.
   embed: false,
+  // Links are a cache of the index (project tdd 3.3): recomputing them discards nothing a human
+  // wrote, costs no provider call, and is the last step, so nothing runs on behind it.
+  cross_reference: false,
 };
 
 /**
@@ -158,6 +162,9 @@ function confirmationFor(step: PipelineStep, title: string, editedChapters: numb
     case 'embed':
       // Never shown — CONFIRMS_RERUN says so — and here because the switch is exhaustive.
       return `Embed “${title}” again? Its vectors are recomputed from the words it has now; nothing is lost.`;
+    case 'cross_reference':
+      // Never shown either, for the same reason.
+      return `Cross-reference “${title}” again? Its links to other teachings are recomputed; nothing is lost.`;
   }
 }
 
@@ -168,6 +175,7 @@ const CONFIRM_ACTION: Record<PipelineStep, string> = {
   generate_draft: 'Yes, generate again',
   generate_chapters: 'Yes, replace the chapters',
   embed: 'Yes, embed again',
+  cross_reference: 'Yes, cross-reference again',
 };
 
 /** What a status is called on screen, in the words an operator would use for it. */

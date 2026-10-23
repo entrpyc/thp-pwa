@@ -1,6 +1,10 @@
 import type { JobRow, ProviderMeta } from '@thp/db';
 import type { JobStep } from '@thp/shared';
 import {
+  createCrossReferenceHandler,
+  type CrossReferenceDependencies,
+} from './cross-reference-recording';
+import {
   createGenerateChaptersHandler,
   type GenerateChaptersDependencies,
 } from './generate-chapters';
@@ -53,7 +57,8 @@ export interface WorkerDependencies
     TranscribeDependencies,
     GenerateDraftDependencies,
     GenerateChaptersDependencies,
-    EmbedDependencies {}
+    EmbedDependencies,
+    CrossReferenceDependencies {}
 
 /**
  * The steps this worker runs — **all of them for real.**
@@ -83,6 +88,7 @@ export function createHandlers(deps: WorkerDependencies = {}): HandlerRegistry {
     generate_draft: createGenerateDraftHandler(deps),
     generate_chapters: createGenerateChaptersHandler(deps),
     embed: createEmbedHandler(deps),
+    cross_reference: createCrossReferenceHandler(deps),
     reprocess_audio: processAudio,
     preview_audio: createPreviewAudioHandler(deps),
   };

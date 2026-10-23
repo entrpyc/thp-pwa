@@ -60,11 +60,23 @@ export interface RecordingEmbeddedEvent {
   readonly recordingId: string;
 }
 
+/**
+ * A teaching's links into the rest of the library were rewritten ([3.9.6](docs/project/prd.md))
+ * — the subscriber `recording_embedded` was waiting for, now a step of the chain. Emitted on
+ * every run that wrote, including one that wrote an empty set, and **not** on a run that skipped
+ * an unpublished teaching: nothing about what members see changed then.
+ */
+export interface RecordingCrossReferencedEvent {
+  readonly type: 'recording_cross_referenced';
+  readonly recordingId: string;
+}
+
 export type DomainEvent =
   | DraftGeneratedEvent
   | RecordingPublishedEvent
   | ChaptersGeneratedEvent
-  | RecordingEmbeddedEvent;
+  | RecordingEmbeddedEvent
+  | RecordingCrossReferencedEvent;
 
 /** The message every domain event is logged under, so one search returns all of them. */
 export const DOMAIN_EVENT_MESSAGE = 'domain.event';

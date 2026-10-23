@@ -159,8 +159,11 @@ describe('the spend ceiling at the runner', () => {
     expect(refused.error).toBe('spend ceiling reached: $6.25 of $2.00 today');
   });
 
-  it('covers every step but the free one', () => {
-    // Audio processing is ffmpeg on our own box; everything after it bills a provider.
-    expect(SPENDING_STEPS).toEqual(PIPELINE_STEPS.filter((step) => step !== 'process_audio'));
+  it('covers every step but the free ones', () => {
+    // Audio processing is ffmpeg on our own box, and cross-referencing asks Postgres about
+    // vectors already paid for; everything between them bills a provider.
+    expect(SPENDING_STEPS).toEqual(
+      PIPELINE_STEPS.filter((step) => step !== 'process_audio' && step !== 'cross_reference'),
+    );
   });
 });
