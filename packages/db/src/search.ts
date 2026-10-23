@@ -30,7 +30,7 @@ import { embeddingVisibleTo } from './visibility';
  *    second spelling.
  * 2. **Two arms, {@link perArm} candidates each.** The vector arm orders by cosine distance over
  *    the HNSW index; the word arm matches `websearch_to_tsquery` against the same `text` the
- *    vector was computed from, under the GIN expression index of migration 0033, ranked by
+ *    vector was computed from, under the GIN expression index of migration 0037, ranked by
  *    `ts_rank_cd`. The configuration is `english` in both places, because an index under one
  *    configuration is not used by a query under another. `websearch_to_tsquery` rather than
  *    `plainto_tsquery` so a member's quotes and minus signs mean what they expect, and so
@@ -106,7 +106,7 @@ export interface SearchHitRow {
   readonly score: number;
 }
 
-/** The text-search configuration, spelled here and in the index of migration 0033 and nowhere else. */
+/** The text-search configuration, spelled here and in the index of migration 0037 and nowhere else. */
 const TEXT_SEARCH_CONFIG = 'english';
 
 /** The reciprocal-rank-fusion constant. See the module comment. */
