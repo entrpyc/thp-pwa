@@ -209,7 +209,8 @@ describe('the Chapters tool in the transport menu', () => {
       await openTools(page);
 
       // Three tools now, where the strip held two: the list icon joins the speech bubble and CC.
-      expect(await toolbar(page).getByRole('button').count()).toBe(3);
+      // Chapters, the Highlights pin, the composer and CC.
+      expect(await toolbar(page).getByRole('button').count()).toBe(4);
       const tool = toolbar(page).getByRole('button', { name: 'Chapters' });
       expect(await tool.count()).toBe(1);
       expect(await tool.getAttribute('aria-pressed')).toBe('false');
@@ -261,7 +262,8 @@ describe('the Chapters tool in the transport menu', () => {
     try {
       await openTools(page);
       // The two tools the strip held before, so this is the menu having decided rather than failed.
-      expect(await toolbar(page).getByRole('button').count()).toBe(2);
+      // The Highlights pin, the composer and CC — no Chapters.
+      expect(await toolbar(page).getByRole('button').count()).toBe(3);
       expect(await toolbar(page).getByRole('button', { name: 'Chapters' }).count()).toBe(0);
       expect(await sheet(page).count()).toBe(0);
     } finally {

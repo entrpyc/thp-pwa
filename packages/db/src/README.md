@@ -69,6 +69,10 @@ against the schema, not a second copy of it.
   taken are records of something that happened to somebody else's note. The admins' notice that
   this person reported a note has its title rewritten to the placeholder's name, as a reply's is.
   `note_report.note_id` cascades with the note, which a public note's re-pointing never fires.
+- `highlight.user_id` — cascade: a member's Highlights playlist is a fact about the person and
+  nothing else, and 3.1.9 names it among what goes with the account. `highlight.note_id` cascades
+  with the note — never fired by a public note's re-pointing, and a private note's hard delete
+  takes its entry with it.
 - `invitation.email` — rows addressed to the person are deleted.
 - `user` itself — the placeholder is excluded from the member list (`listUsers`) and from every
   guarded admin write (`withLastAdminGuard`, `reactivateUser`), so nobody can deactivate,
@@ -118,7 +122,8 @@ that bounds it. No other log line written after the deletion can name them.
 What the product can promise, and what it cannot:
 
 - Deleting an account removes the account, the password hash, the display name, the address,
-  every session, every private note and its search vector, listening positions and history,
+  every session, every private note and its search vector, the Highlights playlist, listening
+  positions and history,
   onboarding state, reactions, the in-app inbox, and the current profile picture. It frees the
   address for a new account.
 - Public notes and replies the person wrote stay on the recordings they were written on, with
