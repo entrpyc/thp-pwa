@@ -26,7 +26,7 @@ import { ImageAttach, useImageAttachments } from './image-attach';
 import { NoteImages } from './note-images';
 import { BlockConfirm, ReportForm } from './note-moderation';
 import { TermsPrompt, isTermsRequired } from './terms-prompt';
-import { PinNoteMenuItem } from '../../highlights/pin-note-menu-item';
+import { PinNoteControl } from '../../highlights/pin-note-control';
 import styles from './notes.module.css';
 
 /**
@@ -552,6 +552,10 @@ function Overflow({
 
   return (
     <div className={styles.overflow}>
+      {/* Any standing top-level note can go to Highlights (3.12.17, widened); a reply has no moment to mark. */}
+      {!note.deleted && note.timestampMs !== null ? (
+        <PinNoteControl noteId={note.id} className={styles.overflowControl} />
+      ) : null}
       <button
         className={styles.overflowControl}
         type="button"
@@ -576,8 +580,6 @@ function Overflow({
               Edit
             </button>
           ) : null}
-          {/* One's own top-level note can go to Highlights (3.12.17); a reply has no moment to pin. */}
-          {note.mine && note.timestampMs !== null ? <PinNoteMenuItem noteId={note.id} className={styles.menuItem} onDone={() => setOpen(false)} /> : null}
           {canDelete ? (
             <button className={styles.menuItem} type="button" onClick={() => setConfirming(true)}>
               Delete

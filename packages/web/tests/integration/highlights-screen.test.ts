@@ -7,7 +7,6 @@ import {
   ROLE,
   chapterPagePath,
   recordingPagePath,
-  seriesPagePath,
 } from '@thp/shared';
 import {
   createDatabase,
@@ -30,9 +29,10 @@ import { uploadTestAudio } from '../support/audio';
  * **Highlights, driven in a real browser** ([3.15](docs/project/prd.md)). The API's half is
  * `highlights.test.ts`; this file asks what a fetch cannot:
  *
- * - whether each of the four pin surfaces ([3.15.4](docs/project/prd.md)) — the recording header,
- *   a series row, the transport's `···` strip, and the menu on one's own note — shows pinned
- *   state and toggles it, writing the row the API would;
+ * - whether each highlight surface ([3.15.4](docs/project/prd.md)) — the transport bar beside the
+ *   rate pill, and the marker beside one's own note — shows highlighted state and toggles it,
+ *   writing the row the API would (the recording header and a series row carried one too, until
+ *   the operator took them off);
  * - whether the chapter page pins the chapter's opening moment;
  * - whether `/profile/highlights` lists the entries newest first with title, series, date and the
  *   note's text, whether Remove takes a row away, whether opening a row lands on the teaching **at
@@ -116,11 +116,6 @@ async function openTeaching(page: Page, recordingId: string): Promise<void> {
     .toBe(1);
 }
 
-/** A pin control, by whichever of its two names it currently has. */
-function pinControl(scope: Page | Locator, noun: string): Locator {
-  return scope.getByRole('button', { name: new RegExp(`^(Pin|Unpin) ${noun}$`) });
-}
-
 async function pressAndExpect(control: Locator, expectedLabel: string): Promise<void> {
   await expect.poll(() => control.isEnabled(), { timeout: 30_000 }).toBe(true);
   await control.click();
@@ -149,54 +144,8 @@ afterAll(async () => {
 
 // =================================================================================================
 
-describe('the recording header', () => {
-  it('pins the whole teaching and unpins it with the same control', async () => {
-    const where = await publishedTeaching(`Header ${RUN}`);
-    const page = await signInAs(member);
-    try {
-      await openTeaching(page, where);
-      const control = pinControl(page, 'to Highlights|from Highlights').first();
-      expect(await control.getAttribute('aria-pressed')).toBe('false');
-
-      await pressAndExpect(control, 'Unpin from Highlights');
-      expect(await control.getAttribute('aria-pressed')).toBe('true');
-      const pinned = (await entriesOf(member)).filter((one) => one.recordingId === where);
-      expect(pinned.map((one) => one.kind)).toEqual(['recording']);
-
-      await pressAndExpect(control, 'Pin to Highlights');
-      expect((await entriesOf(member)).some((one) => one.recordingId === where)).toBe(false);
-    } finally {
-      await page.context().close();
-    }
-  });
-});
-
-describe('a series row', () => {
-  it('pins the row’s teaching', async () => {
-    const study = await insertSeries({ title: `Row study ${RUN}`, description: null }, handle);
-    const where = await publishedTeaching(`Row ${RUN}`);
-    await setRecordingSeries(where, study.id, handle);
-
-    const page = await signInAs(member);
-    try {
-      await page.goto(`${baseUrl}${seriesPagePath(study.id)}`, { waitUntil: 'domcontentloaded' });
-      const row = page.getByRole('listitem').filter({ hasText: `Row ${RUN}` });
-      await expect.poll(() => row.count(), { timeout: 60_000 }).toBe(1);
-
-      // By either name: the press renames the control, and the same locator has to find it after.
-      const control = pinControl(row, 'to Highlights|from Highlights');
-      expect(await control.getAttribute('aria-label')).toBe('Pin to Highlights');
-      await pressAndExpect(control, 'Unpin from Highlights');
-      const pinned = (await entriesOf(member)).filter((one) => one.recordingId === where);
-      expect(pinned.map((one) => one.kind)).toEqual(['recording']);
-    } finally {
-      await page.context().close();
-    }
-  }, 120_000);
-});
-
-describe('the note actions menu', () => {
-  it('offers Pin to Highlights on your own note and not on somebody else’s', async () => {
+describe('the marker on a note', () => {
+  it('offers Add to Highlights beside your own note and beside somebody else’s public one', async () => {
     const where = await publishedTeaching(`Menu ${RUN}`);
     const mine = await insertNote(
       { recordingId: where, authorId: member.id, visibility: 'public', text: 'My note.', timestampMs: 12_000 },
@@ -214,14 +163,18 @@ describe('the note actions menu', () => {
         .poll(() => page.locator(`#note-${mine.id}`).count(), { timeout: 60_000 })
         .toBe(1);
 
-      await page.locator(`#note-${theirs.id}`).getByRole('button', { name: 'Note actions' }).click();
-      const menu = page.locator(`#note-${theirs.id}`).getByRole('group', { name: 'Note actions' });
-      expect(await menu.getByRole('button', { name: 'Pin to Highlights' }).count()).toBe(0);
-      await page.keyboard.press('Escape');
+      const theirCard = page.locator(`#note-${theirs.id}`);
+      const theirMarker = theirCard.getByRole('button', { name: 'Add to Highlights' });
+      await expect.poll(() => theirMarker.isEnabled(), { timeout: 30_000 }).toBe(true);
+      await theirMarker.click();
+      await expect
+        .poll(async () => (await entriesOf(member)).filter((one) => one.noteId === theirs.id).length, {
+          timeout: 30_000,
+        })
+        .toBe(1);
 
       const ownCard = page.locator(`#note-${mine.id}`);
-      await ownCard.getByRole('button', { name: 'Note actions' }).click();
-      const item = ownCard.getByRole('button', { name: 'Pin to Highlights' });
+      const item = ownCard.getByRole('button', { name: 'Add to Highlights' });
       await expect.poll(() => item.isEnabled(), { timeout: 30_000 }).toBe(true);
       await item.click();
 
@@ -231,10 +184,9 @@ describe('the note actions menu', () => {
         })
         .toBe(1);
 
-      // The menu closed on the press; opened again, it offers the way back.
-      await ownCard.getByRole('button', { name: 'Note actions' }).click();
+      // The same control, now filled, offers the way back.
       await expect
-        .poll(() => ownCard.getByRole('button', { name: 'Unpin from Highlights' }).count(), {
+        .poll(() => ownCard.getByRole('button', { name: 'Remove from Highlights' }).count(), {
           timeout: 30_000,
         })
         .toBe(1);
@@ -244,8 +196,8 @@ describe('the note actions menu', () => {
   });
 });
 
-describe('the transport’s strip', () => {
-  it('pins the moment playing, snapped to its line, and reads pinned while that line plays', async () => {
+describe('the transport’s marker', () => {
+  it('highlights the moment playing, snapped to its line, and reads highlighted while that line plays', async () => {
     const where = await publishedTeaching(`Moment ${RUN}`);
     const page = await signInAs(member);
     try {
@@ -254,14 +206,10 @@ describe('the transport’s strip', () => {
         .poll(async () => (await audioState(page)).duration, { timeout: 60_000 })
         .toBeGreaterThan(0);
 
-      await page.getByRole('button', { name: 'More player controls' }).click();
-      const toolbar = page.getByRole('navigation', { name: 'Player tools' });
-      await expect.poll(() => toolbar.count(), { timeout: 30_000 }).toBe(1);
-      const tool = toolbar.getByRole('button', { name: 'Pin this moment' });
+      const bar = page.getByRole('region', { name: 'Player' });
+      const tool = bar.getByRole('button', { name: 'Highlight this moment' });
       await expect.poll(() => tool.isEnabled(), { timeout: 30_000 }).toBe(true);
       await tool.click();
-      // The strip closes behind the press, as it does for every tool.
-      await expect.poll(() => toolbar.count(), { timeout: 30_000 }).toBe(0);
 
       await expect
         .poll(async () => (await entriesOf(member)).filter((one) => one.recordingId === where).length, {
@@ -274,8 +222,7 @@ describe('the transport’s strip', () => {
       expect(entry?.positionMs).toBe(0);
       expect(entry?.segmentId).not.toBeNull();
 
-      await page.getByRole('button', { name: 'More player controls' }).click();
-      const pressed = toolbar.getByRole('button', { name: 'Unpin this moment' });
+      const pressed = bar.getByRole('button', { name: 'Remove highlight from this moment' });
       await expect.poll(() => pressed.count(), { timeout: 30_000 }).toBe(1);
       expect(await pressed.getAttribute('aria-pressed')).toBe('true');
     } finally {
@@ -304,9 +251,9 @@ describe('the chapter page', () => {
       await page.goto(`${baseUrl}${chapterPagePath(where, middle.id)}`, {
         waitUntil: 'domcontentloaded',
       });
-      const control = page.getByRole('button', { name: 'Pin this chapter' });
+      const control = page.getByRole('button', { name: 'Highlight this chapter' });
       await expect.poll(() => control.count(), { timeout: 60_000 }).toBe(1);
-      await pressAndExpect(control, 'Unpin this chapter');
+      await pressAndExpect(control, 'Remove highlight from this chapter');
 
       const [entry] = (await entriesOf(member)).filter((one) => one.recordingId === where);
       expect(entry?.kind).toBe('segment');
@@ -343,14 +290,14 @@ describe('/profile/highlights', () => {
         await page.getByRole('navigation', { name: 'Profile sections' }).getByRole('link', { name: 'Highlights' }).getAttribute('aria-current'),
       ).toBe('page');
 
-      const rows = page.getByRole('list', { name: 'Pinned entries' }).getByRole('listitem');
+      const rows = page.getByRole('list', { name: 'Highlighted entries' }).getByRole('listitem');
       await expect.poll(() => rows.count(), { timeout: 60_000 }).toBe(3);
 
       // Newest first: the note, then the moment, then the teaching.
       const first = (await rows.nth(0).textContent()) ?? '';
       expect(first).toContain('Remember this.');
       expect(first).toContain(`Playlist study ${RUN}`);
-      expect(first).toContain('Pinned ');
+      expect(first).toContain('Highlighted ');
       expect(await rows.nth(1).textContent()).toContain(`Line 2 of Playlist ${RUN}.`);
       expect(await rows.nth(2).textContent()).toContain(`Playlist ${RUN}`);
 

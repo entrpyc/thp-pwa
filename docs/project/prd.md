@@ -308,7 +308,7 @@ It is built as a Progressive Web App on a single codebase, reachable from any br
 - ✅ **3.12.14** A member has one reaction per note, changeable by selecting a different one.
 - ✅ **3.12.15** Admins can pin any number of public notes on a recording. Pinned notes appear above the main note list, each with a visual indicator.
 - ✅ **3.12.16** The author of a public note is notified when someone replies to it (3.17.2).
-- 📝 **3.12.17** Members can pin their own notes to Highlights (3.15.3).
+- 📝 **3.12.17** Members can pin notes to Highlights (3.15.3) — their own, and any other member's public note they can read. (Widened from one's own notes by the operator's decision.)
 - ✅ **3.12.18** Deleting a note that carries replies leaves a placeholder in its position, holding the moment it was written at, its marker on the progress bar (3.12.12) and the replies underneath it. One member deleting their own note does not delete the replies other members wrote to it. A note with no replies is removed outright, and a placeholder is never pinned (3.12.15).
 - ✅ **3.12.19** A deleted note’s text is returned to nobody — its author and an admin included — and the placeholder says only that the note was removed, never who removed it. The record of who removed it is the audit log (3.12.10).
 - ✅ **3.12.20** A member can clear their reaction to a note by selecting the one they have already chosen (3.12.14).
@@ -361,10 +361,10 @@ It is built as a Progressive Web App on a single codebase, reachable from any br
 
 **Functional requirements**
 
-- 📝 **3.15.1** Any member can pin a full recording to their Highlights.
+- 📝 **3.15.1** Any member can pin a full recording to their Highlights. (The control for this was removed from the interface by the operator's decision; the entry kind remains in the API and the playlist.)
 - 📝 **3.15.2** Any member can pin a specific segment of a recording, capturing the moment rather than the whole teaching.
-- 📝 **3.15.3** Members can pin timestamp notes they have written (3.12.17).
-- 📝 **3.15.4** Pinning is available from the recording page, the series view, and while listening.
+- 📝 **3.15.3** Members can pin timestamp notes they can read — their own, or another member's public note (3.12.17).
+- 📝 **3.15.4** Pinning is available while listening, from the transport bar; from a chapter's page; and on one's own notes. (The recording page's header and the series view's rows carried a whole-teaching pin until the operator removed both.)
 - 📝 **3.15.5** Highlights are accessible as a dedicated section from the member's profile.
 - 📝 **3.15.6** Highlights display as a playlist, each entry showing its title, series, date pinned, and either a brief description or the note text if a note was pinned.
 - 📝 **3.15.7** Playing an entry from Highlights opens the recording at the relevant timestamp.

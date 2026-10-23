@@ -26,6 +26,9 @@
   /* category */
   --color-notes: #22C55E;
   --color-notes-bg: #03352B;
+  /* The member's highlighted moments on the track (prd 3.15.2). */
+  --color-highlights: #F97316;
+  --color-highlights-soft: rgba(249,115,22,0.14);
 
   /* SOS urgency (prd 3.16.1) */
   --color-sos-red: #EF4444;

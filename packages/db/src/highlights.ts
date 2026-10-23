@@ -2,6 +2,7 @@ import { and, asc, desc, eq, gt, isNull, lte, or, sql } from 'drizzle-orm';
 import type { HighlightKind } from '@thp/shared';
 import { getDatabase, queryable, type Executor } from './client';
 import { highlight, note, recording, segment, series, transcript } from './schema';
+import { noBlockBetween } from './member-blocks';
 import { recordingIsPublished } from './visibility';
 
 /**
@@ -91,7 +92,9 @@ const HIGHLIGHT_COLUMNS = {
  * would be the one door left ajar — and an entry whose note is a **tombstone**, because a removed
  * note's text is returned to nobody ([3.12.19](docs/project/prd.md)) and an entry with nothing to
  * print is nothing to pin. Neither is deleted by this read: a republished teaching brings its
- * entries back, which is what a member who pinned it would expect.
+ * entries back, which is what a member who pinned it would expect. A third, for the same reason:
+ * an entry whose note is **another member's and no longer readable** — made private since, or
+ * by a member now blocked either way — which the notes read path would not show either.
  *
  * The recording join is inner — the key cascades, so a highlight always has one — and the rest
  * are left joins over nullable keys. The line's text comes by its **id**, not by its position, so
@@ -127,6 +130,11 @@ export async function listHighlightsForMember(
         eq(highlight.userId, userId),
         recordingIsPublished(),
         or(isNull(highlight.noteId), isNull(note.deletedAt)),
+        or(
+          isNull(highlight.noteId),
+          eq(note.authorId, userId),
+          and(eq(note.visibility, 'public'), noBlockBetween(userId, note.authorId)),
+        ),
       ),
     )
     .orderBy(desc(highlight.createdAt), desc(highlight.id));
@@ -269,7 +277,7 @@ export async function deleteHighlightForMember(
  * thread's shape ([3.12.18](docs/project/prd.md)). So the notes service calls this in the delete's
  * own transaction, the way it clears the admin pin and the vector, and the entry goes with the
  * text — a pinned note that reads "this note was removed" would be an entry with nothing to show.
- * Only the author can have pinned it (an entry is of one's own note), so "whoever's" is one person.
+ * Any reader may have pinned a public note, so "whoever's" is every member's entry on it.
  */
 export async function deleteHighlightsOfNote(
   noteId: string,

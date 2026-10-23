@@ -13,7 +13,6 @@ import { ApiClientError, apiFetch } from '@/client/api-client';
 import { useBreadcrumbTrail } from '../../player-context';
 import { DownloadAllControl } from '../../downloads/download-all-control';
 import { DownloadedMark } from '../../downloads/downloaded-mark';
-import { PinRecordingControl } from '../../highlights/pin-recording-control';
 import { seriesMeta } from '../series-listing';
 import { TagLabels } from '../../tag-labels';
 import styles from '../../screens.module.css';
@@ -176,7 +175,6 @@ export function SeriesScreen({ seriesId }: { seriesId: string }) {
                     ›
                   </span>
                 </Link>
-                <PinRecordingControl recordingId={recording.id} placement="row" />
               </li>
             ))}
           </ul>

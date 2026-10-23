@@ -480,9 +480,13 @@
 
 /* ---- the overflow -------------------------------------------------------------------------- */
 
+/* The card's controls at the right: the highlight marker on one's own note, then `···`. */
 .overflow {
   position: relative;
   margin-left: auto;
+  display: flex;
+  align-items: center;
+  gap: var(--space-2);
 }
 
 .overflowControl {
@@ -498,6 +502,17 @@
   font-family: inherit;
   font-size: var(--fs-meta);
   cursor: pointer;
+}
+
+/* The marker pressed: the highlights orange, so "highlighted" reads the same everywhere. */
+.overflowControl[aria-pressed='true'] {
+  border-color: var(--color-highlights);
+  background: var(--color-highlights-soft);
+}
+
+.overflowControl:disabled {
+  cursor: not-allowed;
+  color: var(--color-text-muted);
 }
 
 .menu {

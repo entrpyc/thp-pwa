@@ -12,6 +12,8 @@ import {
 import { track } from '@/client/observability/analytics';
 import { segmentAt } from '@/client/transcript/current-segment';
 import { NoteComposer } from './recordings/[id]/note-composer';
+import { momentEntry } from './highlights/highlights-lookup';
+import { useHighlights } from './highlights/highlights-store';
 import { PinMomentTool } from './highlights/pin-moment-tool';
 import { usePlayer } from './player-context';
 import styles from './transport.module.css';
@@ -45,6 +47,11 @@ import styles from './transport.module.css';
  * away from the recording page still sees where the group has annotated the teaching they are
  * hearing — which is the whole reason the notes are owned by the player provider rather than by
  * that page.
+ *
+ * **The highlight dots** are the member's own moments in this teaching ([3.15.2](docs/project/prd.md)),
+ * drawn on the same track in orange so they are told from the notes' green at a glance. They come
+ * from the highlights store the marker beside the rate pill reads, so a press there puts a dot on
+ * the track in the same render.
  *
  * **The caption pill** is `bottom-navigation/subtitles.png` — the current line floating above the
  * bar, on whichever member screen the listener is on.
@@ -151,6 +158,7 @@ function ChaptersIcon() {
 
 export function TransportBar() {
   const player = usePlayer();
+  const { highlights } = useHighlights();
   const [toolbarOpen, setToolbarOpen] = useState(false);
   const [sheetOpen, setSheetOpen] = useState(false);
   /**
@@ -280,6 +288,10 @@ export function TransportBar() {
    * pill merely reads as a long sentence.
    */
   const caption = spoken === null || spoken.text.trim() === '' ? null : spoken.text;
+  // The line read in the highlights orange when it is one of the member's own moments — the same
+  // question the transcript tab and the marker beside the rate pill ask of the line playing.
+  const captionHighlighted =
+    spoken !== null && highlights !== null && momentEntry(highlights, loaded.id, spoken.startMs) !== null;
 
   /*
    * No duration means no positions to place ticks at, and a failed or empty notes fetch means no
@@ -302,6 +314,18 @@ export function TransportBar() {
    */
   const boundaries =
     max === 0 ? [] : (player.chapters?.chapters ?? []).filter((one, index) => index > 0);
+
+  /*
+   * **The member's highlighted moments on the track** — every `segment` entry of theirs in this
+   * teaching, at the position it was snapped to. A whole-teaching highlight has no position and
+   * a highlighted note already has the note's own tick, so neither is drawn.
+   */
+  const highlightDots =
+    max === 0 || highlights === null
+      ? []
+      : highlights.filter(
+          (one) => one.kind === 'segment' && one.recording.id === loaded.id && one.positionMs !== null,
+        );
 
   /*
    * The `···` opens on **press** rather than on release, which is what makes it two controls in one
@@ -564,7 +588,7 @@ export function TransportBar() {
       */}
       {player.captionsOn ? (
         <section className={styles.caption} aria-label="Caption">
-          <span className={styles.captionText}>
+          <span className={`${styles.captionText}${captionHighlighted ? ` ${styles.captionHighlighted}` : ''}`}>
             {caption === null ? <span aria-hidden="true">–</span> : caption}
           </span>
           <button
@@ -731,6 +755,15 @@ export function TransportBar() {
                 />
               ))}
             </div>
+            <div className={styles.markers} aria-hidden="true">
+              {highlightDots.map((entry) => (
+                <span
+                  key={entry.id}
+                  className={`${styles.marker} ${styles.highlightDot}`}
+                  style={{ left: `${((entry.positionMs ?? 0) / max) * 100}%` }}
+                />
+              ))}
+            </div>
           </div>
           <span className={styles.time}>{totalLabel(player.durationMs)}</span>
         </div>
@@ -766,8 +799,6 @@ export function TransportBar() {
                   <ChaptersIcon />
                 </button>
               )}
-              {/* Pin this moment to Highlights (3.15.2, 3.15.4) — the strip closes behind the press, as every tool's does. */}
-              <PinMomentTool className={styles.tool} onPressed={() => setToolbarOpen(false)} />
               <button
                 className={styles.tool}
                 type="button"
@@ -830,6 +861,11 @@ export function TransportBar() {
           >
             <span aria-hidden="true">···</span>
           </button>
+        </span>
+
+        {/* Highlight this moment (3.15.2, 3.15.4) — the marker on the bar, left of the rate pill. */}
+        <span className={styles.highlightSlot}>
+          <PinMomentTool className={styles.highlight} />
         </span>
 
         {/*

@@ -6,6 +6,7 @@ import {
   findSegmentAt,
   findVisibleRecording,
   insertHighlight,
+  isBlockedEitherWay,
   listHighlightsForMember,
   type HighlightListRow,
   type NewHighlight,
@@ -44,7 +45,7 @@ import { mintArtworkGrant } from '@/server/series/artwork-grant';
 const UUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
 
 const NO_SUCH_TEACHING = 'That teaching is not available.';
-const NO_SUCH_NOTE = 'That note is not one of yours.';
+const NO_SUCH_NOTE = 'There is no such note to highlight.';
 
 export async function listHighlightsFor(actor: Actor): Promise<HighlightListPayload> {
   const rows = await listHighlightsForMember(actor.id);
@@ -69,10 +70,12 @@ export async function listHighlightsFor(actor: Actor): Promise<HighlightListPayl
  *   with no line under it — no transcript, or silence after the last line — is stored as the raw
  *   position with no line; the playlist prints the moment and the transport treats a press within
  *   a few seconds as the same entry.
- * - **`note`** — the note must exist, be standing, and be **the member's own**
- *   ([3.12.17](docs/project/prd.md)); and its teaching must be visible, for the reason the notes
- *   read path refuses an unpublished one. Anything else is `not_found` with one sentence, so the
- *   route cannot be used to learn whether a private note's id exists.
+ * - **`note`** — the note must exist, be standing, top-level, and **one the member can read**:
+ *   their own, or another member's public note with no block either way ([3.12.17](docs/project/prd.md),
+ *   widened by the operator from one's own notes to any readable note); and its teaching must be
+ *   visible, for the reason the notes read path refuses an unpublished one. Anything else is
+ *   `not_found` with one sentence, so the route cannot be used to learn whether a private note's
+ *   id exists.
  *
  * The ceiling is checked before the write and not inside a lock: two pins racing at the limit can
  * land the member one over it, which costs nothing and is corrected by the next remove. Pinning
@@ -131,16 +134,18 @@ async function resolveTarget(actor: Actor, body: unknown): Promise<NewHighlight>
   if (kind === 'note') {
     const noteId = parseId((body as { noteId?: unknown }).noteId, 'noteId must be a note id.');
     const row = await findNoteById(noteId);
-    // One sentence for every way this is not pinnable, so nothing about another member's note —
-    // not even that the id exists — is learned here. A reply is refused too: it has no moment of
-    // its own ([3.12.7](docs/project/prd.md)), and a playlist entry is a moment.
-    if (
-      row === null ||
-      row.deletedAt !== null ||
-      row.authorId !== actor.id ||
-      row.timestampMs === null
-    ) {
+    // One sentence for every way this is not pinnable, so nothing about a note the member cannot
+    // read — not even that the id exists — is learned here. A reply is refused too: it has no
+    // moment of its own ([3.12.7](docs/project/prd.md)), and a playlist entry is a moment. Another
+    // member's note is readable when it is public and nobody has blocked anybody, which is the
+    // notes read path's own rule.
+    if (row === null || row.deletedAt !== null || row.timestampMs === null) {
       throw ApiError.notFound(NO_SUCH_NOTE);
+    }
+    if (row.authorId !== actor.id) {
+      if (row.visibility !== 'public' || (await isBlockedEitherWay(actor.id, row.authorId))) {
+        throw ApiError.notFound(NO_SUCH_NOTE);
+      }
     }
     await requireVisible(row.recordingId);
     return { userId: actor.id, recordingId: row.recordingId, kind, noteId: row.id };

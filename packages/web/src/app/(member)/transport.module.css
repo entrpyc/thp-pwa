@@ -343,12 +343,55 @@
  * layout's slot and its row margin at every width, so it traded places with `···` and sat a step
  * below the controls beside it.
  */
+/*
+ * The highlight marker and the rate pill, grouped: the marker takes the free space so both sit at
+ * the right. On the one-row layout a rule either side of the pair — left of the marker, right of
+ * the pill — reads them as one group apart from the controls and the `···`; on two rows the pair
+ * is alone at the end of its row and the rules would divide it from nothing, so they are drawn
+ * only from the breakpoint up.
+ */
+.highlightSlot {
+  order: 4;
+  margin-top: var(--space-3);
+  display: inline-flex;
+  align-items: center;
+  margin-left: auto;
+}
+
 .speedSlot {
   order: 4;
   margin-top: var(--space-3);
   position: relative;
   display: inline-flex;
-  margin-left: auto;
+  align-items: center;
+}
+
+/* The marker's button: the `···`'s round outline, and the highlights orange when the moment is highlighted. */
+.highlight {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  min-width: calc(var(--space-8) + var(--space-2));
+  min-height: calc(var(--space-8) + var(--space-2));
+  background: transparent;
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-pill);
+  color: var(--color-primary-icon);
+  cursor: pointer;
+}
+
+.highlight:hover {
+  border-color: var(--color-border-strong);
+}
+
+.highlight[aria-pressed='true'] {
+  border-color: var(--color-highlights);
+  background: var(--color-highlights-soft);
+}
+
+.highlight:disabled {
+  cursor: not-allowed;
+  color: var(--color-text-muted);
 }
 
 /* The rate pill, carrying the one thing it says: the rate. */
@@ -500,6 +543,11 @@
   font-size: var(--fs-body);
 }
 
+/* The line playing is one the member highlighted: the transcript tab's orange, here too. */
+.captionHighlighted {
+  color: var(--color-highlights);
+}
+
 .captionDismiss {
   flex: none;
   display: inline-flex;
@@ -520,9 +568,10 @@
 }
 
 /*
- * **The bigger layout**, from 541px up — the measured width at which the title, the controls, the
- * rate and `···` fit one row without the title's ellipsis eating the whole of it. The break is
- * dropped and the four re-order into that line: title at the left, the rest gathered at the right.
+ * **The bigger layout**, from 641px up — the width at which the title, the controls, the highlight
+ * marker, the rate and `···` fit one row without the title's ellipsis eating the whole of it
+ * (541px before the marker joined the row; raised by the operator). The break is dropped and the
+ * groups re-order into that line: title at the left, the rest gathered at the right.
  *
  * A px condition rather than the file's usual `rem`, because the number is a measurement of this
  * bar's own contents rather than a reading width — and the guard exempts media conditions for that
@@ -532,7 +581,33 @@
  * between the controls and the rate is a target too short to land a thumb on and too short to read
  * a position from.
  */
-@media (min-width: 541px) {
+/*
+ * **The narrowest layout**, under 425px — three rows above the track rather than two: the title
+ * row as before; the highlight marker and the rate pill on a second, one at each end; and the
+ * controls alone on a third, spread edge to edge so each is as far from its neighbours as the
+ * width allows. The controls take the full line, which is what gives them a row of their own
+ * without a second break element, and the two groups swap order so the controls sit nearest the
+ * track they drive.
+ */
+@media (max-width: 424px) {
+  .highlightSlot,
+  .speedSlot {
+    order: 3;
+  }
+
+  .highlightSlot {
+    margin-left: 0;
+    margin-right: auto;
+  }
+
+  .controls {
+    order: 4;
+    flex: 1 0 100%;
+    justify-content: space-between;
+  }
+}
+
+@media (min-width: 641px) {
   .bar::before {
     display: none;
   }
@@ -543,9 +618,20 @@
     margin-top: 0;
   }
 
+  .highlightSlot,
   .speedSlot {
     order: 2;
     margin-top: 0;
+  }
+
+  .highlightSlot {
+    padding-left: var(--space-3);
+    border-left: 1px solid var(--color-border);
+  }
+
+  .speedSlot {
+    padding-right: var(--space-3);
+    border-right: 1px solid var(--color-border);
   }
 
   .moreSlot {
@@ -614,6 +700,11 @@
   height: var(--space-2);
   border-radius: var(--radius-pill);
   background: var(--color-notes);
+}
+
+/* A highlighted moment: the same dot in orange, so it is told from a note's green. */
+.highlightDot::before {
+  background: var(--color-highlights);
 }
 
 /* Above the boundary layer, so the fill and the thumb are drawn over every division (5.7.1). */

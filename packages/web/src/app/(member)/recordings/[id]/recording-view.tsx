@@ -17,7 +17,6 @@ import { track } from '@/client/observability/analytics';
 import { useBreadcrumbTrail, usePlayer } from '../../player-context';
 import { DownloadControl } from '../../downloads/download-control';
 import { openAtFromAddress } from '../../highlights/open-at';
-import { PinRecordingControl } from '../../highlights/pin-recording-control';
 import { ChaptersPanel } from './chapters-panel';
 import { CollapsibleProse } from './collapsible-prose';
 import { NotesPanel } from './notes-panel';
@@ -397,7 +396,6 @@ export function RecordingScreen({
               */}
               <TagLabels tags={recording.tags} />
             </div>
-            <PinRecordingControl recordingId={recordingId} placement="header" />
           </header>
 
           <DownloadControl recordingId={recordingId} title={recording.title} />

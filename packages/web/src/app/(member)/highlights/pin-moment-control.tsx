@@ -2,6 +2,7 @@
 
 import { momentEntry } from './highlights-lookup';
 import { useHighlights } from './highlights-store';
+import { MarkerIcon } from './marker-icon';
 import styles from './highlights.module.css';
 
 /**
@@ -12,8 +13,9 @@ import styles from './highlights.module.css';
  * moment being heard, so a chapter pinned here and the same opening line pinned from the transport
  * are one entry.
  *
- * `label` names the thing for the accessible name — *Pin this chapter* — because *Pin this moment*
- * on a page that shows no moment would be a label about the mechanism rather than the thing.
+ * `label` names the thing for the accessible name — *Highlight this chapter* — because *Highlight
+ * this moment* on a page that shows no moment would be a label about the mechanism rather than
+ * the thing.
  */
 export function PinMomentControl({
   recordingId,
@@ -22,7 +24,7 @@ export function PinMomentControl({
 }: {
   recordingId: string;
   positionMs: number;
-  /** The noun: `this chapter`. Prefixed with *Pin* or *Unpin*. */
+  /** The noun: `this chapter`. Prefixed with *Highlight* or *Remove highlight from*. */
   label: string;
 }) {
   const { highlights, busy, toggle } = useHighlights();
@@ -34,14 +36,11 @@ export function PinMomentControl({
       className={`${styles.pin} ${styles.headerPin}`}
       type="button"
       aria-pressed={pinned}
-      aria-label={`${pinned ? 'Unpin' : 'Pin'} ${label}`}
+      aria-label={`${pinned ? 'Remove highlight from' : 'Highlight'} ${label}`}
       disabled={highlights === null || busy}
       onClick={() => void toggle(existing, { kind: 'segment', recordingId, positionMs })}
     >
-      <span className={styles.icon} aria-hidden="true">
-        {pinned ? '★' : '☆'}
-      </span>
-      {pinned ? 'Pinned' : 'Pin'}
+      <MarkerIcon marked={pinned} size={20} />
     </button>
   );
 }

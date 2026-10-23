@@ -15,8 +15,8 @@ import { ApiClientError, apiFetch } from '@/client/api-client';
  * pin control and the playlist read, and what every pin and remove write back.
  *
  * **A module-level store rather than a provider**, and deliberately. Four surfaces show pinned
- * state — the recording header, the transport's tool, every row of a series page, and the menu
- * on every note of one's own — and the recording page alone can mount dozens of them at once. A
+ * state — the transport's marker, the chapter page's, and the marker beside the `···` on every
+ * note of one's own — and the recording page alone can mount dozens of them at once. A
  * hook that fetched per mount would be dozens of identical requests; a provider would mean editing
  * the member layout, which this ticket does not own and three other branches are changing. A
  * store that any number of hooks subscribe to is one fetch per page, no layout edit, and one

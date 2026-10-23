@@ -3,29 +3,26 @@
 import { usePlayer } from '../player-context';
 import { momentEntry } from './highlights-lookup';
 import { useHighlights } from './highlights-store';
+import { MarkerIcon } from './marker-icon';
 
 /**
- * **Pin this moment, from the transport** ([3.15.2](docs/project/prd.md), [3.15.4](docs/project/prd.md)
- * "while listening") — a tool in the `···` strip beside Chapters, the composer and CC.
+ * **Highlight this moment, from the transport** ([3.15.2](docs/project/prd.md), [3.15.4](docs/project/prd.md)
+ * "while listening") — the marker on the bar itself, just left of the speed pill. It was a tool in
+ * the `···` strip until the operator moved it out: a highlight is one press, and a press behind a
+ * strip is two.
  *
  * It reads the player: the loaded teaching and where it has got to, which is the moment the press
  * captures — on whatever screen the member is on, because the bar is. The server snaps that
- * position to the line being spoken, so pressing twice in one sentence is one entry, and the tool
- * reads *pinned* for as long as a pinned line is playing: the same press, during that line, unpins
- * it. It takes the strip's own class so it draws as the tools beside it do, and the pressed state
- * is the strip's too.
- *
- * `onPressed` is the strip closing behind the press, the rule every tool there follows — passed in
- * rather than reached for, so this file knows nothing of the toolbar's state and the transport's
- * line that mounts it stays one line.
+ * position to the line being spoken, so pressing twice in one sentence is one entry, and the
+ * marker reads *highlighted* for as long as a highlighted line is playing: the same press, during
+ * that line, takes it back. It takes the bar's own class so it draws as the `···` beside it does,
+ * and `aria-pressed` carries the state the filled marker shows.
  */
 export function PinMomentTool({
   className,
-  onPressed,
 }: {
-  /** The strip's own tool class, so the pin draws as the tools beside it. */
+  /** The bar's own round control class, so the marker draws as the `···` beside it. */
   className: string | undefined;
-  onPressed: () => void;
 }) {
   const player = usePlayer();
   const { highlights, busy, toggle } = useHighlights();
@@ -41,14 +38,11 @@ export function PinMomentTool({
       className={className}
       type="button"
       aria-pressed={pinned}
-      aria-label={pinned ? 'Unpin this moment' : 'Pin this moment'}
+      aria-label={pinned ? 'Remove highlight from this moment' : 'Highlight this moment'}
       disabled={highlights === null || busy}
-      onClick={() => {
-        onPressed();
-        void toggle(existing, { kind: 'segment', recordingId: loaded.id, positionMs });
-      }}
+      onClick={() => void toggle(existing, { kind: 'segment', recordingId: loaded.id, positionMs })}
     >
-      <span aria-hidden="true">{pinned ? '★' : '☆'}</span>
+      <MarkerIcon marked={pinned} />
     </button>
   );
 }

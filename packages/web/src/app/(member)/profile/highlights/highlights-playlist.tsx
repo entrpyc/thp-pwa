@@ -121,13 +121,13 @@ export function HighlightsPlaylist() {
 
       {highlights !== null && highlights.length === 0 ? (
         <p className={profile.done} role="status">
-          Nothing pinned yet. Pin a teaching from its page or a series, a moment from the player,
-          or one of your notes from its menu.
+          Nothing highlighted yet. Highlight a moment from the player, a chapter from its page, or a
+          note from the marker beside it.
         </p>
       ) : null}
 
       {highlights !== null && highlights.length > 0 ? (
-        <ol className={styles.list} aria-label="Pinned entries">
+        <ol className={styles.list} aria-label="Highlighted entries">
           {highlights.map((entry) => {
             const description = describe(entry);
             const title = entry.recording.title;
@@ -145,7 +145,7 @@ export function HighlightsPlaylist() {
                   )}
                   <span className={styles.meta}>
                     {entry.positionMs === null ? null : `${formatTimecode(entry.positionMs)} · `}
-                    Pinned {pinnedOn(entry.pinnedAt)}
+                    Highlighted {pinnedOn(entry.pinnedAt)}
                   </span>
                 </Link>
                 {/* The series as its own link, beside the row rather than inside it (the library's shape). */}

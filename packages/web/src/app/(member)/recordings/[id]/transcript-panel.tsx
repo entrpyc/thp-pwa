@@ -11,6 +11,8 @@ import {
 } from '@thp/shared';
 import { ApiClientError, apiFetch } from '@/client/api-client';
 import { segmentAt } from '@/client/transcript/current-segment';
+import { momentEntry } from '../../highlights/highlights-lookup';
+import { useHighlights } from '../../highlights/highlights-store';
 import { usePlayer } from '../../player-context';
 import styles from './transcript.module.css';
 
@@ -63,6 +65,7 @@ export function TranscriptPanel({
   chapterId?: string | null;
 }) {
   const player = usePlayer();
+  const { highlights } = useHighlights();
   const listRef = useRef<HTMLOListElement>(null);
   const [following, setFollowing] = useState(true);
   const [editing, setEditing] = useState<string | null>(null);
@@ -108,6 +111,14 @@ export function TranscriptPanel({
   // is outside this chapter — which is right: the line being spoken is not in this chapter's list.
   const current = segments === null ? null : segmentAt(segments, player.currentMs);
   const currentId = current?.id ?? null;
+
+  /**
+   * A line the member has highlighted reads in the highlights orange ([3.15.2](docs/project/prd.md)).
+   * The entry covers the line it was snapped to, so asking about the line's start is asking
+   * whether that line is one of theirs — the same question the transport's marker asks.
+   */
+  const highlighted = (segment: TranscriptSegmentView): boolean =>
+    highlights !== null && momentEntry(highlights, recordingId, segment.startMs) !== null;
 
   /** Centre the highlighted row in the list, without scrolling the page around it. */
   const scrollToCurrent = useCallback((): void => {
@@ -202,6 +213,7 @@ export function TranscriptPanel({
                   className={styles.lineButton}
                   type="button"
                   data-segment={segment.id}
+                  data-highlighted={highlighted(segment) ? 'true' : undefined}
                   aria-current={segment.id === currentId ? 'true' : undefined}
                   onClick={() => select(segment)}
                 >

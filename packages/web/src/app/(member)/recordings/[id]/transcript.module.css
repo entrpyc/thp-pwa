@@ -105,6 +105,11 @@
   color: var(--color-text);
 }
 
+/* A line the member highlighted reads in the highlights orange, playing or not. */
+.lineButton[data-highlighted='true'] .lineText {
+  color: var(--color-highlights);
+}
+
 /* The admin-only affordance. Hidden from a member; the API is what refuses them. */
 .correct {
   flex: none;

@@ -41,8 +41,9 @@ import { closeTestDatabase, createAccount, signIn, type TestAccount } from '../s
  * 3. **A moment is snapped to the line playing there** ([3.15.2](docs/project/prd.md)): two
  *    presses in one sentence are one entry, and the entry carries the sentence. A moment with no
  *    line under it is kept as it was pressed.
- * 4. **A note must be the member's own, standing and top-level** ([3.12.17](docs/project/prd.md)),
- *    and every other case is one `not_found` sentence. Deleting the note takes the entry with it.
+ * 4. **A note must be readable, standing and top-level** ([3.12.17](docs/project/prd.md)): one's
+ *    own, or another member's public one; every other case is one `not_found` sentence. Deleting
+ *    the note takes the entry with it.
  * 5. **An unpublished teaching cannot be pinned and leaves the list while unpublished**,
  *    coming back when republished; a deleted account takes its playlist with it (3.1.9).
  * 6. **The ceiling** holds at `MAX_HIGHLIGHTS` with `highlights_full`, and a duplicate press at the
@@ -277,7 +278,7 @@ describe('a moment is snapped to the line playing there', () => {
   });
 });
 
-describe('a note must be the member’s own, standing and top-level', () => {
+describe('a note must be readable, standing and top-level', () => {
   it('refuses everything else with one sentence, and the entry goes with the note', async () => {
     const where = await recording(`Notes ${RUN}`, 2);
     const mine = await insertNote(
@@ -297,11 +298,14 @@ describe('a note must be the member’s own, standing and top-level', () => {
       handle,
     );
 
-    const refusedPublic = await pin(alice, { kind: 'note', noteId: theirs.id });
+    // Somebody else's public note is readable, so it is pinnable.
+    const theirsPinned = await pinned(alice, { kind: 'note', noteId: theirs.id });
+    expect(theirsPinned.note?.text).toBe('Bob.');
+
     const refusedPrivate = await pin(alice, { kind: 'note', noteId: theirPrivate.id });
     const refusedReply = await pin(alice, { kind: 'note', noteId: reply.id });
     const refusedNobody = await pin(alice, { kind: 'note', noteId: MADE_UP_ID });
-    for (const refused of [refusedPublic, refusedPrivate, refusedReply, refusedNobody]) {
+    for (const refused of [refusedPrivate, refusedReply, refusedNobody]) {
       expect(refused.status).toBe(404);
       expect(refused.code).toBe('not_found');
       expect(refused.message).toBe(refusedNobody.message);
