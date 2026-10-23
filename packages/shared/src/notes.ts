@@ -25,6 +25,8 @@ import { RECORDINGS_PATH } from './recordings';
  * immutable afterwards (active-scope prd 3.1.5) — no update path writes this column, which is why
  * there is no third value for "was public, now isn't".
  */
+import type { NoteImageRef, NoteImageView } from './note-images';
+
 export const NOTE_VISIBILITIES = ['private', 'public'] as const;
 
 export type NoteVisibility = (typeof NOTE_VISIBILITIES)[number];
@@ -141,6 +143,12 @@ export interface NoteView {
   readonly reactions: readonly ReactionCount[];
   /** The reading member's own choice, or `null` — what marks their pill and the picker's row. */
   readonly myReaction: string | null;
+  /**
+   * The pictures it carries, in the author's order ([3.12.22](docs/project/prd.md)) — up to
+   * `MAX_NOTE_IMAGES`, each a signed URL and never a key. Empty on a tombstone: a removed note's
+   * pictures go with its words.
+   */
+  readonly images: readonly NoteImageView[];
 }
 
 /** Payload of `GET /api/v1/recordings/{id}/notes` — the whole visible set, in one answer. */
@@ -156,9 +164,12 @@ export interface NotesPayload {
  * it would make "the member did not choose" and "the client forgot" the same request.
  */
 export interface CreateNoteRequest {
+  /** May be empty when `images` carries at least one picture ([3.12.23](docs/project/prd.md)). */
   readonly text: string;
   readonly visibility: NoteVisibility;
   readonly timestampMs: number;
+  /** Up to `MAX_NOTE_IMAGES`, by upload key — or, offline, by pending id (`note-images.ts`). */
+  readonly images?: readonly NoteImageRef[];
 }
 
 /**
@@ -173,6 +184,7 @@ export interface CreateNoteRequest {
 export interface CreateReplyRequest {
   readonly text: string;
   readonly parentId: string;
+  readonly images?: readonly NoteImageRef[];
 }
 
 /** Payload of the create — the note as it now reads, ready to be listed. */
@@ -225,6 +237,12 @@ export function notePinPath(noteId: string): string {
  */
 export interface EditNoteRequest {
   readonly text: string;
+  /**
+   * The pictures the note should carry after the edit, in order: existing ones by `id` (with a
+   * description that may have changed), new ones by `key`. An image the note had that is not
+   * listed is removed. Omitted means "leave the pictures as they are".
+   */
+  readonly images?: readonly NoteImageRef[];
 }
 
 /** Body of `PUT /api/v1/notes/{id}/reaction` — one of the six, exactly as the vocabulary spells it. */

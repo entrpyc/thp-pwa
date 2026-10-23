@@ -32,6 +32,7 @@ import { shellPlatform } from '@/client/platform';
 import { createBrowserDownloadStore } from './browser-store';
 import { idbPut } from './idb';
 import { createOfflineHooks } from './offline-api';
+import { forgetPendingImages, prepareOutboxImages } from './pending-images';
 import {
   appendProgress,
   applySyncResults,
@@ -321,11 +322,22 @@ export function createOfflineManager(options: OfflineManagerOptions): OfflineMan
     const userId = snapshot.userId;
     if (userId === null || !isOnline()) return;
     flushing = (async () => {
-      const sent = (await outbox.list(userId)).slice(0, MAX_SYNC_ENTRIES);
+      const listed = (await outbox.list(userId)).slice(0, MAX_SYNC_ENTRIES);
       const downloaded = snapshot.downloads.map((one) => one.recordingId);
-      if (sent.length === 0 && downloaded.length === 0) return;
+      if (listed.length === 0 && downloaded.length === 0) return;
       set({ syncing: true });
       try {
+        // Pictures first: a note written offline names bytes kept on the device, and the server
+        // takes only keys. An entry whose pictures could not all go up stays home this round.
+        const prepared = await prepareOutboxImages(listed, fetchJson);
+        const sent = prepared.ready;
+        if (prepared.dropped > 0) {
+          notice(
+            prepared.dropped === 1
+              ? 'A picture on a note written offline was no longer on this device and was left out.'
+              : `${prepared.dropped} pictures on notes written offline were no longer on this device and were left out.`,
+          );
+        }
         const request: SyncRequest = { entries: toSyncEntries(sent), downloaded };
         const payload = await fetchJson<SyncPayload>(SYNC_PATH, {
           method: 'POST',
@@ -334,6 +346,7 @@ export function createOfflineManager(options: OfflineManagerOptions): OfflineMan
         });
         const outcome = applySyncResults(sent, payload.results);
         await outbox.remove(outcome.settled);
+        await forgetPendingImages(prepared.pendingIds);
 
         for (const refused of outcome.refusedNotes) {
           if (refused.recordingGone) {

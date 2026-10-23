@@ -10,6 +10,7 @@ import {
   formatTimecode,
   isInChapter,
   monogramFor,
+  noteImagePath,
   noteReactionPath,
   notePath,
   notePinPath,
@@ -21,6 +22,8 @@ import { ApiClientError, apiFetch } from '@/client/api-client';
 import { track } from '@/client/observability/analytics';
 import { useRecordingContent } from './recording-content';
 import { CharacterCount, NoteComposer } from './note-composer';
+import { ImageAttach, useImageAttachments } from './image-attach';
+import { NoteImages } from './note-images';
 import { BlockConfirm, ReportForm } from './note-moderation';
 import { TermsPrompt, isTermsRequired } from './terms-prompt';
 import { PinNoteMenuItem } from '../../highlights/pin-note-menu-item';
@@ -322,7 +325,30 @@ function NoteCard({ note, canModerate }: CardProps) {
           {editing ? (
             <EditForm note={note} onDone={() => setEditing(false)} onFailure={setFailure} />
           ) : (
-            <p className={styles.noteText}>{note.text}</p>
+            <>
+              {note.text === '' ? null : <p className={styles.noteText}>{note.text}</p>}
+              {/*
+                The pictures ([3.12.22](docs/project/prd.md)), with Remove for the author and for
+                an admin on a public note (3.12.24). A pending note's pictures are the device's own
+                and have nothing to remove them from yet.
+              */}
+              <NoteImages
+                images={note.images}
+                {...((note.mine || (canModerate && note.visibility === 'public')) && !note.id.startsWith('pending:')
+                  ? {
+                      onRemove: (imageId: string) => {
+                        setFailure(null);
+                        void apiFetch(noteImagePath(note.id, imageId), { method: 'DELETE', credentials: 'include' })
+                          .then(() => content.refreshNotes())
+                          .catch((caught: unknown) => {
+                            setFailure(refusalMessage(caught, NOTE_REMOVED_MESSAGE));
+                            content.refreshNotes();
+                          });
+                      },
+                    }
+                  : {})}
+              />
+            </>
           )}
 
           <ReactionRow note={note} onFailure={setFailure} />
@@ -659,6 +685,9 @@ function EditForm({
   const [text, setText] = useState(note.text);
   const [saving, setSaving] = useState(false);
   const count = text.trim().length;
+  // The pictures the note has, to keep, reorder-by-removal or add to ([3.12.22](docs/project/prd.md)).
+  const attachments = useImageAttachments(note.images);
+  const attached = attachments.images.filter((one) => one.status !== 'refused').length;
 
   return (
     <form
@@ -668,12 +697,16 @@ function EditForm({
         event.preventDefault();
         setSaving(true);
         onFailure(null);
-        void apiFetch(notePath(note.id), {
-          method: 'PATCH',
-          credentials: 'include',
-          headers: { 'content-type': 'application/json' },
-          body: JSON.stringify({ text: text.trim() }),
-        })
+        void attachments
+          .settle()
+          .then((images) =>
+            apiFetch(notePath(note.id), {
+              method: 'PATCH',
+              credentials: 'include',
+              headers: { 'content-type': 'application/json' },
+              body: JSON.stringify({ text: text.trim(), images }),
+            }),
+          )
           .then(() => {
             onDone();
             content.refreshNotes();
@@ -697,11 +730,13 @@ function EditForm({
 
       <CharacterCount count={count} />
 
+      <ImageAttach attachments={attachments} disabled={saving} />
+
       <div className={styles.composerActions}>
         <button
           className={styles.primary}
           type="submit"
-          disabled={count === 0 || count > MAX_NOTE_LENGTH || saving}
+          disabled={(count === 0 && attached === 0) || count > MAX_NOTE_LENGTH || saving || !attachments.settled}
         >
           {saving ? 'Saving…' : 'Save'}
         </button>
@@ -739,6 +774,9 @@ function ReplyComposer({
   const [termsPrompt, setTermsPrompt] = useState(false);
   const count = text.trim().length;
   const field = useRef<HTMLTextAreaElement>(null);
+  // A reply carries pictures too ([3.12.22](docs/project/prd.md)); of pictures alone, it needs no words.
+  const attachments = useImageAttachments();
+  const attached = attachments.images.filter((one) => one.status !== 'refused').length;
 
   useEffect(() => field.current?.focus(), []);
 
@@ -750,14 +788,19 @@ function ReplyComposer({
     setSaving(true);
     setFailure(null);
     setTermsPrompt(false);
-    void apiFetch(recordingNotesPath(recordingId), {
-      method: 'POST',
-      credentials: 'include',
-      headers: { 'content-type': 'application/json' },
-      body: JSON.stringify({ text: text.trim(), parentId: note.id }),
-    })
+    void attachments
+      .settle()
+      .then((images) =>
+        apiFetch(recordingNotesPath(recordingId), {
+          method: 'POST',
+          credentials: 'include',
+          headers: { 'content-type': 'application/json' },
+          body: JSON.stringify({ text: text.trim(), parentId: note.id, ...(images.length === 0 ? {} : { images }) }),
+        }),
+      )
       .then(() => {
         setText('');
+        attachments.reset();
         // A reply is always public (scope prd 3.3.3); what it said never travels.
         track('note_created', { recording_id: recordingId, visibility: 'public', is_reply: true });
         onDone();
@@ -797,6 +840,8 @@ function ReplyComposer({
 
       <CharacterCount count={count} />
 
+      <ImageAttach attachments={attachments} disabled={saving} />
+
       {termsPrompt ? <TermsPrompt onAccepted={save} onDismiss={() => setTermsPrompt(false)} /> : null}
 
       {failure === null ? null : <p className={styles.cardFailure} role="status">
@@ -807,7 +852,7 @@ function ReplyComposer({
         <button
           className={styles.primary}
           type="submit"
-          disabled={count === 0 || count > MAX_NOTE_LENGTH || saving}
+          disabled={(count === 0 && attached === 0) || count > MAX_NOTE_LENGTH || saving || !attachments.settled}
         >
           {saving ? 'Saving…' : 'Reply'}
         </button>

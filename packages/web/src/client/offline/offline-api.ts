@@ -4,6 +4,8 @@ import {
   LIBRARY_SURFACE,
   RECORDING_SURFACE_PARAM,
   type CreateNoteRequest,
+  type NoteImageRef,
+  type NoteImageView,
   type NoteView,
   type PlaybackProgressPayload,
   type SeriesRecordingView,
@@ -21,6 +23,7 @@ import {
   sessionMetaKey,
   type DownloadRecord,
   type OutboxRecord,
+  type PendingImageRecord,
 } from './schema';
 
 /**
@@ -50,6 +53,8 @@ export interface Snapshot {
   readonly downloads: readonly DownloadRecord[];
   readonly outbox: readonly OutboxRecord[];
   readonly session: SessionPayload | null;
+  /** The pictures waiting on a connection, so a pending note can show its own. Empty when unread. */
+  readonly pendingImages?: readonly PendingImageRecord[];
 }
 
 export type OfflineRoute =
@@ -99,8 +104,21 @@ export function positionFor(download: DownloadRecord, outbox: readonly OutboxRec
 }
 
 /** A note that exists on this device only, drawn as the member's own until the flush replaces it. */
-export function pendingNote(entry: OutboxRecord, session: SessionPayload | null): NoteView {
+export function pendingNote(
+  entry: OutboxRecord,
+  session: SessionPayload | null,
+  pendingImages: readonly PendingImageRecord[] = [],
+): NoteView {
   const body = entry.body as CreateNoteRequest;
+  // The pictures kept on the device, drawn from their own bytes until the flush uploads them. One
+  // already uploaded (a key) cannot be shown offline — its URL is the server's to sign — and is
+  // left out rather than drawn broken.
+  const images: NoteImageView[] = (body.images ?? []).flatMap((ref) => {
+    if (!('pending' in ref)) return [];
+    const kept = pendingImages.find((one) => one.id === ref.pending);
+    if (kept === undefined || typeof URL === 'undefined' || typeof URL.createObjectURL !== 'function') return [];
+    return [{ id: `pending:${ref.pending}`, url: URL.createObjectURL(kept.blob), alt: ref.alt ?? null }];
+  });
   return {
     id: `pending:${entry.clientId}`,
     timestampMs: body.timestampMs,
@@ -116,6 +134,7 @@ export function pendingNote(entry: OutboxRecord, session: SessionPayload | null)
     replies: [],
     reactions: [],
     myReaction: null,
+    images,
   };
 }
 
@@ -186,7 +205,7 @@ export function offlineAnswer(route: OfflineRoute, snapshot: Snapshot): Answer |
       if (one === null) return null;
       const pending = outbox
         .filter((entry) => entry.kind === 'note' && entry.recordingId === route.id)
-        .map((entry) => pendingNote(entry, snapshot.session));
+        .map((entry) => pendingNote(entry, snapshot.session, snapshot.pendingImages ?? []));
       let notes = [...one.notes, ...pending].sort(
         (a, b) => (a.timestampMs ?? 0) - (b.timestampMs ?? 0),
       );
@@ -251,18 +270,48 @@ export function offlineNoteWrite(
   if (typeof fields.text !== 'string' || typeof fields.timestampMs !== 'number' || (fields.visibility !== 'public' && fields.visibility !== 'private')) {
     return { answer: offlineError('You are offline.') };
   }
+  // Pictures travel as the body named them: a pending id for bytes kept on the device, or a key
+  // for one that was uploaded before the connection went. The flush turns the first into the
+  // second before the note leaves the device.
+  const images = pendingImageRefs(fields.images);
+  if (images === null) return { answer: offlineError('You are offline.') };
+  if (fields.text.trim() === '' && images.length === 0) return { answer: offlineError('You are offline.') };
   const entry: OutboxRecord = {
     clientId: mintClientId(),
     userId: snapshot.userId,
     kind: 'note',
     recordingId,
     at: new Date().toISOString(),
-    body: { text: fields.text, visibility: fields.visibility, timestampMs: fields.timestampMs },
+    body: {
+      text: fields.text,
+      visibility: fields.visibility,
+      timestampMs: fields.timestampMs,
+      ...(images.length === 0 ? {} : { images }),
+    },
   };
-  return { entry, answer: { status: 201, body: { note: pendingNote(entry, snapshot.session) } } };
+  return {
+    entry,
+    answer: { status: 201, body: { note: pendingNote(entry, snapshot.session, snapshot.pendingImages ?? []) } },
+  };
 }
 
 /** Which stored field an online answer refreshes, by route. */
+/** The `images` of an offline note body, read and kept as sent — or `null` when it is not a list of references. */
+function pendingImageRefs(value: unknown): NoteImageRef[] | null {
+  if (value === undefined || value === null) return [];
+  if (!Array.isArray(value) || value.length > 3) return null;
+  const refs: NoteImageRef[] = [];
+  for (const one of value as unknown[]) {
+    if (typeof one !== 'object' || one === null) return null;
+    const ref = one as { pending?: unknown; key?: unknown; alt?: unknown };
+    const alt = typeof ref.alt === 'string' && ref.alt.trim() !== '' ? ref.alt.trim() : null;
+    if (typeof ref.pending === 'string') refs.push({ pending: ref.pending, alt });
+    else if (typeof ref.key === 'string') refs.push({ key: ref.key, alt });
+    else return null;
+  }
+  return refs;
+}
+
 const REFRESHED: Partial<Record<OfflineRoute['name'], { field: keyof DownloadRecord; key: string | null }>> = {
   recording: { field: 'recording', key: 'recording' },
   chapters: { field: 'chapters', key: 'chapters' },
@@ -286,12 +335,13 @@ async function snapshotFor(): Promise<Snapshot> {
   const active = await idbGet<{ userId: string | null }>(OFFLINE_STORES.meta, ACTIVE_USER_KEY);
   const userId = active?.userId ?? null;
   if (userId === null) return { userId: null, downloads: [], outbox: [], session: null };
-  const [downloads, outbox, session] = await Promise.all([
+  const [downloads, outbox, session, pendingImages] = await Promise.all([
     idbAllBy<DownloadRecord>(OFFLINE_STORES.downloads, BY_USER_INDEX, userId),
     idbAllBy<OutboxRecord>(OFFLINE_STORES.outbox, BY_USER_INDEX, userId),
     idbGet<SessionPayload>(OFFLINE_STORES.meta, sessionMetaKey(userId)),
+    idbAllBy<PendingImageRecord>(OFFLINE_STORES.noteImages, BY_USER_INDEX, userId).catch(() => []),
   ]);
-  return { userId, downloads, outbox, session: session ?? null };
+  return { userId, downloads, outbox, session: session ?? null, pendingImages };
 }
 
 /**

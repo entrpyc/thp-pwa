@@ -13,6 +13,7 @@ export * from './invitations';
 export * from './jobs';
 export * from './legal';
 export * from './notes';
+export * from './note-images';
 export * from './notifications';
 export * from './observability/analytics';
 export * from './offline';

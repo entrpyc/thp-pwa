@@ -48,6 +48,10 @@ function upgrade(db: IDBDatabase): void {
   if (!db.objectStoreNames.contains(OFFLINE_STORES.meta)) {
     db.createObjectStore(OFFLINE_STORES.meta);
   }
+  if (!db.objectStoreNames.contains(OFFLINE_STORES.noteImages)) {
+    const images = db.createObjectStore(OFFLINE_STORES.noteImages, { keyPath: 'id' });
+    images.createIndex(BY_USER_INDEX, 'userId', { unique: false });
+  }
 }
 
 export function openOfflineDatabase(): Promise<IDBDatabase> {

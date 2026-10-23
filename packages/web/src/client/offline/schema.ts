@@ -33,7 +33,8 @@ import type {
  */
 
 export const OFFLINE_DB_NAME = 'thp-offline';
-export const OFFLINE_DB_VERSION = 1;
+/** 2 added `noteImages`: the bytes of pictures attached to notes written offline (3.12.22). */
+export const OFFLINE_DB_VERSION = 2;
 
 export const OFFLINE_STORES = {
   /** One {@link DownloadRecord} per download. */
@@ -44,6 +45,8 @@ export const OFFLINE_STORES = {
   outbox: 'outbox',
   /** Small facts: which account is active, the last session payload per account. */
   meta: 'meta',
+  /** One {@link PendingImageRecord} per picture waiting on a connection. */
+  noteImages: 'noteImages',
 } as const;
 
 /** The index on `downloads` and `outbox` that answers "everything this member holds". */
@@ -111,4 +114,17 @@ export interface OutboxRecord {
   /** ISO 8601, the device's clock. */
   readonly at: string;
   readonly body: PlaybackProgressRequest | CreateNoteRequest;
+}
+
+/**
+ * A picture chosen for a note while offline: the encoded bytes under the pending id the outbox
+ * entry names. The flush uploads it, swaps a key into the entry and removes this row
+ * ([3.12.22](docs/project/prd.md); `client/notes/images.ts`).
+ */
+export interface PendingImageRecord {
+  readonly id: string;
+  readonly userId: string;
+  readonly blob: Blob;
+  readonly contentType: string;
+  readonly alt: string | null;
 }

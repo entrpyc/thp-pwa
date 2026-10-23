@@ -87,9 +87,9 @@ export function checkChosenArtwork(file: File): string | null {
  * `createImageBitmap` rather than an `<img>` and a load event: it decodes off the main thread and
  * it refuses a file that is not really an image, which is the one check a content type cannot make.
  */
-export async function encodeArtwork(file: File): Promise<EncodedArtwork> {
+export async function encodeArtwork(file: File, maxEdge: number = ARTWORK_MAX_EDGE): Promise<EncodedArtwork> {
   const source = await createImageBitmap(file);
-  const { width, height } = fitWithin(source.width, source.height);
+  const { width, height } = fitWithin(source.width, source.height, maxEdge);
 
   const canvas = document.createElement('canvas');
   canvas.width = width;

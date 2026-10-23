@@ -39,6 +39,7 @@ export const ACTOR_BUDGET_KINDS = [
   'avatar-grant',
   'recording-grant',
   'artwork-grant',
+  'note-image-grant',
   'search',
 ] as const;
 
@@ -93,6 +94,13 @@ export const ACTOR_BUDGETS: Readonly<Record<ActorBudgetKind, ActorBudget>> = {
     limit: 30,
     windowMs: HOUR_MS,
     refusal: 'Too many upload attempts.',
+  },
+  // Three pictures a note, a note a minute at the most furious — sixty an hour is a ceiling a
+  // person does not reach and a runaway client does.
+  'note-image-grant': {
+    limit: 60,
+    windowMs: HOUR_MS,
+    refusal: 'Too many picture uploads in the last hour.',
   },
   search: {
     limit: SEARCH_BUDGET_PER_HOUR,

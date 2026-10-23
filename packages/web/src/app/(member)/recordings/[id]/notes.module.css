@@ -654,3 +654,239 @@
 .termsRules li + li {
   margin-top: var(--space-1);
 }
+
+/* ---- pictures on notes (3.12.22–3.12.25) ---------------------------------------------------- */
+
+/*
+ * 10. The attach strip and the reader's strip are the guide's **small tiles** — `--radius-sm`,
+ *     one hairline, raised fill — in a row that wraps. Square thumbnails, because a row of mixed
+ *     shapes reads as clutter and the picture itself is one press away.
+ * 11. The overlay is the one full-bleed surface the notes draw: the page base at near-full
+ *     opacity so the picture, not the note behind it, is what the eye lands on. Its controls are
+ *     the outlined pill, as every secondary control here is.
+ */
+
+.attach {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-3);
+}
+
+.attachStrip {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--space-3);
+}
+
+.attachTile {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-2);
+  width: calc(var(--space-8) * 5);
+  max-width: 100%;
+  background: var(--color-surface);
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-sm);
+  padding: var(--space-3);
+}
+
+.attachThumb {
+  width: 100%;
+  aspect-ratio: 1;
+  object-fit: cover;
+  border-radius: var(--radius-sm);
+  background: var(--color-surface-raised);
+}
+
+.attachRefused {
+  margin: 0;
+  color: var(--color-text);
+  font-size: var(--fs-meta);
+  font-weight: 600;
+}
+
+.attachAlt {
+  width: 100%;
+  background: var(--color-surface-raised);
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-sm);
+  padding: var(--space-2) var(--space-3);
+  color: var(--color-text);
+  font-family: inherit;
+  font-size: var(--fs-meta);
+}
+
+.attachAlt::placeholder {
+  color: var(--color-text-dim);
+}
+
+.attachStatus {
+  margin: 0;
+  font-size: var(--fs-meta);
+  color: var(--color-text-dim);
+}
+
+.attachRemove {
+  align-self: flex-start;
+  background: transparent;
+  border: none;
+  padding: 0;
+  color: var(--color-text-muted);
+  font-family: inherit;
+  font-size: var(--fs-meta);
+  text-decoration: underline;
+  cursor: pointer;
+}
+
+.attachAddRow {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: var(--space-3);
+}
+
+/* The file input's visible face — the outlined pill every secondary control here wears. */
+.attachAdd {
+  background: transparent;
+  border: 1px solid var(--color-border-strong);
+  border-radius: var(--radius-pill);
+  padding: var(--space-2) var(--space-5);
+  color: var(--color-text-muted);
+  font-size: var(--fs-body);
+  cursor: pointer;
+}
+
+.attachAdd:hover {
+  border-color: var(--color-primary-strong);
+  color: var(--color-text);
+}
+
+.attachAddOff {
+  cursor: default;
+  opacity: 0.6;
+}
+
+/* Present for the label and the keyboard, drawn by neither: the label is the control. */
+.attachInput {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  opacity: 0;
+  overflow: hidden;
+}
+
+.attachHint {
+  font-size: var(--fs-meta);
+  color: var(--color-text-dim);
+}
+
+.imageStrip {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--space-2);
+}
+
+.imageThumbButton {
+  display: block;
+  padding: 0;
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-sm);
+  background: var(--color-surface-raised);
+  cursor: pointer;
+  overflow: hidden;
+}
+
+.imageThumbButton:hover {
+  border-color: var(--color-primary-strong);
+}
+
+.imageThumb {
+  display: block;
+  width: calc(var(--space-8) * 3);
+  height: calc(var(--space-8) * 3);
+  object-fit: cover;
+}
+
+.lightbox {
+  position: fixed;
+  inset: 0;
+  z-index: 50;
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-3);
+  padding: var(--space-4);
+  background: var(--color-bg);
+}
+
+.lightboxBar {
+  display: flex;
+  align-items: center;
+  justify-content: flex-end;
+  gap: var(--space-3);
+}
+
+.lightboxCount {
+  margin-right: auto;
+  font-size: var(--fs-meta);
+  color: var(--color-text-muted);
+  font-variant-numeric: tabular-nums;
+}
+
+.lightboxAction {
+  background: transparent;
+  border: 1px solid var(--color-border-strong);
+  border-radius: var(--radius-pill);
+  padding: var(--space-2) var(--space-5);
+  color: var(--color-text);
+  font-family: inherit;
+  font-size: var(--fs-body);
+  cursor: pointer;
+}
+
+.lightboxStage {
+  flex: 1;
+  min-height: 0;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: var(--space-3);
+}
+
+.lightboxImage {
+  max-width: 100%;
+  max-height: 100%;
+  object-fit: contain;
+  border-radius: var(--radius-sm);
+}
+
+.lightboxNav,
+.lightboxNavSpace {
+  flex: none;
+  width: calc(var(--space-8) + var(--space-2));
+  height: calc(var(--space-8) + var(--space-2));
+}
+
+.lightboxNav {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  background: var(--color-surface);
+  border: 1px solid var(--color-border-strong);
+  border-radius: var(--radius-pill);
+  color: var(--color-text);
+  font-size: var(--fs-card-title);
+  cursor: pointer;
+}
+
+.lightboxCaption {
+  margin: 0;
+  text-align: center;
+  font-size: var(--fs-body);
+  color: var(--color-text-muted);
+}

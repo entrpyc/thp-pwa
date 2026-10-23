@@ -2,7 +2,13 @@ import {
   clearNoteReaction,
   deleteEmbeddingsForSources,
   deleteHighlightsOfNote,
+  deleteImagesOfNote,
+  deleteNoteImage,
   findNoteById,
+  findNoteImageById,
+  insertNoteImages,
+  listImagesForNotes,
+  replaceNoteImages,
   findOpenNoteReportByReporter,
   findVisibleRecording,
   insertNote,
@@ -19,6 +25,7 @@ import {
   updateNoteText,
   withTransaction,
   type Executor,
+  type NoteImageRow,
   type NoteReactionRow,
   type NoteRow,
   type NoteWithAuthorRow,
@@ -36,7 +43,9 @@ import {
   isReactionEmoji,
   isReportReason,
   termsAcceptanceIsCurrent,
+  excerptForImages,
   type CreateNotePayload,
+  type NoteImageView,
   type NotePayload,
   type NoteView,
   type NoteVisibility,
@@ -60,6 +69,13 @@ import { audit } from '@/server/observability/audit';
 import { logger } from '@/server/observability/logger';
 import { mintArtworkGrant } from '@/server/series/artwork-grant';
 import { BLOCKED_WORD_MESSAGE, findBlockedWord } from './filter';
+import {
+  deleteNoteImageObjects,
+  parseImageRefs,
+  signNoteImages,
+  verifyNewImageKeys,
+  type ParsedImageRef,
+} from './images';
 
 /**
  * **Notes, written and read** (active-scope architecture § 4.3) — scope prd 3.1
@@ -110,12 +126,19 @@ export async function createNote(
   requireTermsAccepted(actor, recordingId);
 
   const fields = asObject(body, 'Send a JSON object with the note, its visibility and its moment.');
-  const text = parseText(fields['text']);
+  // Pictures first, because they decide whether words are required ([3.12.23](docs/project/prd.md)).
+  const images = parseImageRefs(fields['images'], { allowExisting: false });
+  const text = parseText(fields['text'], images.length > 0);
   const parentId = fields['parentId'];
 
   if (parentId === undefined || parentId === null) {
     const requested = parseTopLevel(fields);
-    if (requested.visibility === 'public') requireAllowedWords(actor, text, `recording:${recordingId}`);
+    if (requested.visibility === 'public') {
+      requireAllowedWords(actor, text, `recording:${recordingId}`);
+      requireAllowedAlts(actor, images, `recording:${recordingId}`);
+    }
+    // Read back from the store before anything is written, so a lying body costs no row.
+    await verifyNewImageKeys(actor, images);
     const row = await withTransaction(async (tx) => {
       const written = await insertNote(
         {
@@ -127,6 +150,7 @@ export async function createNote(
         },
         tx,
       );
+      await insertNoteImages(written.id, newImages(images), tx);
       await enqueueEmbed(recordingId, tx);
       return written;
     });
@@ -147,6 +171,8 @@ export async function createNote(
   await requireNoBlock(actor, parent, 'You cannot reply to this member’s notes.');
   // A reply is always public, so it is always checked.
   requireAllowedWords(actor, text, `note:${parent.id}`);
+  requireAllowedAlts(actor, images, `note:${parent.id}`);
+  await verifyNewImageKeys(actor, images);
   const row = await withTransaction(async (tx) => {
     const written = await insertNote(
       {
@@ -162,6 +188,7 @@ export async function createNote(
       },
       tx,
     );
+    await insertNoteImages(written.id, newImages(images), tx);
     await enqueueEmbed(recordingId, tx);
     return written;
   });
@@ -181,7 +208,8 @@ export async function createNote(
     recordingId,
     noteId: parent.id,
     replier: actor,
-    replyText: text,
+    // A reply of pictures alone is still a reply worth a sentence in the bell.
+    replyText: text === '' ? excerptForImages(images.length) : text,
   });
 
   return { note: await bare(authoredBy(row, actor), actor) };
@@ -210,20 +238,77 @@ export async function editNote(actor: Actor, noteId: string, body: unknown): Pro
   });
   requireStanding(existing, NOTE_ALREADY_REMOVED_MESSAGE);
 
-  const text = parseText(asObject(body, 'Send a JSON object carrying the new text.')['text']);
+  const fields = asObject(body, 'Send a JSON object carrying the new text.');
+  // `images` absent means the pictures stay as they are; present, it is the whole new list
+  // ([3.12.22](docs/project/prd.md)): kept ones by id, new ones by key, the rest removed.
+  const current = await listImagesForNotes([noteId]);
+  const images = fields['images'] === undefined ? null : parseImageRefs(fields['images'], { allowExisting: true });
+  if (images !== null) {
+    const known = new Set(current.map((one) => one.id));
+    for (const one of images) {
+      if (one.kind === 'id' && !known.has(one.id)) {
+        throw ApiError.invalidInput('One of the pictures is not on this note any more.');
+      }
+    }
+  }
+  const text = parseText(fields['text'], (images ?? current).length > 0);
   // The same floor the write applied, or an edit would be the way round it. Private text is the
   // author's own, here as there.
-  if (existing.visibility === 'public') requireAllowedWords(actor, text, `note:${noteId}`);
-  const row = await withTransaction(async (tx) => {
+  if (existing.visibility === 'public') {
+    requireAllowedWords(actor, text, `note:${noteId}`);
+    if (images !== null) requireAllowedAlts(actor, images, `note:${noteId}`);
+  }
+  if (images !== null) await verifyNewImageKeys(actor, images);
+  const { row, removedKeys } = await withTransaction(async (tx) => {
     const updated = await updateNoteText(noteId, text, tx);
+    if (updated === null) return { row: null, removedKeys: [] as string[] };
+    const replaced =
+      images === null
+        ? { removedKeys: [] as string[] }
+        : await replaceNoteImages(
+            noteId,
+            images.map((one) => (one.kind === 'id' ? { id: one.id, alt: one.alt } : { mediaKey: one.key, alt: one.alt })),
+            tx,
+          );
     // New words, stale vector — the same enqueue a correction makes, for the same reason. Inside
     // the transaction, so an edit that landed is an edit a re-embed is queued behind.
-    if (updated !== null) await enqueueEmbed(updated.recordingId, tx);
-    return updated;
+    await enqueueEmbed(updated.recordingId, tx);
+    return { row: updated, removedKeys: replaced.removedKeys };
   });
   if (row === null) throw ApiError.noteRemoved(NOTE_ALREADY_REMOVED_MESSAGE);
+  await deleteNoteImageObjects(actor, removedKeys);
 
   return { note: await describeOne(row, actor) };
+}
+
+/**
+ * **Take one picture off a note** ([3.12.24](docs/project/prd.md)) — the author's own, or any on a
+ * public note by an admin. Owned `note.edit` first and `note.moderate` only where it denied, the
+ * ordering `deleteNote` keeps and for its reason: an admin removing a picture from their *own*
+ * note is not moderation.
+ */
+export async function removeNoteImage(actor: Actor, noteId: string, imageId: string): Promise<NotePayload> {
+  const existing = await requireNote(actor, noteId, 'note.edit');
+  const moderating = !can(actor, 'note.edit', { kind: 'note', id: noteId, ownerId: existing.authorId });
+  if (moderating) {
+    authorise(actor, 'note.moderate', `note:${noteId}`);
+    requirePublic(existing, 'This note is private. Only its author can change it.');
+  }
+  requireStanding(existing, NOTE_ALREADY_REMOVED_MESSAGE);
+
+  const image = await findNoteImageById(imageId);
+  if (image === null || image.noteId !== noteId) throw ApiError.notFound('There is no such picture on this note.');
+  // A note of pictures alone keeps at least its last one, or it would become a note of nothing.
+  if (existing.text === '' && (await listImagesForNotes([noteId])).length === 1) {
+    throw ApiError.invalidInput('This note has no words, so its last picture cannot be removed. Delete the note instead.');
+  }
+
+  const key = await deleteNoteImage(imageId);
+  if (key !== null) await deleteNoteImageObjects(actor, [key]);
+  if (moderating) {
+    logger.info('note.moderate', { ...audit(actor, 'note.moderate', `note:${noteId}`), imageId, outcome: 'image-removed' });
+  }
+  return { note: await describeOne(existing, actor) };
 }
 
 /**
@@ -257,10 +342,13 @@ export async function deleteNote(actor: Actor, noteId: string): Promise<NotePayl
   }
   requireStanding(existing, NOTE_ALREADY_REMOVED_MESSAGE);
 
-  const row = await withTransaction(async (tx) => {
+  const { row, imageKeys } = await withTransaction(async (tx) => {
     const deleted = await softDeleteNote(noteId, actor.id, tx);
-    if (deleted === null) return null;
+    if (deleted === null) return { row: null, imageKeys: [] as string[] };
     await unpinNote(noteId, tx);
+    // The pictures go with the words ([3.12.19](docs/project/prd.md)): the rows now, in the same
+    // transaction a soft delete would otherwise never cascade to, and the objects after the commit.
+    const imageKeys = await deleteImagesOfNote(noteId, tx);
     // A removed note's text is returned to nobody ([3.12.19](docs/project/prd.md)) — and that
     // includes being found. The row goes in the delete's own transaction rather than waiting for
     // the next embed run, because a soft delete fires no cascade and a vector is a copy of the
@@ -271,9 +359,10 @@ export async function deleteNote(actor: Actor, noteId: string): Promise<NotePayl
     // ([3.15.3](docs/project/prd.md)): a soft delete fires no cascade, and an entry whose note
     // now reads "removed" has nothing left to show.
     await deleteHighlightsOfNote(noteId, tx);
-    return deleted;
+    return { row: deleted, imageKeys };
   });
   if (row === null) throw ApiError.noteRemoved(NOTE_ALREADY_REMOVED_MESSAGE);
+  await deleteNoteImageObjects(actor, imageKeys);
 
   if (moderating) {
     logger.info('note.moderate', audit(actor, 'note.moderate', `note:${noteId}`));
@@ -551,7 +640,10 @@ export async function readNotesFor(
     else held.push(reply);
   }
   const byNote = groupReactions(reactions);
-  const avatars = await signAvatars([...rows, ...replies]);
+  const [avatars, images] = await Promise.all([
+    signAvatars([...rows, ...replies]),
+    signNoteImages(await listImagesForNotes([...rows, ...replies].map((row) => row.id))),
+  ]);
 
   logger.info('note.read', {
     actorId: actor.id,
@@ -562,9 +654,9 @@ export async function readNotesFor(
 
   return {
     notes: rows.map((row) => ({
-      ...describe(row, actor, byNote, pinned.has(row.id), avatars),
+      ...describe(row, actor, byNote, pinned.has(row.id), avatars, images),
       replies: (byParent.get(row.id) ?? []).map((reply) =>
-        describe(reply, actor, byNote, false, avatars),
+        describe(reply, actor, byNote, false, avatars, images),
       ),
     })),
   };
@@ -803,6 +895,7 @@ function describe(
   byNote: Map<string, NoteReactionRow[]>,
   pinned: boolean,
   avatars: ReadonlyMap<string, string>,
+  images: ReadonlyMap<string, NoteImageView[]>,
 ): NoteView {
   const deleted = row.deletedAt !== null;
   const reactions: ReactionCount[] = deleted
@@ -834,6 +927,8 @@ function describe(
     myReaction: deleted
       ? null
       : ((byNote.get(row.id) ?? []).find((one) => one.mine)?.emoji ?? null),
+    // A tombstone's pictures went with its words; the rows are gone, and nothing is shown.
+    images: deleted ? [] : (images.get(row.id) ?? []),
   };
 }
 
@@ -852,24 +947,43 @@ async function describeOne(row: NoteRow, actor: Actor): Promise<NoteView> {
   ]);
   const byNote = groupReactions(reactions);
   const authored = authoredBy(row, actor);
-  const avatars = await signAvatars([authored, ...replies]);
+  const [avatars, images] = await Promise.all([
+    signAvatars([authored, ...replies]),
+    signNoteImages(await listImagesForNotes([row.id, ...replies.map((reply) => reply.id)])),
+  ]);
   const own = row.authorId === actor.id;
 
   return {
-    ...describe(authored, actor, byNote, pinned.includes(row.id), avatars),
+    ...describe(authored, actor, byNote, pinned.includes(row.id), avatars, images),
     // The author's own name is only right where the actor *is* the author, which is every path that
     // reaches here except an admin's moderation — and that one answers a tombstone, whose author
     // line is replaced by 5.3.3's single line anyway. The picture follows the name.
     authorDisplayName: own ? actor.displayName : '',
     authorAvatarUrl:
       own && actor.avatarKey !== null ? (avatars.get(actor.avatarKey) ?? null) : null,
-    replies: replies.map((reply) => describe(reply, actor, byNote, false, avatars)),
+    replies: replies.map((reply) => describe(reply, actor, byNote, false, avatars, images)),
   };
 }
 
 /** A freshly written note, before anything can have replied or reacted to it. */
 async function bare(row: NoteWithAuthorRow, actor: Actor): Promise<NoteView> {
-  return describe(row, actor, new Map(), false, await signAvatars([row]));
+  const [avatars, images] = await Promise.all([
+    signAvatars([row]),
+    signNoteImages(await listImagesForNotes([row.id])),
+  ]);
+  return describe(row, actor, new Map(), false, avatars, images);
+}
+
+/** The new uploads among the references, in order — what `insertNoteImages` writes. */
+function newImages(refs: readonly ParsedImageRef[]): { mediaKey: string; alt: string | null }[] {
+  return refs.flatMap((one) => (one.kind === 'key' ? [{ mediaKey: one.key, alt: one.alt }] : []));
+}
+
+/** A picture's description is public text when the note is, and meets the same floor. */
+function requireAllowedAlts(actor: Actor, refs: readonly ParsedImageRef[], target: string): void {
+  for (const one of refs) {
+    if (one.alt !== null) requireAllowedWords(actor, one.alt, target);
+  }
 }
 
 /** A row the actor wrote, carrying what the join would have carried had it been read back. */
@@ -921,7 +1035,12 @@ function asObject(body: unknown, complaint: string): Record<string, unknown> {
  * scope prd 3.3.1 and scope prd 3.5.1 both say *the rules at
  * 3.1 apply unchanged* — and the only way to mean that is to run the same code.
  */
-function parseText(value: unknown): string {
+function parseText(value: unknown, imagesAttached = false): string {
+  // A note of pictures alone needs no words ([3.12.23](docs/project/prd.md)); the empty string is
+  // stored, never null — null is the tombstone's and means something else.
+  if (imagesAttached && (value === undefined || value === null || (typeof value === 'string' && value.trim() === ''))) {
+    return '';
+  }
   if (typeof value !== 'string' || value.trim() === '') {
     throw ApiError.invalidInput('Write something before saving the note.');
   }

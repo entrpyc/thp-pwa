@@ -30,6 +30,8 @@ import {
   JOB_STEPS,
   MAX_ANNOUNCEMENT_BODY_LENGTH,
   MAX_ANNOUNCEMENT_TITLE_LENGTH,
+  MAX_NOTE_IMAGES,
+  MAX_NOTE_IMAGE_ALT_LENGTH,
   MAX_NOTE_LENGTH,
   MAX_REPORT_DETAIL_LENGTH,
   MAX_SOS_CLOSING_NOTE_LENGTH,
@@ -2205,6 +2207,50 @@ export const sosReply = pgTable(
     check(
       'sos_reply_text_length',
       sql`char_length(${table.text}) between 1 and ${sql.raw(String(MAX_SOS_REPLY_LENGTH))}`,
+    ),
+  ],
+);
+
+/**
+ * **A picture on a note** ([3.12.22](docs/project/prd.md)–[3.12.25](docs/project/prd.md)) — one
+ * row per image, up to `MAX_NOTE_IMAGES` a note, in the author's order.
+ *
+ * **The key is unique across the table.** An upload grant names one object, and one object is one
+ * note's picture: a second note naming the same key — a client replaying a body, or a member
+ * guessing another's key — is refused by the index rather than by a lookup somebody has to
+ * remember. The key never leaves the server; the wire carries a signed URL.
+ *
+ * **Cascades with the note**, which a soft delete never fires — so the service deletes the rows
+ * (and the objects, after the commit) in the note's own delete, exactly as it clears the text: a
+ * removed note's pictures are returned to nobody ([3.12.19](docs/project/prd.md)). A hard delete
+ * of a private note on account deletion does fire it, and the service lists the keys first so the
+ * objects can follow.
+ */
+export const noteImage = pgTable(
+  'note_image',
+  {
+    id: uuid('id').primaryKey().defaultRandom(),
+    noteId: uuid('note_id')
+      .notNull()
+      .references(() => note.id, { onDelete: 'cascade' }),
+    /** The object's key under `note-images/`. */
+    mediaKey: text('media_key').notNull(),
+    /** The author's description, read in the picture's place ([3.12.25](docs/project/prd.md)). */
+    alt: text('alt'),
+    /** Where in the strip it sits: 0, 1, 2. */
+    position: integer('position').notNull(),
+    createdAt: timestamp('created_at', { withTimezone: true }).notNull().defaultNow(),
+  },
+  (table) => [
+    index('note_image_note_position_idx').on(table.noteId, table.position),
+    uniqueIndex('note_image_media_key_unique').on(table.mediaKey),
+    check(
+      'note_image_alt_length',
+      sql`${table.alt} is null or char_length(${table.alt}) between 1 and ${sql.raw(String(MAX_NOTE_IMAGE_ALT_LENGTH))}`,
+    ),
+    check(
+      'note_image_position_range',
+      sql`${table.position} >= 0 and ${table.position} < ${sql.raw(String(MAX_NOTE_IMAGES))}`,
     ),
   ],
 );

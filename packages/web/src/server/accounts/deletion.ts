@@ -1,4 +1,9 @@
-import { deleteUserAccount, type AccountDeletion, type UserRow } from '@thp/db';
+import {
+  deleteUserAccount,
+  listPrivateNoteImageKeysOfAuthor,
+  type AccountDeletion,
+  type UserRow,
+} from '@thp/db';
 import type { AccountDeletedPayload, DeleteOwnAccountRequest } from '@thp/shared';
 import { mediaStore } from '@thp/media';
 import { ApiError } from '@/server/api/errors';
@@ -6,6 +11,7 @@ import { verifyPassword } from '@/server/auth/password';
 import { toActor, type Actor } from '@/server/auth/policy';
 import { audit } from '@/server/observability/audit';
 import { logger } from '@/server/observability/logger';
+import { deleteNoteImageObjects } from '@/server/notes/images';
 
 /**
  * **A member deletes their own account** ([3.1.8](docs/project/prd.md); Apple 5.1.1(v) and
@@ -92,6 +98,9 @@ export async function eraseAccount(
   via: 'session' | 'token',
 ): Promise<AccountDeletedPayload> {
   const actor = toActor(current);
+  // Read before the erasure hard-deletes the private notes: afterwards there is nothing to find
+  // the objects by. Public notes keep their pictures, as they keep their words (3.1.10).
+  const privateImageKeys = await listPrivateNoteImageKeysOfAuthor(current.id).catch(() => [] as string[]);
   const result = await deleteUserAccount(current.id);
 
   if (result.outcome === 'no-such-account') {
@@ -129,6 +138,7 @@ export async function eraseAccount(
   });
 
   await deleteAvatarObject(actor, current.avatarKey);
+  await deleteNoteImageObjects(actor, privateImageKeys);
 
   return {
     deleted: true,

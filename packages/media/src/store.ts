@@ -117,10 +117,21 @@ export interface MediaStore {
    * Deleting a key nothing is behind is a success: the state asked for is the state there is.
    */
   deleteAvatar(key: string): Promise<void>;
+
+  /**
+   * The second permitted delete, confined to `note-images/` the way `deleteAvatar` is to
+   * `avatars/` ([3.12.24](docs/project/prd.md); packages/db/src/README.md): a picture taken off a
+   * note, a note removed with its pictures, and a leaving member's private notes each have an
+   * object nothing will ever mint a URL for again. The original audio stays unreachable.
+   */
+  deleteNoteImage(key: string): Promise<void>;
 }
 
 /** The prefix {@link MediaStore.deleteAvatar} is confined to. The adapter checks against this. */
 export const AVATAR_KEY_PREFIX = 'avatars/';
+
+/** Where a note's pictures live — the one other prefix the store may delete under. */
+export const NOTE_IMAGE_KEY_PREFIX = 'note-images/';
 
 /**
  * One hour. Long enough for a 200 MB upload on a domestic connection, short enough that a grant
@@ -241,4 +252,13 @@ export function mintAvatarKey(contentType: string): string {
     throw new Error(`no accepted avatar extension for content type "${contentType}"`);
   }
   return `${AVATAR_KEY_PREFIX}${randomUUID()}.${extension}`;
+}
+
+/** A note image's key: the prefix the delete is confined to, a uuid, and the format's extension. */
+export function mintNoteImageKey(contentType: string): string {
+  const extension = extensionForArtworkType(contentType);
+  if (extension === null) {
+    throw new Error(`no accepted note image extension for content type "${contentType}"`);
+  }
+  return `${NOTE_IMAGE_KEY_PREFIX}${randomUUID()}.${extension}`;
 }

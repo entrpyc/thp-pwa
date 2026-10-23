@@ -67,6 +67,7 @@ function download(recordingId: string, seriesId: string | null, recordedAt: stri
         replies: [],
         reactions: [],
         myReaction: null,
+        images: [],
       },
     ],
     progress: { positionMs: 30_000, updatedAt: '2026-10-20T00:00:00.000Z', completedAt: null },
@@ -90,10 +91,11 @@ const snapshot: Snapshot = {
 describe('the names the worker shares', () => {
   it('are stable, because the page and the worker open the same database', () => {
     expect(OFFLINE_DB_NAME).toBe('thp-offline');
-    expect(OFFLINE_DB_VERSION).toBe(1);
+    // 2 since pictures on notes (3.12.22) added the `noteImages` store.
+    expect(OFFLINE_DB_VERSION).toBe(2);
     expect(BY_USER_INDEX).toBe('byUser');
     expect(ACTIVE_USER_KEY).toBe('activeUser');
-    expect(Object.values(OFFLINE_STORES)).toEqual(['downloads', 'media', 'outbox', 'meta']);
+    expect(Object.values(OFFLINE_STORES)).toEqual(['downloads', 'media', 'outbox', 'meta', 'noteImages']);
   });
 });
 

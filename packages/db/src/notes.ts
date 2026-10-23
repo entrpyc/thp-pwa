@@ -2,7 +2,7 @@ import { and, asc, desc, eq, exists, inArray, isNotNull, isNull, or, sql } from 
 import { alias } from 'drizzle-orm/pg-core';
 import { getDatabase, queryable, type Executor } from './client';
 import { noBlockBetween } from './member-blocks';
-import { note, notePin, noteReaction, user } from './schema';
+import { note, noteImage, notePin, noteReaction, user } from './schema';
 import type { NoteVisibility } from '@thp/shared';
 
 /**
@@ -495,6 +495,25 @@ export async function listPinnedNoteIds(
 // =================================================================================================
 
 /** What became of one author's notes when their account was deleted. */
+/**
+ * The keys of every picture on this author's **private** notes ([3.12.22](docs/project/prd.md)) —
+ * read before account deletion hard-deletes those notes, so the objects can be removed after the
+ * commit (README.md beside the schema). Public notes keep their pictures, as they keep their
+ * words. Here rather than in `note-images.ts` because it states the private-note condition, and
+ * this module is the one place that may.
+ */
+export async function listPrivateNoteImageKeysOfAuthor(
+  authorId: string,
+  executor: Executor = getDatabase(),
+): Promise<string[]> {
+  const rows = await queryable(executor)
+    .select({ mediaKey: noteImage.mediaKey })
+    .from(noteImage)
+    .innerJoin(note, eq(noteImage.noteId, note.id))
+    .where(and(eq(note.authorId, authorId), eq(note.visibility, 'private')));
+  return rows.map((one) => one.mediaKey);
+}
+
 export interface ReassignedNotes {
   /** Ids of the private notes that were deleted outright — for the caller to take their vectors with. */
   readonly deletedPrivateNoteIds: readonly string[];

@@ -7,7 +7,7 @@ import {
 } from '@aws-sdk/client-s3';
 import { getSignedUrl } from '@aws-sdk/s3-request-presigner';
 import { readMediaSettings } from './env';
-import { AVATAR_KEY_PREFIX, type MediaStore, type StoredObject } from './store';
+import { AVATAR_KEY_PREFIX, NOTE_IMAGE_KEY_PREFIX, type MediaStore, type StoredObject } from './store';
 
 /**
  * **The one file in the repository permitted to import the S3 SDK** — tools/media-boundary.ts
@@ -126,6 +126,17 @@ export function buildMediaStore(): MediaStore {
       // S3, R2 and MinIO all answer 204 to a delete of a key nothing is behind, so idempotence
       // needs no special case: deleting twice, or deleting a picture that never finished
       // uploading, is the state that was asked for.
+      await client.send(new DeleteObjectCommand({ Bucket: settings.bucket, Key: key }));
+    },
+
+    async deleteNoteImage(key: string): Promise<void> {
+      // The same prefix test, for the same reason: the port's second delete is as narrow as its
+      // first, and a key from anywhere else is a bug worth hearing about.
+      if (!key.startsWith(NOTE_IMAGE_KEY_PREFIX)) {
+        throw new Error(
+          `deleteNoteImage refuses "${key}": only an object under ${NOTE_IMAGE_KEY_PREFIX} may be deleted`,
+        );
+      }
       await client.send(new DeleteObjectCommand({ Bucket: settings.bucket, Key: key }));
     },
   };

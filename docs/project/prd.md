@@ -296,7 +296,7 @@ It is built as a Progressive Web App on a single codebase, reachable from any br
 - ✅ **3.12.2** **Public notes** are visible to all members under the recording, at their respective timestamps.
 - ✅ **3.12.3** **Private notes** are visible only to their author, for personal study and reflection.
 - ✅ **3.12.4** The author selects public or private at the time of writing.
-- ✅ **3.12.5** Notes are plain text with a 1,000 character limit.
+- ✅ **3.12.5** Notes are plain text with a 1,000 character limit. A note may also carry pictures (3.12.22), and one that does may carry no text at all (3.12.23).
 - ✅ **3.12.6** Any public note can carry a reply thread.
 - ✅ **3.12.7** Threads are one level deep: members reply to a note, but cannot reply to a reply.
 - ✅ **3.12.8** Private notes have no threads — they are personal and non-collaborative.
@@ -312,6 +312,10 @@ It is built as a Progressive Web App on a single codebase, reachable from any br
 - ✅ **3.12.18** Deleting a note that carries replies leaves a placeholder in its position, holding the moment it was written at, its marker on the progress bar (3.12.12) and the replies underneath it. One member deleting their own note does not delete the replies other members wrote to it. A note with no replies is removed outright, and a placeholder is never pinned (3.12.15).
 - ✅ **3.12.19** A deleted note’s text is returned to nobody — its author and an admin included — and the placeholder says only that the note was removed, never who removed it. The record of who removed it is the audit log (3.12.10).
 - ✅ **3.12.20** A member can clear their reaction to a note by selecting the one they have already chosen (3.12.14).
+- ✅ **3.12.22** A note or a reply can carry up to three images. The browser shrinks each to at most 1,600 pixels on its longest edge and re-encodes it to WebP before upload, through the same grant-then-upload path a series cover and an avatar take; the member sees a strip of thumbnails under the text, and a press opens the picture full size with a way to the next and the previous. A note written offline keeps its pictures on the device and uploads them when the outbox flushes (3.18).
+- ✅ **3.12.23** A note with at least one picture needs no words. Where a sentence about the note is needed — the bell's notice of a reply, an excerpt — a note of pictures alone reads as “Photo”.
+- ✅ **3.12.24** The author can add and remove pictures when editing a note, and remove one picture from it without editing. An admin can remove a single picture from any public note, or the whole note (3.12.10); either is logged as moderation. Deleting a note removes its pictures with its words (3.12.19), and a member who deletes their account takes the pictures on their private notes with them (3.1.9).
+- ✅ **3.12.25** Each picture may carry a short description of up to 200 characters, read to a screen reader in the picture's place. A picture with none is announced as “Image 2 of 3” rather than as nothing.
 - ✅ **3.12.21** The author of a public note is notified when someone reacts to it (3.17.16). One member changing their reaction replaces their earlier notice rather than adding a second, and clearing a reaction sends nothing.
 
 ### 📝 3.13 Reflective questionnaires
@@ -708,7 +712,8 @@ Mind maps carry no title: the source recording or video title labels them in the
 | Recording   | Auto-set             | Which teaching the note belongs to                                |
 | Timestamp   | Auto-set             | Playback position at creation (3.12.1)                            |
 | Author      | Auto-set             | The member who wrote it                                           |
-| Text        | User-set             | Plain text, 1,000 characters (3.12.5)                             |
+| Text        | User-set             | Plain text, 1,000 characters (3.12.5); may be empty with images    |
+| Images      | User-set             | Up to three, each with an optional description (3.12.22, 3.12.25) |
 | Visibility  | User-set at creation | Public or private (3.12.4)                                        |
 | Parent note | Auto-set             | Present on replies only, one level (3.12.7)                       |
 | Reactions   | User-set             | One per member per note (3.12.14)                                 |

@@ -56,14 +56,16 @@ describe('nothing but an avatar is ever deleted from the store', () => {
     // Account deletion (3.1.8) narrowed this to one named member, `deleteAvatar`, confined by the
     // adapter to the `avatars/` prefix; the original audio is still unreachable by anything here.
     expect(findDeleteOperations(portSource)).toEqual([]);
-    expect(PERMITTED_DELETE_OPERATIONS).toEqual(['deleteAvatar']);
+    // Images on notes (3.12.24) added the second, confined the same way to `note-images/`.
+    expect(PERMITTED_DELETE_OPERATIONS).toEqual(['deleteAvatar', 'deleteNoteImage']);
     expect(portMembers(portSource)).toContain('deleteAvatar');
+    expect(portMembers(portSource)).toContain('deleteNoteImage');
   });
 
   it('would report the permitted delete too if the permission were withdrawn', () => {
     // The exemption is a named member, not a shape: an unnamed list makes the real port fail, which
     // is what "one delete, deliberately" has to mean.
-    expect(findDeleteOperations(portSource, [])).toEqual(['deleteAvatar']);
+    expect(findDeleteOperations(portSource, [])).toEqual(['deleteAvatar', 'deleteNoteImage']);
   });
 
   it('reads the interface it claims to — otherwise the assertion above is vacuous', () => {

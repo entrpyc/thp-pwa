@@ -102,9 +102,13 @@ deletion token, so the same link works once the promotion is done.
 
 ## Storage objects
 
-The media store has one delete, `deleteAvatar`, confined by the adapter to the `avatars/`
-prefix (packages/media/src/store.ts; tools/media-boundary.ts pins the name). Deletion calls it
-**after** the database transaction commits, because the store is not transactional and the
+The media store has two deletes, `deleteAvatar` and `deleteNoteImage`, each confined by the
+adapter to its own prefix — `avatars/` and `note-images/` (packages/media/src/store.ts;
+tools/media-boundary.ts pins both names). Deletion calls the first for the account's picture and
+the second for every picture on the person's private notes, whose keys are read before the
+erasure hard-deletes those notes (`listPrivateNoteImageKeysOfAuthor`); the pictures on their
+public notes stay with the words (3.1.10). Both are called **after** the database transaction
+commits, because the store is not transactional and the
 wrong failure is a person with an account and no picture. The right failure — the store down at
 that instant — leaves an orphan object under a uuid key that nothing can ever mint a URL for
 again, logged at `error` as `account.delete.avatar-orphaned` with the key, for an operator to

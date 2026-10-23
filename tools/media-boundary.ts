@@ -176,12 +176,13 @@ export function portMembers(source: string): string[] {
  * Account deletion ([3.1.8](docs/project/prd.md); packages/db/src/README.md) has to take a
  * person's picture out of the store — Apple 5.1.1(v) and Google Play do not accept "the pointer
  * is dropped" as deletion — so the port carries exactly one delete, confined by the adapter to the
- * `avatars/` prefix. Named here, by its exact spelling, so that the guard below still fails the
- * build on any other member whose name says it removes something: a `deleteObject`, a
- * `removeOriginal`, or a renamed version of this one. The original audio stays unreachable by
+ * `avatars/` prefix. Images on notes ([3.12.24](docs/project/prd.md)) added the second, confined
+ * the same way to `note-images/`. Both named here, by their exact spelling, so that the guard
+ * below still fails the build on any other member whose name says it removes something: a
+ * `deleteObject`, a `removeOriginal`, or a renamed version of either. The original audio stays unreachable by
  * anything on the type, which is what docs/project/prd.md 3.4.9 actually protects.
  */
-export const PERMITTED_DELETE_OPERATIONS: readonly string[] = ['deleteAvatar'];
+export const PERMITTED_DELETE_OPERATIONS: readonly string[] = ['deleteAvatar', 'deleteNoteImage'];
 
 /**
  * Members of the port whose name says it removes something, less the one permitted above. Must be

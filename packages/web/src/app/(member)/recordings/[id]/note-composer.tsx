@@ -13,6 +13,7 @@ import { ApiClientError, apiFetch } from '@/client/api-client';
 import { track } from '@/client/observability/analytics';
 import { clearNoteDraft, readNoteDraft, writeNoteDraft } from '@/client/notes/draft';
 import { useRecordingContent } from './recording-content';
+import { ImageAttach, useImageAttachments } from './image-attach';
 import { TermsPrompt, isTermsRequired } from './terms-prompt';
 import styles from './notes.module.css';
 
@@ -140,6 +141,11 @@ export function NoteComposer({
   // holding nothing but spaces is a composer holding nothing (3.1.6, 3.1.8).
   const count = text.trim().length;
   const overLimit = count > MAX_NOTE_LENGTH;
+  // Pictures ([3.12.22](docs/project/prd.md)). A note of pictures alone needs no words (3.12.23),
+  // so the save is enabled by either; a picture still on its way holds the save until it lands.
+  const attachments = useImageAttachments();
+  const attached = attachments.images.filter((one) => one.status !== 'refused').length;
+  const empty = count === 0 && attached === 0;
 
   const { refreshNotes, lockComposerAnchor, releaseComposerAnchor } = content;
 
@@ -180,14 +186,24 @@ export function NoteComposer({
     setSaving(true);
     setFailure(null);
     setTermsPrompt(false);
-    void apiFetch<CreateNotePayload>(recordingNotesPath(recordingId), {
-      method: 'POST',
-      credentials: 'include',
-      headers: { 'content-type': 'application/json' },
-      body: JSON.stringify({ text: text.trim(), visibility, timestampMs: anchorMs }),
-    })
+    void attachments
+      .settle()
+      .then((images) =>
+        apiFetch<CreateNotePayload>(recordingNotesPath(recordingId), {
+          method: 'POST',
+          credentials: 'include',
+          headers: { 'content-type': 'application/json' },
+          body: JSON.stringify({
+            text: text.trim(),
+            visibility,
+            timestampMs: anchorMs,
+            ...(images.length === 0 ? {} : { images }),
+          }),
+        }),
+      )
       .then(() => {
         setText('');
+        attachments.reset();
         // That a note was written, and whether it was private — never what it said.
         track('note_created', { recording_id: recordingId, visibility, is_reply: false });
         // The draft is the note until the note exists; once it does, it is a second copy of one
@@ -283,6 +299,8 @@ export function NoteComposer({
 
       <CharacterCount count={count} />
 
+      <ImageAttach attachments={attachments} disabled={saving} />
+
       {termsPrompt ? <TermsPrompt onAccepted={save} onDismiss={() => setTermsPrompt(false)} /> : null}
 
       {failure === null ? null : (
@@ -295,7 +313,7 @@ export function NoteComposer({
         <button
           className={styles.primary}
           type="submit"
-          disabled={count === 0 || overLimit || saving}
+          disabled={empty || overLimit || saving || !attachments.settled}
         >
           {saving ? 'Saving…' : 'Save note'}
         </button>

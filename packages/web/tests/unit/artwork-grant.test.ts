@@ -32,6 +32,7 @@ function recordingStore(): { store: MediaStore; asked: Asked[] } {
       return `https://store.test/${input.key}?X-Amz-Expires=${input.expiresInSeconds}`;
     },
     deleteAvatar: async () => {},
+    deleteNoteImage: async () => {},
   };
   return { store, asked };
 }

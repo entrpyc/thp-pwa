@@ -156,6 +156,7 @@ export {
   listNotesForEmbedding,
   listNotesForReader,
   listPinnedNoteIds,
+  listPrivateNoteImageKeysOfAuthor,
   listReactionsForNotes,
   listRepliesForNotes,
   pinNote,
@@ -171,6 +172,17 @@ export {
   type NoteWithAuthorRow,
   type ReassignedNotes,
 } from './notes';
+export {
+  deleteImagesOfNote,
+  deleteNoteImage,
+  findNoteImageById,
+  insertNoteImages,
+  isNoteImageKeyUsed,
+  listImagesForNotes,
+  replaceNoteImages,
+  type NewNoteImage,
+  type NoteImageRow,
+} from './note-images';
 export {
   findNoteReportById,
   findOpenNoteReportByReporter,
