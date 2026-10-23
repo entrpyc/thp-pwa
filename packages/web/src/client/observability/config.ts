@@ -11,9 +11,16 @@ import { type ShellView, shellPlatformOf } from '@/client/platform';
  * reaches the client as `NEXT_PUBLIC_THP_MOCK_EXTERNAL`, mirrored from `THP_MOCK_EXTERNAL` by
  * next.config.ts, so a development build or a test run carries a client that sends nothing —
  * the same promise the four server-side adapters make through `tests/guards/mock-switch.test.ts`.
+ *
+ * **Analytics is a production-only concern.** Whatever the key and the mock switch say, the reader
+ * answers `null` unless `NODE_ENV` is `production`: `next dev`, a test run and a local build
+ * of any other kind send nothing, so a key left in a development `.env` cannot put a developer's
+ * clicks into the member insights.
  */
 
 export const ANALYTICS_KEY_VARIABLE = 'NEXT_PUBLIC_POSTHOG_KEY';
+/** The one value of `NODE_ENV` under which analytics may be on. */
+export const ANALYTICS_PRODUCTION_ENVIRONMENT = 'production';
 export const ANALYTICS_HOST_VARIABLE = 'NEXT_PUBLIC_POSTHOG_HOST';
 
 export interface AnalyticsConfig {
@@ -24,9 +31,9 @@ export interface AnalyticsConfig {
 }
 
 /**
- * `null` means analytics is off: mocked, or no key. A key without a host is refused by name rather
- * than defaulted, because which region the data lands in is a decision nobody should make on the
- * operator's behalf.
+ * `null` means analytics is off: not a production build, mocked, or no key. A key without a host is
+ * refused by name rather than defaulted, because which region the data lands in is a decision
+ * nobody should make on the operator's behalf.
  */
 export function readAnalyticsConfig(env: EnvSource): AnalyticsConfig | null {
   return readAnalyticsConfigNamed(env, { key: ANALYTICS_KEY_VARIABLE, host: ANALYTICS_HOST_VARIABLE });
@@ -41,6 +48,7 @@ export function readAnalyticsConfigNamed(
   env: EnvSource,
   names: { readonly key: string; readonly host: string },
 ): AnalyticsConfig | null {
+  if (env['NODE_ENV'] !== ANALYTICS_PRODUCTION_ENVIRONMENT) return null;
   if (isExternalMocked(env)) return null;
   const key = (env[names.key] ?? '').trim();
   if (key === '') return null;

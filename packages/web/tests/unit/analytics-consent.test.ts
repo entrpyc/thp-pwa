@@ -45,6 +45,7 @@ function callOrder(): string[] {
 
 beforeEach(() => {
   for (const fn of Object.values(sdk)) fn.mockReset();
+  vi.stubEnv('NODE_ENV', 'production');
   vi.stubEnv('NEXT_PUBLIC_POSTHOG_KEY', 'phc_test');
   vi.stubEnv('NEXT_PUBLIC_POSTHOG_HOST', 'https://analytics.example.test');
   vi.stubEnv('NEXT_PUBLIC_THP_MOCK_EXTERNAL', 'false');

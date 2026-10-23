@@ -34,8 +34,9 @@ let state: State = 'idle';
 let consent: 'withheld' | 'granted' = 'withheld';
 
 /**
- * Start the SDK, once. Returns whether it started. Off when mocked, when no key is configured, or
- * outside a browser — and off, with one console line, when the SDK itself refuses to start.
+ * Start the SDK, once. Returns whether it started. Off outside a production build, when mocked,
+ * when no key is configured, or outside a browser — and off, with one console line, when the SDK
+ * itself refuses to start.
  *
  * Started is not capturing: the SDK comes up opted out, and nothing leaves until
  * {@link applyAnalyticsPreference} is told the member has not opted out.
@@ -44,6 +45,8 @@ export function initAnalytics(): boolean {
   if (state !== 'idle') return state === 'on';
   try {
     const config = readAnalyticsConfig({
+      // Inlined by Next like the public pair below, so a development bundle carries the refusal.
+      NODE_ENV: process.env.NODE_ENV,
       NEXT_PUBLIC_POSTHOG_KEY: process.env.NEXT_PUBLIC_POSTHOG_KEY,
       NEXT_PUBLIC_POSTHOG_HOST: process.env.NEXT_PUBLIC_POSTHOG_HOST,
       THP_MOCK_EXTERNAL: process.env.NEXT_PUBLIC_THP_MOCK_EXTERNAL,

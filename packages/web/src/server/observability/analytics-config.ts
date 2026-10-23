@@ -10,7 +10,7 @@ import { readAnalyticsConfigNamed, type AnalyticsConfig } from '@/client/observa
 export const SERVER_ANALYTICS_KEY_VARIABLE = 'POSTHOG_KEY';
 export const SERVER_ANALYTICS_HOST_VARIABLE = 'POSTHOG_HOST';
 
-/** `null` means off: mocked, or no key. A key without a host is refused by name. */
+/** `null` means off: not production, mocked, or no key. A key without a host is refused by name. */
 export function readServerAnalyticsConfig(env: EnvSource = process.env): AnalyticsConfig | null {
   return readAnalyticsConfigNamed(env, {
     key: SERVER_ANALYTICS_KEY_VARIABLE,

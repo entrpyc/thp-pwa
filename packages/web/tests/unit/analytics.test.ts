@@ -2,6 +2,7 @@ import { describe, expect, it } from 'vitest';
 import {
   ANALYTICS_HOST_VARIABLE,
   ANALYTICS_KEY_VARIABLE,
+  ANALYTICS_PRODUCTION_ENVIRONMENT,
   detectInstallSource,
   readAnalyticsConfig,
   stripUrlProperties,
@@ -19,20 +20,31 @@ const EU = 'https://eu.i.posthog.com';
 const RECORDING = 'a3f1c2d4-0000-4000-8000-000000000001';
 const CHAPTER = 'b4e2d3c5-0000-4000-8000-000000000002';
 
+const PRODUCTION = { NODE_ENV: ANALYTICS_PRODUCTION_ENVIRONMENT };
+
 describe('readAnalyticsConfig', () => {
-  it('is on with a key and a host, with the host normalised', () => {
+  it('is on in production with a key and a host, with the host normalised', () => {
     expect(
-      readAnalyticsConfig({ [ANALYTICS_KEY_VARIABLE]: 'phc_x', [ANALYTICS_HOST_VARIABLE]: `${EU}/` }),
+      readAnalyticsConfig({ ...PRODUCTION, [ANALYTICS_KEY_VARIABLE]: 'phc_x', [ANALYTICS_HOST_VARIABLE]: `${EU}/` }),
     ).toEqual({ key: 'phc_x', host: EU });
   });
 
+  it('is off outside production whatever the key says', () => {
+    const configured = { [ANALYTICS_KEY_VARIABLE]: 'phc_x', [ANALYTICS_HOST_VARIABLE]: EU };
+    expect(readAnalyticsConfig({ ...configured, NODE_ENV: 'development' })).toBeNull();
+    expect(readAnalyticsConfig({ ...configured, NODE_ENV: 'test' })).toBeNull();
+    expect(readAnalyticsConfig(configured)).toBeNull();
+  });
+
   it('is off with no key, which is what the development template says', () => {
-    expect(readAnalyticsConfig({ [ANALYTICS_HOST_VARIABLE]: EU })).toBeNull();
-    expect(readAnalyticsConfig({ [ANALYTICS_KEY_VARIABLE]: '  ', [ANALYTICS_HOST_VARIABLE]: EU })).toBeNull();
+    expect(readAnalyticsConfig({ ...PRODUCTION, [ANALYTICS_HOST_VARIABLE]: EU })).toBeNull();
+    expect(
+      readAnalyticsConfig({ ...PRODUCTION, [ANALYTICS_KEY_VARIABLE]: '  ', [ANALYTICS_HOST_VARIABLE]: EU }),
+    ).toBeNull();
   });
 
   it('refuses a key without a host by name rather than defaulting a region', () => {
-    expect(() => readAnalyticsConfig({ [ANALYTICS_KEY_VARIABLE]: 'phc_x' })).toThrow(
+    expect(() => readAnalyticsConfig({ ...PRODUCTION, [ANALYTICS_KEY_VARIABLE]: 'phc_x' })).toThrow(
       ANALYTICS_HOST_VARIABLE,
     );
   });

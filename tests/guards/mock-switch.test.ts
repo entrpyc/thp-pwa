@@ -95,7 +95,10 @@ describe('THP_MOCK_EXTERNAL', () => {
   it('silences the client analytics adapter too, which joined the promise in the observability scope', () => {
     // The switch reaches the client as NEXT_PUBLIC_THP_MOCK_EXTERNAL (next.config.ts) and is read
     // under its own name by the same function — so the shape of the promise is the same.
+    // Analytics is production-only as well, so the fixture has to say it is production before the
+    // switch has anything to silence.
     const configured = {
+      NODE_ENV: 'production',
       NEXT_PUBLIC_POSTHOG_KEY: 'phc_x',
       NEXT_PUBLIC_POSTHOG_HOST: 'https://eu.i.posthog.com',
     };
@@ -108,13 +111,19 @@ describe('THP_MOCK_EXTERNAL', () => {
   });
 
   it('silences the server analytics adapter the same way, under its runtime names', () => {
-    const configured = { POSTHOG_KEY: 'phc_x', POSTHOG_HOST: 'https://eu.i.posthog.com' };
+    const configured = {
+      NODE_ENV: 'production',
+      POSTHOG_KEY: 'phc_x',
+      POSTHOG_HOST: 'https://eu.i.posthog.com',
+    };
     expect(readServerAnalyticsConfig({ ...configured, [MOCK_EXTERNAL_VARIABLE]: 'true' })).toBeNull();
     expect(readServerAnalyticsConfig(configured)).toEqual({
       key: 'phc_x',
       host: 'https://eu.i.posthog.com',
     });
     expect(readServerAnalyticsConfig({})).toBeNull();
-    expect(() => readServerAnalyticsConfig({ POSTHOG_KEY: 'phc_x' })).toThrow('POSTHOG_HOST');
+    expect(() => readServerAnalyticsConfig({ NODE_ENV: 'production', POSTHOG_KEY: 'phc_x' })).toThrow(
+      'POSTHOG_HOST',
+    );
   });
 });
