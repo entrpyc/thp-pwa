@@ -23,6 +23,7 @@ import { CollapsibleProse } from './collapsible-prose';
 import { NotesPanel } from './notes-panel';
 import { RecordingContentProvider, toLoaded, useRecordingContentFor } from './recording-content';
 import { listOffsetLeftHere, tabFromAddress, writeTabToAddress } from './round-trip';
+import { RelatedTeachings } from './related-teachings';
 import { ScripturePanel } from './scripture-panel';
 import { TranscriptPanel } from './transcript-panel';
 import { TagLabels } from '../../tag-labels';
@@ -439,6 +440,7 @@ export function RecordingScreen({
             player over, and until it is pressed the other teaching keeps playing.
           */}
           <RecordingContentProvider value={content}>
+          <RelatedTeachings recordingId={recordingId} />
           <div className={styles.tabs} role="tablist" aria-label="Teaching contents">
             <button
               className={`${styles.tab} ${styles.notesTab}`}

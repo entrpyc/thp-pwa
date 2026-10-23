@@ -1,4 +1,5 @@
 import {
+  deleteCrossReferencesTouching,
   deleteEmbeddingsForSources,
   findRecordingById,
   findSummaryByRecording,
@@ -59,7 +60,16 @@ export async function publishRecording(actor: Actor, id: string): Promise<Public
     return describe(id, existing.publishedAt, await findSummaryByRecording(id));
   }
 
-  const row = await setRecordingPublication(id, new Date());
+  const row = await withTransaction(async (tx) => {
+    const published = await setRecordingPublication(id, new Date(), tx);
+    // A teaching gives and receives links only once it is published ([3.9](docs/project/prd.md)),
+    // so the chain's run of `cross_reference` — made while this was a draft — wrote nothing for
+    // it. The step is asked again in the publish's own transaction: a teaching a member can open
+    // is a teaching whose links are being computed, with no gap a crash could widen. `embed` ran
+    // already and is not re-asked; this step alone is what publication changes.
+    if (published !== null) await queue().enqueue({ recordingId: id, step: 'cross_reference' }, tx);
+    return published;
+  });
   if (row === null) throw notFound();
 
   logger.info('recording.publish', {
@@ -80,7 +90,16 @@ export async function publishRecording(actor: Actor, id: string): Promise<Public
 export async function unpublishRecording(actor: Actor, id: string): Promise<PublicationPayload> {
   await requireRecording(id);
 
-  const row = await setRecordingPublication(id, null);
+  const row = await withTransaction(async (tx) => {
+    const taken = await setRecordingPublication(id, null, tx);
+    // The one thing unpublishing deletes, and it is a cache rather than content (project tdd
+    // 3.3): every cross-reference touching this teaching, on either end, goes in the same
+    // transaction. An unpublished teaching neither gives nor receives links, other teachings'
+    // pages would otherwise still hold rows pointing at it until their own runs happened to
+    // re-execute, and the read's gate hiding those rows is the second line, not the first.
+    if (taken !== null) await deleteCrossReferencesTouching(id, tx);
+    return taken;
+  });
   if (row === null) throw notFound();
 
   logger.info('recording.unpublish', audit(actor, 'recording.unpublish', `recording:${id}`));

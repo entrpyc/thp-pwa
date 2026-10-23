@@ -5,6 +5,7 @@ import { afterAll, beforeAll, describe, expect, it, inject } from 'vitest';
 import postgres from 'postgres';
 import { MIGRATIONS_DIR, runMigrations } from '@thp/db';
 import {
+  CROSS_REFERENCE_BASES,
   DEFAULT_SOUND_PROFILE,
   EMBEDDING_DIMENSIONS,
   EMBEDDING_SOURCE_KINDS,
@@ -183,11 +184,17 @@ describe('migrations apply to an empty database by one command', () => {
       // Member blocks add `member_block` — one row per directed pair, read in both directions by
       // one predicate. The UGC controls add `note_report` — a member's request that an admin look
       // at a note (Apple 1.2, Google Play UGC); the terms acceptance is two columns on `user`.
+      // Cross-referencing adds `cross_reference` ([3.9](docs/project/prd.md)) — the derived edge
+      // table over segment pairs, a cache of the index rather than content. Push adds
+      // `notification_preference` and `push_subscription`, Highlights adds `highlight`, and
+      // offline sync adds `sync_receipt`.
       expect(tables.map((row) => row.tablename)).toEqual([
         'account_deletion_request',
         'announcement',
         'chapter',
+        'cross_reference',
         'embedding',
+        'highlight',
         'invitation',
         'job',
         'member_block',
@@ -196,8 +203,10 @@ describe('migrations apply to an empty database by one command', () => {
         'note_reaction',
         'note_report',
         'notification',
+        'notification_preference',
         'password_reset',
         'playback_progress',
+        'push_subscription',
         'recording',
         'recording_tag',
         'review_item',
@@ -209,6 +218,7 @@ describe('migrations apply to an empty database by one command', () => {
         'sound_profile',
         'spend_ceiling_raise',
         'summary',
+        'sync_receipt',
         'tag',
         'transcript',
         'user',
@@ -2131,10 +2141,13 @@ describe('the chapter table, and nothing beside it', () => {
     `;
     // Derived from the one declaration rather than restated beside it, exactly as every other enum
     // in this file is — less `process_audio`, which `0021_process_audio` adds ahead of `transcribe`
-    // two migrations later, and less `embed`, which `0028_embeddings` adds after the chain; this
-    // database, migrated only as far as chapters, admits neither yet.
+    // two migrations later, less `embed`, which `0028_embeddings` adds after the chain, and less
+    // `cross_reference`, which `0038_cross_references` adds after that; this database, migrated
+    // only as far as chapters, admits none of them yet.
     expect(steps.map((row) => row.enumlabel)).toEqual(
-      PIPELINE_STEPS.filter((step) => step !== 'process_audio' && step !== 'embed'),
+      PIPELINE_STEPS.filter(
+        (step) => step !== 'process_audio' && step !== 'embed' && step !== 'cross_reference',
+      ),
     );
     expect(steps.map((row) => row.enumlabel)).toContain('generate_chapters');
 
@@ -2307,9 +2320,12 @@ describe('the sound profile, and nothing beside it', () => {
       join pg_type on pg_type.oid = pg_enum.enumtypid
       where pg_type.typname = 'pipeline_step' order by pg_enum.enumsortorder
     `;
-    // Less `embed`, which `0028_embeddings` slots in ahead of the standalone pair two migrations
-    // later; this database, migrated only as far as the sound profile, does not admit it yet.
-    expect(steps.map((row) => row.enumlabel)).toEqual(JOB_STEPS.filter((step) => step !== 'embed'));
+    // Less `embed` and `cross_reference`, which `0028_embeddings` and `0038_cross_references`
+    // slot in ahead of the standalone pair later; this database, migrated only as far as the
+    // sound profile, does not admit either yet.
+    expect(steps.map((row) => row.enumlabel)).toEqual(
+      JOB_STEPS.filter((step) => step !== 'embed' && step !== 'cross_reference'),
+    );
   });
 
   it('seeds version 1 with the shared defaults, saved by nobody', async () => {
@@ -2562,11 +2578,13 @@ describe('the embedding table, and nothing beside it', () => {
       join pg_type on pg_type.oid = pg_enum.enumtypid
       where pg_type.typname = 'pipeline_step' order by pg_enum.enumsortorder
     `;
-    // The whole declaration, in its order: the chain, then the standalone steps. This database is
-    // migrated to the newest migration, so nothing is missing from it as `process_audio` is from
-    // the chapters block above.
-    expect(steps.map((row) => row.enumlabel)).toEqual([...JOB_STEPS]);
-    expect(PIPELINE_STEPS[PIPELINE_STEPS.length - 1]).toBe('embed');
+    // The whole declaration, in its order: the chain, then the standalone steps — less
+    // `cross_reference`, which `0038_cross_references` slots in after `embed` later; this
+    // database, migrated only as far as embeddings, does not admit it yet.
+    expect(steps.map((row) => row.enumlabel)).toEqual(
+      JOB_STEPS.filter((step) => step !== 'cross_reference'),
+    );
+    expect(PIPELINE_STEPS.indexOf('embed')).toBe(PIPELINE_STEPS.indexOf('generate_chapters') + 1);
 
     // The job written before the widening is still readable and still says what it said.
     const rows = await sql<{ step: string }[]>`
@@ -2767,7 +2785,11 @@ describe('the note_report table and the terms columns, and nothing beside them',
       ).map((row) => row.value);
     expect(await enumValues('report_reason')).toEqual([...REPORT_REASONS]);
     expect(await enumValues('report_outcome')).toEqual([...REPORT_OUTCOMES]);
-    expect(await enumValues('notification_kind')).toEqual([...NOTIFICATION_KINDS]);
+    // Less `summary_ready`, which `0033_summary_ready` adds next; this database, migrated only as
+    // far as the UGC controls, does not admit it yet.
+    expect(await enumValues('notification_kind')).toEqual(
+      NOTIFICATION_KINDS.filter((kind) => kind !== 'summary_ready'),
+    );
   });
 
   it('leaves an account written before the columns with no acceptance rather than a default one', async () => {
@@ -2839,6 +2861,178 @@ describe('the note_report table and the terms columns, and nothing beside them',
     // The note goes; the report goes with it.
     await sql`delete from note where id = ${noteId}`;
     const [count] = await sql<{ count: string }[]>`select count(*)::text as count from note_report`;
+    expect(count?.count).toBe('0');
+  });
+});
+
+/**
+ * `cross_reference` — **the derived edge table over segment pairs** ([3.9](docs/project/prd.md);
+ * project tdd 3.3) — and the migration that adds nothing beside it and one value to the step enum.
+ *
+ * The same before-and-after as every block above. The properties of the *database* asserted
+ * here: the basis enum admits exactly what the shared constant declares, `cross_reference` took
+ * its place in the step enum after `embed` and before the standalone pair, the three checks
+ * refuse a self-link, a score outside 0..1 and a row owned by neither end, and a segment going
+ * takes every link anchored to it on either side — which is what makes a re-transcription clean
+ * the table without a statement of its own.
+ */
+describe('the cross_reference table, and nothing beside it', () => {
+  let target: ThrowawayDatabase;
+  let before: Map<string, string[]>;
+  let after: Map<string, string[]>;
+  let sql: ReturnType<typeof postgres>;
+
+  beforeAll(async () => {
+    target = await createThrowawayDatabase(inject('databaseUrl'), 'cross_references_migration');
+
+    const priorCount = journalCountBefore('0038_cross_references');
+    await runMigrations({ url: target.url, migrationsFolder: migrationsFolderUpTo(priorCount) });
+    before = await readColumnSets(target.url);
+
+    await runMigrations({ url: target.url, migrationsFolder: migrationsFolderUpTo(priorCount + 1) });
+    after = await readColumnSets(target.url);
+    sql = postgres(target.url, { max: 2, onnotice: () => {} });
+  }, 120_000);
+
+  afterAll(async () => {
+    await sql?.end({ timeout: 5 });
+    await target?.drop();
+  }, 60_000);
+
+  it('did not have the table before this migration and does after — otherwise the comparison is vacuous', () => {
+    expect(before.has('cross_reference')).toBe(false);
+    expect(after.has('cross_reference')).toBe(true);
+  });
+
+  it('adds the cross_reference table and changes no column of any other', () => {
+    for (const [table, columns] of before) {
+      expect(after.get(table), `${table} changed`).toEqual(columns);
+    }
+    expect([...after.keys()].sort()).toEqual([...before.keys(), 'cross_reference'].sort());
+    expect(after.get('cross_reference')).toEqual([
+      'basis',
+      'computed_for',
+      'created_at',
+      'id',
+      'score',
+      'source_recording_id',
+      'source_segment_id',
+      'target_recording_id',
+      'target_segment_id',
+    ]);
+  });
+
+  it('declares the basis enum from the shared constant and slots the step in after embed', async () => {
+    const bases = await sql<{ enumlabel: string }[]>`
+      select enumlabel from pg_enum
+      join pg_type on pg_type.oid = pg_enum.enumtypid
+      where pg_type.typname = 'cross_reference_basis' order by pg_enum.enumsortorder
+    `;
+    expect(bases.map((row) => row.enumlabel)).toEqual([...CROSS_REFERENCE_BASES]);
+
+    const steps = await sql<{ enumlabel: string }[]>`
+      select enumlabel from pg_enum
+      join pg_type on pg_type.oid = pg_enum.enumtypid
+      where pg_type.typname = 'pipeline_step' order by pg_enum.enumsortorder
+    `;
+    // The whole declaration in its order: the chain, then the standalone steps. This is the newest
+    // migration, so the enum and the list agree exactly.
+    expect(steps.map((row) => row.enumlabel)).toEqual([...JOB_STEPS]);
+    expect(PIPELINE_STEPS[PIPELINE_STEPS.length - 1]).toBe('cross_reference');
+    expect(PIPELINE_STEPS.indexOf('cross_reference')).toBe(PIPELINE_STEPS.indexOf('embed') + 1);
+  });
+
+  it('indexes both ends and the owning run, refuses the rows no run writes, and goes with a segment', async () => {
+    const indexes = await sql<{ indexname: string }[]>`
+      select indexname from pg_indexes where tablename = 'cross_reference' order by indexname
+    `;
+    expect(indexes.map((row) => row.indexname)).toEqual([
+      'cross_reference_computed_for_idx',
+      'cross_reference_pair_per_run_unique',
+      'cross_reference_pkey',
+      'cross_reference_source_recording_idx',
+      'cross_reference_target_recording_idx',
+    ]);
+
+    const [a] = await sql<{ id: string }[]>`
+      insert into recording (original_media_key, title, recorded_at)
+      values ('originals/xref-a.mp3', 'A', '2026-10-21') returning id
+    `;
+    const [b] = await sql<{ id: string }[]>`
+      insert into recording (original_media_key, title, recorded_at)
+      values ('originals/xref-b.mp3', 'B', '2026-10-21') returning id
+    `;
+    const [c] = await sql<{ id: string }[]>`
+      insert into recording (original_media_key, title, recorded_at)
+      values ('originals/xref-c.mp3', 'C', '2026-10-21') returning id
+    `;
+    const aId = a?.id as string;
+    const bId = b?.id as string;
+    const cId = c?.id as string;
+    const [ta] = await sql<{ id: string }[]>`
+      insert into transcript (recording_id, language, confidence) values (${aId}, 'en', 0.9) returning id
+    `;
+    const [tb] = await sql<{ id: string }[]>`
+      insert into transcript (recording_id, language, confidence) values (${bId}, 'en', 0.9) returning id
+    `;
+    const [sa] = await sql<{ id: string }[]>`
+      insert into segment (transcript_id, start_ms, end_ms, text) values (${ta?.id as string}, 0, 1000, 'a') returning id
+    `;
+    const [sb] = await sql<{ id: string }[]>`
+      insert into segment (transcript_id, start_ms, end_ms, text) values (${tb?.id as string}, 0, 1000, 'b') returning id
+    `;
+    const segA = sa?.id as string;
+    const segB = sb?.id as string;
+
+    await sql`
+      insert into cross_reference (source_recording_id, source_segment_id, target_recording_id, target_segment_id, score, basis, computed_for)
+      values (${aId}, ${segA}, ${bId}, ${segB}, 0.8, 'semantic', ${aId})
+    `;
+    // The mirror, owned by the same run, is a different pair and is admitted.
+    await sql`
+      insert into cross_reference (source_recording_id, source_segment_id, target_recording_id, target_segment_id, score, basis, computed_for)
+      values (${bId}, ${segB}, ${aId}, ${segA}, 0.8, 'semantic', ${aId})
+    `;
+    // The same pair from the same run is refused; from the other end's run it is a second opinion.
+    await expect(
+      sql`
+        insert into cross_reference (source_recording_id, source_segment_id, target_recording_id, target_segment_id, score, basis, computed_for)
+        values (${aId}, ${segA}, ${bId}, ${segB}, 0.9, 'semantic', ${aId})
+      `,
+    ).rejects.toThrow(/cross_reference_pair_per_run_unique/);
+    await sql`
+      insert into cross_reference (source_recording_id, source_segment_id, target_recording_id, target_segment_id, score, basis, computed_for)
+      values (${aId}, ${segA}, ${bId}, ${segB}, 0.9, 'semantic', ${bId})
+    `;
+
+    await expect(
+      sql`
+        insert into cross_reference (source_recording_id, source_segment_id, target_recording_id, target_segment_id, score, basis, computed_for)
+        values (${aId}, ${segA}, ${aId}, ${segA}, 0.8, 'semantic', ${aId})
+      `,
+    ).rejects.toThrow(/cross_reference_across_recordings/);
+    await expect(
+      sql`
+        insert into cross_reference (source_recording_id, source_segment_id, target_recording_id, target_segment_id, score, basis, computed_for)
+        values (${aId}, ${segA}, ${bId}, ${segB}, 1.5, 'semantic', ${cId})
+      `,
+    ).rejects.toThrow(/cross_reference_score_range|cross_reference_owned_by_an_end/);
+    await expect(
+      sql`
+        insert into cross_reference (source_recording_id, source_segment_id, target_recording_id, target_segment_id, score, basis, computed_for)
+        values (${aId}, ${segA}, ${bId}, ${segB}, 0.5, 'semantic', ${cId})
+      `,
+    ).rejects.toThrow(/cross_reference_owned_by_an_end/);
+    await expect(
+      sql`
+        insert into cross_reference (source_recording_id, source_segment_id, target_recording_id, target_segment_id, score, basis, computed_for)
+        values (${aId}, ${segA}, ${bId}, ${segB}, 0.5, 'shared_tag', ${aId})
+      `,
+    ).rejects.toThrow(/cross_reference_basis/);
+
+    // B's sentence goes — a re-transcription — and every link anchored to it, on either side, goes too.
+    await sql`delete from segment where id = ${segB}`;
+    const [count] = await sql<{ count: string }[]>`select count(*)::text as count from cross_reference`;
     expect(count?.count).toBe('0');
   });
 });
