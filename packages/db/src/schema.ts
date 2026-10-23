@@ -25,6 +25,7 @@ import {
   DEFAULT_PLAYBACK_SPEED,
   EMBEDDING_DIMENSIONS,
   EMBEDDING_SOURCE_KINDS,
+  HIGHLIGHT_KINDS,
   JOB_STATUSES,
   JOB_STEPS,
   MAX_ANNOUNCEMENT_BODY_LENGTH,
@@ -32,10 +33,13 @@ import {
   MAX_NOTE_LENGTH,
   MAX_REPORT_DETAIL_LENGTH,
   MAX_SOUND_PROFILE_NOTE_LENGTH,
+  MAX_PUSH_ENDPOINT_LENGTH,
   MAX_TAG_LENGTH,
   NOTE_VISIBILITIES,
+  NOTIFICATION_CATEGORIES,
   NOTIFICATION_KINDS,
   PLAYBACK_SPEEDS,
+  PUSH_PLATFORMS,
   REPORT_OUTCOMES,
   REPORT_REASONS,
   REVIEW_KINDS,
@@ -43,6 +47,8 @@ import {
   ROLES,
   SCRIPTURE_ORIGINS,
   SOUND_PROFILE_BOUNDS,
+  SYNC_ENTRY_KINDS,
+  SYNC_RESULT_STATUSES,
   UNFINISHED_JOB_STATUSES,
 } from '@thp/shared';
 
@@ -89,6 +95,11 @@ export const scriptureOrigin = pgEnum('scripture_origin', SCRIPTURE_ORIGINS);
 
 export const notificationKind = pgEnum('notification_kind', NOTIFICATION_KINDS);
 
+/** The four categories a member switches push for, and the three places a push can reach. Both derived. */
+export const notificationCategory = pgEnum('notification_category', NOTIFICATION_CATEGORIES);
+
+export const pushPlatform = pgEnum('push_platform', PUSH_PLATFORMS);
+
 export const embeddingSource = pgEnum('embedding_source', EMBEDDING_SOURCE_KINDS);
 
 /** Why a member reported a note, and what an admin did about it. Both derived, never restated. */
@@ -98,6 +109,7 @@ export const reportOutcome = pgEnum('report_outcome', REPORT_OUTCOMES);
 
 /** Why two moments are linked ([3.9.3](docs/project/prd.md)). Derived, never restated. */
 export const crossReferenceBasis = pgEnum('cross_reference_basis', CROSS_REFERENCE_BASES);
+export const highlightKind = pgEnum('highlight_kind', HIGHLIGHT_KINDS);
 
 /**
  * An account. Columns arrive with the steps that use them: `deactivated_at` comes with ticket 4
@@ -1480,6 +1492,85 @@ export const notification = pgTable(
 );
 
 /**
+ * **One member's push switch for one category** ([3.17.13](docs/project/prd.md),
+ * [3.17.14](docs/project/prd.md)) — the gate in front of the second delivery of a notification.
+ *
+ * **A row says "off"; no row says "on."** The operator chose on-by-default, so the honest shape is
+ * a table of exceptions rather than a row per member per category written at registration and
+ * back-filled when a category is added. `push_enabled` is still a column rather than the row's
+ * existence, so a member turning a category back on is an update the section can read back,
+ * and so a later default of "off" for a new category is one line in the reader
+ * (`coalesce(push_enabled, <default>)`) rather than a migration over every member.
+ *
+ * Gates push only. The in-app centre reads `notification` and never this table, which is what
+ * makes "the centre receives everything" a property of the schema rather than of a check.
+ *
+ * Cascades: a fact about the person and nothing else (README.md beside this file).
+ */
+export const notificationPreference = pgTable(
+  'notification_preference',
+  {
+    userId: uuid('user_id')
+      .notNull()
+      .references(() => user.id, { onDelete: 'cascade' }),
+    category: notificationCategory('category').notNull(),
+    pushEnabled: boolean('push_enabled').notNull(),
+    updatedAt: timestamp('updated_at', { withTimezone: true }).notNull().defaultNow(),
+  },
+  (table) => [primaryKey({ columns: [table.userId, table.category] })],
+);
+
+/**
+ * **One device a member can be reached on** ([3.17.1](docs/project/prd.md),
+ * [5.2.5](docs/project/prd.md)) — a Web Push endpoint with its two keys, or an APNs or FCM
+ * device token, under the account that registered it.
+ *
+ * **The endpoint is unique across the table, not per member.** A device belongs to whoever signed
+ * in on it last: a phone that one member signs out of and another signs into must not go on
+ * receiving the first member's replies, so registering an endpoint re-points its row rather than
+ * adding a second. Sign-out deletes the row for the same reason, and a provider answering that
+ * the device is gone deletes it too — so what is left is only ever an address that was recently
+ * known to work.
+ *
+ * `p256dh` and `auth` are the Web Push encryption keys and exist exactly on a web row: the check
+ * says so, because a web row without them would be an address nothing can be encrypted to, and a
+ * token row with them would be two keys for nothing.
+ *
+ * Cascades: a device registration is meaningless without the person (README.md beside this file).
+ * Nothing about the device is stored but its address — no user agent, no name.
+ */
+export const pushSubscription = pgTable(
+  'push_subscription',
+  {
+    id: uuid('id').primaryKey().defaultRandom(),
+    userId: uuid('user_id')
+      .notNull()
+      .references(() => user.id, { onDelete: 'cascade' }),
+    platform: pushPlatform('platform').notNull(),
+    /** The Web Push endpoint URL, or the device token. */
+    endpoint: text('endpoint').notNull(),
+    p256dh: text('p256dh'),
+    auth: text('auth'),
+    createdAt: timestamp('created_at', { withTimezone: true }).notNull().defaultNow(),
+    /** Moved on every re-registration, so a row that has not been seen for a year is tellable. */
+    lastSeenAt: timestamp('last_seen_at', { withTimezone: true }).notNull().defaultNow(),
+  },
+  (table) => [
+    uniqueIndex('push_subscription_endpoint_idx').on(table.endpoint),
+    /** Delivery: every device of each recipient. */
+    index('push_subscription_user_idx').on(table.userId),
+    check(
+      'push_subscription_keys_on_web',
+      sql`(${table.platform} = 'web') = (${table.p256dh} is not null and ${table.auth} is not null)`,
+    ),
+    check(
+      'push_subscription_endpoint_length',
+      sql`char_length(${table.endpoint}) between 1 and ${sql.raw(String(MAX_PUSH_ENDPOINT_LENGTH))}`,
+    ),
+  ],
+);
+
+/**
  * **A raise of one day's spend ceiling** (docs/project/prd.md, 3.21.2.8 and 3.19.16).
  *
  * Keyed by the UTC day it applies to, so tomorrow has no row and starts back at the configured
@@ -1626,6 +1717,23 @@ export const embedding = pgTable(
      * of that trade.
      */
     index('embedding_vector_hnsw_idx').using('hnsw', table.embedding.op('vector_cosine_ops')),
+    /**
+     * **The full-text half of search** (project tdd 4.5), over the same `text` the vector was
+     * computed from — so the two arms of a hybrid query read one set of sources and a row found by
+     * either is the same row ([3.10.5](docs/project/prd.md)).
+     *
+     * An expression index rather than a generated `tsvector` column, so the table's shape is what
+     * the embed step wrote and nothing else: the step is not taught about full-text, and a reader
+     * of the row sees words, not lexemes. GIN because the index is read far more than written, the
+     * same trade the HNSW index above makes. `english` is the configuration the search query must
+     * spell identically — `search.ts` names it once and the index names it here — because a
+     * `to_tsvector` under any other configuration would not use this index and would rank by a
+     * different stemming.
+     */
+    index('embedding_text_search_idx').using(
+      'gin',
+      sql`to_tsvector('english', ${table.text})`,
+    ),
     /** A series has no recording; everything else has exactly one. */
     check(
       'embedding_recording_per_kind',
@@ -1824,5 +1932,147 @@ export const crossReference = pgTable(
       'cross_reference_owned_by_an_end',
       sql`${table.computedFor} in (${table.sourceRecordingId}, ${table.targetRecordingId})`,
     ),
+  ],
+);
+
+/**
+ * **One entry in a member's Highlights** ([3.15](docs/project/prd.md); [4.14](docs/project/prd.md)):
+ * a whole teaching, one line of it, or a note of the member's own, with the date it was pinned.
+ *
+ * **One row per target per member**, and the target's shape depends on the kind, so uniqueness
+ * is three partial indexes rather than one: a teaching once, a line once by its position, a note
+ * once. A whole-teaching pin and a line of the same teaching are two entries, because they are two
+ * things a member said ([3.15.1](docs/project/prd.md) and [3.15.2](docs/project/prd.md) are two
+ * requirements). The check beneath them is what makes the kind honest: a `segment` row has a
+ * position and no note, a `note` row has a note and no position, a `recording` row has neither.
+ *
+ * **A line is a position, snapped.** The service snaps "this moment" to the start of the transcript
+ * line playing there and stores both the position and the line's id. The position is the identity
+ * and the thing that opens the player; the id is only how the playlist reads the line's text. It
+ * **sets null** when the transcript is replaced — the segments cascade with it — so a re-run takes
+ * the description off an entry and never the entry: the moment the member chose is still the
+ * moment, whatever the new segmentation calls it.
+ *
+ * **A note's moment is not stored here.** 4.14 says a note entry has a timestamp, and it does:
+ * the note's own, read at answer time. A second copy could only disagree with the first. The
+ * composite foreign key beneath is what makes `recording_id` honest on a note entry — it must be
+ * the note's recording — and it is why the schema keeps `note_recording_id_unique`.
+ *
+ * **Deletion follows the README.** `user_id` cascades: a playlist is a fact about the person and
+ * nothing else, and 3.1.9 names Highlights among what goes with an account. `recording_id`
+ * cascades: a highlight of a teaching the database no longer holds is of nothing. `note_id`
+ * cascades — which a *soft* delete never fires, so the notes service removes a tombstoned note's
+ * entries itself in the delete's transaction, and the list read leaves tombstones out besides.
+ *
+ * No `title`, no `description`: the playlist reads them off the teaching and the note at answer
+ * time, so a renamed teaching is renamed in the playlist too.
+ */
+export const highlight = pgTable(
+  'highlight',
+  {
+    id: uuid('id').primaryKey().defaultRandom(),
+    userId: uuid('user_id')
+      .notNull()
+      .references(() => user.id, { onDelete: 'cascade' }),
+    recordingId: uuid('recording_id')
+      .notNull()
+      .references(() => recording.id, { onDelete: 'cascade' }),
+    kind: highlightKind('kind').notNull(),
+    /** The moment, in milliseconds — non-null exactly on a `segment` entry. */
+    positionMs: integer('position_ms'),
+    /**
+     * The transcript line the position was snapped to, or null: a teaching with no transcript, a
+     * position after its last line, or a line a later run replaced. Never the identity — see above.
+     */
+    segmentId: uuid('segment_id').references(() => segment.id, { onDelete: 'set null' }),
+    /** The member's own note — non-null exactly on a `note` entry. */
+    noteId: uuid('note_id'),
+    createdAt: timestamp('created_at', { withTimezone: true }).notNull().defaultNow(),
+  },
+  (table) => [
+    /** The playlist's order exactly (3.15.6: newest pinned first), one index scan per member. */
+    index('highlight_user_created_idx').on(table.userId, table.createdAt),
+    /** The three identities, one per kind. */
+    uniqueIndex('highlight_recording_unique')
+      .on(table.userId, table.recordingId)
+      .where(sql`${table.kind} = 'recording'`),
+    uniqueIndex('highlight_segment_unique')
+      .on(table.userId, table.recordingId, table.positionMs)
+      .where(sql`${table.kind} = 'segment'`),
+    uniqueIndex('highlight_note_unique')
+      .on(table.userId, table.noteId)
+      .where(sql`${table.kind} = 'note'`),
+    /** A note entry names the note's own recording, and goes with the note. */
+    foreignKey({
+      columns: [table.recordingId, table.noteId],
+      foreignColumns: [note.recordingId, note.id],
+      name: 'highlight_note_recording_fk',
+    }).onDelete('cascade'),
+    /** The kind says what the row holds; both directions, one check. */
+    check(
+      'highlight_shape',
+      sql`(${table.kind} = 'segment') = (${table.positionMs} is not null)
+        and (${table.kind} = 'note') = (${table.noteId} is not null)
+        and (${table.segmentId} is null or ${table.kind} = 'segment')
+        and (${table.positionMs} is null or ${table.positionMs} >= 0)`,
+    ),
+  ],
+);
+
+/**
+ * **A receipt for one outbox entry** ([3.18.14](docs/project/prd.md), [3.18.15](docs/project/prd.md);
+ * project tdd 5.3) — the one table offline sync needs, and it holds no member content.
+ *
+ * The outbox is flushed over a connection that was just lost and may be lost again: a phone that
+ * sent its entries and never saw the answer sends them again. The client id on each entry (tdd 5.3)
+ * is what makes the second flush harmless, and this row is where the server remembers having seen
+ * it. The write itself landed where every live write lands — `playback_progress`, `note` — so a
+ * receipt is a record that *this flush was handled*, not a second copy of what it wrote. What it
+ * keeps beside the id is what a replay has to answer with: the status, the refusal if there was
+ * one, and for a note the row it became, so a client that missed the first answer can still swap
+ * its pending copy for the real note.
+ *
+ * Keyed on `(user_id, client_id)` rather than on the client id alone: a client id is minted on a
+ * device, and two members' devices are two sources of ids with no reason to agree. A member cannot
+ * collide with themselves — one outbox per account per device, and a uuid per entry.
+ *
+ * `kind`, `status` and `code` are text with a check rather than enums, because they are the wire
+ * vocabulary of `@thp/shared`'s offline contract and a retired status is a row nobody reads again —
+ * the argument `user_onboarding` makes for its id. The checks still derive from the shared lists,
+ * so the column cannot hold a word the contract does not.
+ *
+ * **Deletion follows the README**: `user_id` cascades — a receipt is a fact about the person's own
+ * device and means nothing without them; `note_id` sets null when the note goes, because the
+ * receipt outlives a deleted note the way a log line does, and a replay after the deletion answers
+ * `applied` with no note, which the client reads as "already handled, nothing to show".
+ */
+export const syncReceipt = pgTable(
+  'sync_receipt',
+  {
+    userId: uuid('user_id')
+      .notNull()
+      .references(() => user.id, { onDelete: 'cascade' }),
+    /** The id the device minted for the entry; uuid-shaped, checked by the service, stored as text. */
+    clientId: text('client_id').notNull(),
+    kind: text('kind').notNull(),
+    status: text('status').notNull(),
+    /** The API error code the entry was refused with, or null when it was applied. */
+    code: text('code'),
+    message: text('message'),
+    noteId: uuid('note_id').references(() => note.id, { onDelete: 'set null' }),
+    appliedAt: timestamp('applied_at', { withTimezone: true }).notNull().defaultNow(),
+  },
+  (table) => [
+    primaryKey({ columns: [table.userId, table.clientId] }),
+    check(
+      'sync_receipt_kind',
+      sql`${table.kind} in (${sql.raw(SYNC_ENTRY_KINDS.map((kind) => `'${kind}'`).join(', '))})`,
+    ),
+    check(
+      'sync_receipt_status',
+      sql`${table.status} in (${sql.raw(SYNC_RESULT_STATUSES.filter((status) => status !== 'duplicate').map((status) => `'${status}'`).join(', '))})`,
+    ),
+    /** A refusal names its reason; an application has none. */
+    check('sync_receipt_refusal_whole', sql`(${table.status} = 'refused') = (${table.code} is not null)`),
   ],
 );

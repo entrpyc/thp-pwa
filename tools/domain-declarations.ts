@@ -4,9 +4,12 @@ import {
   BIBLE_BOOKS,
   CROSS_REFERENCE_BASES,
   FEEDBACK_KINDS,
+  HIGHLIGHT_KINDS,
   JOB_STATUSES,
   NOTE_VISIBILITIES,
+  NOTIFICATION_CATEGORIES,
   NOTIFICATION_KINDS,
+  PUSH_PLATFORMS,
   REACTIONS,
   PIPELINE_STEPS,
   REPORT_OUTCOMES,
@@ -113,6 +116,14 @@ export const DOMAIN_DECLARATIONS: readonly DomainDeclaration[] = [
   },
   { name: 'NotificationKind', canonicalFile: 'packages/shared/src/notifications.ts' },
   {
+    name: 'NOTIFICATION_CATEGORIES',
+    canonicalFile: 'packages/shared/src/push.ts',
+    members: NOTIFICATION_CATEGORIES,
+  },
+  { name: 'NotificationCategory', canonicalFile: 'packages/shared/src/push.ts' },
+  { name: 'PUSH_PLATFORMS', canonicalFile: 'packages/shared/src/push.ts', members: PUSH_PLATFORMS },
+  { name: 'PushPlatform', canonicalFile: 'packages/shared/src/push.ts' },
+  {
     name: 'REPORT_REASONS',
     canonicalFile: 'packages/shared/src/reports.ts',
     members: REPORT_REASONS,
@@ -124,6 +135,12 @@ export const DOMAIN_DECLARATIONS: readonly DomainDeclaration[] = [
     members: REPORT_OUTCOMES,
   },
   { name: 'ReportOutcome', canonicalFile: 'packages/shared/src/reports.ts' },
+  {
+    name: 'HIGHLIGHT_KINDS',
+    canonicalFile: 'packages/shared/src/highlights.ts',
+    members: HIGHLIGHT_KINDS,
+  },
+  { name: 'HighlightKind', canonicalFile: 'packages/shared/src/highlights.ts' },
 ];
 
 export interface DeclarationViolation {

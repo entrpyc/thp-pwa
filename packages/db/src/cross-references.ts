@@ -2,7 +2,7 @@ import { desc, eq, inArray, or, sql } from 'drizzle-orm';
 import type { CrossReferenceBasis } from '@thp/shared';
 import { getDatabase, queryable, withTransaction, type Executor } from './client';
 import { crossReference, embedding, recording, segment, series } from './schema';
-import { recordingIsPublished } from './visibility';
+import { recordingWithIdIsPublished } from './visibility';
 
 /**
  * **Every statement against `cross_reference`** ([3.9](docs/project/prd.md); project tdd 3.3 and
@@ -107,7 +107,7 @@ export async function findNearestSegments(
       from ${embedding} as e
       where e.source_kind = 'segment'
         and e.recording_id <> q.recording_id
-        and ${recordingIsPublished(sql`e.recording_id`)}
+        and ${recordingWithIdIsPublished(sql`e.recording_id`)}
       order by e.embedding <=> q.embedding
       limit ${k}
     ) as n
@@ -280,7 +280,7 @@ export async function listOutgoingCrossReferences(
     join ${recording} as r on r.id = x.target_recording_id
     left join ${series} as s on s.id = r.series_id
     where x.source_recording_id = ${recordingId}
-      and ${recordingIsPublished(sql`x.target_recording_id`)}
+      and ${recordingWithIdIsPublished(sql`x.target_recording_id`)}
     order by x.score desc, ${source}.start_ms asc, x.id asc
   `);
   return (rows as unknown as OutgoingCrossReferenceRow[]).map((row) => ({

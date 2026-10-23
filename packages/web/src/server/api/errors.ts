@@ -277,6 +277,17 @@ export class ApiError extends Error {
     return new ApiError('terms_required', 403, message);
   }
 
+  /**
+   * A pin that would take a member's Highlights past `MAX_HIGHLIGHTS` ([3.15](docs/project/prd.md)).
+   *
+   * `409` for the reason the spend ceiling is: the caller was permitted and the request was
+   * well-formed, and what refuses is a state of the world — a full list — the member can change
+   * in one press. The message says so, and says to remove entries first.
+   */
+  static highlightsFull(message: string): ApiError {
+    return new ApiError('highlights_full', 409, message);
+  }
+
   static notFound(message = 'The requested resource does not exist.'): ApiError {
     return new ApiError('not_found', 404, message);
   }

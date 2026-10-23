@@ -197,6 +197,15 @@ export const POLICY_ACTIONS = [
   'note.read',
   'note.write',
   /**
+   * **Searching the library** ([3.10.1](docs/project/prd.md)). Its own action rather than a reuse
+   * of `recording.browse`, because what it spends is different: a browse reads rows, a search
+   * embeds the member's words with a paid provider first — and a budget is hung on this action
+   * (`server/api/actor-limits.ts`) that a browse does not carry. What a search may *return* is not
+   * decided here at all: that is the visibility predicate inside the query, the same for both
+   * roles ([3.10.9](docs/project/prd.md), NFR 6.7).
+   */
+  'search.query',
+  /**
    * **The six the rest of the scope needs** (active-scope architecture § 8), and the split is the
    * habit every group above follows rather than an exception to it.
    *
@@ -307,6 +316,27 @@ export const POLICY_ACTIONS = [
   'note.report',
   'report.list',
   'report.resolve',
+  /**
+   * **Which push categories an account is offered.** There is still no `notification.read` —
+   * the switches are keyed on the caller's own id — but one of the four categories is the
+   * admin-only alerts ([3.17.10](docs/project/prd.md), the reported-note notice), and whether an
+   * account is offered that switch is a role question, which only this module answers.
+   */
+  'notification.admin-alerts',
+  /**
+   * **The three highlight actions** ([3.15](docs/project/prd.md)): pinning an entry, removing one,
+   * and reading your own playlist. Three rather than one `highlight.manage`, the split every group
+   * above takes.
+   *
+   * Both roles, and no ownership flag on any of the three, for the reason the block actions have
+   * none: every entry is on the caller's own list by construction — the route is
+   * `/users/me/highlights` — and 3.15.9's "not visible to admins" is the absence of any route that
+   * could list another account's, not a rule here. An admin pinning is a member pinning: their
+   * playlist is as private as anybody's.
+   */
+  'highlight.create',
+  'highlight.remove',
+  'highlight.list',
 ] as const;
 
 export type PolicyAction = (typeof POLICY_ACTIONS)[number];
@@ -471,6 +501,8 @@ const RULES: PolicyRules = {
   // moderation actions this scope adds later are where the roles part.
   'note.read': { roles: { admin: true, member: true } },
   'note.write': { roles: { admin: true, member: true } },
+  // Every signed-in account may search; an admin searching sees what a member sees.
+  'search.query': { roles: { admin: true, member: true } },
   // Both roles, and only over what they wrote. `requiresOwnership` is what refuses **an admin**
   // editing a member's note (3.5.6, 3.6.2) with no special case written anywhere: moderation is
   // deletion, never rewriting somebody's words.
@@ -514,6 +546,13 @@ const RULES: PolicyRules = {
   'note.report': { roles: { admin: true, member: true } },
   'report.list': { roles: { admin: true, member: false } },
   'report.resolve': { roles: { admin: true, member: false } },
+  // A member is never a recipient of a draft-ready or reported-note notice, so a switch for the
+  // category would be a switch over nothing; it is offered to the role that receives them.
+  'notification.admin-alerts': { roles: { admin: true, member: false } },
+  // Both roles, over their own list only. A playlist is a member's own ([3.15.9](docs/project/prd.md)).
+  'highlight.create': { roles: { admin: true, member: true } },
+  'highlight.remove': { roles: { admin: true, member: true } },
+  'highlight.list': { roles: { admin: true, member: true } },
 };
 
 export function isPolicyAction(value: string): value is PolicyAction {

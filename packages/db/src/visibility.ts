@@ -35,6 +35,18 @@ import {
  * row.
  */
 
+/**
+ * **The row gate as a fragment**, for a statement in a sibling module that already joins
+ * `recording` and must keep only published ones — the Highlights list, whose rows are the member's
+ * own and whose teachings may since have been taken down ([3.15](docs/project/prd.md)). Spelled
+ * here and consumed there, so the module keeps the one spelling the guard allows and the sibling
+ * never writes the predicate it is not allowed to. Only the first gate: a highlight is of a
+ * teaching, and a teaching's summary is not what it opens.
+ */
+export function recordingIsPublished(): SQL {
+  return isNotNull(recording.publishedAt);
+}
+
 /** A recording and its summary, as far as the read paths are concerned. */
 export interface VisibleRecordingRow {
   readonly id: string;
@@ -548,12 +560,17 @@ export async function listVisibleEmbeddings(
  * So the gate is spelled here, once more, as the same `is not null` the lists above compare, and
  * handed out as SQL — the shape {@link embeddingVisibleTo} already takes.
  *
+ * Beside {@link recordingIsPublished} rather than folded into it: that one is the column
+ * predicate for a statement that has already joined `recording`, and this one is the `exists`
+ * for a statement that has not and names the recording only by an id it holds. Two shapes of one
+ * rule, both spelled in the one file allowed to spell it.
+ *
  * The *first* gate only. A cross-reference is a link between transcript segments, which carry no
  * gate of their own ([3.5](docs/project/prd.md)): a published teaching's transcript is readable
  * whole, so a link to one of its sentences needs nothing beyond the recording's publication. A
  * caller that wanted a summary's second gate would use {@link embeddingVisibleTo} instead.
  */
-export function recordingIsPublished(recordingId: SQL): SQL {
+export function recordingWithIdIsPublished(recordingId: SQL): SQL {
   return sql`exists (
     select 1 from ${recording}
     where ${recording.id} = ${recordingId} and ${recording.publishedAt} is not null

@@ -1,5 +1,5 @@
 {
-  "id": "a6f2f85a-0509-4c8d-8e99-a847ab749bdb",
+  "id": "ea2c8ead-1b12-44f0-b6bb-ff38622279bb",
   "prevId": "fe4c4e88-2125-4ecf-b1fa-baf0506c8410",
   "version": "7",
   "dialect": "postgresql",
@@ -319,228 +319,6 @@
         "chapter_start_non_negative": {
           "name": "chapter_start_non_negative",
           "value": "\"chapter\".\"start_ms\" >= 0"
-        }
-      },
-      "isRLSEnabled": false
-    },
-    "public.cross_reference": {
-      "name": "cross_reference",
-      "schema": "",
-      "columns": {
-        "id": {
-          "name": "id",
-          "type": "uuid",
-          "primaryKey": true,
-          "notNull": true,
-          "default": "gen_random_uuid()"
-        },
-        "source_recording_id": {
-          "name": "source_recording_id",
-          "type": "uuid",
-          "primaryKey": false,
-          "notNull": true
-        },
-        "source_segment_id": {
-          "name": "source_segment_id",
-          "type": "uuid",
-          "primaryKey": false,
-          "notNull": true
-        },
-        "target_recording_id": {
-          "name": "target_recording_id",
-          "type": "uuid",
-          "primaryKey": false,
-          "notNull": true
-        },
-        "target_segment_id": {
-          "name": "target_segment_id",
-          "type": "uuid",
-          "primaryKey": false,
-          "notNull": true
-        },
-        "score": {
-          "name": "score",
-          "type": "real",
-          "primaryKey": false,
-          "notNull": true
-        },
-        "basis": {
-          "name": "basis",
-          "type": "cross_reference_basis",
-          "typeSchema": "public",
-          "primaryKey": false,
-          "notNull": true
-        },
-        "computed_for": {
-          "name": "computed_for",
-          "type": "uuid",
-          "primaryKey": false,
-          "notNull": true
-        },
-        "created_at": {
-          "name": "created_at",
-          "type": "timestamp with time zone",
-          "primaryKey": false,
-          "notNull": true,
-          "default": "now()"
-        }
-      },
-      "indexes": {
-        "cross_reference_pair_per_run_unique": {
-          "name": "cross_reference_pair_per_run_unique",
-          "columns": [
-            {
-              "expression": "source_segment_id",
-              "isExpression": false,
-              "asc": true,
-              "nulls": "last"
-            },
-            {
-              "expression": "target_segment_id",
-              "isExpression": false,
-              "asc": true,
-              "nulls": "last"
-            },
-            {
-              "expression": "computed_for",
-              "isExpression": false,
-              "asc": true,
-              "nulls": "last"
-            }
-          ],
-          "isUnique": true,
-          "concurrently": false,
-          "method": "btree",
-          "with": {}
-        },
-        "cross_reference_source_recording_idx": {
-          "name": "cross_reference_source_recording_idx",
-          "columns": [
-            {
-              "expression": "source_recording_id",
-              "isExpression": false,
-              "asc": true,
-              "nulls": "last"
-            }
-          ],
-          "isUnique": false,
-          "concurrently": false,
-          "method": "btree",
-          "with": {}
-        },
-        "cross_reference_target_recording_idx": {
-          "name": "cross_reference_target_recording_idx",
-          "columns": [
-            {
-              "expression": "target_recording_id",
-              "isExpression": false,
-              "asc": true,
-              "nulls": "last"
-            }
-          ],
-          "isUnique": false,
-          "concurrently": false,
-          "method": "btree",
-          "with": {}
-        },
-        "cross_reference_computed_for_idx": {
-          "name": "cross_reference_computed_for_idx",
-          "columns": [
-            {
-              "expression": "computed_for",
-              "isExpression": false,
-              "asc": true,
-              "nulls": "last"
-            }
-          ],
-          "isUnique": false,
-          "concurrently": false,
-          "method": "btree",
-          "with": {}
-        }
-      },
-      "foreignKeys": {
-        "cross_reference_source_recording_id_recording_id_fk": {
-          "name": "cross_reference_source_recording_id_recording_id_fk",
-          "tableFrom": "cross_reference",
-          "tableTo": "recording",
-          "columnsFrom": [
-            "source_recording_id"
-          ],
-          "columnsTo": [
-            "id"
-          ],
-          "onDelete": "cascade",
-          "onUpdate": "no action"
-        },
-        "cross_reference_source_segment_id_segment_id_fk": {
-          "name": "cross_reference_source_segment_id_segment_id_fk",
-          "tableFrom": "cross_reference",
-          "tableTo": "segment",
-          "columnsFrom": [
-            "source_segment_id"
-          ],
-          "columnsTo": [
-            "id"
-          ],
-          "onDelete": "cascade",
-          "onUpdate": "no action"
-        },
-        "cross_reference_target_recording_id_recording_id_fk": {
-          "name": "cross_reference_target_recording_id_recording_id_fk",
-          "tableFrom": "cross_reference",
-          "tableTo": "recording",
-          "columnsFrom": [
-            "target_recording_id"
-          ],
-          "columnsTo": [
-            "id"
-          ],
-          "onDelete": "cascade",
-          "onUpdate": "no action"
-        },
-        "cross_reference_target_segment_id_segment_id_fk": {
-          "name": "cross_reference_target_segment_id_segment_id_fk",
-          "tableFrom": "cross_reference",
-          "tableTo": "segment",
-          "columnsFrom": [
-            "target_segment_id"
-          ],
-          "columnsTo": [
-            "id"
-          ],
-          "onDelete": "cascade",
-          "onUpdate": "no action"
-        },
-        "cross_reference_computed_for_recording_id_fk": {
-          "name": "cross_reference_computed_for_recording_id_fk",
-          "tableFrom": "cross_reference",
-          "tableTo": "recording",
-          "columnsFrom": [
-            "computed_for"
-          ],
-          "columnsTo": [
-            "id"
-          ],
-          "onDelete": "cascade",
-          "onUpdate": "no action"
-        }
-      },
-      "compositePrimaryKeys": {},
-      "uniqueConstraints": {},
-      "policies": {},
-      "checkConstraints": {
-        "cross_reference_score_range": {
-          "name": "cross_reference_score_range",
-          "value": "\"cross_reference\".\"score\" between 0 and 1"
-        },
-        "cross_reference_across_recordings": {
-          "name": "cross_reference_across_recordings",
-          "value": "\"cross_reference\".\"source_recording_id\" <> \"cross_reference\".\"target_recording_id\""
-        },
-        "cross_reference_owned_by_an_end": {
-          "name": "cross_reference_owned_by_an_end",
-          "value": "\"cross_reference\".\"computed_for\" in (\"cross_reference\".\"source_recording_id\", \"cross_reference\".\"target_recording_id\")"
         }
       },
       "isRLSEnabled": false
@@ -3411,13 +3189,6 @@
     }
   },
   "enums": {
-    "public.cross_reference_basis": {
-      "name": "cross_reference_basis",
-      "schema": "public",
-      "values": [
-        "semantic"
-      ]
-    },
     "public.embedding_source": {
       "name": "embedding_source",
       "schema": "public",
@@ -3456,6 +3227,7 @@
         "note_reaction",
         "note_reported",
         "report_resolved",
+        "summary_ready",
         "announcement",
         "new_feature"
       ]
@@ -3469,7 +3241,6 @@
         "generate_draft",
         "generate_chapters",
         "embed",
-        "cross_reference",
         "reprocess_audio",
         "preview_audio"
       ]

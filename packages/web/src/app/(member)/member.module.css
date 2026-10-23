@@ -306,6 +306,99 @@
   border-color: var(--color-border-strong);
 }
 
+/* ---------------------------------------------------------------------------------- the search */
+
+/*
+ * The magnifier is the bell's recipe as a button: the same boxed shape, the same icon colour, so
+ * the three controls at the right of the bar read as one group (`top-navigation/search.png`).
+ */
+.searchButton {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  min-width: calc(var(--space-8) + var(--space-3));
+  min-height: calc(var(--space-8) + var(--space-3));
+  background: var(--color-surface-raised);
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-md);
+  color: var(--color-primary-icon);
+  cursor: pointer;
+  -webkit-user-select: none;
+  user-select: none;
+  -webkit-touch-callout: none;
+}
+
+.searchButton:hover,
+.searchButton[aria-expanded='true'] {
+  border-color: var(--color-border-strong);
+}
+
+/*
+ * `search.png`'s second bar: the first bar's own recipe — dark, rounded, bordered, the shell's
+ * width — drawn in the flow under it rather than overlaid, because unlike the menu it is not a
+ * question about where to go next but a thing the member types into, and a field that floated over
+ * the page would float over whatever it was about to replace. The region is a column, so the bar
+ * simply follows the first.
+ */
+.searchBar {
+  width: 100%;
+  max-width: 48rem;
+  margin: var(--space-2) auto 0;
+  pointer-events: auto;
+  display: flex;
+  align-items: center;
+  gap: var(--space-3);
+  background: var(--color-bg-deep);
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-lg);
+  padding: var(--space-2) var(--space-3) var(--space-2) var(--space-4);
+}
+
+.searchGlyph {
+  flex: none;
+  display: inline-flex;
+  color: var(--color-text-muted);
+}
+
+/* The field is the bar: no box of its own, the bar's background showing through. */
+.searchField {
+  flex: 1 1 auto;
+  min-width: 0;
+  background: transparent;
+  border: none;
+  padding: var(--space-2) 0;
+  color: var(--color-text);
+  font-family: inherit;
+  font-size: var(--fs-card-title);
+}
+
+.searchField:focus {
+  outline: none;
+}
+
+.searchField::placeholder {
+  color: var(--color-text-dim);
+}
+
+/* The × at the right, in the bar's own raised circle, as the reference draws it. */
+.searchClear {
+  flex: none;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: var(--space-8);
+  height: var(--space-8);
+  background: var(--color-surface-raised);
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-pill);
+  color: var(--color-text);
+  cursor: pointer;
+}
+
+.searchClear:hover {
+  border-color: var(--color-border-strong);
+}
+
 /*
  * The unread count, on the bell's top-right corner. The one solid fill in the bar — principle 3
  * allows it because it is the one thing here that is asking for a press — in the accent, with the

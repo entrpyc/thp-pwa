@@ -6,6 +6,7 @@ import {
   findRecordingById,
   findSummaryByRecording,
   insertRecording,
+  insertUser,
   listPendingReviews,
   replaceTranscript,
   runMigrations,
@@ -13,7 +14,14 @@ import {
   type JobRow,
 } from '@thp/db';
 import type { BibleSource } from '@thp/bible';
-import { REVIEW_KINDS, type ReviewKind, type ReviewProvenance } from '@thp/shared';
+import {
+  ADMIN_REVIEWS_PAGE_PATH,
+  REVIEW_KINDS,
+  ROLE,
+  SUMMARY_READY_TITLE,
+  type ReviewKind,
+  type ReviewProvenance,
+} from '@thp/shared';
 import { DOMAIN_EVENT_MESSAGE } from '@thp/shared/observability/events';
 import { setLogSink, type LogLine } from '@thp/shared/observability/logger';
 import { GenerationError, fakeGenerator, type Generator } from '../../src/generate';
@@ -664,5 +672,95 @@ describe('the verses of what it drafted', () => {
       versesHeld: 5,
       verseSourceRequestId: null,
     });
+  });
+});
+
+/**
+ * **The draft tells the admins** ([3.17.10](docs/project/prd.md)) — the worker's one notification,
+ * driven through the handler so the row is proved to arrive *after* the drafts it is about.
+ */
+describe('a draft waiting on an admin', () => {
+  async function account(role: 'admin' | 'member', active = true): Promise<string> {
+    const row = await insertUser(
+      {
+        email: `${role}-${active ? 'live' : 'gone'}-${Date.now().toString(36)}${Math.random().toString(36).slice(2, 6)}@example.test`,
+        passwordHash: 'not-a-hash',
+        displayName: role,
+        role: ROLE[role],
+      },
+      handle,
+    );
+    if (!active) await sql`update "user" set deactivated_at = now() where id = ${row.id}`;
+    return row.id;
+  }
+
+  async function noticesFor(userId: string, recordingId: string) {
+    return (await sql`
+      select kind::text as kind, title, body, href, read_at
+      from notification where user_id = ${userId} and recording_id = ${recordingId}
+    `) as unknown as { kind: string; title: string; body: string; href: string; read_at: null }[];
+  }
+
+  it('writes one unread notice per active admin, landing on the review queue, and none for members or deactivated admins', async () => {
+    const [admin, secondAdmin, formerAdmin, member] = await Promise.all([
+      account('admin'),
+      account('admin'),
+      account('admin', false),
+      account('member'),
+    ]);
+    const job = await claimedJob();
+
+    const row = await run(job);
+    expect(row.status).toBe('succeeded');
+
+    const recording = await findRecordingById(job.recordingId, handle);
+    for (const adminId of [admin, secondAdmin]) {
+      expect(await noticesFor(adminId, job.recordingId)).toEqual([
+        {
+          kind: 'summary_ready',
+          title: SUMMARY_READY_TITLE,
+          body: recording?.title,
+          href: ADMIN_REVIEWS_PAGE_PATH,
+          read_at: null,
+        },
+      ]);
+    }
+    expect(await noticesFor(formerAdmin, job.recordingId)).toEqual([]);
+    expect(await noticesFor(member, job.recordingId)).toEqual([]);
+
+    const raised = captured.find((line) => line.message === 'notification.raised');
+    expect(raised).toMatchObject({ event: 'summary.ready', recordingId: job.recordingId });
+    expect(raised?.['recipients']).toBeGreaterThanOrEqual(2);
+  });
+
+  it('tells them again on a steered regeneration, because that is a fresh draft waiting', async () => {
+    const admin = await account('admin');
+    const job = await claimedJob({ payload: { kinds: ['summary'], prompt: 'shorter' } });
+
+    await run(job);
+    expect(await noticesFor(admin, job.recordingId)).toHaveLength(1);
+
+    const again = await claimedJob({ payload: { kinds: ['summary'], prompt: 'shorter still' } });
+    await run({ ...again, recordingId: job.recordingId });
+    expect(await noticesFor(admin, job.recordingId)).toHaveLength(2);
+  });
+
+  it('does not fail the step when the notice cannot be written', async () => {
+    const job = await claimedJob();
+    // A trigger that refuses every insert: the drafts, written a moment earlier, are in place and
+    // the notice is the one write that cannot land.
+    await sql`create or replace function refuse_notice() returns trigger language plpgsql as $$ begin raise exception 'notice refused'; end $$`;
+    await sql`create trigger refuse_notice before insert on notification for each row execute function refuse_notice()`;
+    try {
+      const row = await run(job);
+      expect(row.status).toBe('succeeded');
+      expect(await items(job.recordingId)).toHaveLength(REVIEW_KINDS.length);
+      expect(captured.find((line) => line.message === 'notification.failed')).toMatchObject({
+        event: 'summary.ready',
+      });
+    } finally {
+      await sql`drop trigger refuse_notice on notification`;
+      await sql`drop function refuse_notice()`;
+    }
   });
 });

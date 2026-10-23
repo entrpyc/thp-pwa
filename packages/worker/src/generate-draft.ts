@@ -24,6 +24,7 @@ import { emitDomainEvent } from '@thp/shared/observability/events';
 import { logger } from '@thp/shared/observability/logger';
 import { generator as configuredGenerator, type Generator } from './generate';
 import { readProposedCitations, resolveProposedCitations } from './scripture-draft';
+import { notifySummaryReady } from './summary-ready';
 import type { JobHandler } from './handlers';
 
 /**
@@ -228,8 +229,12 @@ export function createGenerateDraftHandler(deps: GenerateDraftDependencies = {})
       logger.warn('generate_draft.citations_discarded', { ...fields, dropped, duplicates });
     }
 
-    // Nothing subscribes. §3.17's notifications are what will — see the events module.
     emitDomainEvent({ type: 'draft_generated', recordingId: job.recordingId, kinds });
+
+    // The event's first subscriber (3.17.10): the admins' inboxes. After the drafts are written
+    // and after the event line, so an admin pressing the notice finds the row it is about — and
+    // never before the step is known to have worked. It throws nothing; see summary-ready.ts.
+    await notifySummaryReady({ recordingId: job.recordingId, title: recording.title }, deps.executor);
 
     return providerMeta;
   };

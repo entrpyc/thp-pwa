@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { PROFILE_PAGE_PATH } from '@thp/shared';
+import { NOTIFICATION_SETTINGS_PAGE_PATH, PROFILE_PAGE_PATH } from '@thp/shared';
 import { PROFILE_SECTIONS, sectionFor } from '@/app/(member)/profile/sections';
 
 /**
@@ -29,8 +29,15 @@ describe('the profile sections', () => {
     expect(distinct('label')).toBe(PROFILE_SECTIONS.length);
   });
 
-  it('list settings as the first section beside the identity page', () => {
-    expect(PROFILE_SECTIONS.map((section) => section.id)).toEqual(['identity', 'settings']);
+  it('lists highlights, settings, notifications and downloads beside the identity page, in that order', () => {
+    expect(PROFILE_SECTIONS.map((section) => section.id)).toEqual([
+      'identity',
+      'highlights',
+      'settings',
+      'notifications',
+      'downloads',
+    ]);
+    expect(PROFILE_SECTIONS[3]?.href).toBe(NOTIFICATION_SETTINGS_PAGE_PATH);
   });
 });
 
@@ -47,7 +54,7 @@ describe('which section an address is in', () => {
   });
 
   it('is nothing for an address no section claims — a deferred destination is dropped, not guessed', () => {
-    expect(sectionFor(`${PROFILE_PAGE_PATH}/highlights`)).toBeNull();
+    expect(sectionFor(`${PROFILE_PAGE_PATH}/questionnaires`)).toBeNull();
     expect(sectionFor(`${PROFILE_PAGE_PATH}/settingsx`)).toBeNull();
     expect(sectionFor('/recordings')).toBeNull();
   });

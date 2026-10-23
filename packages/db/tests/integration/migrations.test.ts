@@ -185,13 +185,16 @@ describe('migrations apply to an empty database by one command', () => {
       // one predicate. The UGC controls add `note_report` — a member's request that an admin look
       // at a note (Apple 1.2, Google Play UGC); the terms acceptance is two columns on `user`.
       // Cross-referencing adds `cross_reference` ([3.9](docs/project/prd.md)) — the derived edge
-      // table over segment pairs, a cache of the index rather than content.
+      // table over segment pairs, a cache of the index rather than content. Push adds
+      // `notification_preference` and `push_subscription`, Highlights adds `highlight`, and
+      // offline sync adds `sync_receipt`.
       expect(tables.map((row) => row.tablename)).toEqual([
         'account_deletion_request',
         'announcement',
         'chapter',
         'cross_reference',
         'embedding',
+        'highlight',
         'invitation',
         'job',
         'member_block',
@@ -200,8 +203,10 @@ describe('migrations apply to an empty database by one command', () => {
         'note_reaction',
         'note_report',
         'notification',
+        'notification_preference',
         'password_reset',
         'playback_progress',
+        'push_subscription',
         'recording',
         'recording_tag',
         'review_item',
@@ -213,6 +218,7 @@ describe('migrations apply to an empty database by one command', () => {
         'sound_profile',
         'spend_ceiling_raise',
         'summary',
+        'sync_receipt',
         'tag',
         'transcript',
         'user',
@@ -2136,7 +2142,7 @@ describe('the chapter table, and nothing beside it', () => {
     // Derived from the one declaration rather than restated beside it, exactly as every other enum
     // in this file is — less `process_audio`, which `0021_process_audio` adds ahead of `transcribe`
     // two migrations later, less `embed`, which `0028_embeddings` adds after the chain, and less
-    // `cross_reference`, which `0033_cross_references` adds after that; this database, migrated
+    // `cross_reference`, which `0038_cross_references` adds after that; this database, migrated
     // only as far as chapters, admits none of them yet.
     expect(steps.map((row) => row.enumlabel)).toEqual(
       PIPELINE_STEPS.filter(
@@ -2314,7 +2320,7 @@ describe('the sound profile, and nothing beside it', () => {
       join pg_type on pg_type.oid = pg_enum.enumtypid
       where pg_type.typname = 'pipeline_step' order by pg_enum.enumsortorder
     `;
-    // Less `embed` and `cross_reference`, which `0028_embeddings` and `0033_cross_references`
+    // Less `embed` and `cross_reference`, which `0028_embeddings` and `0038_cross_references`
     // slot in ahead of the standalone pair later; this database, migrated only as far as the
     // sound profile, does not admit either yet.
     expect(steps.map((row) => row.enumlabel)).toEqual(
@@ -2573,7 +2579,7 @@ describe('the embedding table, and nothing beside it', () => {
       where pg_type.typname = 'pipeline_step' order by pg_enum.enumsortorder
     `;
     // The whole declaration, in its order: the chain, then the standalone steps — less
-    // `cross_reference`, which `0033_cross_references` slots in after `embed` later; this
+    // `cross_reference`, which `0038_cross_references` slots in after `embed` later; this
     // database, migrated only as far as embeddings, does not admit it yet.
     expect(steps.map((row) => row.enumlabel)).toEqual(
       JOB_STEPS.filter((step) => step !== 'cross_reference'),
@@ -2779,7 +2785,11 @@ describe('the note_report table and the terms columns, and nothing beside them',
       ).map((row) => row.value);
     expect(await enumValues('report_reason')).toEqual([...REPORT_REASONS]);
     expect(await enumValues('report_outcome')).toEqual([...REPORT_OUTCOMES]);
-    expect(await enumValues('notification_kind')).toEqual([...NOTIFICATION_KINDS]);
+    // Less `summary_ready`, which `0033_summary_ready` adds next; this database, migrated only as
+    // far as the UGC controls, does not admit it yet.
+    expect(await enumValues('notification_kind')).toEqual(
+      NOTIFICATION_KINDS.filter((kind) => kind !== 'summary_ready'),
+    );
   });
 
   it('leaves an account written before the columns with no acceptance rather than a default one', async () => {
@@ -2875,7 +2885,7 @@ describe('the cross_reference table, and nothing beside it', () => {
   beforeAll(async () => {
     target = await createThrowawayDatabase(inject('databaseUrl'), 'cross_references_migration');
 
-    const priorCount = journalCountBefore('0033_cross_references');
+    const priorCount = journalCountBefore('0038_cross_references');
     await runMigrations({ url: target.url, migrationsFolder: migrationsFolderUpTo(priorCount) });
     before = await readColumnSets(target.url);
 

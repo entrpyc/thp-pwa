@@ -1,3 +1,4 @@
+import { SEARCH_BUDGET_PER_HOUR } from '@thp/shared';
 import { ApiError } from '@/server/api/errors';
 import { describeWait, retryAfterSeconds } from '@/server/api/budgets';
 import { createRateLimiter, type RateLimiter } from '@/server/api/rate-limit';
@@ -38,6 +39,7 @@ export const ACTOR_BUDGET_KINDS = [
   'avatar-grant',
   'recording-grant',
   'artwork-grant',
+  'search',
 ] as const;
 
 export type ActorBudgetKind = (typeof ACTOR_BUDGET_KINDS)[number];
@@ -64,6 +66,12 @@ const HOUR_MS = 60 * 60 * 1000;
  *   has ever needed, and the bulk path (prd 3.21.3) will get its own budget rather than borrow
  *   this one.
  * - **Artwork grants, thirty.** The same argument, for the same admin.
+ * - **Searches, sixty** (`SEARCH_BUDGET_PER_HOUR`). Every search embeds the member's words with the
+ *   provider before the database is asked ([3.10.2](docs/project/prd.md)), so this is the fifth
+ *   thing a session can make leave the server. One a minute for an hour is more than a person
+ *   reading results between searches reaches; the operator chose a search that runs on Enter
+ *   rather than as the member types, which is what makes sixty generous rather than tight.
+ *   Spent before the provider is called, unlike the four above — here the call *is* the cost.
  */
 export const ACTOR_BUDGETS: Readonly<Record<ActorBudgetKind, ActorBudget>> = {
   feedback: {
@@ -85,6 +93,11 @@ export const ACTOR_BUDGETS: Readonly<Record<ActorBudgetKind, ActorBudget>> = {
     limit: 30,
     windowMs: HOUR_MS,
     refusal: 'Too many upload attempts.',
+  },
+  search: {
+    limit: SEARCH_BUDGET_PER_HOUR,
+    windowMs: HOUR_MS,
+    refusal: 'You have searched many times in the last hour.',
   },
 };
 

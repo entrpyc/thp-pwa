@@ -12,6 +12,7 @@ import {
 import { track } from '@/client/observability/analytics';
 import { segmentAt } from '@/client/transcript/current-segment';
 import { NoteComposer } from './recordings/[id]/note-composer';
+import { PinMomentTool } from './highlights/pin-moment-tool';
 import { usePlayer } from './player-context';
 import styles from './transport.module.css';
 
@@ -765,6 +766,8 @@ export function TransportBar() {
                   <ChaptersIcon />
                 </button>
               )}
+              {/* Pin this moment to Highlights (3.15.2, 3.15.4) — the strip closes behind the press, as every tool's does. */}
+              <PinMomentTool className={styles.tool} onPressed={() => setToolbarOpen(false)} />
               <button
                 className={styles.tool}
                 type="button"

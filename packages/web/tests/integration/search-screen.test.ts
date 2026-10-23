@@ -1,0 +1,243 @@
+import { afterAll, beforeAll, describe, expect, it, inject } from 'vitest';
+import { chromium, type Browser, type Page } from 'playwright';
+import {
+  API_PREFIX,
+  DASHBOARD_PAGE_PATH,
+  ROLE,
+  SEARCH_PAGE_PATH,
+  SEARCH_PATH,
+  chapterPagePath,
+  recordingPagePath,
+} from '@thp/shared';
+import {
+  createDatabase,
+  insertRecording,
+  listChapters,
+  listSegments,
+  replaceChapters,
+  replaceTranscript,
+  setRecordingPublication,
+  upsertEmbeddings,
+  type DatabaseHandle,
+  type NewEmbedding,
+} from '@thp/db';
+import { fakeVector } from '@thp/embed';
+import { closeTestDatabase, createAccount, type TestAccount } from '../support/accounts';
+import { uploadTestAudio } from '../support/audio';
+
+/**
+ * **Search, driven in a real browser** ([3.10.1](docs/project/prd.md), [3.10.6](docs/project/prd.md),
+ * [3.10.7](docs/project/prd.md), [3.10.11](docs/project/prd.md)).
+ *
+ * Real for the reason the chapter suite is: one claim here is about a live media element — that
+ * selecting a result lands on the moment and does **not** start sound ([3.2.12](docs/project/prd.md))
+ * — and only an element that is actually decoding audio can make it.
+ *
+ * The teaching is thirty seconds long with a line every ten; the fake embedder means a search for
+ * a line's own words is a distance of zero from it, which is all the ranking this screen test needs.
+ */
+
+const baseUrl = inject('apiBaseUrl');
+const databaseUrl = inject('databaseUrl');
+const settings = inject('mediaSettings');
+
+const RUN = `${Date.now().toString(36)}${Math.floor(Math.random() * 1e6).toString(36)}`;
+const TITLE = `Search screen teaching ${RUN}`;
+const LINES = [
+  `Opening words ${RUN}.`,
+  `The lost sheep is carried home ${RUN}.`,
+  `Closing words ${RUN}.`,
+];
+const CHAPTER_TITLE = `The ninety-nine ${RUN}`;
+
+let browser: Browser;
+let handle: DatabaseHandle;
+let member: TestAccount;
+let recordingId: string;
+let chapterId: string;
+
+async function audioState(page: Page) {
+  return page.evaluate(() => {
+    const element = document.querySelector('audio');
+    return {
+      currentTime: element?.currentTime ?? -1,
+      paused: element?.paused ?? true,
+      duration: Number.isFinite(element?.duration) ? (element?.duration ?? 0) : 0,
+    };
+  });
+}
+
+async function signedInPage(): Promise<Page> {
+  const context = await browser.newContext({ viewport: { width: 1280, height: 1100 } });
+  const page = await context.newPage();
+  await page.goto(`${baseUrl}/sign-in`, { waitUntil: 'domcontentloaded' });
+  await page.getByLabel('Email').fill(member.email);
+  await page.getByLabel('Password').fill(member.password);
+  await page.getByRole('button', { name: 'Sign in' }).click();
+  await page.waitForURL(`${baseUrl}${DASHBOARD_PAGE_PATH}`, { timeout: 30_000 });
+  return page;
+}
+
+beforeAll(async () => {
+  browser = await chromium.launch();
+  handle = createDatabase({ url: databaseUrl, max: 4 });
+  member = await createAccount(databaseUrl, ROLE.member, 'search-screen');
+
+  const { key } = await uploadTestAudio(settings, 30);
+  const row = await insertRecording({ originalMediaKey: key, title: TITLE, recordedAt: '2026-08-16' }, handle);
+  recordingId = row.id;
+  const transcript = await replaceTranscript(
+    {
+      recordingId,
+      language: 'en',
+      confidence: 0.95,
+      segments: LINES.map((text, index) => ({ startMs: index * 10_000, endMs: (index + 1) * 10_000, text })),
+    },
+    handle,
+  );
+  await replaceChapters(
+    recordingId,
+    [
+      { startMs: 0, title: 'Opening', summary: 'How it begins.' },
+      { startMs: 20_000, title: CHAPTER_TITLE, summary: 'The shepherd goes looking.' },
+    ],
+    { model: 'fake', modelVersion: 'fake-1', promptVersion: 'chapters-1' },
+    handle,
+  );
+  const chapters = await listChapters(recordingId, handle);
+  chapterId = chapters[1]?.id ?? '';
+  const rows: NewEmbedding[] = [
+    ...(await listSegments(transcript.id, handle)).map((segment) => ({
+      sourceKind: 'segment' as const,
+      sourceId: segment.id,
+      recordingId,
+      ownerUserId: null,
+      text: segment.text,
+      vector: fakeVector(segment.text),
+      model: 'fake-embed-1',
+    })),
+    ...chapters.map((chapter) => ({
+      sourceKind: 'chapter' as const,
+      sourceId: chapter.id,
+      recordingId,
+      ownerUserId: null,
+      text: `${chapter.title}\n\n${chapter.summary}`,
+      vector: fakeVector(`${chapter.title}\n\n${chapter.summary}`),
+      model: 'fake-embed-1',
+    })),
+  ];
+  await upsertEmbeddings(rows, handle);
+  await setRecordingPublication(recordingId, new Date(), handle);
+}, 240_000);
+
+afterAll(async () => {
+  await browser?.close();
+  await handle?.close();
+  await closeTestDatabase();
+});
+
+describe('the search box in the navigation (3.10.1)', () => {
+  it('opens from the magnifier on any screen and goes to the results page on Enter', async () => {
+    const page = await signedInPage();
+    await page.getByRole('button', { name: 'Search' }).click();
+    const box = page.getByRole('searchbox', { name: 'Search the library' });
+    await expect.poll(() => box.isVisible()).toBe(true);
+    await box.fill(LINES[1] ?? '');
+    await box.press('Enter');
+    await page.waitForURL((url) => url.pathname === SEARCH_PAGE_PATH, { timeout: 30_000 });
+    expect(new URL(page.url()).searchParams.get('q')).toBe(LINES[1]);
+    await page.context().close();
+  });
+});
+
+describe('the results page (3.10.6, 3.10.7)', () => {
+  it('prints the match in context with its teaching and moment, and opens the moment without playing', async () => {
+    const page = await signedInPage();
+    await page.goto(`${baseUrl}${SEARCH_PAGE_PATH}?q=${encodeURIComponent(LINES[1] ?? '')}`, {
+      waitUntil: 'domcontentloaded',
+    });
+    const results = page.getByRole('list', { name: 'Search results' });
+    await expect.poll(() => results.isVisible(), { timeout: 30_000 }).toBe(true);
+    const first = results.getByRole('listitem').first();
+    await expect.poll(() => first.textContent()).toContain(TITLE);
+    expect(await first.textContent()).toContain(LINES[1]);
+    // The line before and after, in context, and the moment at the right.
+    expect(await first.textContent()).toContain(LINES[0]);
+    expect(await first.textContent()).toContain('00:10');
+
+    await first.getByRole('link').click();
+    await page.waitForURL(`${baseUrl}${recordingPagePath(recordingId)}`, { timeout: 30_000 });
+    await expect.poll(async () => (await audioState(page)).duration, { timeout: 60_000 }).toBeGreaterThan(0);
+    const state = await audioState(page);
+    expect(state.paused).toBe(true);
+    expect(state.currentTime).toBeCloseTo(10, 0);
+    await page.context().close();
+  });
+
+  it('a chapter match opens the chapter’s page', async () => {
+    const page = await signedInPage();
+    await page.goto(`${baseUrl}${SEARCH_PAGE_PATH}?q=${encodeURIComponent(CHAPTER_TITLE)}`, {
+      waitUntil: 'domcontentloaded',
+    });
+    const results = page.getByRole('list', { name: 'Search results' });
+    await expect.poll(() => results.isVisible(), { timeout: 30_000 }).toBe(true);
+    const first = results.getByRole('listitem').first();
+    expect(await first.textContent()).toContain('Chapter');
+    expect(await first.textContent()).toContain(CHAPTER_TITLE);
+    await first.getByRole('link').click();
+    await page.waitForURL(`${baseUrl}${chapterPagePath(recordingId, chapterId)}`, { timeout: 30_000 });
+    await page.context().close();
+  });
+
+  it('the "only my notes" switch narrows to notes and says so when there are none (3.10.10)', async () => {
+    const page = await signedInPage();
+    await page.goto(`${baseUrl}${SEARCH_PAGE_PATH}?q=${encodeURIComponent(LINES[1] ?? '')}`, {
+      waitUntil: 'domcontentloaded',
+    });
+    await expect
+      .poll(() => page.getByRole('list', { name: 'Search results' }).isVisible(), { timeout: 30_000 })
+      .toBe(true);
+    // A click rather than `check()`: the switch reads its state off the address, so it changes
+    // only once the navigation it causes has landed — which is the next line's wait.
+    await page.getByLabel('Only my notes').click();
+    await page.waitForURL((url) => url.searchParams.get('mine') === '1', { timeout: 30_000 });
+    const empty = page.locator('[data-state="empty"]');
+    await expect.poll(() => empty.isVisible(), { timeout: 30_000 }).toBe(true);
+    expect(await empty.textContent()).toContain('among your notes');
+    await page.context().close();
+  });
+});
+
+describe('the two empty states (3.10.11)', () => {
+  it('nothing matching says so about the library', async () => {
+    const page = await signedInPage();
+    await page.goto(`${baseUrl}${SEARCH_PAGE_PATH}?q=${encodeURIComponent(`zxqv-${RUN}-nothing`)}&book=obadiah`, {
+      waitUntil: 'domcontentloaded',
+    });
+    const empty = page.locator('[data-state="empty"]');
+    await expect.poll(() => empty.isVisible(), { timeout: 30_000 }).toBe(true);
+    expect(await empty.textContent()).toContain('Nothing in the library matches');
+    expect(await page.locator('[data-state="unavailable"]').count()).toBe(0);
+    await page.context().close();
+  });
+
+  it('a search that could not run says search is unavailable, not that nothing matches', async () => {
+    const page = await signedInPage();
+    // The route failing is the server's business; the browser is shown what the page does with it.
+    await page.route(`**${API_PREFIX}${SEARCH_PATH}?*`, (route) =>
+      route.fulfill({
+        status: 500,
+        contentType: 'application/json',
+        body: JSON.stringify({ error: { code: 'internal_error', message: 'down', correlationId: 'x' } }),
+      }),
+    );
+    await page.goto(`${baseUrl}${SEARCH_PAGE_PATH}?q=${encodeURIComponent(LINES[1] ?? '')}`, {
+      waitUntil: 'domcontentloaded',
+    });
+    const down = page.locator('[data-state="unavailable"]');
+    await expect.poll(() => down.isVisible(), { timeout: 30_000 }).toBe(true);
+    expect(await down.textContent()).toContain('Search is unavailable');
+    expect(await page.locator('[data-state="empty"]').count()).toBe(0);
+    await page.context().close();
+  });
+});
