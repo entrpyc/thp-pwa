@@ -36,6 +36,7 @@ import { ApiClientError, apiFetch } from '@/client/api-client';
 import { SYNCED_EVENT, offlineManager } from '@/client/offline/manager';
 import { track } from '@/client/observability/analytics';
 import { shouldRenewGrant, shouldRenewPreemptively } from '@/client/playback/renewal';
+import { SOUND_CHECK_MS, soundRemedy } from '@/client/playback/stall';
 import { listenedStep, shouldWriteProgress, type ProgressEventKind } from '@/client/playback/cadence';
 import {
   SKIP_STEP_MS,
@@ -504,6 +505,13 @@ export function PlayerProvider({
    */
   const wantsPlay = useRef(false);
   /**
+   * The check that the last press for sound produced sound (`stall.ts` says why), armed by each
+   * `play` event and read off the element when it fires; and how many remedies the press has had,
+   * so the check cannot loop — cleared by the member's own presses, which start a fresh budget.
+   */
+  const soundCheck = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const soundRemedies = useRef(0);
+  /**
    * The recording whose transcript has been asked for.
    *
    * A ref rather than derived from `transcript`, because it has to be set the moment the request
@@ -723,6 +731,7 @@ export function PlayerProvider({
     const element = audioRef.current;
     if (element === null || loadedRef.current === null) return;
     wantsPlay.current = true;
+    soundRemedies.current = 0;
     if (element.src === '' || renewing.current) {
       playOnLoad.current = true;
       return;
@@ -748,6 +757,7 @@ export function PlayerProvider({
     if (element === null) return;
     wantsPlay.current = false;
     playOnLoad.current = false;
+    soundRemedies.current = 0;
     element.pause();
   }, []);
 
@@ -852,9 +862,44 @@ export function PlayerProvider({
       declarePosition(element);
       pushProgress('tick');
     };
+    /*
+     * **Did the press produce sound?** Read off the clock a moment after each `play`, because the
+     * event is the element agreeing to play and not the pipeline doing it (`stall.ts` has the
+     * ticket). The two remedies are the member's own pause-and-play, and the source swap a renewal
+     * already does with the position in hand; `soundRemedy` decides which, and when to stop.
+     */
+    const checkSound = (startedAtSeconds: number) => {
+      soundCheck.current = null;
+      const remedy = soundRemedy({
+        paused: element.paused,
+        wantsPlay: wantsPlay.current,
+        startedAtSeconds,
+        nowSeconds: element.currentTime,
+        remedies: soundRemedies.current,
+      });
+      if (remedy === 'none' || remedy === 'leave') return;
+      soundRemedies.current += 1;
+      if (remedy === 'replay') {
+        element.pause();
+        void element.play().catch(() => undefined);
+      } else {
+        void renew();
+      }
+    };
+    const armSoundCheck = () => {
+      if (soundCheck.current !== null) clearTimeout(soundCheck.current);
+      const startedAtSeconds = element.currentTime;
+      soundCheck.current = setTimeout(() => checkSound(startedAtSeconds), SOUND_CHECK_MS);
+    };
+    const disarmSoundCheck = () => {
+      if (soundCheck.current === null) return;
+      clearTimeout(soundCheck.current);
+      soundCheck.current = null;
+    };
     const onPlay = () => {
       setPlaying(true);
       declarePlaybackState('playing');
+      armSoundCheck();
       // The first `play` since this teaching was loaded is the unique play; every later one is a
       // resume of the same visit and reports nothing.
       const recording = loadedRef.current;
@@ -869,6 +914,7 @@ export function PlayerProvider({
       }
     };
     const onPause = () => {
+      disarmSoundCheck();
       setPlaying(false);
       declarePlaybackState('paused');
       pushProgress('pause');
@@ -898,6 +944,7 @@ export function PlayerProvider({
     element.addEventListener('durationchange', onClockChange);
     element.addEventListener('error', onError);
     return () => {
+      disarmSoundCheck();
       element.removeEventListener('loadedmetadata', onLoadedMetadata);
       element.removeEventListener('timeupdate', onTimeUpdate);
       element.removeEventListener('play', onPlay);
