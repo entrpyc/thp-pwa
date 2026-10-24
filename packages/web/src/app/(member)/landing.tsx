@@ -12,27 +12,31 @@ import {
   type ResumeView,
 } from '@thp/shared';
 import { apiFetch } from '@/client/api-client';
+import { MarkerIcon } from './highlights/marker-icon';
 import { usePlayer } from './player-context';
 import { SosCard } from './prayer-requests/sos-card';
+import { SeriesIcon } from './series-icon';
 import styles from './screens.module.css';
 
 /**
  * **The member landing** — `pages/dashboard.png`.
  *
- * The reference has three cards. One ships:
+ * The reference has three cards. The screen is three rows, in the order the operator set:
  *
- * - **Resume recording** — Story 4's, and the marquee behaviour behind it.
- * - **View all series** — first on the screen, above the cards, by the operator's decision.
- *   Story 4 shipped this row pointing at the library, because series did not
- *   exist yet; Story 6 gives it the destination the reference draws. *All recordings* did not
- *   disappear with it — it is an entry in the menu, beside *All series*, which is where
- *   `top-navigation/menu-opened.png` puts both.
- * - **View highlights** — the same line, under it, to the member's own playlist
- *   ([3.15.5](docs/project/prd.md)), by the operator's decision when the playlist left the profile.
+ * - **Resume recording** — first. Story 4's, and the marquee behaviour behind it.
+ * - **Series** and **Highlights** — the second row, two tiles side by side, each a big icon over
+ *   one word. Their accessible names stay *View all series* and *View highlights*, which is what
+ *   the word on the tile abbreviates and what every test and the PRD call them. Story 4 shipped the
+ *   series way-in pointing at the library, because series did not exist yet; Story 6 gave it the
+ *   destination the reference draws. *All recordings* did not disappear with it — it is an entry
+ *   in the menu, beside *All series*, which is where `top-navigation/menu-opened.png` puts both.
+ *   Highlights goes to the member's own playlist ([3.15.5](docs/project/prd.md)), by the
+ *   operator's decision when the playlist left the profile; its icon is the highlighter every
+ *   highlight control draws, so the tile is recognised rather than read.
  * - **My notes** — [§3.12](docs/project/prd.md) is deferred whole, so the card is **dropped**
  *   rather than rendered empty. An empty card is a promise; a missing one is a screen that will
  *   grow.
- * - **SOS** — not in the reference, and added by the operator's decision when
+ * - **SOS** — the last row. Not in the reference, and added by the operator's decision when
  *   [§3.16](docs/project/prd.md) shipped: the prayer emergency channel's way in is a card here
  *   rather than a navigation entry, with the open counts, the most urgent signals and Raise SOS.
  *
@@ -89,20 +93,6 @@ export function Landing() {
       */}
       <h1 className={styles.hiddenTitle}>Dashboard</h1>
 
-      <Link className={styles.wayIn} href={MEMBER_SERIES_PAGE_PATH}>
-        <span className={styles.wayInLabel}>View all series</span>
-        <span className={styles.wayInArrow} aria-hidden="true">
-          →
-        </span>
-      </Link>
-
-      <Link className={styles.wayIn} href={HIGHLIGHTS_PAGE_PATH}>
-        <span className={styles.wayInLabel}>View highlights</span>
-        <span className={styles.wayInArrow} aria-hidden="true">
-          →
-        </span>
-      </Link>
-
       {/*
         `loaded` is only the gate on the *fetched* row — it is what stops a card appearing and then
         being replaced a moment later. A teaching already in the player needs no such wait: it is
@@ -127,6 +117,21 @@ export function Landing() {
           </Link>
         </section>
       ) : null}
+
+      <div className={styles.tiles}>
+        <Link className={styles.tile} href={MEMBER_SERIES_PAGE_PATH} aria-label="View all series">
+          <span className={styles.tileIcon}>
+            <SeriesIcon size={40} />
+          </span>
+          <span className={styles.tileLabel}>Series</span>
+        </Link>
+        <Link className={styles.tile} href={HIGHLIGHTS_PAGE_PATH} aria-label="View highlights">
+          <span className={styles.tileIcon}>
+            <MarkerIcon marked={false} size={40} />
+          </span>
+          <span className={styles.tileLabel}>Highlights</span>
+        </Link>
+      </div>
 
       <SosCard />
     </>

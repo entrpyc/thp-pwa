@@ -153,32 +153,40 @@
   font-variant-numeric: tabular-nums;
 }
 
-/* The reference's *View all series* row, keeping its place, its arrow and its accent. */
-.wayIn {
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
+/* The landing's second row: two tiles side by side, a big icon over one word. */
+.tiles {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
   gap: var(--space-4);
-  min-height: calc(var(--space-8) + var(--space-3));
+}
+
+.tile {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: var(--space-3);
+  min-height: calc(var(--space-8) * 4);
   background: var(--color-surface);
   border: 1px solid var(--color-border);
   border-radius: var(--radius-md);
-  padding: var(--space-4) var(--space-5);
+  padding: var(--space-5);
   text-decoration: none;
 }
 
-.wayIn:hover {
+.tile:hover {
   background: var(--color-surface-raised);
 }
 
-.wayInLabel {
-  font-size: var(--fs-body);
-  font-weight: 500;
-  color: var(--color-primary-strong);
+.tileIcon {
+  display: flex;
+  color: var(--color-primary-icon);
 }
 
-.wayInArrow {
-  color: var(--color-primary-strong);
+.tileLabel {
+  font-size: var(--fs-card-title);
+  font-weight: 500;
+  color: var(--color-text);
 }
 
 /* ----------------------------------------------------------------------------------- the library */
