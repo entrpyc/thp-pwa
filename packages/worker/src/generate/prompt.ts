@@ -2,6 +2,8 @@ import {
   MAX_CHAPTER_MS,
   MAX_FLOW_QUESTION_LENGTH,
   MIN_CHAPTER_MS,
+  MIND_MAP_MAX_POINTS,
+  MIND_MAP_MAX_THEMES,
   REVIEW_FIELD,
   type ReviewKind,
 } from '@thp/shared';
@@ -32,7 +34,7 @@ import type {
  * meaning of the instruction changes with the model behind it. The value is meaningless as anything
  * but a label an operator compares two drafts with, and deriving it would make it lie.
  */
-export const PROMPT_VERSION = 'draft-1';
+export const PROMPT_VERSION = 'draft-2';
 
 /** The tool the model is forced to call. The name is arbitrary and is part of the contract. */
 export const DRAFT_TOOL_NAME = 'record_draft';
@@ -62,6 +64,15 @@ export const DRAFT_FIELD_INSTRUCTIONS: Record<ReviewKind, string> = {
     'clearly where a passage is read out or worked through, give the offset of that line as ' +
     'anchorMs; leave anchorMs out where the passage is only mentioned in passing or where you ' +
     'cannot place it, and never guess at one.',
+  mind_map:
+    'A mind map of the teaching: its main themes, and under each theme the points made about it. ' +
+    `Give between three and ${MIND_MAP_MAX_THEMES} themes, each a label of a few words, and under ` +
+    `each theme up to ${MIND_MAP_MAX_POINTS} points, each a short phrase — never a sentence of ` +
+    'commentary, never a quotation longer than a line. A theme may span several parts of the ' +
+    'teaching; it is a concept, not a chapter. Where a theme or a point is clearly spoken at one ' +
+    'place in the transcript, give the offset of that line as anchorMs, copied exactly from the ' +
+    'brackets; leave anchorMs out where you cannot place it, and never guess at one. Use only ' +
+    'what the transcript says.',
 };
 
 /** The instruction the model is given about who it is writing for and what it is reading. */
@@ -131,6 +142,54 @@ const CITATION_SCHEMA = {
   required: ['book', 'chapter'],
 } as const;
 
+/** A node's offset, in the words the citation's anchor uses, so the two cannot be described apart. */
+const NODE_ANCHOR_SCHEMA = {
+  type: 'integer',
+  description:
+    'The offset of the transcript line where this is spoken, copied exactly from the brackets at ' +
+    'the start of that line. Omit it where it cannot be placed.',
+} as const;
+
+/**
+ * What the mind map looks like in the tool call ([3.8.1](docs/project/prd.md)).
+ *
+ * **Themes and points, two levels, spelled out rather than recursive.** The teaching itself is the
+ * root and is not asked for; a recursive schema would invite a fourth level the product does not
+ * draw, and a schema that says exactly what fits is one a model fills in correctly more often. The
+ * caps themselves are not in the schema — a ninth theme is dropped and counted by the handler,
+ * where every other "did not fit" is counted — but the instruction names them.
+ */
+const MIND_MAP_SCHEMA = {
+  type: 'object',
+  properties: {
+    themes: {
+      type: 'array',
+      description: 'The main themes of the teaching, in the order they are best read.',
+      items: {
+        type: 'object',
+        properties: {
+          label: { type: 'string', description: 'A few words naming the theme.' },
+          anchorMs: NODE_ANCHOR_SCHEMA,
+          points: {
+            type: 'array',
+            description: 'The points made under this theme, each a short phrase.',
+            items: {
+              type: 'object',
+              properties: {
+                label: { type: 'string', description: 'A short phrase stating the point.' },
+                anchorMs: NODE_ANCHOR_SCHEMA,
+              },
+              required: ['label'],
+            },
+          },
+        },
+        required: ['label', 'points'],
+      },
+    },
+  },
+  required: ['themes'],
+} as const;
+
 /**
  * The tool's parameter schema, carrying **only the fields this request asked for**.
  *
@@ -152,7 +211,9 @@ export function buildToolSchema(kinds: readonly ReviewKind[]): {
     properties[field.name] =
       field.shape === 'list'
         ? { type: 'array', description: DRAFT_FIELD_INSTRUCTIONS[kind], items: CITATION_SCHEMA }
-        : { type: 'string', description: DRAFT_FIELD_INSTRUCTIONS[kind] };
+        : field.shape === 'tree'
+          ? { ...MIND_MAP_SCHEMA, description: DRAFT_FIELD_INSTRUCTIONS[kind] }
+          : { type: 'string', description: DRAFT_FIELD_INSTRUCTIONS[kind] };
   }
   return { type: 'object', properties, required: kinds.map((kind) => REVIEW_FIELD[kind].name) };
 }

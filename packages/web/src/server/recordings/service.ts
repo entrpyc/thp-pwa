@@ -84,6 +84,8 @@ export function describeRecording(row: RecordingRow): RecordingSummary {
     // And it cites nothing: the draft that will propose references has not been written yet, let
     // alone approved.
     hasScripture: false,
+    // And it has no map yet, for the same reason.
+    hasMindMap: false,
     // And it is tagged with nothing: tags are put on by hand from the row this creation adds to
     // the list, never by the upload ([4.17.1](docs/project/prd.md)).
     tags: [],
@@ -428,6 +430,9 @@ async function describeForMember(
     // rather than fetched here: the page needs to know before it asks for a passage, and asking for
     // the passages to find out is the download the closed tab exists to avoid.
     hasScripture: row.hasScripture,
+    // The same question of the **Mindmap** tab ([3.8.3](docs/project/prd.md)), answered the same
+    // way: by the visibility read, before the page asks for the tree.
+    hasMindMap: row.hasMindMap,
     // Handed in rather than fetched here, so a list of teachings costs one tag query and not one
     // per row. Both surfaces get them: a member reads labels, the console draws chips.
     tags,

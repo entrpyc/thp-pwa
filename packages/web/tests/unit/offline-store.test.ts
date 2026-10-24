@@ -29,6 +29,7 @@ function draft(userId: string, recordingId: string): DownloadDraft {
       summary: null,
       series: null,
       hasScripture: false,
+      hasMindMap: false,
       tags: [],
     },
     chapters: [],

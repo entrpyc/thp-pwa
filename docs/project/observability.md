@@ -223,7 +223,7 @@ sign-out.
 | :--- | :--- | :--- | :--- |
 | Streams, listeners, returns | `playback_started` | `recording_id`, `series_id`, `resumed` (position above zero), `speed` | A unique play, as defined above. In `player-context.tsx`, where a flag reset on load is cleared by the first `play`. |
 | Completions | `playback_completed` | `recording_id`, `series_id` | **Server-side**, the moment the progress write crosses 80% (section 5.3). |
-| Tabs | `tab_opened` | `tab` (`chapters`, `scripture`, `notes`, `transcript`), `surface` (`recording`, `chapter`), `recording_id` | A tab is opened. The recording page's `chooseTab` and the chapter page's toggle are the two call sites; closing a tab fires nothing. Chapters and scripture are the two asked for; the other two cost nothing extra. |
+| Tabs | `tab_opened` | `tab` (`chapters`, `scripture`, `notes`, `transcript`, `mindmap`), `surface` (`recording`, `chapter`), `recording_id` | A tab is opened. The recording page's `chooseTab` and the chapter page's toggle are the two call sites; closing a tab fires nothing. Chapters and scripture are the two asked for; the others cost nothing extra — `mindmap` arrived with prd 3.8.3 and rides the same call. |
 | Private notes | `note_created` | `recording_id`, `visibility` (`public`, `private`), `is_reply` | The note form's submit succeeds. Public notes and replies ride along for free. |
 | Chapter jumps | `chapter_jumped` | `recording_id`, `chapter_index` | The chapters panel's `playFromMs` is called from a chapter row. |
 | Speed changes | `speed_changed` | `speed` | `chooseSpeed` accepts a new rate. |
@@ -455,7 +455,7 @@ recreate them, and the HogQL query is recorded there verbatim.
 | `alloy` | The `alloy` systemd unit is active, its `/-/ready` endpoint on `127.0.0.1:12345` answers, and every component in `/api/v0/web/components` reports itself healthy — which is how a wrong Postgres password or a dead Grafana token shows up. |
 | `backup-pings` | `/etc/thp/healthchecks.env` names an `https` URL for all three pings, and the *installed* `thp-backup` and `thp-backup-check` units carry the `ExecStartPost` that sends theirs. |
 | `analytics` | The built client chunks under `packages/web/.next` carry a `phc_` key and the EU host — read from disk, because the adapter is in the member layout's chunk and an anonymous fetch of the origin is handed the sign-in page — and `POSTHOG_KEY` is set for the API. |
-| `analytics-proxy` | An empty POST to `/relay/e/` on the origin is answered by PostHog's JSON validation error rather than by Next — which is what a live nginx block that was never given the `location /relay/` would do, silently losing every event. |
+| `analytics-proxy` | An empty POST to `/relay/e/` on the origin is answered by PostHog's plain-text `400 request missing data payload` rather than by Next — which is what a live nginx block that was never given the `location /relay/` would do, silently losing every event. |
 | `heartbeat` | `HEALTHCHECK_WORKER_URL` is set and the worker's pm2 log carries a `worker.heartbeat.sent` line in the last 10 min. |
 | `not-mocked` | Already exists; unchanged — `THP_MOCK_EXTERNAL` is not `true` on the box. |
 

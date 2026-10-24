@@ -44,6 +44,7 @@ function download(recordingId: string, seriesId: string | null, recordedAt: stri
       summary: null,
       series: seriesId === null ? null : { id: seriesId, title: 'Study', artworkUrl: null },
       hasScripture: false,
+      hasMindMap: false,
       tags: [],
     },
     chapters: [

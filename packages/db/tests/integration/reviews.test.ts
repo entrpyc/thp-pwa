@@ -59,6 +59,20 @@ const MACHINE: Record<ReviewKind, unknown> = {
     { book: 'romans', chapter: 8, verseStart: 1, verseEnd: 4 },
     { book: 'john', chapter: 3, verseStart: 16, verseEnd: 16 },
   ],
+  // A tree-shaped draft: the root, one theme, one point, the way the handler writes it.
+  mind_map: {
+    id: 'n1',
+    label: 'The teaching',
+    anchorMs: null,
+    children: [
+      {
+        id: 'n2',
+        label: 'Grace',
+        anchorMs: 4000,
+        children: [{ id: 'n3', label: 'Unearned', anchorMs: 4000, children: [] }],
+      },
+    ],
+  },
 };
 
 /** A draft of each named kind, written the way the handler writes them. */

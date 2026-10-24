@@ -135,6 +135,7 @@ export {
   type BlockedMemberRow,
   type MemberBlockRow,
 } from './member-blocks';
+export { findMindMapByRecording, publishMindMap, type MindMapRow } from './mind-maps';
 export {
   countHighlightsForMember,
   deleteHighlightForMember,

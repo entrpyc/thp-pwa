@@ -621,16 +621,22 @@ const CHECKS: readonly Check[] = [
       // (deploy/nginx/thp.conf, `location /relay/`). If the live nginx block was never updated the
       // path falls through to Next, which answers an unknown route with its 404 page, and every
       // event would be lost with nothing in any log to say so. An empty POST to the capture
-      // endpoint is enough to tell the two apart: PostHog refuses it with a JSON validation error,
-      // Next with HTML.
+      // endpoint is enough to tell the two apart: PostHog refuses it with a plain-text 400 that
+      // says `request missing data payload` (observed 2026-10-24 against eu.i.posthog.com/e/
+      // directly), Next with an HTML 404. The body is the witness rather than the content type,
+      // because PostHog's capture service answers in text/plain, not JSON.
       const target = `${origin()}/relay/e/`;
       const response = await fetch(target, { method: 'POST', body: '', redirect: 'manual' });
       const contentType = response.headers.get('content-type') ?? '';
+      const body = (await response.text()).trim();
       if (response.status === 404) return bad(`${target} is a 404 — nginx is not forwarding /relay/ to PostHog`);
       if (response.status >= 300 && response.status < 400) return bad(`${target} redirects — nginx is not forwarding it`);
       if (response.headers.has('x-powered-by')) return bad(`${target} was answered by Next, not by PostHog`);
-      if (!contentType.includes('json')) return bad(`${target} answered ${response.status} ${contentType || '(no content type)'} — not PostHog`);
-      return ok(`${target} is answered by PostHog (${response.status})`);
+      if (contentType.includes('html')) return bad(`${target} answered ${response.status} ${contentType} — a page, not PostHog`);
+      if (response.status !== 400 || !/missing data payload/i.test(body)) {
+        return bad(`${target} answered ${response.status} "${body.slice(0, 80)}" — not PostHog's refusal of an empty capture`);
+      }
+      return ok(`${target} is answered by PostHog (${response.status}, "${body}")`);
     },
   },
   {

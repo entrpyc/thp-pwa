@@ -300,3 +300,20 @@
   font-size: var(--fs-meta);
   color: var(--color-text-dim);
 }
+
+/* ------------------------------------------------------------------ a tree an admin can curate */
+
+/*
+ * The mind map canvas (3.8.2), at the height the member's inline panel gives it, so an admin
+ * judges the map at the size a member reads it. The canvas's own sheet draws the boxes.
+ */
+.treeCanvas {
+  height: 60vh;
+  max-height: 560px;
+}
+
+.treeHint {
+  margin: 0 0 var(--space-3);
+  font-size: var(--fs-meta);
+  color: var(--color-text-dim);
+}

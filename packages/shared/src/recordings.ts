@@ -359,6 +359,13 @@ export interface RecordingView {
    */
   readonly hasScripture: boolean;
   /**
+   * Whether there is a **Mindmap** tab to draw ([3.8.3](docs/project/prd.md)) — an approved map
+   * exists for this teaching. Decided by the visibility read, as `hasScripture` is, so the page
+   * knows before it asks for the tree, and gated the same way: never `true` for a teaching the
+   * reader may not see.
+   */
+  readonly hasMindMap: boolean;
+  /**
    * The tags an admin put on this teaching ([4.7](docs/project/prd.md)), alphabetically, and
    * empty for the many with none.
    *

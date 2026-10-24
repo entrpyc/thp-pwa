@@ -1,6 +1,7 @@
 'use client';
 
 import Link from 'next/link';
+import { usePathname } from 'next/navigation';
 import { useEffect, useRef, useState, type PointerEvent as ReactPointerEvent } from 'react';
 import {
   NOW_PLAYING_PAGE_PATH,
@@ -158,6 +159,8 @@ function ChaptersIcon() {
 
 export function TransportBar() {
   const player = usePlayer();
+  // Which member screen the bar is docked under — read for one thing only, the caption pill below.
+  const pathname = usePathname();
   const { highlights } = useHighlights();
   const [toolbarOpen, setToolbarOpen] = useState(false);
   const [sheetOpen, setSheetOpen] = useState(false);
@@ -585,8 +588,13 @@ export function TransportBar() {
         would take the dismiss control with it and shift every control under it back and forth for
         the length of a pause — so a gap draws a dash instead, which says the captions are running
         and this moment has no words rather than leaving a member to wonder which.
+
+        **Not on the now-playing view**, where the same line is already written large across the
+        cover: two copies of one sentence stacked on one screen read as a fault, and the view's copy
+        is the one that is on purpose. The switch itself is untouched — the pill is back the moment
+        the member leaves.
       */}
-      {player.captionsOn ? (
+      {player.captionsOn && pathname !== NOW_PLAYING_PAGE_PATH ? (
         <section className={styles.caption} aria-label="Caption">
           <span className={`${styles.captionText}${captionHighlighted ? ` ${styles.captionHighlighted}` : ''}`}>
             {caption === null ? <span aria-hidden="true">–</span> : caption}

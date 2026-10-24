@@ -13,6 +13,7 @@ export * from './highlights';
 export * from './invitations';
 export * from './jobs';
 export * from './legal';
+export * from './mind-maps';
 export * from './notes';
 export * from './note-images';
 export * from './notifications';

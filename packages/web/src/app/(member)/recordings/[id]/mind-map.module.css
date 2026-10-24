@@ -1,0 +1,95 @@
+/*
+ * The `Mindmap` tab of `pages/recording.png` (3.8.3).
+ *
+ * The canvas itself is `mind-map-canvas.module.css`; this sheet is the panel around it — the quiet
+ * and failure lines every panel on the page shares, a one-line bar with the hint and the
+ * full-screen control, and the two sizes the canvas takes: a fixed height inline, and the whole
+ * viewport when full screen. Everything is read off `style-guide.md` and the token layer.
+ */
+
+.panel {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-4);
+}
+
+.quiet {
+  margin: 0;
+  font-size: var(--fs-body);
+  color: var(--color-text-dim);
+}
+
+.failure {
+  margin: 0;
+  background: var(--color-bg-deep);
+  border: 1px solid var(--color-border-strong);
+  border-radius: var(--radius-md);
+  padding: var(--space-4);
+  font-size: var(--fs-body);
+  color: var(--color-text);
+}
+
+.inline {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-3);
+}
+
+/*
+ * Full screen is the same element fixed to the viewport, over everything including the transport,
+ * on the page's own base colour. The outer gutter is the guide's viewport margin.
+ */
+.fullScreen {
+  position: fixed;
+  inset: 0;
+  z-index: 50;
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-3);
+  background: var(--color-bg);
+  padding: var(--space-4);
+}
+
+.bar {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--space-3);
+}
+
+.hint {
+  margin: 0;
+  font-size: var(--fs-meta);
+  color: var(--color-text-dim);
+}
+
+/* The guide's pill tab, used as a control: outlined, muted, the accent when pressed. */
+.control {
+  flex: none;
+  background: transparent;
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-pill);
+  padding: var(--space-2) var(--space-4);
+  color: var(--color-text-muted);
+  font-family: inherit;
+  font-size: var(--fs-meta);
+  cursor: pointer;
+}
+
+.control[aria-pressed='true'] {
+  border-color: var(--color-primary-strong);
+  background: var(--color-primary-soft);
+  color: var(--color-text);
+}
+
+/* Inline: tall enough to read a theme and its points, short enough that the page scrolls past. */
+.fixed {
+  height: 60vh;
+  max-height: 560px;
+}
+
+/* Full screen: whatever is left under the bar. */
+.fill {
+  flex: 1;
+  min-height: 0;
+}

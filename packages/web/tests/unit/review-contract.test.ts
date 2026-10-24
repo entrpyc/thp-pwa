@@ -44,6 +44,16 @@ describe('every kind says what field it carries and what shape that field is', (
       REVIEW_KINDS.filter((kind) => REVIEW_FIELD[kind].shape === 'list'),
     ).toEqual(['scripture']);
   });
+
+  // 3.8.1 — the mind map is the one tree-shaped kind, and arriving as a value here is the whole of
+  // what it cost the queue and the route.
+  it('declares the mind map as the one tree-shaped kind', () => {
+    expect(REVIEW_FIELD.mind_map).toEqual({ name: 'mindMap', shape: 'tree' });
+    expect(
+      REVIEW_KINDS.filter((kind) => REVIEW_FIELD[kind].shape === 'tree'),
+    ).toEqual(['mind_map']);
+    expect(REVIEW_KIND_LABEL.mind_map).toBe('Mind map');
+  });
 });
 
 describe('a field value is one of the shapes a kind may declare', () => {
