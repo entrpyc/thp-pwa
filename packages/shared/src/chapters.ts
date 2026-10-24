@@ -61,7 +61,7 @@ export interface ChapterView {
    */
   readonly endMs: number;
   readonly title: string;
-  /** One short paragraph, plain text with line breaks ([3.22.3](docs/project/prd.md)). */
+  /** One to three sentences, plain text ([3.22.3](docs/project/prd.md)). */
   readonly summary: string;
   /**
    * Whether a human has changed this chapter's title, summary or start
@@ -303,5 +303,5 @@ export type ChapterWritePayload = ChaptersPayload;
 /** The most a chapter title may be. A name for a stretch of teaching, not a sentence about it. */
 export const MAX_CHAPTER_TITLE_LENGTH = 200;
 
-/** The most a chapter summary may be — one short paragraph ([4.19](docs/project/prd.md)). */
+/** The most a chapter summary may be — one to three sentences ([4.19](docs/project/prd.md)). */
 export const MAX_CHAPTER_SUMMARY_LENGTH = 2_000;
