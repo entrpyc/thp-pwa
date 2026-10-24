@@ -6,6 +6,10 @@ import {
   matchesAnalyticsKind,
   sanitiseAnalyticsProperties,
 } from '@thp/shared';
+import {
+  EXCEPTION_PROPERTY_NAMES,
+  exceptionProperties,
+} from '@thp/shared/observability/exceptions';
 
 /**
  * **Nothing that leaves for analytics is free text** (docs/project/observability.md § 5.5).
@@ -114,5 +118,39 @@ describe('the sanitiser', () => {
     expect(matchesAnalyticsKind(true, 'boolean')).toBe(true);
     expect(matchesAnalyticsKind('public', ['public', 'private'])).toBe(true);
     expect(matchesAnalyticsKind('secret', ['public', 'private'])).toBe(false);
+  });
+});
+
+describe('the exception context', () => {
+  // Exceptions travel outside the event table (observability.md § 5.6) but under the same rule:
+  // every property an adapter may attach to a report is an id, an enum, a count or a route
+  // pattern, and none of them is named for content.
+  it('names no property that could carry content', () => {
+    for (const property of EXCEPTION_PROPERTY_NAMES) {
+      expect(property, property).toMatch(SNAKE_CASE);
+      for (const word of CONTENT_WORDS) {
+        expect(property.split('_'), `${property} names content`).not.toContain(word);
+      }
+    }
+  });
+
+  it('attaches only what the context declares, with nothing undefined', () => {
+    const properties = exceptionProperties({
+      process: 'api',
+      correlation_id: 'req-1234-abcd',
+      method: 'POST',
+      route: '/api/v1/recordings/[id]/notes',
+      status: 500,
+    });
+    expect(properties).toEqual({
+      process: 'api',
+      correlation_id: 'req-1234-abcd',
+      method: 'POST',
+      route: '/api/v1/recordings/[id]/notes',
+      status: 500,
+    });
+    // A caller that smuggles a field in past the type gets nothing for it.
+    const widened = { process: 'client', note_text: 'private' } as unknown as Parameters<typeof exceptionProperties>[0];
+    expect(exceptionProperties(widened)).toEqual({ process: 'client' });
   });
 });

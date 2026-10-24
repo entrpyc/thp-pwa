@@ -1,5 +1,10 @@
 import type { AnalyticsInstallSource } from '@thp/shared';
-import { type EnvSource, isExternalMocked } from '@thp/shared/mock';
+import type { EnvSource } from '@thp/shared/mock';
+import {
+  ANALYTICS_PRODUCTION_ENVIRONMENT,
+  readAnalyticsConfigNamed,
+  type AnalyticsConfig,
+} from '@thp/shared/observability/analytics-config';
 import { type ShellView, shellPlatformOf } from '@/client/platform';
 
 /**
@@ -19,8 +24,6 @@ import { type ShellView, shellPlatformOf } from '@/client/platform';
  */
 
 export const ANALYTICS_KEY_VARIABLE = 'NEXT_PUBLIC_POSTHOG_KEY';
-/** The one value of `NODE_ENV` under which analytics may be on. */
-export const ANALYTICS_PRODUCTION_ENVIRONMENT = 'production';
 
 /**
  * **Where the browser sends events: a path on the app's own origin, not PostHog's host.**
@@ -40,12 +43,11 @@ export const ANALYTICS_PRODUCTION_ENVIRONMENT = 'production';
 export const ANALYTICS_PROXY_PATH = '/relay';
 export const ANALYTICS_HOST_VARIABLE = 'NEXT_PUBLIC_POSTHOG_HOST';
 
-export interface AnalyticsConfig {
-  /** The project's public key. Public by design: it can only write events. */
-  readonly key: string;
-  /** The ingestion host, with no trailing slash. */
-  readonly host: string;
-}
+/**
+ * The decision itself — on or off, and under which key and host — is made once in `@thp/shared`
+ * for the client, the API and the worker alike; this side only names its own variables.
+ */
+export { ANALYTICS_PRODUCTION_ENVIRONMENT, readAnalyticsConfigNamed, type AnalyticsConfig };
 
 /**
  * `null` means analytics is off: not a production build, mocked, or no key. A key without a host is
@@ -54,26 +56,6 @@ export interface AnalyticsConfig {
  */
 export function readAnalyticsConfig(env: EnvSource): AnalyticsConfig | null {
   return readAnalyticsConfigNamed(env, { key: ANALYTICS_KEY_VARIABLE, host: ANALYTICS_HOST_VARIABLE });
-}
-
-/**
- * The same decision under other variable names — the server reads `POSTHOG_KEY` and
- * `POSTHOG_HOST` at runtime where the client inlines the `NEXT_PUBLIC_` pair at build time, and
- * one reader is what keeps the two sides' answers the same.
- */
-export function readAnalyticsConfigNamed(
-  env: EnvSource,
-  names: { readonly key: string; readonly host: string },
-): AnalyticsConfig | null {
-  if (env['NODE_ENV'] !== ANALYTICS_PRODUCTION_ENVIRONMENT) return null;
-  if (isExternalMocked(env)) return null;
-  const key = (env[names.key] ?? '').trim();
-  if (key === '') return null;
-  const host = (env[names.host] ?? '').trim();
-  if (host === '') {
-    throw new Error(`${names.host} is not set but ${names.key} is — see .env.example.`);
-  }
-  return { key, host: host.replace(/\/+$/, '') };
 }
 
 /**
@@ -121,6 +103,16 @@ const URL_PROPERTY_KEYS = [
   '$ip',
 ];
 
+/**
+ * A Web Vitals metric as the SDK nests it in `$web_vitals` (observability.md § 5.7): the metric
+ * object the `web-vitals` library produced, plus the SDK's own stamps. `entries` are raw
+ * performance entries — an LCP entry names the element and its resource URL, which for artwork is
+ * a signed grant — and `attribution` names elements and URLs by design. Neither is a number the
+ * insight reads, so neither leaves.
+ */
+const WEB_VITALS_METRIC_KEY = /^\$web_vitals_[A-Z]+_event$/;
+const WEB_VITALS_CONTENT_KEYS = ['entries', 'attribution', ...URL_PROPERTY_KEYS];
+
 export function stripUrlProperties<T extends Record<string, unknown>>(properties: T): T {
   const clean: Record<string, unknown> = { ...properties };
   for (const key of URL_PROPERTY_KEYS) delete clean[key];
@@ -131,6 +123,14 @@ export function stripUrlProperties<T extends Record<string, unknown>>(properties
       for (const key of URL_PROPERTY_KEYS) delete innerClean[key];
       clean[envelope] = innerClean;
     }
+  }
+  for (const key of Object.keys(clean)) {
+    if (!WEB_VITALS_METRIC_KEY.test(key)) continue;
+    const metric = clean[key];
+    if (typeof metric !== 'object' || metric === null) continue;
+    const metricClean: Record<string, unknown> = { ...(metric as Record<string, unknown>) };
+    for (const content of WEB_VITALS_CONTENT_KEYS) delete metricClean[content];
+    clean[key] = metricClean;
   }
   return clean as T;
 }

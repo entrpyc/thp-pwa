@@ -18,10 +18,22 @@ const sdk = vi.hoisted(() => ({
   register: vi.fn(),
   identify: vi.fn(),
   capture: vi.fn(),
+  captureException: vi.fn(),
   reset: vi.fn(),
   opt_in_capturing: vi.fn(),
   opt_out_capturing: vi.fn(),
 }));
+
+/** The window's listeners, so a test can fire what the browser would. */
+const listeners = {
+  handlers: new Map<string, (event: unknown) => void>(),
+  add(type: string, handler: (event: unknown) => void) {
+    listeners.handlers.set(type, handler);
+  },
+  fire(type: string, event: unknown) {
+    listeners.handlers.get(type)?.(event);
+  },
+};
 
 vi.mock('posthog-js', () => ({ default: sdk }));
 
@@ -45,6 +57,7 @@ function callOrder(): string[] {
 
 beforeEach(() => {
   for (const fn of Object.values(sdk)) fn.mockReset();
+  listeners.handlers.clear();
   vi.stubEnv('NODE_ENV', 'production');
   vi.stubEnv('NEXT_PUBLIC_POSTHOG_KEY', 'phc_test');
   vi.stubEnv('NEXT_PUBLIC_POSTHOG_HOST', 'https://analytics.example.test');
@@ -52,7 +65,7 @@ beforeEach(() => {
   vi.stubEnv('NEXT_PUBLIC_APP_VERSION', '1.2.3');
   // Enough of a window for the adapter to agree it is in a browser; the install-source reader
   // treats what is missing as a plain browser tab.
-  vi.stubGlobal('window', {});
+  vi.stubGlobal('window', { addEventListener: listeners.add });
 });
 
 afterEach(() => {
@@ -176,5 +189,55 @@ describe('on toggle, without a reload', () => {
     expect(sdk.capture).not.toHaveBeenCalled();
     expect(sdk.identify).not.toHaveBeenCalled();
     silence.mockRestore();
+  });
+});
+
+describe('exceptions, under the same consent', () => {
+  // docs/project/observability.md § 5.6: a stack trace is collected on the same terms as an
+  // event. The listeners go in with the SDK; what they send waits for the preference.
+  it('installs the two window listeners with the SDK, and sends nothing through them before consent', async () => {
+    const adapter = await freshAdapter();
+    expect(adapter.initAnalytics()).toBe(true);
+    expect([...listeners.handlers.keys()].sort()).toEqual(['error', 'unhandledrejection']);
+
+    listeners.fire('error', { error: new Error('before consent') });
+    listeners.fire('unhandledrejection', { reason: new Error('before consent') });
+    adapter.captureClientException(new Error('before consent'));
+    expect(sdk.captureException).not.toHaveBeenCalled();
+  });
+
+  it('reports with the client context once consent is granted, and stops again when it is withdrawn', async () => {
+    const adapter = await freshAdapter();
+    adapter.initAnalytics();
+    adapter.applyAnalyticsPreference(PERSON, false);
+
+    const thrown = new Error('render failed');
+    listeners.fire('error', { error: thrown });
+    expect(sdk.captureException).toHaveBeenCalledWith(thrown, { process: 'client' });
+
+    // A rejection with a non-error reason still becomes an error the tool can group.
+    listeners.fire('unhandledrejection', { reason: 'a string reason' });
+    const [filed] = sdk.captureException.mock.calls[1] ?? [];
+    expect(filed).toBeInstanceOf(Error);
+    expect((filed as Error).message).toBe('a string reason');
+
+    adapter.applyAnalyticsPreference(PERSON, true);
+    listeners.fire('error', { error: new Error('after opt-out') });
+    expect(sdk.captureException).toHaveBeenCalledTimes(2);
+  });
+
+  it('attaches only the declared context, never anything else the caller passes', async () => {
+    const adapter = await freshAdapter();
+    adapter.initAnalytics();
+    adapter.applyAnalyticsPreference(PERSON, false);
+
+    const widened = { route: '/recordings/[id]', note_text: 'private' } as unknown as Parameters<
+      typeof adapter.captureClientException
+    >[1];
+    adapter.captureClientException(new Error('x'), widened);
+    expect(sdk.captureException).toHaveBeenCalledWith(expect.any(Error), {
+      process: 'client',
+      route: '/recordings/[id]',
+    });
   });
 });

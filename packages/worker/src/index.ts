@@ -8,6 +8,7 @@ import {
 import { logger } from '@thp/shared/observability/logger';
 import { createHandlers } from './handlers';
 import { startWorkerLoop } from './loop';
+import { createExceptionReporter } from './observability/exceptions';
 import { createHeartbeat } from './observability/heartbeat';
 import { sweepAbandonedJobs } from './sweep';
 
@@ -72,7 +73,13 @@ export async function main(): Promise<void> {
 
   // The heartbeat is built here, from the environment, and beats from inside the loop
   // (docs/project/observability.md § 2.4): no URL means it says so once and does nothing.
-  const loop = startWorkerLoop({ handlers: createHandlers(), heartbeat: createHeartbeat().beat });
+  // The exception reporter likewise: built from the environment, handed to the loop, and silent
+  // (said once at boot) when no error tracker is configured (observability.md § 5.6).
+  const loop = startWorkerLoop({
+    handlers: createHandlers(),
+    heartbeat: createHeartbeat().beat,
+    exceptions: createExceptionReporter(),
+  });
   installSignalHandlers(loop.stop);
 
   await loop.done;

@@ -44,10 +44,15 @@ const ANALYTICS_API_HOSTS = [
   'api.segment.io',
 ];
 
-/** The files permitted to name the tool, repo-relative and posix: one for the client, one for the server. */
+/**
+ * The files permitted to name the tool, repo-relative and posix: **one per process** — the
+ * client, the API, and the worker, which reports failed jobs to the same tool
+ * (docs/project/observability.md § 5.6). The client adapter is first; a test relies on that.
+ */
 export const ANALYTICS_ADAPTER_FILES: readonly string[] = [
   'packages/web/src/client/observability/analytics.ts',
   'packages/web/src/server/observability/analytics.ts',
+  'packages/worker/src/observability/exceptions.ts',
 ];
 
 /** The vocabulary the rest of the application speaks instead. */

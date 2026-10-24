@@ -7,6 +7,7 @@ import { readBibleSource } from '../../packages/bible/src/env';
 import { readTransportName } from '../../packages/web/src/server/mail/env';
 import { readAnalyticsConfig } from '../../packages/web/src/client/observability/config';
 import { readServerAnalyticsConfig } from '../../packages/web/src/server/observability/analytics-config';
+import { readServerAnalyticsConfig as readWorkerExceptionsConfig } from '../../packages/shared/src/observability/analytics-config';
 
 /**
  * **One switch, four adapters.**
@@ -125,5 +126,9 @@ describe('THP_MOCK_EXTERNAL', () => {
     expect(() => readServerAnalyticsConfig({ NODE_ENV: 'production', POSTHOG_KEY: 'phc_x' })).toThrow(
       'POSTHOG_HOST',
     );
+    // The worker's exception reporter reads the same pair through the shared reader, so the
+    // switch that silences the API's completions silences the worker's reports too.
+    expect(readWorkerExceptionsConfig({ ...configured, [MOCK_EXTERNAL_VARIABLE]: 'true' })).toBeNull();
+    expect(readWorkerExceptionsConfig(configured)).toEqual({ key: 'phc_x', host: 'https://eu.i.posthog.com' });
   });
 });

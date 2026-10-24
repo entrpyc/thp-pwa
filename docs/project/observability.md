@@ -92,8 +92,9 @@ every provider in this codebase already obeys. The other three never see applica
   | :--- | :--- |
   | OpenTelemetry SDK in the API and worker (traces, per-route latency and error histograms) | The heaviest maintenance item in the plan: the OTel JS packages, the `pg` and `undici` instrumentations and the Next.js instrumentation hook all move fast and break across minor versions. None of the seven alerts needs it. If a slow request ever needs explaining, the correlation id in the pm2 logs is still there. |
   | Log shipping to Loki | Cheap and app-code-free, but it existed to feed alerts on error-line volume and to pair with traces. With neither, the pm2 files on the box are enough. |
-  | Nine alerts: API 5xx, API p95, rate-limit probing, pipeline age, pipeline failure, spend ceiling, provider error rate, error-log volume, new exception issue | Each one is a threshold that needs tuning and an e-mail that needs reading. The pipeline and the spend ceiling already have a screen (`/admin/pipeline`); the rest were observability for its own sake at this product's size. |
-  | Client error tracking and Web Vitals in PostHog | Not on the list of questions. Both are one flag away in the SDK and are listed in section 9 for when they are wanted. |
+  | Eight alerts: API 5xx, API p95, rate-limit probing, pipeline age, pipeline failure, spend ceiling, provider error rate, error-log volume | Each one is a threshold that needs tuning and an e-mail that needs reading. The pipeline and the spend ceiling already have a screen (`/admin/pipeline`); the rest were observability for its own sake at this product's size. |
+  | ~~New exception issue~~ | Removed here on 21 October 2026 with the eight above, and **brought back on 24 October 2026** as A8 (section 5.6, section 7). It is the one of the nine that is not a threshold: a *new* issue is a failure the software has never had before, and that is an e-mail worth reading once. |
+  | Client error tracking and Web Vitals in PostHog | Not on the list of questions. Both were one flag away in the SDK; **both turned on 24 October 2026** — error tracking with the server-side reports (section 5.6), Web Vitals when the operator enabled them in the project (section 5.7). |
   | Playback delivery events (first audio, stall, error, grant renewal, seek) | Observability of the player, not a question about members. Deferred to section 9. |
   | Sentry, Grafana Faro, self-hosted Prometheus/Loki/Grafana, self-hosted PostHog, Umami/Plausible/Matomo | Same reasons as the first draft: user limits, RAM on an 8 GB box, ClickHouse, or no typed events. The self-hosted Grafana stack remains the fallback if Grafana Cloud's free tier goes away; Alloy points at a different address and nothing else changes. |
 
@@ -334,6 +335,71 @@ into is a second admin. So:
   test run, development machine or CI job ever reaches PostHog. `tests/guards/mock-switch.test.ts`
   gains the two new adapters.
 
+### 5.6 Exceptions (PostHog error tracking)
+
+Added **24 October 2026**, revisiting two lines of section 2.5. An exception is not an analytics
+event about a member; it is a fact about the software, and the question it answers is *has
+something started failing that never failed before*. It is sent to the same PostHog project, under
+the same key, through the same per-process adapters, and held to the same privacy rule.
+
+**What is reported, and from where.**
+
+| Process | When | Context sent | Adapter |
+| :--- | :--- | :--- | :--- |
+| API | The shared route wrapper's catch block — an error no handler handled, answered as a 500. An `ApiError` is a refusal, not a crash, and is never reported. | `correlation_id`, `method`, `route` (the **pattern**: every UUID, number or token segment is `[id]`), `status` | `packages/web/src/server/observability/analytics.ts` |
+| Worker | A handler's throw in `runJob`, after the row is failed; and a ledger write the loop could not make. The runner's own refusals (no handler, the spend ceiling) are decisions and are not reported. | `correlation_id`, `job_id`, `step`, `attempt`, `recording_id` | `packages/worker/src/observability/exceptions.ts` |
+| Client | `window` `error` and `unhandledrejection`, installed by the adapter when it starts. Under the member's analytics consent like every event: a member who turned analytics off sends no stack traces either. | none beyond the common properties | `packages/web/src/client/observability/analytics.ts` |
+
+Each report carries the error's name, bounded message and stack — what a log line already has —
+plus `process` (`api`, `worker`, `client`) and `app_version`, so an issue is placed on a release.
+The server-side reports are filed under the process's own distinct id (`thp-api`, `thp-worker`)
+with no person profile: **no member is identified by a server crash**, and the correlation id,
+which is already on the response and in the pm2 logs, is what joins the issue to the request.
+
+**Privacy.** The context above is the whole list, held by `exceptionProperties()` in
+`packages/shared/src/observability/exceptions.ts`, which loops over the allowed names rather than
+over its argument, and `tests/guards/analytics-vocabulary.test.ts` refuses a content word among
+them. Never a request body, never a note's text, never a raw URL (`apiRoutePattern` on the server;
+the SDK's URL stamps stripped on the client as for every event). Messages are cut at 500
+characters so a provider's response echoed into one cannot carry a transcript. The mock switch and
+the production-only rule silence all three adapters through one reader
+(`readAnalyticsConfigNamed`, now in `@thp/shared`; `tests/guards/mock-switch.test.ts`).
+
+**The alert** is A8 in section 7: PostHog's *new issue* alert on the project, to the operator's
+e-mail. The other eight alerts cut in 2.5 stay cut; this one came back because it is the only one
+that fires on something new rather than on a threshold.
+
+**Budget.** The free tier allows 100,000 exceptions a month (section 3); a product this size
+produces a handful. A client-side loop that throws on every frame is the one way to spend it, and
+PostHog's per-issue rate limiting is what stops that costing the month.
+
+### 5.7 Web Vitals
+
+Turned on **24 October 2026**, when the operator enabled Web Vitals in the PostHog project. The
+SDK sends one `$web_vitals` event per page load, batched after five seconds, with the four metrics
+(LCP, CLS, FCP, INP) as `$web_vitals_<metric>_value` and the metric object as
+`$web_vitals_<metric>_event`. It is an event like any other: under the member's consent, counted
+against the event budget (one per page view, so section 4.2's room halves and still holds), sent
+through `/relay/`.
+
+Three things the adapter settles that the project setting alone does not:
+
+- **The metric code is in the bundle.** The SDK fetches it from its CDN by default, which
+  `disable_external_dependency_loading` refuses (§ 5.5); the adapter imports
+  `posthog-js/dist/web-vitals` instead, and the SDK finds the callbacks already registered.
+- **No attribution.** `web_vitals_attribution` is empty: attribution names the slow element and
+  its resource URL, and for artwork a resource URL is a signed media grant.
+- **The payload is sanitised.** Each nested metric object carries the page URL, the raw
+  performance entries (an LCP entry names the element and the image URL) and the SDK's session
+  stamps. `stripUrlProperties` removes the URL stamps, `entries` and `attribution` from every
+  `$web_vitals_*_event`, leaving `name`, `value`, `rating`, `delta`, `id` and `navigationType` —
+  numbers and enums, which is what § 5.5 allows. `packages/web/tests/unit/analytics.test.ts`
+  holds it.
+
+PostHog's built-in Web Vitals dashboard reads the `_value` properties and needs nothing else. If
+a slow number ever needs diagnosing, attribution for one metric is one entry in that array, and
+the sanitiser has to be widened deliberately for it — which is the point.
+
 ## 6. Implementation
 
 Four phases, each shippable on its own. Phase 1 is operator work with no code change. The
@@ -347,7 +413,10 @@ outbound ping from the worker.
 | `packages/shared/src/observability/analytics.ts` | The typed event vocabulary and the `track()` signature. No SDK import. |
 | `packages/web/src/client/observability/analytics.ts` | The **only** file that imports `posthog-js`. Initialises with the EU host, identifies, exposes `track()`. |
 | `packages/web/src/client/observability/analytics-provider.tsx` | Mounts the SDK in the member layout, wires `$pageview` with the route pattern to the router. |
-| `packages/web/src/server/observability/analytics.ts` | The **only** file that imports `posthog-node`. Server-side `track()`, used by exactly one caller. |
+| `packages/web/src/server/observability/analytics.ts` | The only file in the API that imports `posthog-node`. Server-side `track()`, used by exactly one caller, and `captureServerException()`, used by exactly one: the route wrapper's catch block (section 5.6). |
+| `packages/shared/src/observability/exceptions.ts` | The shape of an exception report — the allowed context, the route-pattern rule, the message bound. No SDK import. |
+| `packages/shared/src/observability/analytics-config.ts` | The one reader of whether analytics is on, for all three processes. |
+| `packages/worker/src/observability/exceptions.ts` | The only file in the worker that imports `posthog-node`. Reports a failed job; called from `runJob` and the loop. |
 | `packages/db/src/schema.ts`, `packages/db/src/playback.ts`, one migration | The three columns and the `UPDATE … RETURNING` from section 5.3. |
 | `packages/web/src/server/playback/state.ts` | `writePlaybackProgress` accepts the two new fields and sends `playback_completed` on the transition. |
 | `packages/web/src/client/playback/cadence.ts` | Unchanged rule; the listened accumulator lives beside it. |
@@ -501,8 +570,10 @@ the PRD feature that will read it depends on the column, never on the event.
 | A5 | Postgres connections above 80%, or a transaction open longer than 5 min | Grafana | The database is about to refuse connections or is holding a lock. |
 | A6 | Nightly backup or daily archive check missed by 1 h | Healthchecks.io | The one failure nobody notices. |
 | A7 | Restore drill receipt older than 90 days | Healthchecks.io | An unverified backup is not a backup. |
+| A8 | A **new** exception issue in the project | PostHog | Something is failing that never failed before — in the API, the worker or a member's browser (section 5.6). Fires once per new issue, never on volume. |
 
-Seven, and the list grows only by a decision recorded in section 2.5's table moving the other way.
+Eight. A8 is the one decision in section 2.5's table that moved the other way, on 24 October
+2026; the list grows only that way.
 
 ## 8. Operator checklist
 
@@ -541,6 +612,15 @@ Everything the operator does by hand, in order. Estimated at one afternoon.
 12. Import the dashboard and the alert rules from `deploy/observability/`; set the contact point
     to the operator's e-mail; send a test notification.
 13. Create the nine PostHog insights from section 5.4 and pin them to one dashboard.
+13a. In PostHog's *Error tracking* settings, add an alert for **a new issue** to the operator's
+    e-mail (A8). Prove it: with the release deployed, open a recording page and run
+    `throw new Error('A8 proof')` in the browser console as a member who has not turned
+    analytics off — an issue named `A8 proof` appears under *Error tracking* with `process` =
+    `client` and the e-mail arrives. Resolve the issue afterwards.
+13b. Web Vitals is a project setting (*Settings → Web analytics → Web Vitals*, section 5.7) and
+    is already on. Prove the client side: a `$web_vitals` event appears in the live view within
+    ten seconds of a page load, carrying `$web_vitals_LCP_value` and no `$current_url` in or
+    beside its metric objects.
 14. Prove the alerts: stop the worker with `pm2 stop thp-worker`, wait ten minutes, confirm A2 and
     A3 arrived, start it again, confirm both resolved.
 
@@ -553,9 +633,11 @@ Everything the operator does by hand, in order. Estimated at one afternoon.
 
 ## 9. Deferred, with a home
 
-- **Client error tracking and Web Vitals.** Both are one flag in the `posthog-js` adapter. Turned
-  on when a client bug needs chasing or a performance question is asked; they share the event
-  budget, which section 4.2 shows has room.
+- **Web Vitals attribution.** The metrics themselves are on (section 5.7); attribution — which
+  element was slow, which resource — is off, because it names URLs. One metric's attribution is
+  one entry in `web_vitals_attribution` plus a deliberate widening of the sanitiser, when a slow
+  number needs diagnosing. Client error tracking and the metrics, which used to sit here, are on
+  since 24 October 2026 (sections 5.6, 5.7).
 - **Playback delivery events** (time to first audio, stalls, errors, grant renewals, seeks). The
   first draft specified them in full; they are not on the question list. If the 2-second start
   promise in project prd 6.2 is ever doubted, `playback_first_audio` with `start_delay_ms` is the
