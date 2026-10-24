@@ -45,6 +45,7 @@ import {
   signedInAccount,
   type TestAccount,
 } from '../support/accounts';
+import { readWholeInbox } from '../support/inbox';
 import { webpBytes } from '../support/artwork';
 import { logOffset, waitForLogLines } from '../support/log-reader';
 import { mailOffset, waitForMail, type CapturedMail } from '../support/mail';
@@ -149,10 +150,8 @@ async function notesSeenBy(recordingId: string, who: Signed): Promise<readonly N
   return answer.body.notes;
 }
 
-async function inboxOf(who: Signed): Promise<NotificationListPayload> {
-  const answer = await call<NotificationListPayload>(NOTIFICATIONS_PATH, { cookie: who.cookie });
-  if (answer.status !== 200) throw new Error(`inbox refused ${answer.status}`);
-  return answer.body;
+async function inboxOf(who: Signed): Promise<Pick<NotificationListPayload, 'notifications' | 'unreadCount'>> {
+  return readWholeInbox(baseUrl, who.cookie);
 }
 
 async function deleteMe(cookie: string, password: string): Promise<Answer<AccountDeletedPayload>> {

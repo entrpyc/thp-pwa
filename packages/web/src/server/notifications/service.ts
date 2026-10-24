@@ -20,6 +20,7 @@ import {
   ADMIN_REPORTS_PAGE_PATH,
   MAX_ANNOUNCEMENT_BODY_LENGTH,
   MAX_ANNOUNCEMENT_TITLE_LENGTH,
+  NOTIFICATIONS_BEFORE_PARAM,
   NOTIFICATIONS_PAGE_SIZE,
   REPORT_DISMISSED_TITLE,
   REPORT_REASON_LABEL,
@@ -388,13 +389,43 @@ async function raise(
 // Reading — always the caller's own
 // =================================================================================================
 
-/** The centre's list and the bell's count, in one answer ([3.17.2](docs/project/prd.md), 3.17.3). */
-export async function readNotificationsFor(actor: Actor): Promise<NotificationListPayload> {
+const UUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
+
+/**
+ * One page of the centre's list and the bell's count, in one answer ([3.17.2](docs/project/prd.md),
+ * 3.17.3).
+ *
+ * `before` is the {@link NOTIFICATIONS_BEFORE_PARAM} query parameter as the route read it: `null`
+ * or empty for the first page, otherwise the id of the last row the centre holds. One row more than
+ * the page is read, and that row's presence — not the page's length — is what says whether there is
+ * a next page; the extra row is dropped and the last listed row's id becomes the cursor.
+ *
+ * A cursor that is malformed, or that names a row this member does not have, is `invalid_input`:
+ * the parameter was read fine and does not describe anything of the caller's. Another member's id
+ * gets the same answer as a made-up one, so the parameter does not report which ids exist.
+ */
+export async function readNotificationsFor(
+  actor: Actor,
+  before: string | null = null,
+): Promise<NotificationListPayload> {
+  const cursor = before === null || before === '' ? null : before;
+  if (cursor !== null && !UUID.test(cursor)) {
+    throw ApiError.invalidInput(`${NOTIFICATIONS_BEFORE_PARAM} must be the id of one of your notifications.`);
+  }
   const [rows, unreadCount] = await Promise.all([
-    listNotificationsForUser(actor.id, NOTIFICATIONS_PAGE_SIZE),
+    listNotificationsForUser(actor.id, NOTIFICATIONS_PAGE_SIZE + 1, cursor),
     countUnreadNotifications(actor.id),
   ]);
-  return { notifications: rows.map(describeNotification), unreadCount };
+  if (rows === null) {
+    throw ApiError.invalidInput(`${NOTIFICATIONS_BEFORE_PARAM} must be the id of one of your notifications.`);
+  }
+  const page = rows.slice(0, NOTIFICATIONS_PAGE_SIZE);
+  const last = page[page.length - 1];
+  return {
+    notifications: page.map(describeNotification),
+    unreadCount,
+    nextCursor: rows.length > NOTIFICATIONS_PAGE_SIZE && last !== undefined ? last.id : null,
+  };
 }
 
 /**

@@ -34,6 +34,7 @@ import {
 } from '@thp/db';
 import { BLOCKED_WORDS } from '@/server/notes/blocked-words';
 import { closeTestDatabase, createAccount, signIn, type TestAccount } from '../support/accounts';
+import { readWholeInbox } from '../support/inbox';
 
 /**
  * **The member-facing moderation controls over the API** (Apple guideline 1.2, Google Play's UGC
@@ -158,9 +159,7 @@ async function resolve(reportId: string, who: Signed, outcome: string) {
 
 /** This run's notices of one kind in somebody's centre. */
 async function notices(who: Signed, kind: string): Promise<NotificationListPayload['notifications']> {
-  const answer = await call<NotificationListPayload>(NOTIFICATIONS_PATH, { cookie: who.cookie });
-  if (answer.status !== 200) throw new Error(`inbox refused ${answer.status}`);
-  return answer.body.notifications.filter((one) => one.kind === kind);
+  return (await readWholeInbox(baseUrl, who.cookie)).notifications.filter((one) => one.kind === kind);
 }
 
 beforeAll(async () => {

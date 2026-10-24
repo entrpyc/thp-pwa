@@ -17,6 +17,7 @@ import {
 } from '@thp/shared';
 import { createDatabase, insertRecording, setRecordingPublication, type DatabaseHandle } from '@thp/db';
 import { closeTestDatabase, createAccount, signIn, type TestAccount } from '../support/accounts';
+import { readWholeInbox } from '../support/inbox';
 
 /**
  * **Member blocks over the API** — the list a member keeps, and what a block does to notes and
@@ -145,9 +146,8 @@ async function unblock(who: Signed, target: string) {
 
 /** This run's reply and reaction notices in somebody's centre, by who caused them. */
 async function noticesFrom(who: Signed, actor: Signed): Promise<readonly string[]> {
-  const answer = await call<NotificationListPayload>(NOTIFICATIONS_PATH, { cookie: who.cookie });
-  if (answer.status !== 200) throw new Error(`inbox refused ${answer.status}`);
-  return answer.body.notifications
+  const inbox = await readWholeInbox(baseUrl, who.cookie);
+  return inbox.notifications
     .filter((one) => one.kind === 'note_reply' || one.kind === 'note_reaction')
     .filter((one) => one.title.startsWith(actor.displayName))
     .map((one) => `${one.kind}:${one.body}`);

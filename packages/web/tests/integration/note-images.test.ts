@@ -19,6 +19,7 @@ import {
 } from '@thp/shared';
 import { createDatabase, insertRecording, setRecordingPublication, type DatabaseHandle } from '@thp/db';
 import { closeTestDatabase, createAccount, signIn, type TestAccount } from '../support/accounts';
+import { readWholeInbox } from '../support/inbox';
 import { webpBytes } from '../support/artwork';
 
 /**
@@ -177,8 +178,8 @@ describe('a note carries its pictures', () => {
     const reply = await written(other, { text: '', parentId: note.id, images: [{ key: replyKey }] });
     expect(reply.text).toBe('');
     expect(reply.images).toHaveLength(1);
-    const inbox = await call<NotificationListPayload>(NOTIFICATIONS_PATH, { cookie: author.cookie });
-    const notice = inbox.body.notifications.find((one) => one.kind === 'note_reply' && one.body === 'Photo');
+    const inbox = await readWholeInbox(baseUrl, author.cookie);
+    const notice = inbox.notifications.find((one) => one.kind === 'note_reply' && one.body === 'Photo');
     expect(notice).toBeDefined();
 
     // Pictures alone on a top-level note, too.

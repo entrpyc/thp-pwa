@@ -117,10 +117,20 @@ export function notificationReadPath(notificationId: string): string {
 export const NOTIFICATIONS_PAGE_PATH = '/notifications';
 
 /**
- * The most notifications one read answers with. The centre is a list of recent events, not an
- * archive: fifty is a few weeks of a busy group, and older rows stay stored without being listed.
+ * The most notifications one read answers with. The centre opens on the ten most recent and reads
+ * the next ten each time the member scrolls to the bottom ({@link NOTIFICATIONS_BEFORE_PARAM}), so
+ * the first paint is one screen of rows and older rows are paid for only when scrolled to.
  */
-export const NOTIFICATIONS_PAGE_SIZE = 50;
+export const NOTIFICATIONS_PAGE_SIZE = 10;
+
+/**
+ * Query parameter of `GET /api/v1/notifications` — the id of the last notification the caller has
+ * already been shown. The answer is the page that follows it: older rows only. Absent, the answer
+ * is the first page. An id that is not one of the caller's own notifications is `invalid_input`,
+ * which is also the answer for anybody else's id, so the parameter reports nothing about which ids
+ * exist.
+ */
+export const NOTIFICATIONS_BEFORE_PARAM = 'before';
 
 /**
  * One notification, as the member is answered.
@@ -146,13 +156,18 @@ export interface NotificationView {
 }
 
 /**
- * Payload of `GET /api/v1/notifications` — the most recent {@link NOTIFICATIONS_PAGE_SIZE}, newest
- * first, and the unread count **over every row**, not only the ones listed. The bell reads the
- * count; the centre reads the list; one request answers both so the two cannot disagree.
+ * Payload of `GET /api/v1/notifications` — one page of at most {@link NOTIFICATIONS_PAGE_SIZE},
+ * newest first, and the unread count **over every row**, not only the ones listed. The bell reads
+ * the count; the centre reads the list; one request answers both so the two cannot disagree.
+ *
+ * `nextCursor` is what to send as {@link NOTIFICATIONS_BEFORE_PARAM} for the page after this one,
+ * and `null` when this page reaches the member's oldest row. The centre stops asking at `null`
+ * rather than at a short page, so a page that happens to be exactly full is never read as the end.
  */
 export interface NotificationListPayload {
   readonly notifications: readonly NotificationView[];
   readonly unreadCount: number;
+  readonly nextCursor: string | null;
 }
 
 /** Payload of `PUT /api/v1/notifications/{id}/read` — the row as it now reads, and the new count. */

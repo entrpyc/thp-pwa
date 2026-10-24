@@ -1,6 +1,7 @@
 'use client';
 
 import Link from 'next/link';
+import { useEffect, useRef } from 'react';
 import { NOTIFICATION_KIND_LABEL, type NotificationView } from '@thp/shared';
 import { useNotifications } from '../notifications-context';
 import { useBreadcrumbTrail } from '../player-context';
@@ -21,6 +22,10 @@ import styles from './notifications.module.css';
  *    marks it read and nothing else, because there is nowhere else the message lives.
  * 3. **Unread is said by weight and a dot, never by hue.** The one accent on the page is the dot,
  *    which is the same accent the bell's badge carries.
+ * 4. **The list opens on one page and grows as the member scrolls.** A sentinel under the last row
+ *    asks for the next page when it comes into view; the same request sits behind a "Load more"
+ *    button for a keyboard, a screen reader, or a browser without an intersection observer, and the
+ *    button is what says "loading" and "could not load" so the foot of the list is never silent.
  */
 
 function formatWhen(iso: string): string {
@@ -35,7 +40,17 @@ function formatWhen(iso: string): string {
 
 export function NotificationsCentre() {
   useBreadcrumbTrail('Notifications');
-  const { notifications, unreadCount, failed, markRead, markAllRead } = useNotifications();
+  const {
+    notifications,
+    unreadCount,
+    failed,
+    hasMore,
+    loadingMore,
+    moreFailed,
+    loadMore,
+    markRead,
+    markAllRead,
+  } = useNotifications();
 
   return (
     <>
@@ -63,15 +78,65 @@ export function NotificationsCentre() {
       ) : notifications.length === 0 ? (
         <p className={styles.quiet}>Nothing yet. When something happens, it will be listed here.</p>
       ) : (
-        <ul className={styles.rows} aria-label="Notifications">
-          {notifications.map((entry) => (
-            <li className={styles.rowGroup} key={entry.id}>
-              <Row entry={entry} onRead={markRead} />
-            </li>
-          ))}
-        </ul>
+        <>
+          <ul className={styles.rows} aria-label="Notifications">
+            {notifications.map((entry) => (
+              <li className={styles.rowGroup} key={entry.id}>
+                <Row entry={entry} onRead={markRead} />
+              </li>
+            ))}
+          </ul>
+          {hasMore ? (
+            <MoreSentinel loading={loadingMore} failed={moreFailed} onMore={loadMore} />
+          ) : null}
+        </>
       )}
     </>
+  );
+}
+
+/**
+ * The foot of the list while there is more to list. Coming into view asks for the next page, as
+ * does pressing the button; after a page lands the sentinel is still at the foot, so if it is still
+ * in view — a tall screen, a short page — the observer fires again and the list keeps filling.
+ */
+function MoreSentinel({
+  loading,
+  failed,
+  onMore,
+}: {
+  loading: boolean;
+  failed: boolean;
+  onMore: () => Promise<void>;
+}) {
+  const sentinel = useRef<HTMLDivElement | null>(null);
+
+  useEffect(() => {
+    const node = sentinel.current;
+    if (node === null || loading || failed || typeof IntersectionObserver === 'undefined') return;
+    const observer = new IntersectionObserver(
+      (entries) => {
+        if (entries.some((entry) => entry.isIntersecting)) void onMore();
+      },
+      // Start the read a little before the foot is reached, so the next rows are usually there by
+      // the time the member is.
+      { rootMargin: '200px 0px' },
+    );
+    observer.observe(node);
+    return () => observer.disconnect();
+  }, [loading, failed, onMore]);
+
+  return (
+    <div className={styles.more} ref={sentinel}>
+      {failed ? (
+        <p className={styles.quiet} role="alert">
+          Could not load more.
+        </p>
+      ) : null}
+      <button className={styles.loadMore} type="button" disabled={loading} onClick={() => void onMore()}>
+        {loading ? 'Loading more…' : failed ? 'Try again' : 'Load more'}
+      </button>
+    </div>
   );
 }
 
