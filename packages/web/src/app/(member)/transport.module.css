@@ -106,7 +106,7 @@
  */
 .bar::before {
   content: '';
-  order: 2;
+  order: 3;
   flex: 0 0 100%;
   height: 0;
 }
@@ -197,7 +197,7 @@
   display: flex;
   align-items: center;
   gap: var(--space-3);
-  order: 3;
+  order: 4;
   margin-top: var(--space-3);
 }
 
@@ -242,7 +242,7 @@
 
 /* Its own row in both layouts — the one group that never shares a line with anything. */
 .track {
-  order: 5;
+  order: 6;
   flex: 1 0 100%;
   margin-top: var(--space-3);
   display: flex;
@@ -335,23 +335,23 @@
  * below the controls beside it.
  */
 /*
- * The highlight marker and the rate pill, grouped: the marker takes the free space so both sit at
- * the right. On the one-row layout a rule either side of the pair — left of the marker, right of
- * the pill — reads them as one group apart from the controls and the `···`; on two rows the pair
- * is alone at the end of its row and the rules would divide it from nothing, so they are drawn
- * only from the breakpoint up.
+ * The highlight marker and the rate pill. **On the small layout they are apart**: the marker sits
+ * on the first row beside the `···` it is the same kind of control as, and the pill takes the free
+ * space of the second row so it sits at the right of the controls. On the one-row layout they come
+ * back together, and a rule either side of the pair — left of the marker, right of the pill —
+ * reads them as one group apart from the controls and the `···`; on two rows neither is next to
+ * the other, so the rules are drawn only from the breakpoint up.
  */
 .highlightSlot {
-  order: 4;
-  margin-top: var(--space-3);
+  order: 1;
   display: inline-flex;
   align-items: center;
-  margin-left: auto;
 }
 
 .speedSlot {
-  order: 4;
+  order: 5;
   margin-top: var(--space-3);
+  margin-left: auto;
   position: relative;
   display: inline-flex;
   align-items: center;
@@ -455,7 +455,7 @@
  * the dock happens to have room.
  */
 .moreSlot {
-  order: 1;
+  order: 2;
   position: relative;
   display: inline-flex;
 }
@@ -559,6 +559,12 @@
 }
 
 /*
+ * There is no narrower layout below this one: under 640px the bar is the same two rows above the
+ * track at every width — the title row with the marker and `···`, then the controls with the pill
+ * at the right. (It replaced a three-row layout under 425px, at the operator's reading.)
+ */
+
+/*
  * **The bigger layout**, from 641px up — the width at which the title, the controls, the highlight
  * marker, the rate and `···` fit one row without the title's ellipsis eating the whole of it
  * (541px before the marker joined the row; raised by the operator). The break is dropped and the
@@ -572,32 +578,6 @@
  * between the controls and the rate is a target too short to land a thumb on and too short to read
  * a position from.
  */
-/*
- * **The narrowest layout**, under 425px — three rows above the track rather than two: the title
- * row as before; the highlight marker and the rate pill on a second, one at each end; and the
- * controls alone on a third, spread edge to edge so each is as far from its neighbours as the
- * width allows. The controls take the full line, which is what gives them a row of their own
- * without a second break element, and the two groups swap order so the controls sit nearest the
- * track they drive.
- */
-@media (max-width: 424px) {
-  .highlightSlot,
-  .speedSlot {
-    order: 3;
-  }
-
-  .highlightSlot {
-    margin-left: 0;
-    margin-right: auto;
-  }
-
-  .controls {
-    order: 4;
-    flex: 1 0 100%;
-    justify-content: space-between;
-  }
-}
-
 @media (min-width: 641px) {
   .bar::before {
     display: none;
@@ -620,7 +600,9 @@
     border-left: 1px solid var(--color-border);
   }
 
+  /* The title's slot grows into the row, so the pill needs no auto margin to reach the right. */
   .speedSlot {
+    margin-left: 0;
     padding-right: var(--space-3);
     border-right: 1px solid var(--color-border);
   }

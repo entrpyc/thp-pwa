@@ -864,7 +864,10 @@ export function TransportBar() {
           </button>
         </span>
 
-        {/* Highlight this moment (3.15.2, 3.15.4) — the marker on the bar, left of the rate pill. */}
+        {/*
+          Highlight this moment (3.15.2, 3.15.4) — the marker on the bar. Beside the `···` on the
+          small layout's title row, left of the rate pill on the one-row layout; the CSS orders it.
+        */}
         <span className={styles.highlightSlot}>
           <PinMomentTool className={styles.highlight} />
         </span>
