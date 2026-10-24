@@ -2,6 +2,8 @@ import { afterAll, beforeAll, describe, expect, it, inject } from 'vitest';
 import {
   ANNOUNCEMENTS_PATH,
   API_PREFIX,
+  NOTIFICATIONS_BEFORE_PARAM,
+  NOTIFICATIONS_PAGE_SIZE,
   NOTIFICATIONS_PATH,
   NOTIFICATIONS_READ_ALL_PATH,
   REACTIONS,
@@ -21,8 +23,15 @@ import {
   type NotificationsReadAllPayload,
   type SendAnnouncementPayload,
 } from '@thp/shared';
-import { createDatabase, insertRecording, setRecordingPublication, type DatabaseHandle } from '@thp/db';
+import {
+  createDatabase,
+  insertNotification,
+  insertRecording,
+  setRecordingPublication,
+  type DatabaseHandle,
+} from '@thp/db';
 import { closeTestDatabase, createAccount, signIn, type TestAccount } from '../support/accounts';
+import { readWholeInbox } from '../support/inbox';
 
 /**
  * **In-app notifications over HTTP** ([3.17](docs/project/prd.md)) — every event this scope
@@ -104,14 +113,12 @@ async function recording(title: string, published: boolean): Promise<string> {
   return row.id;
 }
 
-async function inbox(who: Signed): Promise<NotificationListPayload> {
-  const answer = await call<NotificationListPayload>(NOTIFICATIONS_PATH, { cookie: who.cookie });
-  if (answer.status !== 200) throw new Error(`inbox refused ${answer.status}`);
-  return answer.body;
+async function inbox(who: Signed): Promise<Pick<NotificationListPayload, 'notifications' | 'unreadCount'>> {
+  return readWholeInbox(baseUrl, who.cookie);
 }
 
 /** This run's rows only — the suite shares a database, so a list is never asserted whole. */
-function ours(list: NotificationListPayload, marker: string): NotificationView[] {
+function ours(list: Pick<NotificationListPayload, 'notifications'>, marker: string): NotificationView[] {
   return list.notifications.filter((one) => one.title.includes(marker) || one.body.includes(marker));
 }
 
@@ -245,6 +252,53 @@ describe('reading and marking', () => {
     expect(all.body.marked).toBe(before.unreadCount - 1);
     expect((await inbox(author)).unreadCount).toBe(0);
   });
+
+  it('answers a page at a time, follows its own cursor to the end, and refuses a cursor that is not mine', async () => {
+    const pager = await signedIn('member', 'notif-pager');
+    const marker = `Page ${RUN}`;
+    const total = NOTIFICATIONS_PAGE_SIZE * 2 + 3;
+    for (let n = 0; n < total; n += 1) {
+      await insertNotification(
+        pager.id,
+        { kind: 'announcement', title: `${marker} ${n}`, body: '', href: null },
+        handle,
+      );
+    }
+
+    // Page by page: every page but the last is exactly full, and the last says there is no more.
+    const seen: string[] = [];
+    let before: string | null = null;
+    let pages = 0;
+    do {
+      const query: string =
+        before === null ? '' : `?${new URLSearchParams({ [NOTIFICATIONS_BEFORE_PARAM]: before })}`;
+      const answer = await call<NotificationListPayload>(`${NOTIFICATIONS_PATH}${query}`, { cookie: pager.cookie });
+      expect(answer.status).toBe(200);
+      pages += 1;
+      if (answer.body.nextCursor !== null) {
+        expect(answer.body.notifications).toHaveLength(NOTIFICATIONS_PAGE_SIZE);
+        expect(answer.body.nextCursor).toBe(answer.body.notifications[NOTIFICATIONS_PAGE_SIZE - 1]?.id);
+      }
+      seen.push(...answer.body.notifications.map((one) => one.id));
+      before = answer.body.nextCursor;
+    } while (before !== null);
+    expect(pages).toBeGreaterThanOrEqual(3);
+    // Nothing listed twice, nothing skipped: every row this test wrote is there exactly once.
+    expect(new Set(seen).size).toBe(seen.length);
+    const whole = await inbox(pager);
+    expect(ours(whole, marker)).toHaveLength(total);
+
+    // A cursor that is not one of my rows — somebody else's, or nobody's — is refused as input.
+    const theirs = ours(await inbox(author), `Marking ${RUN}`)[0];
+    if (theirs === undefined) throw new Error('the earlier publish did not reach the author');
+    for (const cursor of [theirs.id, '00000000-0000-4000-8000-000000000000', 'not-an-id']) {
+      const refused = await call(`${NOTIFICATIONS_PATH}?${NOTIFICATIONS_BEFORE_PARAM}=${cursor}`, {
+        cookie: pager.cookie,
+      });
+      expect(refused.status).toBe(400);
+      expect(refused.code).toBe('invalid_input');
+    }
+  }, 120_000);
 });
 
 describe('what an admin sends', () => {

@@ -33,6 +33,7 @@ import {
   type CreateAccountOptions,
   type TestAccount,
 } from '../support/accounts';
+import { readWholeInbox } from '../support/inbox';
 
 /**
  * **The SOS channel over the API** ([3.16](docs/project/prd.md)), driven through the routes a
@@ -139,9 +140,7 @@ async function read(who: Signed, id: string) {
 }
 
 async function inbox(who: Signed): Promise<readonly NotificationView[]> {
-  const answer = await call<NotificationListPayload>(NOTIFICATIONS_PATH, { cookie: who.cookie });
-  if (answer.status !== 200) throw new Error(`inbox refused ${answer.status}`);
-  return answer.body.notifications;
+  return (await readWholeInbox(baseUrl, who.cookie)).notifications;
 }
 
 function about(notifications: readonly NotificationView[], signalId: string): NotificationView[] {

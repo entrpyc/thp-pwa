@@ -328,16 +328,41 @@ export async function anonymiseNotificationsByActor(
 /**
  * This member's most recent notifications, newest first — the `(user_id, created_at)` index
  * read backwards, and no more than `limit` of them.
+ *
+ * `before` is the id of the last row the caller already holds, and asks for the rows that follow
+ * it in the same order: strictly older by `(created_at, id)`, the pair the order is on, so two rows
+ * written in the same microsecond are split the same way on every page and nothing is listed twice
+ * or skipped between pages. The cursor row is looked up **for this member**; another member's id
+ * finds nothing, which the function answers as `null` rather than as an empty page, so the service
+ * can refuse the cursor instead of pretending the list ended.
  */
 export async function listNotificationsForUser(
   userId: string,
   limit: number,
+  before: string | null = null,
   executor: Executor = getDatabase(),
-): Promise<NotificationRow[]> {
-  const rows = await queryable(executor)
+): Promise<NotificationRow[] | null> {
+  const db = queryable(executor);
+  let olderThanCursor = undefined;
+  if (before !== null) {
+    const anchor = await db
+      .select({ id: notification.id })
+      .from(notification)
+      .where(and(eq(notification.userId, userId), eq(notification.id, before)))
+      .limit(1);
+    if (anchor[0] === undefined) return null;
+    // Compared in SQL against the stored row rather than against a `Date` carried through JS, which
+    // keeps milliseconds only: a row written in the same millisecond as the cursor but a few
+    // microseconds earlier would otherwise fall between two pages.
+    olderThanCursor = sql`(${notification.createdAt}, ${notification.id}) < (
+      select ${notification.createdAt}, ${notification.id} from ${notification}
+      where ${notification.id} = ${before}::uuid and ${notification.userId} = ${userId}::uuid
+    )`;
+  }
+  const rows = await db
     .select(NOTIFICATION_COLUMNS)
     .from(notification)
-    .where(eq(notification.userId, userId))
+    .where(and(eq(notification.userId, userId), olderThanCursor))
     .orderBy(desc(notification.createdAt), desc(notification.id))
     .limit(limit);
   return rows as NotificationRow[];

@@ -92,7 +92,7 @@ describe('a notification round-trips', () => {
       handle,
     );
 
-    const listed = await listNotificationsForUser(me, 10, handle);
+    const listed = (await listNotificationsForUser(me, 10, null, handle)) ?? [];
     expect(listed.map((row) => row.id)).toEqual([second.id, first.id]);
     expect(listed[0]?.readAt).toBeNull();
     expect(listed[0]?.kind).toBe('note_reply');
@@ -106,8 +106,32 @@ describe('a notification round-trips', () => {
     for (let n = 0; n < 3; n += 1) {
       await insertNotification(me, { kind: 'announcement', title: `${n}`, body: '', href: null }, handle);
     }
-    expect((await listNotificationsForUser(me, 2, handle)).length).toBe(2);
+    expect((await listNotificationsForUser(me, 2, null, handle))?.length).toBe(2);
     expect(await countUnreadNotifications(me, handle)).toBe(3);
+  });
+
+  it('pages from a cursor without repeating or skipping, and refuses a cursor that is not mine', async () => {
+    const me = await newUser('pages');
+    const you = await newUser('pages-other');
+    const written: string[] = [];
+    for (let n = 0; n < 5; n += 1) {
+      const row = await insertNotification(me, { kind: 'announcement', title: `${n}`, body: '', href: null }, handle);
+      written.push(row.id);
+    }
+    const yours = await insertNotification(you, { kind: 'announcement', title: 'y', body: '', href: null }, handle);
+    const newestFirst = [...written].reverse();
+
+    const first = (await listNotificationsForUser(me, 2, null, handle)) ?? [];
+    expect(first.map((row) => row.id)).toEqual(newestFirst.slice(0, 2));
+    const second = (await listNotificationsForUser(me, 2, first[1]!.id, handle)) ?? [];
+    expect(second.map((row) => row.id)).toEqual(newestFirst.slice(2, 4));
+    const third = (await listNotificationsForUser(me, 2, second[1]!.id, handle)) ?? [];
+    expect(third.map((row) => row.id)).toEqual(newestFirst.slice(4));
+    expect(await listNotificationsForUser(me, 2, third[0]!.id, handle)).toEqual([]);
+
+    // Somebody else's row is not a cursor into my list, and neither is an id nobody has.
+    expect(await listNotificationsForUser(me, 2, yours.id, handle)).toBeNull();
+    expect(await listNotificationsForUser(me, 2, '00000000-0000-4000-8000-000000000000', handle)).toBeNull();
   });
 });
 
@@ -122,17 +146,17 @@ describe('fan-out', () => {
       handle,
     );
 
-    const mine = (await listNotificationsForUser(active, 50, handle)).filter(
+    const mine = ((await listNotificationsForUser(active, 50, null, handle)) ?? []).filter(
       (row) => row.title === `Hello ${RUN}`,
     );
-    const theirs = (await listNotificationsForUser(asleep, 50, handle)).filter(
+    const theirs = ((await listNotificationsForUser(asleep, 50, null, handle)) ?? []).filter(
       (row) => row.title === `Hello ${RUN}`,
     );
     expect(mine.length).toBe(1);
     expect(mine[0]?.href).toBeNull();
     expect(theirs).toEqual([]);
     // At least the one active account this test made; the rest of the suite's accounts count too.
-    expect(written).toBeGreaterThanOrEqual(1);
+    expect(written.length).toBeGreaterThanOrEqual(1);
   });
 });
 

@@ -4,6 +4,7 @@ import {
   ADMIN_ANNOUNCEMENTS_PAGE_PATH,
   DASHBOARD_PAGE_PATH,
   NOTIFICATIONS_PAGE_PATH,
+  NOTIFICATIONS_PAGE_SIZE,
   ROLE,
   onboardingPagePath,
   recordingPagePath,
@@ -24,7 +25,8 @@ import { closeTestDatabase, createAccount, type TestAccount } from '../support/a
  * The API's half is `notifications.test.ts`; what a fetch cannot answer is what this file asks.
  * Whether the bell shows the count. Whether pressing a row goes where the row says and takes one
  * off the bell. Whether an admin can compose a new feature from the console and a member is then
- * taken into the onboarding by pressing it.
+ * taken into the onboarding by pressing it. Whether the centre opens on one page and fills the next
+ * as the member scrolls to the foot.
  */
 
 const baseUrl = inject('apiBaseUrl');
@@ -47,8 +49,8 @@ afterAll(async () => {
   await closeTestDatabase();
 });
 
-async function signInAs(account: TestAccount): Promise<Page> {
-  const context = await browser.newContext({ viewport: DESKTOP });
+async function signInAs(account: TestAccount, viewport = DESKTOP): Promise<Page> {
+  const context = await browser.newContext({ viewport });
   const page = await context.newPage();
   await page.goto(`${baseUrl}/sign-in`, { waitUntil: 'domcontentloaded' });
   await page.getByLabel('Email').fill(account.email);
@@ -126,6 +128,43 @@ describe('the bell and the centre', () => {
         })
         .toBe(1);
       expect(await page.getByRole('button', { name: 'Mark all as read' }).count()).toBe(0);
+    } finally {
+      await page.context().close();
+    }
+  }, 120_000);
+});
+
+describe('the centre fills as the member scrolls', () => {
+  it('opens on one page, loads the next when the foot comes into view, and stops at the end', async () => {
+    const member = await createAccount(databaseUrl, ROLE.member, `scroll-${RUN}`);
+    const total = NOTIFICATIONS_PAGE_SIZE * 2 + 3;
+    for (let n = 0; n < total; n += 1) {
+      await insertNotification(
+        member.id,
+        { kind: 'announcement', title: `Scroll ${RUN} ${n}`, body: '', href: null },
+        handle,
+      );
+    }
+
+    // Short enough that the foot of the first page is below the fold, so nothing loads unasked.
+    const page = await signInAs(member, { width: 1280, height: 480 });
+    try {
+      await page.goto(`${baseUrl}${NOTIFICATIONS_PAGE_PATH}`, { waitUntil: 'domcontentloaded' });
+      const rows = page.getByRole('list', { name: 'Notifications' }).getByRole('listitem');
+      const more = page.getByRole('button', { name: 'Load more' });
+      await expect.poll(() => rows.count(), { timeout: 30_000 }).toBe(NOTIFICATIONS_PAGE_SIZE);
+      expect(await more.count()).toBe(1);
+
+      // Scrolling the foot into view is the request.
+      await more.scrollIntoViewIfNeeded();
+      await expect.poll(() => rows.count(), { timeout: 30_000 }).toBe(NOTIFICATIONS_PAGE_SIZE * 2);
+
+      // And again, to the end — at which point there is nothing left to ask for. Other suites may
+      // have published to every member meanwhile, so the end is "at least ours", not "exactly".
+      await more.scrollIntoViewIfNeeded();
+      await expect.poll(() => rows.count(), { timeout: 30_000 }).toBeGreaterThanOrEqual(total);
+      await expect.poll(() => more.count(), { timeout: 30_000 }).toBe(0);
+      expect(await page.getByText(`Scroll ${RUN} 0`, { exact: true }).count()).toBe(1);
     } finally {
       await page.context().close();
     }
