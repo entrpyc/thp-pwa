@@ -104,9 +104,13 @@
   min-width: 0;
 }
 
-.fieldRow .attachAdd {
-  height: auto;
+.fieldRow .attachAddWrap {
   align-self: stretch;
+}
+
+.fieldRow .attachAdd {
+  flex: 1 1 auto;
+  height: auto;
 }
 
 .textArea {
@@ -174,6 +178,19 @@
   display: flex;
   flex-wrap: wrap;
   gap: var(--space-3);
+}
+
+/* The visibility pills grouped at one end, Save at the other; stacks when the width runs out. */
+.composerRow {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--space-3);
+}
+
+.composerRow .primary {
+  margin-left: auto;
 }
 
 .primary {
@@ -710,13 +727,17 @@
   gap: var(--space-3);
 }
 
+/* One box for all the pictures, a tone below the composer, so they read as a group under the text. */
 .attachStrip {
   list-style: none;
   margin: 0;
-  padding: 0;
+  padding: var(--space-3);
   display: flex;
   flex-wrap: wrap;
   gap: var(--space-3);
+  background: var(--color-bg-deep);
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-sm);
 }
 
 .attachTile {
@@ -800,9 +821,30 @@
   color: var(--color-text);
 }
 
-.attachAddOff {
+/* The control and the line under it, as one column beside the text box. */
+.attachAddWrap {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: var(--space-1);
+  flex: 0 0 auto;
+}
+
+/* Off, and staying off under the pointer: no hover while the limit is reached or a save is in flight. */
+.attachAddOff,
+.attachAddOff:hover {
   cursor: default;
   opacity: 0.6;
+  border-color: var(--color-border);
+  color: var(--color-text-muted);
+}
+
+.attachLimit {
+  margin: 0;
+  max-width: calc((var(--space-8) + var(--space-3)) * 1.5);
+  font-size: var(--fs-meta);
+  color: var(--color-text-dim);
+  text-align: center;
 }
 
 /* Present for the label and the keyboard, drawn by neither: the label is the control. */
