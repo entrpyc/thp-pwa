@@ -15,7 +15,12 @@ import {
 import { MIN_CHAPTERS, MIN_CHAPTER_MS, TARGET_CHAPTER_MS } from '@thp/shared';
 import { DOMAIN_EVENT_MESSAGE } from '@thp/shared/observability/events';
 import { setLogSink, type LogLine } from '@thp/shared/observability/logger';
-import { GenerationError, fakeGenerator, type Generator } from '../../src/generate';
+import {
+  CHAPTER_PROMPT_VERSION,
+  GenerationError,
+  fakeGenerator,
+  type Generator,
+} from '../../src/generate';
 import { createHandlers } from '../../src/handlers';
 import { runJob } from '../../src/run-job';
 import { createThrowawayDatabase, type ThrowawayDatabase } from '../../../../tests/setup/throwaway-db';
@@ -178,7 +183,10 @@ describe('cutting a teaching into chapters (3.22.1, 3.22.2, 3.22.5)', () => {
     expect(chapters[0]?.title).toBe('The vine');
     expect(chapters[0]?.summary).toBe('Abiding in the vine.');
     // 4.19, 4.17.5 — which model, which version, which prompt, on the list it produced.
-    expect(chapters[0]?.generatedBy).toMatchObject({ model: 'fake', promptVersion: 'chapters-1' });
+    expect(chapters[0]?.generatedBy).toMatchObject({
+      model: 'fake',
+      promptVersion: CHAPTER_PROMPT_VERSION,
+    });
     expect(chapters.every((one) => !one.editedByAdmin)).toBe(true);
   });
 
@@ -336,7 +344,7 @@ describe('what the run records', () => {
     `;
     const meta = rows[0]?.provider_meta ?? {};
     expect(meta['model']).toBe('fake');
-    expect(meta['promptVersion']).toBe('chapters-1');
+    expect(meta['promptVersion']).toBe(CHAPTER_PROMPT_VERSION);
     expect(meta['costUsd']).toBe(0);
     // A prompt going wrong should be visible as a number climbing rather than as lists quietly
     // getting shorter.

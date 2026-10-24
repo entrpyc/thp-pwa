@@ -1324,7 +1324,7 @@ export const chapter = pgTable(
      */
     startMs: integer('start_ms').notNull(),
     title: text('title').notNull(),
-    /** One short paragraph, plain text with line breaks ([4.19](docs/project/prd.md)). */
+    /** One to three sentences, plain text ([4.19](docs/project/prd.md)). */
     summary: text('summary').notNull(),
     /** Which model, which model version and which prompt version produced the list. */
     generatedBy: jsonb('generated_by').notNull(),

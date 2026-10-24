@@ -471,7 +471,7 @@ function ReviewRow({
                 className={styles.textarea}
                 id={`${promptId}-draft`}
                 name={field}
-                rows={item.kind === 'summary' ? 14 : 4}
+                rows={item.kind === 'summary' ? 10 : 4}
                 disabled={busy !== null}
                 value={values[field] ?? ''}
                 onChange={(event) => setValues({ ...values, [field]: event.target.value })}

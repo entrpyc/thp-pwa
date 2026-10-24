@@ -298,7 +298,7 @@ export function ChapterScreen({
           {/*
             The chapter's summary, in the page body where the recording page puts a teaching's
             ([3.22.3](docs/project/prd.md)). Not clamped, unlike a teaching's summary: a chapter's is
-            one short paragraph by definition (4.19), so there is nothing to collapse.
+            one to three sentences by definition (4.19), so there is nothing to collapse.
           */}
           <p className={styles.chapterSummary}>{chapter.summary}</p>
 

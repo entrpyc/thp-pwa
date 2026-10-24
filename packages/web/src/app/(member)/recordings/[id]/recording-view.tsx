@@ -406,7 +406,7 @@ export function RecordingScreen({
             **Description first, then summary.** The description is what an admin wrote *about* this
             teaching — a line or two, chosen, and the same text the library row carries — so it is
             the sentence a member arriving from that row is already half-reading. The summary is
-            generated from what was actually said and is as long as the teaching was; it answers a
+            generated from what was actually said, two paragraphs of it; it answers a
             question the description has just raised rather than the other way round.
 
             Both blocks clamp rather than run: between them they can push the tab strip off the

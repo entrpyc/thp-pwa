@@ -81,9 +81,9 @@ export const MINIMAX_USD_PER_MILLION_OUTPUT = 1.2;
 export const MINIMAX_MAX_OUTPUT_TOKENS = 4096;
 
 /**
- * Enough room for the chapters of a ninety-minute teaching — five titles and five short paragraphs
- * — and no more. Its own ceiling rather than the draft's, because a ceiling sized for a
- * six-paragraph summary says nothing about a list of boundaries.
+ * Enough room for the chapters of a ninety-minute teaching — five titles and five summaries of a
+ * few sentences — and no more. Its own ceiling rather than the draft's, because a ceiling sized for
+ * a two-paragraph summary says nothing about a list of boundaries.
  */
 export const MINIMAX_MAX_CHAPTER_TOKENS = 2048;
 
