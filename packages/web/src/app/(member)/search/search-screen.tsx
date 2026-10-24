@@ -65,6 +65,8 @@ const KIND_LABEL: Record<SearchHit['kind'], string> = {
   segment: 'Recording',
   chapter: 'Chapter',
   note: 'Note',
+  summary: 'Summary',
+  recording: 'Teaching',
 };
 
 type Outcome =

@@ -262,7 +262,15 @@ export async function editRecording(
   // case, and both are checked: the lookup gives the honest refusal, the `null` closes the race.
   if ((await findRecordingById(id)) === null) throw notFound();
 
-  const row = await updateRecordingDetails(id, requested);
+  // The title is part of the recording's own embedding row ([3.10.4](docs/project/prd.md)), so
+  // the write that changes it asks the worker to bring the vectors up to date — in the same
+  // transaction, the way a note's write does, so a saved title is a searchable title with no gap
+  // a crash could widen. Nothing else is re-processed: the step reconciles and replaces one row.
+  const row = await withTransaction(async (tx) => {
+    const updated = await updateRecordingDetails(id, requested, tx);
+    if (updated !== null) await queue().enqueue({ recordingId: id, step: 'embed' }, tx);
+    return updated;
+  });
   if (row === null) throw notFound();
 
   logger.info('recording.edit', {

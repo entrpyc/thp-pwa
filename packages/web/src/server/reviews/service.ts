@@ -141,14 +141,16 @@ export async function resolveReview(
     // *where the approved text goes* — not what the queue is, not what the form renders.
     if (item.kind === 'summary') {
       await publishSummary(item.recordingId, content, tx);
-      // The chain's `embed` ran while this was a draft and embedded nothing for it, because a
-      // draft is nothing a member may find ([3.10.9](docs/project/prd.md)). Now it is published
-      // text, and the step is asked again in the same transaction — so a summary a member can
-      // read is a summary a member will be able to search for, with no gap a crash could widen.
-      await queue().enqueue({ recordingId: item.recordingId, step: 'embed' }, tx);
     } else {
       await setRecordingDescription(item.recordingId, content, tx);
     }
+    // The chain's `embed` ran while this was a draft and embedded nothing for it, because a
+    // draft is nothing a member may find ([3.10.9](docs/project/prd.md)). Now it is published
+    // text — the summary, or the description that is part of the recording's own row
+    // ([3.10.4](docs/project/prd.md)) — and the step is asked again in the same transaction, so
+    // text a member can read is text a member will be able to search for, with no gap a crash
+    // could widen.
+    await queue().enqueue({ recordingId: item.recordingId, step: 'embed' }, tx);
 
     const closed = await closeReviewItem(
       {

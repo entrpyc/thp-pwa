@@ -2578,7 +2578,11 @@ describe('the embedding table, and nothing beside it', () => {
       join pg_type on pg_type.oid = pg_enum.enumtypid
       where pg_type.typname = 'embedding_source' order by pg_enum.enumsortorder
     `;
-    expect(rows.map((row) => row.enumlabel)).toEqual([...EMBEDDING_SOURCE_KINDS]);
+    // Everything but `recording`, which the passage-windows migration adds afterwards; up to this
+    // migration the enum is the declaration as it stood when the table was created.
+    expect(rows.map((row) => row.enumlabel)).toEqual(
+      EMBEDDING_SOURCE_KINDS.filter((kind) => kind !== 'recording'),
+    );
   });
 
   it('adds embed to the pipeline steps after generate_chapters and before the standalone ones', async () => {

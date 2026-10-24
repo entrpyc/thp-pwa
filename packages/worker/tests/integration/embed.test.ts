@@ -8,6 +8,7 @@ import {
   findUnfinishedJob,
   insertNote,
   insertRecording,
+  insertSeries,
   insertUser,
   listChapters,
   listEmbeddingsForRecording,
@@ -16,7 +17,9 @@ import {
   replaceChapters,
   replaceTranscript,
   runMigrations,
+  setRecordingDescription,
   setRecordingPublication,
+  setRecordingSeries,
   setSummaryPublication,
   softDeleteNote,
   updateChapter,
@@ -60,10 +63,19 @@ const SEGMENTS = [
   { startMs: 15_000, endMs: 24_000, text: 'Turn with me to the second chapter.' },
 ] as const;
 
+/** The four sentences are one passage window — short, and inside a minute — so one row holds them all. */
+const WINDOW_TEXT = SEGMENTS.map((one) => one.text).join(' ');
+
 const CHAPTERS = [
   { startMs: 0, title: 'Welcome', summary: 'The greeting.', editedByAdmin: false },
   { startMs: 9000, title: 'Epaphras', summary: 'Who he was.', editedByAdmin: false },
 ] as const;
+
+/**
+ * Forty seconds a line: two lines span eighty, past the window's minute, so every line is a window
+ * of its own. What a test about *many rows* wants, without a transcript of ten thousand words.
+ */
+const ONE_WINDOW_PER_LINE_MS = 40_000;
 
 let target: ThrowawayDatabase;
 let sql: postgres.Sql;
@@ -74,6 +86,7 @@ let restoreSink: () => void;
 
 interface Seeded {
   readonly recordingId: string;
+  readonly title: string;
   readonly segmentIds: readonly string[];
   readonly chapterIds: readonly string[];
 }
@@ -81,10 +94,11 @@ interface Seeded {
 /** A recording with a transcript and chapters, published unless said otherwise. */
 async function teaching(options: { published?: boolean; transcript?: boolean } = {}): Promise<Seeded> {
   made += 1;
+  const title = `Teaching ${made}`;
   const recording = await insertRecording(
     {
       originalMediaKey: `originals/embed-${made}-${Date.now().toString(36)}.mp3`,
-      title: `Teaching ${made}`,
+      title,
       recordedAt: '2026-10-01',
     },
     handle,
@@ -101,7 +115,7 @@ async function teaching(options: { published?: boolean; transcript?: boolean } =
     chapterIds = (await listChapters(recording.id, handle)).map((one) => one.id);
   }
   if (options.published !== false) await setRecordingPublication(recording.id, new Date(), handle);
-  return { recordingId: recording.id, segmentIds, chapterIds };
+  return { recordingId: recording.id, title, segmentIds, chapterIds };
 }
 
 async function member(label: string): Promise<string> {
@@ -163,17 +177,20 @@ beforeEach(() => {
 });
 
 describe('what the step embeds', () => {
-  it('writes one row per segment and per chapter, under the model that produced them', async () => {
+  it('writes one row per passage window, per chapter, and one for the recording, under the model that produced them', async () => {
     const seeded = await teaching();
     const embedder = fakeEmbedder();
     const row = await run(await claimed(seeded.recordingId), embedder);
     expect(row.status).toBe('succeeded');
 
+    // Four short sentences inside twenty-four seconds are one window, keyed on the first — so one
+    // segment row, not four. The transcript is embedded as the passage it is.
     const rows = await rowsOf(seeded.recordingId);
     expect([...rows.keys()].sort()).toEqual(
       [
-        ...seeded.segmentIds.map((id) => `segment:${id}`),
+        `segment:${seeded.segmentIds[0]}`,
         ...seeded.chapterIds.map((id) => `chapter:${id}`),
+        `recording:${seeded.recordingId}`,
       ].sort(),
     );
     for (const one of rows.values()) {
@@ -181,13 +198,20 @@ describe('what the step embeds', () => {
       expect(one.recordingId).toBe(seeded.recordingId);
       expect(one.ownerUserId).toBeNull();
     }
-    // The segment's words, and the chapter's title and summary as one text.
-    expect(rows.get(`segment:${seeded.segmentIds[0]}`)?.text).toBe(SEGMENTS[0].text);
+    // The window's sentences joined, with its extent on the row; the chapter's title and summary
+    // as one text; the recording's title — nothing else is written about it yet.
+    const window = rows.get(`segment:${seeded.segmentIds[0]}`);
+    expect(window?.text).toBe(WINDOW_TEXT);
+    expect(window?.windowFirstSegmentId).toBe(seeded.segmentIds[0]);
+    expect(window?.windowLastSegmentId).toBe(seeded.segmentIds[SEGMENTS.length - 1]);
     expect(rows.get(`chapter:${seeded.chapterIds[0]}`)?.text).toBe('Welcome\n\nThe greeting.');
+    const own = rows.get(`recording:${seeded.recordingId}`);
+    expect(own?.text).toBe(seeded.title);
+    expect(own?.windowFirstSegmentId).toBeNull();
 
-    // The vector stored is the one the embedder answered for those words.
+    // The vector stored is the one the embedder answered for the window's words.
     const vector = await storedVector(seeded.segmentIds[0] as string);
-    const expected = fakeVector(SEGMENTS[0].text);
+    const expected = fakeVector(WINDOW_TEXT);
     expect(vector).toHaveLength(expected.length);
     vector.forEach((value, index) => expect(value).toBeCloseTo(expected[index] as number, 6));
   });
@@ -200,11 +224,38 @@ describe('what the step embeds', () => {
       costUsd: 0,
       inputTokens: 0,
       requests: 1,
-      embedded: SEGMENTS.length + CHAPTERS.length,
+      embedded: 1 + CHAPTERS.length + 1,
       unchanged: 0,
       removed: 0,
+      windows: 1,
       passes: 2,
     });
+  });
+
+  it('writes the recording’s own words — title, description, series and the summary’s opening — and follows their gates', async () => {
+    const seeded = await teaching();
+    await setRecordingDescription(seeded.recordingId, 'A teaching on Colossians.', handle);
+    const series = await insertSeries({ title: 'Colossians', description: null }, handle);
+    await setRecordingSeries(seeded.recordingId, series.id, handle);
+    await publishSummary(seeded.recordingId, 'First paragraph.\n\nSecond paragraph.', handle);
+    await setSummaryPublication(seeded.recordingId, false, handle);
+
+    // A draft summary contributes nothing, as it has no row of its own.
+    await run(await claimed(seeded.recordingId));
+    expect((await rowsOf(seeded.recordingId)).get(`recording:${seeded.recordingId}`)?.text).toBe(
+      `${seeded.title}\n\nA teaching on Colossians.\n\nSeries: Colossians`,
+    );
+
+    // Published, its first paragraph joins the text and only that row is re-embedded for it.
+    await setSummaryPublication(seeded.recordingId, true, handle);
+    const embedder = fakeEmbedder();
+    await run(await claimed(seeded.recordingId), embedder);
+    expect((await rowsOf(seeded.recordingId)).get(`recording:${seeded.recordingId}`)?.text).toBe(
+      `${seeded.title}\n\nA teaching on Colossians.\n\nSeries: Colossians\n\nFirst paragraph.`,
+    );
+    expect(embedder.calls.flat().sort()).toEqual(
+      ['First paragraph.\n\nSecond paragraph.', `${seeded.title}\n\nA teaching on Colossians.\n\nSeries: Colossians\n\nFirst paragraph.`].sort(),
+    );
   });
 
   it('leaves a draft summary out, and embeds it once it is published', async () => {
@@ -270,12 +321,13 @@ describe('what the step embeds', () => {
     expect(row.providerMeta).toMatchObject({ removed: 1, embedded: 0 });
   });
 
-  it('succeeds with no rows for a recording with nothing to embed', async () => {
+  it('writes only the recording’s own row for a teaching with no transcript', async () => {
     const seeded = await teaching({ transcript: false });
     const row = await run(await claimed(seeded.recordingId));
     expect(row.status).toBe('succeeded');
-    expect(await listEmbeddingsForRecording(seeded.recordingId, handle)).toEqual([]);
-    expect(row.providerMeta).toMatchObject({ requests: 0, embedded: 0 });
+    const rows = await listEmbeddingsForRecording(seeded.recordingId, handle);
+    expect(rows.map((one) => [one.sourceKind, one.sourceId])).toEqual([['recording', seeded.recordingId]]);
+    expect(row.providerMeta).toMatchObject({ requests: 1, embedded: 1, windows: 0 });
   });
 
   it('fails the job, spending nothing, when the embedder refuses', async () => {
@@ -337,7 +389,7 @@ describe('reconciliation: running it again (at-least-once dispatch, 3.21.2.4)', 
     };
     const row = await run(await claimed(seeded.recordingId), newer);
 
-    expect(row.providerMeta).toMatchObject({ embedded: SEGMENTS.length + CHAPTERS.length, unchanged: 0 });
+    expect(row.providerMeta).toMatchObject({ embedded: 1 + CHAPTERS.length + 1, unchanged: 0 });
     for (const one of (await rowsOf(seeded.recordingId)).values()) expect(one.model).toBe('fake-embed-2');
   });
 
@@ -347,6 +399,7 @@ describe('reconciliation: running it again (at-least-once dispatch, 3.21.2.4)', 
       { originalMediaKey: `originals/long-${made}.mp3`, title: 'Long', recordedAt: '2026-10-01' },
       handle,
     );
+    // One window per line, plus the recording's own row: sixty-nine windows and one more.
     const lines = EMBED_BATCH_SIZE + 5;
     await replaceTranscript(
       {
@@ -354,9 +407,9 @@ describe('reconciliation: running it again (at-least-once dispatch, 3.21.2.4)', 
         language: 'en',
         confidence: 0.95,
         segments: Array.from({ length: lines }, (_unused, index) => ({
-          startMs: index * 1000,
-          endMs: (index + 1) * 1000,
-          text: `Line ${index + 1}.`,
+          startMs: index * ONE_WINDOW_PER_LINE_MS,
+          endMs: (index + 1) * ONE_WINDOW_PER_LINE_MS,
+          text: `Line ${index + 1} of the long teaching.`,
         })),
       },
       handle,
@@ -365,18 +418,19 @@ describe('reconciliation: running it again (at-least-once dispatch, 3.21.2.4)', 
     const embedder = fakeEmbedder();
     await run(await claimed(recording.id), embedder);
 
-    expect(embedder.calls.map((call) => call.length)).toEqual([EMBED_BATCH_SIZE, 5]);
-    expect((await rowsOf(recording.id)).size).toBe(lines);
+    expect(embedder.calls.map((call) => call.length)).toEqual([EMBED_BATCH_SIZE, 5 + 1]);
+    expect((await rowsOf(recording.id)).size).toBe(lines + 1);
   });
 });
 
 describe('re-embedding after a correction (3.5.5) and a chapter edit (3.22.7)', () => {
-  it('replaces the corrected line’s row and only that row', async () => {
+  it('replaces the rows of the windows that hold the corrected line, and only those', async () => {
     const seeded = await teaching();
     await run(await claimed(seeded.recordingId));
     const before = await rowsOf(seeded.recordingId);
     const corrected = seeded.segmentIds[2] as string;
-    const vectorBefore = await storedVector(corrected);
+    const windowKey = `segment:${seeded.segmentIds[0]}`;
+    const vectorBefore = await storedVector(seeded.segmentIds[0] as string);
 
     await correctSegment(
       {
@@ -389,25 +443,70 @@ describe('re-embedding after a correction (3.5.5) and a chapter edit (3.22.7)', 
       handle,
     );
 
+    // One call, one text: the one window that holds the corrected sentence, re-joined, and
+    // nothing else went to the provider. The row is keyed on the window's first sentence, not on
+    // the sentence that changed.
+    const correctedWindow = WINDOW_TEXT.replace('Epafras', 'Epaphras');
     const embedder = fakeEmbedder();
     const row = await run(await claimed(seeded.recordingId), embedder);
-
-    // One call, one text: the corrected words and nothing else went to the provider.
-    expect(embedder.calls).toEqual([['A word about Epaphras before we begin.']]);
+    expect(embedder.calls).toEqual([[correctedWindow]]);
     expect(row.providerMeta).toMatchObject({ embedded: 1, unchanged: before.size - 1, removed: 0 });
 
     const after = await rowsOf(seeded.recordingId);
     expect(after.size).toBe(before.size);
-    const replaced = after.get(`segment:${corrected}`);
-    expect(replaced?.id).toBe(before.get(`segment:${corrected}`)?.id);
-    expect(replaced?.text).toBe('A word about Epaphras before we begin.');
-    expect(await storedVector(corrected)).not.toEqual(vectorBefore);
+    const replaced = after.get(windowKey);
+    expect(replaced?.id).toBe(before.get(windowKey)?.id);
+    expect(replaced?.text).toBe(correctedWindow);
+    expect(await storedVector(seeded.segmentIds[0] as string)).not.toEqual(vectorBefore);
 
     // Every other row is untouched — same id, same updated_at.
     for (const [key, one] of after) {
-      if (key === `segment:${corrected}`) continue;
+      if (key === windowKey) continue;
       expect(one.updatedAt, key).toEqual(before.get(key)?.updatedAt);
     }
+  });
+
+  it('re-embeds only the windows a corrected line falls in when the transcript has several', async () => {
+    made += 1;
+    const recording = await insertRecording(
+      { originalMediaKey: `originals/windows-${made}.mp3`, title: 'Windows', recordedAt: '2026-10-01' },
+      handle,
+    );
+    // Twelve lines of twenty-five words, five seconds each: windows of six lines stepping by three
+    // (0–5, 3–8, 6–11), so the middle lines sit in two windows and the first three in one.
+    const line = (index: number) =>
+      `${Array.from({ length: 24 }, (_unused, word) => `w${index}x${word}`).join(' ')} end.`;
+    const transcript = await replaceTranscript(
+      {
+        recordingId: recording.id,
+        language: 'en',
+        confidence: 0.95,
+        segments: Array.from({ length: 12 }, (_unused, index) => ({
+          startMs: index * 5_000,
+          endMs: (index + 1) * 5_000,
+          text: line(index),
+        })),
+      },
+      handle,
+    );
+    const ids = (await listSegments(transcript.id, handle)).map((one) => one.id);
+    await run(await claimed(recording.id));
+    const windows = [...(await rowsOf(recording.id)).values()].filter((one) => one.sourceKind === 'segment');
+    expect(windows.map((one) => one.sourceId).sort()).toEqual([ids[0], ids[3], ids[6]].sort());
+
+    // Line 4 is in the first two windows (0–5 and 3–8) and no other. The correction keeps the
+    // word count, so the window boundaries stay where they were — a correction that changed it
+    // could legitimately move the windows after it, and that is the builder's rule, not a leak.
+    const corrected = `${Array.from({ length: 24 }, (_unused, word) => `fixed4x${word}`).join(' ')} end.`;
+    await correctSegment(
+      { id: ids[4] as string, text: corrected, startMs: 20_000, endMs: 25_000, correctedByUserId: await member('admin') },
+      handle,
+    );
+    const embedder = fakeEmbedder();
+    const row = await run(await claimed(recording.id), embedder);
+    expect(row.providerMeta).toMatchObject({ embedded: 2, removed: 0 });
+    expect(embedder.calls.flat()).toHaveLength(2);
+    expect(embedder.calls.flat().every((text) => text.includes('fixed4x0'))).toBe(true);
   });
 
   it('replaces a retitled chapter’s row and ignores a boundary move that changed no words', async () => {
@@ -457,8 +556,11 @@ describe('re-embedding after a correction (3.5.5) and a chapter edit (3.22.7)', 
     const newIds = (await listSegments(transcript.id, handle)).map((one) => one.id);
     await run(await claimed(seeded.recordingId));
 
+    // The two new sentences are one window, keyed on the first of them; the old window's row — keyed
+    // on an id that no longer exists — is gone.
     const segments = [...(await rowsOf(seeded.recordingId)).values()].filter((one) => one.sourceKind === 'segment');
-    expect(segments.map((one) => one.sourceId).sort()).toEqual([...newIds].sort());
+    expect(segments.map((one) => one.sourceId)).toEqual([newIds[0]]);
+    expect(segments[0]?.windowLastSegmentId).toBe(newIds[1]);
     expect(await findEmbeddingsForSources('segment', [...seeded.segmentIds], handle)).toEqual([]);
   });
 });

@@ -168,6 +168,12 @@ function requestUrl(request: TranscriptionRequest): string {
  * speaker on it — which is every paragraph of a response that was not diarised — gives its
  * sentences `null` rather than failing the mapping.
  *
+ * **A sentence keeps its paragraph's index**, too. The provider's grouping is the one thing about
+ * paragraphs that *is* persisted: the passage-window builder prefers to end a window where the
+ * speaker paused, and the paragraph break is where that is recorded. The index is the paragraph's
+ * position in the response, counted over every paragraph including one whose sentences were all
+ * blank, so two sentences with different indexes always had a break between them.
+ *
  * Exported so the mapping is unit-testable against a captured response without a transport in the
  * way — the shape of what comes back is the part most likely to change under us.
  */
@@ -186,7 +192,7 @@ export function mapDeepgramResponse(body: string, language: string): Transcripti
   }
 
   const segments: TranscribedSegment[] = [];
-  for (const paragraph of alternative.paragraphs?.paragraphs ?? []) {
+  (alternative.paragraphs?.paragraphs ?? []).forEach((paragraph, paragraphIndex) => {
     const speaker = typeof paragraph.speaker === 'number' ? paragraph.speaker : null;
     for (const sentence of paragraph.sentences ?? []) {
       const text = (sentence.text ?? '').trim();
@@ -196,9 +202,10 @@ export function mapDeepgramResponse(body: string, language: string): Transcripti
         endMs: Math.round((sentence.end ?? 0) * 1000),
         text,
         speaker,
+        paragraphIndex,
       });
     }
-  }
+  });
 
   const metadata = response.metadata;
   const modelId = metadata?.models?.[0] ?? '';

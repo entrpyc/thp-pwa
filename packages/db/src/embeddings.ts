@@ -33,6 +33,12 @@ export interface EmbeddingRow {
   /** The words the vector was computed from — what a re-run compares against before spending. */
   readonly text: string;
   readonly model: string;
+  /**
+   * The passage window's first and last sentence ids on a `segment` row (`@thp/shared`
+   * `passages.ts`); `null` on every other kind, and on a segment row written before windows.
+   */
+  readonly windowFirstSegmentId: string | null;
+  readonly windowLastSegmentId: string | null;
   readonly createdAt: Date;
   readonly updatedAt: Date;
 }
@@ -46,6 +52,9 @@ export interface NewEmbedding {
   readonly text: string;
   readonly vector: readonly number[];
   readonly model: string;
+  /** The window's extent, on a `segment` row. Omitted or `null` elsewhere — the check constraint insists. */
+  readonly windowFirstSegmentId?: string | null;
+  readonly windowLastSegmentId?: string | null;
 }
 
 /** The columns every read below returns — named, so the vector stays in the table. */
@@ -57,6 +66,8 @@ const EMBEDDING_COLUMNS = {
   ownerUserId: embedding.ownerUserId,
   text: embedding.text,
   model: embedding.model,
+  windowFirstSegmentId: embedding.windowFirstSegmentId,
+  windowLastSegmentId: embedding.windowLastSegmentId,
   createdAt: embedding.createdAt,
   updatedAt: embedding.updatedAt,
 } as const;
@@ -121,6 +132,8 @@ export async function upsertEmbeddings(
         text: row.text,
         embedding: [...row.vector],
         model: row.model,
+        windowFirstSegmentId: row.windowFirstSegmentId ?? null,
+        windowLastSegmentId: row.windowLastSegmentId ?? null,
       })),
     )
     .onConflictDoUpdate({
@@ -131,9 +144,31 @@ export async function upsertEmbeddings(
         text: sql`excluded.text`,
         embedding: sql`excluded.embedding`,
         model: sql`excluded.model`,
+        windowFirstSegmentId: sql`excluded.window_first_segment_id`,
+        windowLastSegmentId: sql`excluded.window_last_segment_id`,
         updatedAt: sql`now()`,
       },
     });
+}
+
+/**
+ * Remove every row of one kind a recording has — what the passage backfill calls before it runs
+ * the embed step, so a library embedded one row per sentence is rebuilt one row per window
+ * rather than reconciled against ids the builder no longer names. Inside the caller's
+ * transaction, so a search never sees the recording with no transcript rows at all.
+ *
+ * Answers how many rows went.
+ */
+export async function deleteEmbeddingsOfKindForRecording(
+  recordingId: string,
+  sourceKind: EmbeddingSourceKind,
+  executor: Executor = getDatabase(),
+): Promise<number> {
+  const deleted = await queryable(executor)
+    .delete(embedding)
+    .where(and(eq(embedding.recordingId, recordingId), eq(embedding.sourceKind, sourceKind)))
+    .returning({ id: embedding.id });
+  return deleted.length;
 }
 
 /**

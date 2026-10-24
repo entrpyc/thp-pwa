@@ -16,13 +16,12 @@ import type { TagRef } from './tags';
  *   is the one caller of the route. {@link SEARCH_BUDGET_PER_HOUR} is the ceiling on that.
  * - **The address is the query.** `?q=` and every filter live in the URL, so a search survives a
  *   reload, can be shared, and the back button returns to the results rather than to an empty box.
- * - **Three kinds of hit, not five.** The embed step writes segments, chapters, notes and the
- *   published summary; the operator chose to leave the summary out of search for this round, and
- *   a series row is never written at all. {@link SEARCHABLE_KINDS} is that decision, read by the
- *   query. Recording titles, descriptions, tags, series titles and scripture citations are not
- *   embedded and so are not searched yet — [3.10.4](docs/project/prd.md) names them and this
- *   round covers the rows that exist; a citation is still found wherever a transcript *says* it
- *   ([3.10.5](docs/project/prd.md)), which the full-text arm is for.
+ * - **Five kinds of hit, not six.** The embed step writes passage windows (`segment`), chapters,
+ *   notes, the published summary and one `recording` row per teaching carrying its title,
+ *   description, series title and the summary's opening; all five are searched
+ *   ([3.10.4](docs/project/prd.md)). {@link SEARCHABLE_KINDS} is that list, read by the query.
+ *   Tags and scripture citations are not embedded; a citation is still found wherever a
+ *   transcript *says* it ([3.10.5](docs/project/prd.md)), which the full-text arm is for.
  * - **Personal mind maps do not exist yet** ([3.8](docs/project/prd.md)), so the "only my notes"
  *   restriction of [3.10.10](docs/project/prd.md) is notes alone. When mind maps arrive they join
  *   {@link SEARCHABLE_KINDS}, the `onlyMine` predicate in `packages/db/src/search.ts` gains a
@@ -63,8 +62,16 @@ export const MAX_SEARCH_QUERY_LENGTH = 200;
  */
 export const SEARCH_RESULT_LIMIT = 20;
 
-/** Candidates taken from each index before the two rankings are fused (project tdd 4.5). */
-export const SEARCH_CANDIDATES_PER_ARM = 40;
+/**
+ * Candidates taken from each index before the two rankings are fused (project tdd 4.5).
+ *
+ * A hundred, up from forty: the fusion rewards a row *both* arms placed, and with forty per arm
+ * over a library of passage windows the two sets rarely overlapped at all — fusion then only
+ * interleaved two independent lists, and the "found by words *and* meaning" signal it exists for
+ * never fired. A hundred is still one index probe per arm and well inside what the HNSW index
+ * answers in a few milliseconds.
+ */
+export const SEARCH_CANDIDATES_PER_ARM = 100;
 
 /**
  * Searches one account may run in an hour. Sixty is one a minute for an hour straight, which is
@@ -74,8 +81,25 @@ export const SEARCH_CANDIDATES_PER_ARM = 40;
  */
 export const SEARCH_BUDGET_PER_HOUR = 60;
 
-/** The kinds a search ranks. See the module comment for why the summary is not among them. */
-export const SEARCHABLE_KINDS = ['segment', 'chapter', 'note'] as const satisfies readonly EmbeddingSourceKind[];
+/**
+ * The kinds a search ranks: passage windows, chapters, notes, the published summary and the
+ * recording's own row (title, description, series, the summary's opening).
+ *
+ * **`series` is not among them, and not for this round.** Nothing in search can return a row
+ * without a recording id — every hit is a teaching to open, the query joins `recording` for its
+ * filters and the visibility rule gates on the recording's publication — and a series hit would
+ * need a destination of its own (the series page), a gate of its own (a series is visible when it
+ * holds a published teaching) and a result row that is not a teaching. The embed step writes no
+ * series row either, so admitting the kind here would admit nothing. When series are embedded,
+ * they join this list together with that read-back and that gate.
+ */
+export const SEARCHABLE_KINDS = [
+  'segment',
+  'chapter',
+  'note',
+  'summary',
+  'recording',
+] as const satisfies readonly EmbeddingSourceKind[];
 
 export type SearchableKind = (typeof SEARCHABLE_KINDS)[number];
 
@@ -198,10 +222,14 @@ export interface SearchHitRecording {
  * row goes ([3.10.7](docs/project/prd.md)): a chapter opens its page, everything else opens the
  * recording at `startMs` without playing ([3.2.12](docs/project/prd.md)).
  *
- * `passage` is the matched text whole — a transcript line, a chapter's title and summary, a note.
- * `before` and `after` are the neighbouring transcript lines when the hit is a segment, so a
- * sentence reads in its context rather than as a fragment; `null` on every other kind, whose
- * passage is already the whole of what was written.
+ * `passage` is the matched text whole — a passage window of the transcript, a chapter's title and
+ * summary, a note, the summary, the recording's own words. `before` and `after` are the transcript
+ * lines either side of the window when the hit is a segment — the sentence before the window's
+ * first and the sentence after its last — so a passage reads in its context rather than as a
+ * fragment; `null` on every other kind, whose passage is already the whole of what was written.
+ *
+ * `startMs` for a segment hit is the window's first non-filler sentence, so the member lands on
+ * content; `null` for a `recording` or `summary` hit, which are about the teaching as a whole.
  */
 export interface SearchHit {
   /** The embedding row's id — stable for a key, meaningless to a member. */
@@ -215,6 +243,11 @@ export interface SearchHit {
   readonly after: string | null;
   /** Which arms placed this row: both is the strongest kind of hit. For a tester, not a member. */
   readonly matchedBy: readonly ('meaning' | 'words')[];
+  /**
+   * Cosine similarity between the query and this row, `1 - distance`, in 0..1 — `null` when the
+   * meaning arm did not place the row (a words-only hit, or a search with no vector at all).
+   */
+  readonly similarity: number | null;
 }
 
 /** Payload of `GET /api/v1/search`. */

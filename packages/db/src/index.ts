@@ -67,6 +67,7 @@ export {
 } from './cross-references';
 export {
   deleteEmbeddingsForSources,
+  deleteEmbeddingsOfKindForRecording,
   findEmbeddingsForSources,
   listEmbeddingsForRecording,
   upsertEmbeddings,

@@ -41,6 +41,15 @@ export interface TranscribedSegment {
    * failure: a response with no speaker information at all maps to segments that are all null.
    */
   readonly speaker: number | null;
+  /**
+   * Which of the provider's **paragraphs** the sentence fell in, as an index that rises through
+   * the transcript. The provider groups sentences into paragraphs at the speaker's pauses, and the
+   * passage-window builder prefers to end a window at one of those breaks.
+   *
+   * `null` when the provider grouped nothing — a fake script with no paragraphs, say — which the
+   * builder reads as "no break information" rather than as a break anywhere.
+   */
+  readonly paragraphIndex: number | null;
 }
 
 /**

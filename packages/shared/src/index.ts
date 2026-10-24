@@ -20,6 +20,7 @@ export * from './notifications';
 export * from './observability/analytics';
 export * from './offline';
 export * from './onboarding';
+export * from './passages';
 export * from './passwords';
 export * from './playback';
 export * from './pipeline';

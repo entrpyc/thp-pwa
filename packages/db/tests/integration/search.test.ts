@@ -6,6 +6,7 @@ import {
   insertRecording,
   insertSeries,
   insertUser,
+  listEmbeddingsForRecording,
   listSegments,
   listChapters,
   publishSummary,
@@ -24,21 +25,31 @@ import {
   type NewEmbedding,
   type SearchFilters,
   type SearchHitRow,
+  type SegmentRow,
 } from '@thp/db';
 import { fakeVector } from '@thp/embed';
-import { EMBEDDING_DIMENSIONS, type EmbeddingSourceKind } from '@thp/shared';
+import {
+  EMBEDDING_DIMENSIONS,
+  SEARCH_CANDIDATES_PER_ARM,
+  buildPassageWindows,
+  recordingMetadataText,
+  type EmbeddingSourceKind,
+  type PassageWindow,
+} from '@thp/shared';
 import { createThrowawayDatabase, type ThrowawayDatabase } from '../../../../tests/setup/throwaway-db';
 
 /**
  * **The search query against a real database** ([3.10](docs/project/prd.md); project tdd 4.5).
  *
- * Rows are written the way the embed step writes them — one per segment, chapter and note, with
- * the fake embedder's vector for the text — and the query is driven with vectors from the same
- * fake, so "the query is the words of this line" is a cosine distance of zero and nothing else is
- * near it. The fake is not semantic, and no test here pretends it is: what is asserted is the
- * *machinery* — that visibility holds inside the top-k, that every filter narrows, that an exact
- * citation is found by its words, and that a row both arms place outranks a row either places
- * alone.
+ * Rows are written the way the embed step writes them — one per **passage window** of the
+ * transcript (`@thp/shared` `passages.ts`), per chapter, per note, for the published summary and
+ * for the recording itself — with the fake embedder's vector for the text, and the query is driven
+ * with vectors from the same fake, so "the query is the words of this passage" is a cosine
+ * distance of zero and nothing else is near it. The fake is not semantic, and no test here
+ * pretends it is: what is asserted is the *machinery* — that visibility holds inside the top-k,
+ * that every filter narrows, that an exact citation is found by its words, that a row both arms
+ * place outranks a row either places alone, and that a window is read back as a passage with the
+ * lines either side of it.
  */
 
 let target: ThrowawayDatabase;
@@ -53,6 +64,13 @@ const NO_FILTERS: SearchFilters = {
   book: null,
   onlyMine: false,
 };
+
+/**
+ * Forty seconds a line, unless a test says otherwise: two lines span more than the window's
+ * minute, so every line is a window of its own and a test about one line is about one row. The
+ * tests about windows proper write ten-second lines and get windows of several.
+ */
+const ONE_WINDOW_PER_LINE_MS = 40_000;
 
 async function member(label: string): Promise<string> {
   made += 1;
@@ -92,26 +110,38 @@ function embeddingOf(
   };
 }
 
-/** A transcript of these lines, ten seconds each, embedded as the step would embed it. */
-async function transcriptOf(recordingId: string, lines: readonly string[]) {
+/** A window's row, as the embed step writes it: keyed on the seek point, carrying its extent. */
+function windowRow(recordingId: string, window: PassageWindow): NewEmbedding {
+  return embeddingOf('segment', window.sourceId, recordingId, window.text, {
+    windowFirstSegmentId: window.firstSegmentId,
+    windowLastSegmentId: window.lastSegmentId,
+  });
+}
+
+/** A transcript of these lines, `lineMs` each, embedded per window as the step would embed it. */
+async function transcriptOf(
+  recordingId: string,
+  lines: readonly string[],
+  lineMs = ONE_WINDOW_PER_LINE_MS,
+): Promise<SegmentRow[]> {
   const transcript = await replaceTranscript(
     {
       recordingId,
       language: 'en',
       confidence: 0.9,
       segments: lines.map((text, index) => ({
-        startMs: index * 10_000,
-        endMs: (index + 1) * 10_000,
+        startMs: index * lineMs,
+        endMs: (index + 1) * lineMs,
         text,
       })),
     },
     handle,
   );
   const segments = await listSegments(transcript.id, handle);
-  await upsertEmbeddings(
-    segments.map((segment) => embeddingOf('segment', segment.id, recordingId, segment.text)),
-    handle,
-  );
+  const windows = buildPassageWindows(segments);
+  if (windows.length > 0) {
+    await upsertEmbeddings(windows.map((window) => windowRow(recordingId, window)), handle);
+  }
   return segments;
 }
 
@@ -126,7 +156,7 @@ async function search(
       queryText,
       queryVector: options.vector === undefined ? fakeVector(queryText) : options.vector,
       filters: { ...NO_FILTERS, ...options.filters },
-      perArm: 40,
+      perArm: SEARCH_CANDIDATES_PER_ARM,
       limit: 20,
     },
     handle,
@@ -186,21 +216,150 @@ describe('visibility holds inside the ranking (3.10.9)', () => {
     expect(hits.filter((hit) => hit.sourceKind === 'segment')).toHaveLength(1);
   });
 
-  it('leaves the published summary out — the kinds searched are segments, chapters and notes', async () => {
+  it('finds the published summary, and never a summary returned to draft', async () => {
     const reader = await member('reader');
     const id = await recording('Summarised teaching', '2026-02-01');
     const words = 'Grace upon grace, the summary says.';
     const summary = await publishSummary(id, words, handle);
     await setSummaryPublication(id, true, handle);
     await upsertEmbeddings([embeddingOf('summary', summary.id, id, words)], handle);
-    const [segment] = await transcriptOf(id, ['Grace upon grace, the teacher says.']);
 
-    // The vector arm answers its nearest rows whatever their distance, so other suites' lines may
-    // trail in; what is asserted is that the summary's words are matched by neither arm.
-    const hits = await search(reader, 'Grace upon grace');
-    expect(hits.map((hit) => hit.sourceId)).toContain(segment?.id);
-    expect(hits.map((hit) => hit.sourceId)).not.toContain(summary.id);
-    expect(hits.some((hit) => (hit.sourceKind as string) === 'summary')).toBe(false);
+    const published = await search(reader, words);
+    expect(published[0]).toMatchObject({
+      sourceKind: 'summary',
+      sourceId: summary.id,
+      recordingId: id,
+      text: words,
+      // A summary is about the teaching as a whole: no moment to seek to, no lines around it.
+      startMs: null,
+      before: null,
+      after: null,
+    });
+
+    // Returned to draft, the row is gated out of both arms before either ranks — the embed step
+    // would also remove it, and this is the moment between the two.
+    await setSummaryPublication(id, false, handle);
+    const byMeaning = await search(reader, words);
+    expect(byMeaning.map((hit) => hit.sourceId)).not.toContain(summary.id);
+    const byWords = await search(reader, 'Grace upon grace', { vector: null });
+    expect(byWords.map((hit) => hit.sourceId)).not.toContain(summary.id);
+    expect([...byMeaning, ...byWords].some((hit) => hit.sourceKind === 'summary' && hit.recordingId === id)).toBe(false);
+  });
+});
+
+describe('passage windows are the unit of a transcript hit (3.10.6)', () => {
+  const reader = () => member('reader');
+
+  /** Ten-second lines: a window holds up to six, steps after three, and an opening filler is kept in the text. */
+  const LINES = [
+    'We open where we left off last week in the gospel.',
+    'Alright?',
+    'The vine is Christ himself.',
+    'The branches are those who abide in him.',
+    'Apart from the vine a branch withers and dies.',
+    'Abiding means remaining in his word daily.',
+    'You see it?',
+    'Next week we continue in chapter sixteen.',
+  ] as const;
+
+  it('finds a concept spread across four sentences as one window, seeking to content, with the lines either side', async () => {
+    const me = await reader();
+    const id = await recording('Windowed teaching', '2026-06-01');
+    const segments = await transcriptOf(id, LINES, 10_000);
+    const windows = buildPassageWindows(segments);
+
+    // Two windows: the first six lines, and lines four to eight, which reach the end — one row
+    // each, and no row for any sentence on its own.
+    const rows = (await listEmbeddingsForRecording(id, handle)).filter((row) => row.sourceKind === 'segment');
+    expect(windows.map((window) => window.segmentIds.length)).toEqual([6, 5]);
+    expect(rows.map((row) => row.sourceId).sort()).toEqual(windows.map((window) => window.sourceId).sort());
+
+    // The four sentences of the concept are one passage, and the hit is the window that holds
+    // them — not any one of them.
+    const concept = windows[0] as PassageWindow;
+    const hits = await search(me, concept.text);
+    const hit = hits.find((one) => one.recordingId === id);
+    expect(hits.indexOf(hit as SearchHitRow)).toBe(0);
+    expect(hit?.sourceKind).toBe('segment');
+    expect(hit?.sourceId).toBe(concept.sourceId);
+    expect(hit?.text).toBe(LINES.slice(0, 6).join(' '));
+    for (const sentence of LINES.slice(2, 6)) expect(hit?.text).toContain(sentence);
+    // The seek point is the window's first sentence, which is content; the context is the line
+    // after the window's *last* sentence — never a line the passage already holds — and nothing
+    // before a window that opens the transcript.
+    expect(hit?.startMs).toBe(0);
+    expect(hit?.before).toBeNull();
+    expect(hit?.after).toBe(LINES[6]);
+  });
+
+  it('seeks past a filler at the window’s start, and reads the context around the whole window', async () => {
+    const me = await reader();
+    const id = await recording('Second-window teaching', '2026-06-02');
+    const segments = await transcriptOf(id, LINES, 10_000);
+    const windows = buildPassageWindows(segments);
+
+    // The second window runs from "The branches" to the end; its context before is the sentence
+    // before its first line, and there is nothing after it. The same lines were planted by the
+    // test above, so the hit is picked out by recording — identical text is an identical vector.
+    const second = windows[1] as PassageWindow;
+    const middle = (await search(me, second.text)).find((hit) => hit.recordingId === id);
+    expect(middle?.sourceId).toBe(segments[3]?.id);
+    expect(middle?.startMs).toBe(30_000);
+    expect(middle?.before).toBe(LINES[2]);
+    expect(middle?.after).toBeNull();
+
+    // A window that opens on a filler is keyed on, and seeks to, the sentence after it; the
+    // filler stays in the passage.
+    const fillerFirst = await recording('Filler-first teaching', '2026-06-03');
+    const tailLines = ['You see it?', 'Next week we continue in chapter sixteen.', 'Bring your Bibles with you then.'];
+    const tailSegments = await transcriptOf(fillerFirst, tailLines, 10_000);
+    const [only] = buildPassageWindows(tailSegments);
+    expect(only?.firstSegmentId).toBe(tailSegments[0]?.id);
+    const tail = (await search(me, only?.text ?? '')).find((hit) => hit.recordingId === fillerFirst);
+    expect(tail?.sourceId).toBe(tailSegments[1]?.id);
+    expect(tail?.startMs).toBe(10_000);
+    expect(tail?.text).toBe(tailLines.join(' '));
+    expect(tail?.before).toBeNull();
+    expect(tail?.after).toBeNull();
+  });
+
+  it('produces no row for a stretch of fillers only', async () => {
+    const me = await reader();
+    const id = await recording('Fillers teaching', '2026-06-03');
+    await transcriptOf(id, ['Alright?', 'You see it?', 'Okay.', 'Amen.'], 10_000);
+    expect((await listEmbeddingsForRecording(id, handle)).filter((row) => row.sourceKind === 'segment')).toEqual([]);
+    const hits = await search(me, 'Alright? You see it?', { vector: null });
+    expect(hits.filter((hit) => hit.recordingId === id)).toEqual([]);
+  });
+});
+
+describe('the recording’s own row (3.10.4)', () => {
+  it('finds a teaching by words that appear only in its title', async () => {
+    const reader = await member('reader');
+    const id = await recording('Epaphras of Colossae', '2026-07-01');
+    await transcriptOf(id, ['A faithful minister is remembered by his prayers.']);
+    const text = recordingMetadataText({
+      title: 'Epaphras of Colossae',
+      description: null,
+      seriesTitle: null,
+      summary: null,
+    });
+    await upsertEmbeddings([embeddingOf('recording', id, id, text)], handle);
+
+    const hits = await search(reader, 'Epaphras Colossae', { vector: null });
+    expect(hits).toHaveLength(1);
+    expect(hits[0]).toMatchObject({
+      sourceKind: 'recording',
+      sourceId: id,
+      recordingId: id,
+      recordingTitle: 'Epaphras of Colossae',
+      text: 'Epaphras of Colossae',
+      startMs: null,
+      before: null,
+      after: null,
+      textRank: 1,
+      vectorRank: null,
+    });
   });
 });
 
@@ -293,7 +452,7 @@ describe('each filter narrows (3.10.8)', () => {
 });
 
 describe('an exact citation is found by its words (3.10.5)', () => {
-  it('matches the line that says it, with its neighbours for context, and no line that does not', async () => {
+  it('matches the passage that says it, with its neighbours for context, and no passage that does not', async () => {
     const reader = await member('reader');
     const id = await recording('Romans teaching', '2026-04-01');
     const segments = await transcriptOf(id, [
@@ -308,7 +467,7 @@ describe('an exact citation is found by its words (3.10.5)', () => {
     expect(hits[0]?.sourceId).toBe(segments[1]?.id);
     const cited = hits[0];
     expect(cited?.textRank).toBe(1);
-    expect(cited?.startMs).toBe(10_000);
+    expect(cited?.startMs).toBe(ONE_WINDOW_PER_LINE_MS);
     expect(cited?.before).toBe('Let us open our Bibles.');
     expect(cited?.after).toBe('All things work together for good.');
     // On words alone, the lines around it are not matches at all.
@@ -324,6 +483,40 @@ describe('an exact citation is found by its words (3.10.5)', () => {
     expect(hits.map((hit) => hit.sourceId)).toEqual([segment?.id]);
     expect(hits[0]?.vectorRank).toBeNull();
     expect(hits[0]?.textRank).toBe(1);
+  });
+});
+
+describe('similarity rides on every vector hit', () => {
+  it('is the cosine similarity for a row the vector arm placed, and null for a words-only hit', async () => {
+    const reader = await member('reader');
+    const id = await recording('Similarity teaching', '2026-08-01');
+    const line = 'Blessed are the merciful, for they shall obtain mercy.';
+    const [segment] = await transcriptOf(id, [line]);
+
+    // The query is the passage's own words: the fake answers the same unit vector, so the
+    // similarity is one, to floating-point.
+    const exact = (await search(reader, line)).find((hit) => hit.sourceId === segment?.id);
+    expect(exact?.vectorRank).toBe(1);
+    expect(exact?.similarity).toBeCloseTo(1, 4);
+
+    // A vector part-way towards the passage: the similarity is what was blended in, and every row
+    // the arm placed carries one in range.
+    const leaning = (await search(reader, line, { vector: blend(fakeVector(line), fakeVector('far away'), 0.8) })).find(
+      (hit) => hit.sourceId === segment?.id,
+    );
+    expect(leaning?.similarity).toBeGreaterThan(0.7);
+    expect(leaning?.similarity).toBeLessThan(1);
+    for (const hit of await search(reader, line)) {
+      if (hit.vectorRank === null) continue;
+      expect(hit.similarity).toBeGreaterThanOrEqual(-1);
+      expect(hit.similarity).toBeLessThanOrEqual(1);
+    }
+
+    // No vector, no similarity: the word arm alone placed the row.
+    const wordsOnly = await search(reader, 'merciful mercy', { vector: null });
+    expect(wordsOnly.map((hit) => hit.sourceId)).toEqual([segment?.id]);
+    expect(wordsOnly[0]?.similarity).toBeNull();
+    expect(wordsOnly[0]?.vectorRank).toBeNull();
   });
 });
 

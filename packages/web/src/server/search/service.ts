@@ -180,6 +180,9 @@ async function describeHit(row: SearchHitRow): Promise<SearchHit> {
     before: row.before,
     after: row.after,
     matchedBy,
+    // The cosine similarity the vector arm measured, carried as it is; `null` when only the word
+    // arm placed the row. The page decides how to show it; nothing here rounds or hides it.
+    similarity: row.similarity,
   };
 }
 

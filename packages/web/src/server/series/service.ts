@@ -7,6 +7,7 @@ import {
   setRecordingSeries,
   setSeriesArtwork,
   updateSeries,
+  withTransaction,
   type SeriesRow,
   type VisibleSeriesRow,
 } from '@thp/db';
@@ -31,6 +32,7 @@ import { UPLOAD_GRANT_SECONDS, mediaStore, mintArtworkKey } from '@thp/media';
 import { actorGuard } from '@/server/api/actor-limits';
 import { ApiError } from '@/server/api/errors';
 import { can, type Actor } from '@/server/auth/policy';
+import { queue } from '@/server/jobs/queue';
 import { audit } from '@/server/observability/audit';
 import { logger } from '@/server/observability/logger';
 import { mintArtworkGrant } from '@/server/series/artwork-grant';
@@ -187,7 +189,15 @@ export async function assignRecordingSeries(
     throw notFound();
   }
 
-  const row = await setRecordingSeries(recordingId, seriesId);
+  // The series title is part of the recording's own embedding row
+  // ([3.10.4](docs/project/prd.md)), so moving a teaching into or out of a study asks the worker
+  // to bring its vectors up to date — in the same transaction, the way a note's write does. The
+  // step reconciles and replaces that one row; nothing else about the teaching is re-processed.
+  const row = await withTransaction(async (tx) => {
+    const updated = await setRecordingSeries(recordingId, seriesId, tx);
+    if (updated !== null) await queue().enqueue({ recordingId, step: 'embed' }, tx);
+    return updated;
+  });
   if (row === null) throw ApiError.notFound('There is no recording with that id.');
 
   logger.info('series.assign', {

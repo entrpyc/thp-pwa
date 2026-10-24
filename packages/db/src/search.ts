@@ -29,28 +29,36 @@ import { embeddingVisibleTo } from './visibility';
  *    4.4. The predicate is imported, never restated: `tests/guards/visibility-boundary` refuses a
  *    second spelling.
  * 2. **Two arms, {@link perArm} candidates each.** The vector arm orders by cosine distance over
- *    the HNSW index; the word arm matches `websearch_to_tsquery` against the same `text` the
- *    vector was computed from, under the GIN expression index of migration 0037, ranked by
- *    `ts_rank_cd`. The configuration is `english` in both places, because an index under one
- *    configuration is not used by a query under another. `websearch_to_tsquery` rather than
- *    `plainto_tsquery` so a member's quotes and minus signs mean what they expect, and so
- *    `Romans 8:28` becomes the three lexemes a transcript that says it also holds
- *    ([3.10.5](docs/project/prd.md)).
+ *    the HNSW index and carries the distance out as a **similarity**, `1 - distance`, so the
+ *    service can say how near a hit was rather than only that it was placed; the word arm matches
+ *    `websearch_to_tsquery` against the same `text` the vector was computed from, under the GIN
+ *    expression index of migration 0037, ranked by `ts_rank_cd`. The configuration is `english`
+ *    in both places, because an index under one configuration is not used by a query under
+ *    another. `websearch_to_tsquery` rather than `plainto_tsquery` so a member's quotes and minus
+ *    signs mean what they expect, and so `Romans 8:28` becomes the three lexemes a transcript that
+ *    says it also holds ([3.10.5](docs/project/prd.md)).
  * 3. **Reciprocal rank fusion**, `1 / (60 + rank)` summed over the arms a row appears in. Rank
  *    fusion rather than score fusion because a cosine distance and a `ts_rank` are not on one
  *    scale and no weighting of them would be honest; sixty is the constant the method was
  *    published with and there is no library here to tune it against yet. A row both arms placed
  *    outranks a row either placed alone, which is what a search for the words a teaching uses
  *    *and* means should do.
- * 4. **Read the sources back**, joined by kind, with the neighbouring transcript lines for a
- *    segment so the passage reads in context ([3.10.6](docs/project/prd.md)).
+ * 4. **Read the sources back**, joined by kind. A `segment` row is a **passage window**
+ *    (`@thp/shared` `passages.ts`): its text is the passage, its `source_id` is the window's first
+ *    non-filler sentence and therefore the seek point, and the context lines are the sentence
+ *    *before the window's first sentence* and the sentence *after its last* — read off the window
+ *    extent the embed step stored on the row, never lines inside the window, which the passage
+ *    already holds ([3.10.6](docs/project/prd.md)). A row written before the extent columns
+ *    existed is read as a window of its one sentence.
  *
  * **The query vector may be absent.** When the provider failed, the caller passes `null` and the
  * word arm runs alone — the degraded answer the operator chose over no answer
- * ([3.10.11](docs/project/prd.md)). The fusion is unchanged; every row simply has one rank.
+ * ([3.10.11](docs/project/prd.md)). The fusion is unchanged; every row simply has one rank and no
+ * similarity.
  *
- * **Kinds.** `SEARCHABLE_KINDS` is read from `@thp/shared`, where the decision to leave the
- * published summary out is argued; this module applies it and does not re-argue it.
+ * **Kinds.** `SEARCHABLE_KINDS` is read from `@thp/shared`, where the decision to leave series out
+ * is argued; this module applies it and does not re-argue it. A `recording` or `summary` hit has
+ * no moment: `start_ms` is null and the member opens the teaching where they left it.
  *
  * **Filters, in words.** A series is the recording's `series_id`. A date range is inclusive over
  * `recorded_at`, the day the teaching was given. A tag matches when it is on the recording *or on
@@ -96,13 +104,18 @@ export interface SearchHitRow {
   readonly seriesId: string | null;
   readonly seriesTitle: string | null;
   readonly seriesArtworkKey: string | null;
+  /** The passage: a window's sentences, a chapter's title and summary, a note, a summary, a recording's own words. */
   readonly text: string;
+  /** The seek point; `null` for a recording or summary hit, and for a note on the whole teaching. */
   readonly startMs: number | null;
-  /** The transcript line before a segment hit; `null` for a first line and for every other kind. */
+  /** The transcript line before a window's first sentence; `null` for a first line and for every other kind. */
   readonly before: string | null;
+  /** The transcript line after a window's last sentence; `null` for a last line and for every other kind. */
   readonly after: string | null;
   readonly vectorRank: number | null;
   readonly textRank: number | null;
+  /** Cosine similarity, `1 - distance`, for a row the vector arm placed; `null` otherwise. */
+  readonly similarity: number | null;
   readonly score: number;
 }
 
@@ -180,18 +193,20 @@ export async function searchEmbeddings(
   const tsVector = sql`to_tsvector(${TEXT_SEARCH_CONFIG}, ${embedding.text})`;
 
   // Without a vector the arm is an empty set, spelled as a query so the fusion below is one shape.
+  // The distance is computed once and carried out as a similarity beside the rank.
   const vectorArm =
     query.queryVector === null
-      ? sql`select null::uuid as id, null::bigint as rank where false`
+      ? sql`select null::uuid as id, null::bigint as rank, null::float8 as similarity where false`
       : sql`select ${embedding.id} as id,
-              row_number() over (order by ${embedding.embedding} <=> ${vectorLiteral(query.queryVector)}::vector) as rank
+              row_number() over (order by ${embedding.embedding} <=> ${vectorLiteral(query.queryVector)}::vector) as rank,
+              (1 - (${embedding.embedding} <=> ${vectorLiteral(query.queryVector)}::vector))::float8 as similarity
             ${candidates}
             order by ${embedding.embedding} <=> ${vectorLiteral(query.queryVector)}::vector
             limit ${query.perArm}`;
 
-  // Normalisation `1` divides the rank by `1 + log(document length)`: a transcript line that *is*
-  // the words outranks a long note that mentions them once, which is the order a member reading
-  // for the moment a thing was said wants. Without it the two tie and the tie breaks on an id.
+  // Normalisation `1` divides the rank by `1 + log(document length)`: a passage that *is* the
+  // words outranks a long note that mentions them once, which is the order a member reading for
+  // the moment a thing was said wants. Without it the two tie and the tie breaks on an id.
   const textRank = sql`ts_rank_cd(${tsVector}, ${tsQuery}, 1)`;
   const textArm = sql`select ${embedding.id} as id,
       row_number() over (order by ${textRank} desc, ${embedding.id}) as rank
@@ -199,6 +214,11 @@ export async function searchEmbeddings(
       and ${tsVector} @@ ${tsQuery}
     order by ${textRank} desc, ${embedding.id}
     limit ${query.perArm}`;
+
+  // The window's ends. A row written before the extent columns existed is a window of one
+  // sentence, so both ends fall back to the source itself.
+  const windowFirst = sql`coalesce(${embedding.windowFirstSegmentId}, ${embedding.sourceId})`;
+  const windowLast = sql`coalesce(${embedding.windowLastSegmentId}, ${embedding.sourceId})`;
 
   const rows = await queryable(executor).execute(sql`
     with by_vector as (${vectorArm}),
@@ -208,6 +228,7 @@ export async function searchEmbeddings(
         coalesce(v.id, w.id) as id,
         v.rank as vector_rank,
         w.rank as text_rank,
+        v.similarity as similarity,
         coalesce(1.0 / (${sql.raw(String(FUSION_K))} + v.rank), 0)
           + coalesce(1.0 / (${sql.raw(String(FUSION_K))} + w.rank), 0) as score
       from by_vector v
@@ -233,26 +254,29 @@ export async function searchEmbeddings(
       after_line.text as after,
       f.vector_rank,
       f.text_rank,
+      f.similarity,
       f.score::float8 as score
     from fused f
     join ${embedding} on ${embedding.id} = f.id
     join ${recording} on ${recording.id} = ${embedding.recordingId}
     left join ${series} on ${series.id} = ${recording.seriesId}
     left join ${segment} on ${embedding.sourceKind} = 'segment' and ${segment.id} = ${embedding.sourceId}
+    left join ${segment} first_line on ${embedding.sourceKind} = 'segment' and first_line.id = ${windowFirst}
+    left join ${segment} last_line on ${embedding.sourceKind} = 'segment' and last_line.id = ${windowLast}
     left join ${chapter} on ${embedding.sourceKind} = 'chapter' and ${chapter.id} = ${embedding.sourceId}
     left join ${note} on ${embedding.sourceKind} = 'note' and ${note.id} = ${embedding.sourceId}
     left join lateral (
       select earlier.text from ${segment} earlier
-      where ${segment.id} is not null
-        and earlier.transcript_id = ${segment.transcriptId}
-        and earlier.start_ms < ${segment.startMs}
+      where first_line.id is not null
+        and earlier.transcript_id = first_line.transcript_id
+        and earlier.start_ms < first_line.start_ms
       order by earlier.start_ms desc limit 1
     ) before_line on true
     left join lateral (
       select later.text from ${segment} later
-      where ${segment.id} is not null
-        and later.transcript_id = ${segment.transcriptId}
-        and later.start_ms > ${segment.startMs}
+      where last_line.id is not null
+        and later.transcript_id = last_line.transcript_id
+        and later.start_ms > last_line.start_ms
       order by later.start_ms asc limit 1
     ) after_line on true
     order by f.score desc, f.vector_rank asc nulls last, f.text_rank asc nulls last, f.id
@@ -275,6 +299,7 @@ export async function searchEmbeddings(
     after: row.after,
     vectorRank: row.vector_rank === null ? null : Number(row.vector_rank),
     textRank: row.text_rank === null ? null : Number(row.text_rank),
+    similarity: row.similarity === null ? null : Number(row.similarity),
     score: Number(row.score),
   }));
 }
@@ -296,6 +321,7 @@ interface RawRow {
   /** `bigint` from `row_number`, which the driver hands back as a string. */
   readonly vector_rank: string | number | null;
   readonly text_rank: string | number | null;
+  readonly similarity: string | number | null;
   readonly score: number | string;
 }
 
