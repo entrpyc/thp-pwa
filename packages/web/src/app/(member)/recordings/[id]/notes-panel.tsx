@@ -145,8 +145,11 @@ export function NotesPanel({
     const landed = styles.landed;
     if (landed === undefined) return;
     card.classList.add(landed);
-    const timer = window.setTimeout(() => card.classList.remove(landed), LANDED_FOR_MS);
-    return () => window.clearTimeout(timer);
+    // Not cleared on cleanup: the list refreshes while the pulse is running — the player's store
+    // taking over from the page's fetch is one such refresh — and a cleanup that cancelled the
+    // timer there would leave the class on the card for good. The card outliving the timer is
+    // the only case; a card that unmounted first is a detached node nobody can see.
+    window.setTimeout(() => card.classList.remove(landed), LANDED_FOR_MS);
   }, [held]);
 
   /*

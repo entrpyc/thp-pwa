@@ -612,26 +612,27 @@
 }
 
 /*
- * The card a highlight landed on: its background blinks slowly to orange twice over two seconds,
- * then the class is taken off and the card is itself again. A blink rather than a held colour,
- * because the eye is drawn by change; slow, because a fast flash reads as an alert.
+ * The card a highlight landed on: its background eases from its own colour to a lighter blue and
+ * back, twice, over two seconds — surface, blue, surface, blue, surface — then the class is taken
+ * off and the card is itself again. A gradual pulse rather than a held colour, because the eye is
+ * drawn by change; slow, because a fast flash reads as an alert. The blue is the operator's.
  */
 .landed {
   animation: landedBlink 1s ease-in-out 2;
 }
 
-/* Only the peak is named, so the blink rises from whatever the card's own background is — the
+/* Only the peak is named, so the pulse rises from whatever the card's own background is — the
    plain surface or a pinned note's raised one — and settles back to it. */
 @keyframes landedBlink {
   50% {
-    background: var(--color-sos-orange);
+    background: #15273b;
   }
 }
 
 @media (prefers-reduced-motion: reduce) {
   .landed {
     animation: none;
-    background: var(--color-sos-orange);
+    background: #15273b;
   }
 }
 
