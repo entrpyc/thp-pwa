@@ -300,22 +300,29 @@ describe('the transcript keeps the current line in view by itself', () => {
       await openTranscript(page);
       const list = page.getByRole('list', { name: 'Transcript' });
       const scrollTop = () => list.evaluate((node) => node.scrollTop);
+      const follow = page.getByRole('switch', { name: 'Follow along' });
+      const followingIs = () => follow.getAttribute('aria-checked');
 
       // Following: a seek deep into the teaching pulls the list down to it on its own.
       await page.getByRole('slider', { name: 'Position' }).fill('105000');
       await expect.poll(scrollTop, { timeout: 30_000 }).toBeGreaterThan(0);
-      // And the auto-scroll did not count as a member scroll — the control stays hidden.
-      expect(await page.getByRole('button', { name: 'Jump to current' }).count()).toBe(0);
+      // And the auto-scroll did not count as a member scroll — the switch stays on.
+      expect(await followingIs()).toBe('true');
+      // Centred: the current row's middle sits at the list's middle, give or take a pixel.
+      const offCentre = await list.evaluate((node) => {
+        const row = node.querySelector('[aria-current="true"]');
+        if (row === null) return Number.NaN;
+        const box = node.getBoundingClientRect();
+        const line = row.getBoundingClientRect();
+        return Math.abs(line.top + line.height / 2 - (box.top + box.height / 2));
+      });
+      expect(offCentre).toBeLessThanOrEqual(1);
 
-      // A member scroll suspends it, and says so.
+      // A member scroll suspends it, and the switch says so.
       await list.evaluate((node) => {
         node.scrollTop = 0;
       });
-      await expect
-        .poll(() => page.getByRole('button', { name: 'Jump to current' }).count(), {
-          timeout: 30_000,
-        })
-        .toBe(1);
+      await expect.poll(followingIs, { timeout: 30_000 }).toBe('false');
 
       // Suspended means suspended: another seek does not drag the view back.
       await page.getByRole('slider', { name: 'Position' }).fill('108000');
@@ -323,38 +330,44 @@ describe('the transcript keeps the current line in view by itself', () => {
 
       // Selecting any line resumes it — the clearest possible signal that they want it keeping up.
       await page.getByRole('button', { name: lineAt(6000), exact: false }).first().click();
-      await expect
-        .poll(() => page.getByRole('button', { name: 'Jump to current' }).count(), {
-          timeout: 30_000,
-        })
-        .toBe(0);
+      await expect.poll(followingIs, { timeout: 30_000 }).toBe('true');
     } finally {
       await page.context().close();
     }
   }, 240_000);
 
-  it('resumes when the Jump to current control is pressed', async () => {
+  it('Jump to current centres the line once and leaves the switch off; the switch resumes', async () => {
     const { page } = await openTeaching(recordingId);
     try {
       await openTranscript(page);
       const list = page.getByRole('list', { name: 'Transcript' });
+      const scrollTop = () => list.evaluate((node) => node.scrollTop);
+      const follow = page.getByRole('switch', { name: 'Follow along' });
+      const followingIs = () => follow.getAttribute('aria-checked');
 
       await page.getByRole('slider', { name: 'Position' }).fill('105000');
-      await expect
-        .poll(() => list.evaluate((node) => node.scrollTop), { timeout: 30_000 })
-        .toBeGreaterThan(0);
+      await expect.poll(scrollTop, { timeout: 30_000 }).toBeGreaterThan(0);
       await list.evaluate((node) => {
         node.scrollTop = 0;
       });
+      await expect.poll(followingIs, { timeout: 30_000 }).toBe('false');
 
-      const jump = page.getByRole('button', { name: 'Jump to current' });
-      await expect.poll(() => jump.count(), { timeout: 30_000 }).toBe(1);
-      await jump.click();
+      // One look at the line playing: the view goes there, the switch stays off.
+      await page.getByRole('button', { name: 'Jump to current' }).click();
+      await expect.poll(scrollTop, { timeout: 30_000 }).toBeGreaterThan(0);
+      expect(await followingIs()).toBe('false');
 
-      await expect
-        .poll(() => list.evaluate((node) => node.scrollTop), { timeout: 30_000 })
-        .toBeGreaterThan(0);
-      expect(await jump.count()).toBe(0);
+      // Off means off: scrolled away again, a seek does not drag the view back…
+      await list.evaluate((node) => {
+        node.scrollTop = 0;
+      });
+      await page.getByRole('slider', { name: 'Position' }).fill('108000');
+      expect(await scrollTop()).toBe(0);
+
+      // …and turning the switch on is what brings it back.
+      await follow.click();
+      await expect.poll(followingIs, { timeout: 30_000 }).toBe('true');
+      await expect.poll(scrollTop, { timeout: 30_000 }).toBeGreaterThan(0);
     } finally {
       await page.context().close();
     }

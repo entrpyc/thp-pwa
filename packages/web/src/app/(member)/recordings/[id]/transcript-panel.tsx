@@ -1,6 +1,7 @@
 'use client';
 
 import { useCallback, useEffect, useRef, useState } from 'react';
+import { Directory, Encoding, Filesystem } from '@capacitor/filesystem';
 import {
   formatTimecode,
   isInChapter,
@@ -10,16 +11,21 @@ import {
   type TranscriptSegmentView,
 } from '@thp/shared';
 import { ApiClientError, apiFetch } from '@/client/api-client';
+import { shellPlatform } from '@/client/platform';
 import { segmentAt } from '@/client/transcript/current-segment';
+import { transcriptFileName, transcriptFileText } from '@/client/transcript/transcript-file';
+import { DownloadIcon } from '../../downloads/download-icon';
 import { momentEntry } from '../../highlights/highlights-lookup';
 import { useHighlights } from '../../highlights/highlights-store';
+import { MarkerIcon } from '../../highlights/marker-icon';
+import pins from '../../highlights/highlights.module.css';
 import { usePlayer } from '../../player-context';
 import styles from './transcript.module.css';
 
 /**
  * **The `Transcript` tab of `pages/recording.png`** — the transcript a member reads along with.
  *
- * Four behaviours, and each is a line in the reference or a sentence in
+ * Its behaviours, and each is a line in the reference or a sentence in
  * [3.5.3](docs/project/prd.md)–[3.5.4](docs/project/prd.md):
  *
  * - **The line being spoken is highlighted**, driven off the player context's `currentMs` — the
@@ -29,10 +35,18 @@ import styles from './transcript.module.css';
  *   and operable from a keyboard, and it calls the player's `seekToMs` rather than touching the
  *   element. It does **not** start playback: a member reading a paused teaching has not asked for
  *   sound, which is the rule opening a recording already follows.
- * - **The view follows the highlight, and stops fighting a member who scrolls.** A member-initiated
- *   scroll suspends the following and reveals *Jump to current*; pressing that, or selecting any
- *   line, resumes it. Scrolling this component did itself does not count as a member scroll — see
- *   {@link scrollToCurrent}.
+ * - **A header above the lines holds the reading controls.** *Follow along* is a switch: on, the
+ *   view keeps the highlighted row centred; a member-initiated scroll turns it off, because a
+ *   member who has scrolled away has said where they want to be and a view that dragged them back
+ *   would be fighting them. Selecting any line turns it back on. *Jump to current* beside it
+ *   centres the highlighted row once, and leaves the switch where it was — a member who has
+ *   stopped following and wants one look at the line playing has not asked to be followed again.
+ *   Scrolling this component did itself does not count as a member scroll — see
+ *   {@link scrollToCurrent}. At the header's far end, *Download* hands the lines over as a file.
+ * - **Every line carries the highlighter** ([3.15.2](docs/project/prd.md)): the same marker the
+ *   transport's tool and the chapter header draw, pinning that line's start, which the server snaps
+ *   to the line itself — so a line pinned here and the same line pinned while it played are one
+ *   entry, and the row reads highlighted the moment the store answers.
  * - **An admin corrects a line in place** ([3.5.5](docs/project/prd.md)) and is then offered a
  *   summary and a set of scripture references built on the corrected words
  *   ([3.5.6](docs/project/prd.md), scope prd 3.1.10). The offer never fires by
@@ -65,12 +79,13 @@ export function TranscriptPanel({
   chapterId?: string | null;
 }) {
   const player = usePlayer();
-  const { highlights } = useHighlights();
+  const { highlights, busy, toggle } = useHighlights();
   const listRef = useRef<HTMLOListElement>(null);
   const [following, setFollowing] = useState(true);
   const [editing, setEditing] = useState<string | null>(null);
   const [offered, setOffered] = useState(false);
   const [failure, setFailure] = useState<string | null>(null);
+  const [saved, setSaved] = useState<string | null>(null);
 
   /**
    * The scroll position this component last set.
@@ -113,14 +128,21 @@ export function TranscriptPanel({
   const currentId = current?.id ?? null;
 
   /**
-   * A line the member has highlighted reads in the highlights orange ([3.15.2](docs/project/prd.md)).
-   * The entry covers the line it was snapped to, so asking about the line's start is asking
-   * whether that line is one of theirs — the same question the transport's marker asks.
+   * A line the member has highlighted reads in the highlights orange ([3.15.2](docs/project/prd.md)),
+   * and its marker reads pressed. The entry covers the line it was snapped to, so asking about the
+   * line's start is asking whether that line is one of theirs — the same question the transport's
+   * marker asks, and the entry the row's marker removes when pressed again.
    */
-  const highlighted = (segment: TranscriptSegmentView): boolean =>
-    highlights !== null && momentEntry(highlights, recordingId, segment.startMs) !== null;
+  const entryOf = (segment: TranscriptSegmentView) =>
+    highlights === null ? null : momentEntry(highlights, recordingId, segment.startMs);
 
-  /** Centre the highlighted row in the list, without scrolling the page around it. */
+  /**
+   * Centre the highlighted row in the list, without scrolling the page around it.
+   *
+   * The row's place is measured against the list's own box rather than read off `offsetTop`: that
+   * property answers relative to the nearest *positioned* ancestor, which the list is not, so it
+   * described the row's place on the page and the view landed wherever that happened to be.
+   */
   const scrollToCurrent = useCallback((): void => {
     const list = listRef.current;
     if (list === null || currentId === null) return;
@@ -129,7 +151,8 @@ export function TranscriptPanel({
 
     // Written rather than `scrollIntoView`, because that also scrolls every ancestor — including
     // the page — and the transcript following itself must not move the rest of the screen.
-    list.scrollTop = row.offsetTop - list.clientHeight / 2 + row.clientHeight / 2;
+    const rowTop = row.getBoundingClientRect().top - list.getBoundingClientRect().top + list.scrollTop;
+    list.scrollTop = rowTop - (list.clientHeight - row.clientHeight) / 2;
     ourScrollTop.current = list.scrollTop;
   }, [currentId]);
 
@@ -157,6 +180,50 @@ export function TranscriptPanel({
     [player],
   );
 
+  /**
+   * Hand the lines on screen over as a file — the chapter's on the chapter page, the teaching's on
+   * the recording page, named for whichever it is.
+   *
+   * In a browser an anchor with `download` is the whole mechanism. Inside the store shell a WebView
+   * does nothing with such an anchor, so the file is written to the app's Documents through the
+   * same plugin the offline downloads use, and the line below the header says where it went —
+   * there is no save dialog to say it for us.
+   */
+  const download = useCallback(async (): Promise<void> => {
+    if (segments === null) return;
+    const text = transcriptFileText(segments);
+    const name = transcriptFileName(player.loaded?.title ?? '', scope?.title ?? null);
+    setFailure(null);
+    setSaved(null);
+    try {
+      if (shellPlatform() !== null) {
+        await Filesystem.writeFile({
+          path: name,
+          data: text,
+          directory: Directory.Documents,
+          encoding: Encoding.UTF8,
+          recursive: true,
+        });
+        setSaved(`Saved to your Documents as ${name}.`);
+        return;
+      }
+      const url = URL.createObjectURL(new Blob([text], { type: 'text/plain;charset=utf-8' }));
+      try {
+        const anchor = document.createElement('a');
+        anchor.href = url;
+        anchor.download = name;
+        anchor.rel = 'noopener';
+        anchor.click();
+      } finally {
+        // The click has handed the URL to the browser's downloader; revoking on the next tick
+        // keeps the blob alive long enough for it to be read.
+        setTimeout(() => URL.revokeObjectURL(url), 0);
+      }
+    } catch {
+      setFailure('Could not save the transcript. Try again in a moment.');
+    }
+  }, [segments, player.loaded?.title, scope?.title]);
+
   if (segments === null) {
     return <p className={styles.quiet}>Loading the transcript…</p>;
   }
@@ -177,63 +244,109 @@ export function TranscriptPanel({
         />
       ) : null}
 
-      {following ? null : (
+      <div className={styles.header}>
+        <div className={styles.headerGroup}>
+          <button
+            className={styles.switch}
+            type="button"
+            role="switch"
+            aria-checked={following}
+            onClick={() => setFollowing((on) => !on)}
+          >
+            <span className={styles.switchKnob} aria-hidden="true" />
+            <span>Follow along</span>
+          </button>
+          <button
+            className={styles.jump}
+            type="button"
+            disabled={currentId === null}
+            onClick={scrollToCurrent}
+          >
+            Jump to current
+          </button>
+        </div>
         <button
-          className={styles.jump}
+          className={styles.download}
           type="button"
-          onClick={() => {
-            setFollowing(true);
-            scrollToCurrent();
-          }}
+          aria-label="Download transcript"
+          onClick={() => void download()}
         >
-          Jump to current
+          <DownloadIcon held={false} size={18} />
+          <span>Download</span>
         </button>
+      </div>
+
+      {saved === null ? null : (
+        <p className={styles.quiet} role="status">
+          {saved}
+        </p>
       )}
 
       <ol className={styles.lines} ref={listRef} onScroll={onScroll} aria-label="Transcript">
-        {segments.map((segment) => (
-          <li key={segment.id} className={styles.line}>
-            {editing === segment.id ? (
-              <CorrectionForm
-                recordingId={recordingId}
-                segment={segment}
-                onCancel={() => setEditing(null)}
-                onSaved={(corrected) => {
-                  player.applyCorrection(corrected);
-                  setEditing(null);
-                  setFailure(null);
-                  // The offer appears **after** the correction is saved, never before.
-                  setOffered(true);
-                }}
-                onFailure={setFailure}
-              />
-            ) : (
-              <>
-                <button
-                  className={styles.lineButton}
-                  type="button"
-                  data-segment={segment.id}
-                  data-highlighted={highlighted(segment) ? 'true' : undefined}
-                  aria-current={segment.id === currentId ? 'true' : undefined}
-                  onClick={() => select(segment)}
-                >
-                  <span className={styles.lineTime}>{formatTimecode(segment.startMs)}</span>
-                  <span className={styles.lineText}>{segment.text}</span>
-                </button>
-                {canCorrect ? (
+        {segments.map((segment) => {
+          const entry = entryOf(segment);
+          const pinned = entry !== null;
+          const at = formatTimecode(segment.startMs);
+          return (
+            <li key={segment.id} className={styles.line}>
+              {editing === segment.id ? (
+                <CorrectionForm
+                  recordingId={recordingId}
+                  segment={segment}
+                  onCancel={() => setEditing(null)}
+                  onSaved={(corrected) => {
+                    player.applyCorrection(corrected);
+                    setEditing(null);
+                    setFailure(null);
+                    // The offer appears **after** the correction is saved, never before.
+                    setOffered(true);
+                  }}
+                  onFailure={setFailure}
+                />
+              ) : (
+                <>
                   <button
-                    className={styles.correct}
+                    className={styles.lineButton}
                     type="button"
-                    aria-label={`Correct the line at ${formatTimecode(segment.startMs)}`}
-                    onClick={() => setEditing(segment.id)}
+                    data-segment={segment.id}
+                    data-highlighted={pinned ? 'true' : undefined}
+                    aria-current={segment.id === currentId ? 'true' : undefined}
+                    onClick={() => select(segment)}
                   >
-                    Correct
+                    <span className={styles.lineTime}>{at}</span>
+                    <span className={styles.lineText}>{segment.text}</span>
                   </button>
-                ) : null}
-              </>
-            )}
-          </li>
-        ))}
+                  <button
+                    className={`${pins.pin} ${styles.linePin}`}
+                    type="button"
+                    aria-pressed={pinned}
+                    aria-label={`${pinned ? 'Remove highlight from' : 'Highlight'} the line at ${at}`}
+                    disabled={highlights === null || busy}
+                    onClick={() =>
+                      void toggle(entry, {
+                        kind: 'segment',
+                        recordingId,
+                        positionMs: segment.startMs,
+                      })
+                    }
+                  >
+                    <MarkerIcon marked={pinned} size={16} />
+                  </button>
+                  {canCorrect ? (
+                    <button
+                      className={styles.correct}
+                      type="button"
+                      aria-label={`Correct the line at ${at}`}
+                      onClick={() => setEditing(segment.id)}
+                    >
+                      Correct
+                    </button>
+                  ) : null}
+                </>
+              )}
+            </li>
+          );
+        })}
       </ol>
     </div>
   );
