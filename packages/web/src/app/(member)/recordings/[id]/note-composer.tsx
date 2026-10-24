@@ -275,35 +275,6 @@ export function NoteComposer({
         </div>
       </div>
 
-      {/*
-        A labelled two-state control rather than a colour difference (5.1.3): whether the group will
-        read this is the one thing about a note that cannot be undone, so it is spelled out in words
-        and again in the line beneath.
-      */}
-      <div className={styles.visibility} role="group" aria-label="Who can see this note">
-        <button
-          className={styles.visibilityOption}
-          type="button"
-          aria-pressed={visibility === 'private'}
-          onClick={() => setVisibility('private')}
-        >
-          Private
-        </button>
-        <button
-          className={styles.visibilityOption}
-          type="button"
-          aria-pressed={visibility === 'public'}
-          onClick={() => setVisibility('public')}
-        >
-          Public
-        </button>
-      </div>
-      <p className={styles.visibilityHint}>
-        {visibility === 'private'
-          ? 'Only you will see this.'
-          : 'Everyone in the group will see this at this moment.'}
-      </p>
-
       <CharacterCount count={count} />
 
       <ImageAttach attachments={attachments} disabled={saving} />
@@ -316,7 +287,31 @@ export function NoteComposer({
         </p>
       )}
 
-      <div className={styles.composerActions}>
+      {/*
+        A labelled two-state control rather than a colour difference (5.1.3): whether the group will
+        read this is the one thing about a note that cannot be undone, so it is spelled out in words,
+        and again in the line beneath when the choice is the public one. Save sits on the same row,
+        at the far end, so the choice and the act are read together.
+      */}
+      <div className={styles.composerRow}>
+        <div className={styles.visibility} role="group" aria-label="Who can see this note">
+          <button
+            className={styles.visibilityOption}
+            type="button"
+            aria-pressed={visibility === 'private'}
+            onClick={() => setVisibility('private')}
+          >
+            Private
+          </button>
+          <button
+            className={styles.visibilityOption}
+            type="button"
+            aria-pressed={visibility === 'public'}
+            onClick={() => setVisibility('public')}
+          >
+            Public
+          </button>
+        </div>
         <button
           className={styles.primary}
           type="submit"
@@ -325,6 +320,9 @@ export function NoteComposer({
           {saving ? 'Saving…' : 'Save note'}
         </button>
       </div>
+      {visibility === 'public' ? (
+        <p className={styles.visibilityHint}>Everyone in the group will see this at this moment.</p>
+      ) : null}
     </form>
   );
 }

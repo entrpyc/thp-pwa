@@ -123,7 +123,8 @@ export type ImageAttachments = ReturnType<typeof useImageAttachments>;
  * **The strip itself**: for each picture a thumbnail, a description field and Remove. What state
  * a picture is in is said in words under it — "Uploading", "Will upload when you are back
  * online" — never by a spinner alone. Nothing at all while there is no picture: the way to add
- * one is {@link ImageAttachAdd}, which the forms place beside their text box.
+ * one is {@link ImageAttachAdd}, which the forms place beside their text box. The strip is a boxed
+ * group under the text box, so the pictures read as one set belonging to the note above them.
  */
 export function ImageAttach({ attachments, disabled = false }: { attachments: ImageAttachments; disabled?: boolean }) {
   const { images, remove, setAlt } = attachments;
@@ -166,8 +167,8 @@ export function ImageAttach({ attachments, disabled = false }: { attachments: Im
 
 /**
  * **The add control**: a square with a picture in it, by the operator's decision, placed on the
- * text box's row. The words are its name and its hover title; the limit is said only when it is
- * reached, in the title, and the input's `accept` says what the picker offers.
+ * text box's row. The words are its name and its hover title; when the limit is reached the control
+ * loses its hover and a line under it says so, and the input's `accept` says what the picker offers.
  */
 export function ImageAttachAdd({ attachments, disabled = false }: { attachments: ImageAttachments; disabled?: boolean }) {
   const inputId = useId();
@@ -187,7 +188,7 @@ export function ImageAttachAdd({ attachments, disabled = false }: { attachments:
   }
 
   return (
-    <>
+    <div className={styles.attachAddWrap}>
       <label
         className={full || disabled ? `${styles.attachAdd} ${styles.attachAddOff}` : styles.attachAdd}
         htmlFor={inputId}
@@ -205,7 +206,9 @@ export function ImageAttachAdd({ attachments, disabled = false }: { attachments:
         disabled={full || disabled}
         onChange={onChosen}
       />
-    </>
+      {/* Said in words under the control once the limit is reached, not only in its hover title. */}
+      {full ? <p className={styles.attachLimit}>Limit reached</p> : null}
+    </div>
   );
 }
 

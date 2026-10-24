@@ -762,14 +762,15 @@ describe('the composer', () => {
       expect(await form.getByRole('button', { name: 'Public' }).getAttribute('aria-pressed')).toBe(
         'false',
       );
-      expect(await form.innerText()).toContain('Only you will see this.');
+      // Private carries no line of its own; Public, the choice that cannot be undone, does.
+      expect(await form.innerText()).not.toContain('Everyone in the group will see this');
 
       await form.getByRole('button', { name: 'Public' }).click();
       expect(await form.innerText()).toContain(
         'Everyone in the group will see this at this moment.',
       );
       await form.getByRole('button', { name: 'Private' }).click();
-      expect(await form.innerText()).toContain('Only you will see this.');
+      expect(await form.innerText()).not.toContain('Everyone in the group will see this');
 
       // Submitted without touching the control at all.
       await form.getByRole('textbox').fill('Untouched control, so nothing is published.');
