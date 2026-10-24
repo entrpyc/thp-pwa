@@ -58,6 +58,11 @@ npm run build
 echo "==> Checking the built client calls the right origin"
 npm run check:origin
 
+# After the build and before anything serves it: the maps go to PostHog and off the disk
+# (observability.md § 5.6). Skips itself, with one line, on a box with no CLI credentials.
+echo "==> Source maps"
+./scripts/upload-sourcemaps.sh "$TAG"
+
 echo "==> Restarting"
 pm2 restart ecosystem.config.cjs --update-env
 # So a reboot brings back what is running now, rather than what was running at the last save.
