@@ -1,6 +1,6 @@
 ---
 name: parallel-session
-description: Set up an isolated git worktree for working on a ticket in a parallel Claude Code session — own branch, own .env (DATABASE_URL, NEXT_PUBLIC_API_ORIGIN, MEDIA_BUCKET if needed), own Postgres database, npm ci, then open it in a new VS Code window. Trigger on "use parallel session to work on <ticket>", "parallel session for <ticket>", "new worktree for <ticket>", "spin up a worktree".
+description: Set up an isolated git worktree for working on a ticket in a parallel Claude Code session — own branch, own .env (DATABASE_URL, NEXT_PUBLIC_API_ORIGIN, MEDIA_BUCKET if needed), own Postgres database, npm ci, then open it in a new VS Code window. The handover at the end of the ticket (copy of main's database, seed, dev server on its own port, Chrome, manual validation checklist) is the companion skill parallel-session-finish. Trigger on "use parallel session to work on <ticket>", "parallel session for <ticket>", "new worktree for <ticket>", "spin up a worktree".
 ---
 
 # Parallel session: isolated worktree for one ticket
@@ -157,6 +157,11 @@ Rules for this session:
   before merge, after rebasing on main, so numbering and snapshots don't collide with other tickets.
 - Do not check out or modify main. Rebase with `git rebase main` when asked.
 - Integration tests are safe here (throwaway DB, free port); they only rebuild .next in this worktree.
+- When the changes are done and typecheck + tests pass, invoke the `parallel-session-finish` skill.
+  It commits all changes on this branch (no push: publishing the branch is the operator's call),
+  replaces <db> with a fresh copy of main's `thp` database, migrates, runs `npm run seed:admin`,
+  starts the dev server on port <port>, opens it in Chrome, and prints a manual validation
+  checklist derived from the branch's diff. Do not hand over without it.
 ```
 
 Also list the cleanup for later, so it ends up in the user's notes:
