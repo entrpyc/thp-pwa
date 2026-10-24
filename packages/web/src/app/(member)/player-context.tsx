@@ -242,6 +242,17 @@ export interface PlayerApi {
   /** Fetch the transcript if nothing has yet. Safe to call on every mount — it asks once. */
   requestTranscript(): void;
   setCaptions(on: boolean): void;
+  /**
+   * **Follow the words without the pill** — what the now-playing view calls on mount.
+   *
+   * The view draws the current line over its cover whatever the pill's switch says, so it needs the
+   * two things the switch would otherwise bring: the transcript fetched, and the finer clock running
+   * while sound plays. It must not *turn the pill on* to get them — a member who walks into the view
+   * and back out would find a pill they never asked for floating over the library. So interest is
+   * counted here instead, and the clock runs while either the pill is on or anybody is attending.
+   * Returns the release; call it on unmount.
+   */
+  attendCaptions(): () => void;
   /** Put a corrected line back in the loaded transcript, so the list and the pill agree with it. */
   applyCorrection(segment: TranscriptSegmentView): void;
   /**
@@ -461,6 +472,8 @@ export function PlayerProvider({
   const [breadcrumb, setBreadcrumb] = useState<BreadcrumbTrail>(EMPTY_TRAIL);
   const [transcript, setTranscript] = useState<LoadedTranscript | null>(null);
   const [captionsOn, setCaptionsOn] = useState(false);
+  /** How many mounted surfaces are following the words without the pill (`attendCaptions`). */
+  const [captionAttendants, setCaptionAttendants] = useState(0);
   const [notes, setNotes] = useState<LoadedNotes | null>(null);
   const [notesFailed, setNotesFailed] = useState(false);
   const [chapters, setChapters] = useState<LoadedChapters | null>(null);
@@ -1008,10 +1021,11 @@ export function PlayerProvider({
    * quarter-second after the voice has moved on. While captions are showing and sound is running,
    * the position is re-read every tenth of a second so a caption changes with the sentence rather
    * than after it. Captions off (or paused), the interval is not running at all and `timeupdate`
-   * remains the only clock, exactly as before.
+   * remains the only clock, exactly as before. The now-playing view counts as a caption on screen
+   * through `attendCaptions`, pill or no pill.
    */
   useEffect(() => {
-    if (!captionsOn || !playing) return;
+    if ((!captionsOn && captionAttendants === 0) || !playing) return;
     const timer = setInterval(() => {
       const element = audioRef.current;
       if (element !== null && element.readyState >= 1) {
@@ -1019,7 +1033,7 @@ export function PlayerProvider({
       }
     }, 100);
     return () => clearInterval(timer);
-  }, [captionsOn, playing]);
+  }, [captionsOn, captionAttendants, playing]);
 
   /*
    * **The sitting survives the app being closed.** On the first load of the member surface, the
@@ -1271,6 +1285,12 @@ export function PlayerProvider({
     [requestTranscript],
   );
 
+  const attendCaptions = useCallback((): (() => void) => {
+    setCaptionAttendants((count) => count + 1);
+    requestTranscript();
+    return () => setCaptionAttendants((count) => Math.max(0, count - 1));
+  }, [requestTranscript]);
+
   const applyCorrection = useCallback((corrected: TranscriptSegmentView): void => {
     setTranscript((held) =>
       held === null
@@ -1365,6 +1385,7 @@ export function PlayerProvider({
       chooseSpeed,
       requestTranscript,
       setCaptions,
+      attendCaptions,
       applyCorrection,
       replaceChapters,
       refreshNotes,
@@ -1395,6 +1416,7 @@ export function PlayerProvider({
       chooseSpeed,
       requestTranscript,
       setCaptions,
+      attendCaptions,
       applyCorrection,
       replaceChapters,
       refreshNotes,
