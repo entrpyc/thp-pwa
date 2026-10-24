@@ -15,10 +15,12 @@ import {
 } from '@thp/shared';
 import {
   createDatabase,
+  insertNote,
   insertRecording,
   insertSeries,
   replaceOpenDrafts,
   replaceScriptureReferences,
+  replaceTranscript,
   setRecordingPublication,
   setRecordingSeries,
   setSeriesArtwork,
@@ -61,6 +63,13 @@ const RUN = `${Date.now().toString(36)}${Math.floor(Math.random() * 1e6).toStrin
 
 /** Long enough that a play press has somewhere to go while the view is opened and closed. */
 const TEACHING_SECONDS = 60;
+/** One transcript line every two seconds, so "the line being spoken" is a known string at any moment. */
+const LINE_MS = 2_000;
+/** Notes on the covered teaching, by moment — one inside the window at the start, one far ahead. */
+const EARLY_NOTE_MS = 10_000;
+const LATE_NOTE_MS = 50_000;
+const EARLY_NOTE_TEXT = `Early note ${RUN}`;
+const LATE_NOTE_TEXT = `Late note ${RUN}`;
 
 const COVERED_TITLE = `Now playing covered ${RUN}`;
 const LOOSE_TITLE = `Now playing loose ${RUN}`;
@@ -189,8 +198,21 @@ async function openTheView(page: Page): Promise<void> {
 }
 
 /** The view's scripture citations, in the order they are drawn. */
+const scripture = (page: Page): Locator => view(page).getByRole('region', { name: 'Scripture' });
+
+/**
+ * Put the playhead somewhere definite. The member's position is remembered between sittings, so a
+ * test that assumes the start — or any moment — says so rather than inheriting the last test's seek.
+ */
+async function seekTo(page: Page, seconds: number): Promise<void> {
+  await page.evaluate((at: number) => {
+    const element = document.querySelector('audio');
+    if (element !== null) element.currentTime = at;
+  }, seconds);
+}
+
 async function citationsOnScreen(page: Page): Promise<string[]> {
-  return view(page).getByRole('listitem').getByRole('heading').allTextContents();
+  return scripture(page).getByRole('listitem').getByRole('heading').allTextContents();
 }
 
 /** The same teaching's citations **as the API answers them**, asked for from inside the page. */
@@ -215,6 +237,28 @@ beforeAll(async () => {
 
   coveredId = await publishedRecording(COVERED_TITLE);
   await setRecordingSeries(coveredId, series.id, handle);
+  await replaceTranscript(
+    {
+      recordingId: coveredId,
+      language: 'en',
+      confidence: 0.95,
+      segments: Array.from({ length: (TEACHING_SECONDS * 1000) / LINE_MS }, (_unused, index) => ({
+        startMs: index * LINE_MS,
+        endMs: (index + 1) * LINE_MS,
+        text: `Line ${index + 1} of ${COVERED_TITLE}.`,
+      })),
+    },
+    handle,
+  );
+  for (const [timestampMs, text] of [
+    [EARLY_NOTE_MS, EARLY_NOTE_TEXT],
+    [LATE_NOTE_MS, LATE_NOTE_TEXT],
+  ] as const) {
+    await insertNote(
+      { recordingId: coveredId, authorId: member.id, visibility: 'public', text, timestampMs },
+      handle,
+    );
+  }
   await replaceScriptureReferences(coveredId, APPROVED, handle);
   // Open, and left open: an approval is the only thing that puts a citation in front of a member.
   await replaceOpenDrafts(
@@ -402,9 +446,9 @@ describe('the transport opens the now-playing view, and it closes back', () => {
  * The cover is the *series'*: a recording has none of its own in this scope, and the view reads it
  * off the teaching the transport is already holding rather than fetching anything.
  */
-describe('the view shows the playing teaching`s cover as a square', () => {
-  // 3.2.1 — it is there, it is the series' cover, and it is square.
-  it('renders the series cover as a square', async () => {
+describe('the view draws the playing teaching`s cover as the hero behind the words', () => {
+  // The cover is there, it is the series' cover, and it fills the hero rather than sitting in it.
+  it('renders the series cover filling the hero', async () => {
     const { page } = await openTeaching(coveredId);
     try {
       await openTheView(page);
@@ -414,19 +458,21 @@ describe('the view shows the playing teaching`s cover as a square', () => {
       expect(await cover.getAttribute('src')).toContain(COVER_KEY);
 
       const box = await cover.boundingBox();
+      const frame = await view(page).boundingBox();
       expect(box).not.toBeNull();
+      expect(frame).not.toBeNull();
       const drawn = box as { width: number; height: number };
-      expect(drawn.width).toBeGreaterThan(0);
-      // Square from the CSS rather than from the image: the box is what `pages/player.png` draws,
-      // whatever shape the admin uploaded.
-      expect(drawn.height).toBeCloseTo(drawn.width, 0);
+      const column = frame as { width: number };
+      // Edge to edge across the column, and tall: it is a backdrop, not a tile.
+      expect(drawn.width).toBeGreaterThanOrEqual(column.width);
+      expect(drawn.height).toBeGreaterThan(drawn.width / 3);
     } finally {
       await page.context().close();
     }
   }, 180_000);
 
-  // 3.2.2 — cropped from the centre, never stretched to the square.
-  it('crops the cover from its centre rather than stretching it', async () => {
+  // Cropped from the centre to the frame, never stretched; and blurred into a wash.
+  it('crops the cover from its centre and blurs it into a backdrop', async () => {
     const { page } = await openTeaching(coveredId);
     try {
       await openTheView(page);
@@ -435,18 +481,19 @@ describe('the view shows the playing teaching`s cover as a square', () => {
       await expect.poll(() => cover.count(), { timeout: 30_000 }).toBe(1);
       expect(await cover.evaluate((node) => getComputedStyle(node).objectFit)).toBe('cover');
       expect(await cover.evaluate((node) => getComputedStyle(node).objectPosition)).toBe('50% 50%');
+      expect(await cover.evaluate((node) => getComputedStyle(node).filter)).toContain('blur(');
     } finally {
       await page.context().close();
     }
   }, 180_000);
 
   /**
-   * 3.2.3 — **labelled**, unlike the covers that sit beside their own titles.
+   * **Labelled**, unlike the covers that sit beside their own titles.
    *
-   * Nothing on this view prints the series' name, so a decorative square would leave a screen
+   * Nothing on this view prints the series' name, so a decorative backdrop would leave a screen
    * reader with a page that never says which study is playing (scope prd 4.3).
    */
-  it('labels the square with the series, because it stands alone', async () => {
+  it('labels the cover with the series, because it stands alone', async () => {
     const { page } = await openTeaching(coveredId);
     try {
       await openTheView(page);
@@ -487,6 +534,168 @@ describe('the view shows the playing teaching`s cover as a square', () => {
 
 // =================================================================================================
 
+describe('the words being spoken are written across the hero', () => {
+  const heroCaption = (page: Page): Locator => view(page).locator('[aria-live="polite"]');
+
+  // Always on here: no switch was touched, and the line is on the hero regardless.
+  it('shows the current transcript line large over the cover without the pill being on', async () => {
+    const { page } = await openTeaching(coveredId);
+    try {
+      await openTheView(page);
+      await seekTo(page, 0);
+
+      await expect
+        .poll(() => heroCaption(page).textContent(), { timeout: 30_000 })
+        .toContain(`Line 1 of ${COVERED_TITLE}.`);
+      // Larger than anything else on the view: the page-title size, read off the token layer.
+      const size = await heroCaption(page).evaluate((node) => parseFloat(getComputedStyle(node).fontSize));
+      const body = await view(page)
+        .getByRole('heading', { level: 2 })
+        .first()
+        .evaluate((node) => parseFloat(getComputedStyle(node).fontSize));
+      expect(size).toBeGreaterThan(body);
+      // And the pill is not what is showing it.
+      expect(await page.getByRole('region', { name: 'Caption' }).count()).toBe(0);
+    } finally {
+      await page.context().close();
+    }
+  }, 180_000);
+
+  // Seeking moves the line with the playhead — the clock the view reads is the player's.
+  it('follows the playhead to a later line', async () => {
+    const { page } = await openTeaching(coveredId);
+    try {
+      await openTheView(page);
+      await seekTo(page, 0);
+      await expect
+        .poll(() => heroCaption(page).textContent(), { timeout: 30_000 })
+        .toContain('Line 1 of');
+
+      await seekTo(page, 21);
+
+      await expect
+        .poll(() => heroCaption(page).textContent(), { timeout: 30_000 })
+        .toContain(`Line 11 of ${COVERED_TITLE}.`);
+    } finally {
+      await page.context().close();
+    }
+  }, 180_000);
+
+  /**
+   * The pill is hidden **only while this is the screen**: a member who had captions on keeps them
+   * on, and finds the pill back where it was the moment they close the view.
+   */
+  it('hides the transport caption pill on this view and restores it on the way back', async () => {
+    const { page } = await openTeaching(coveredId);
+    try {
+      const pill = page.getByRole('region', { name: 'Caption' });
+      await page.getByRole('button', { name: 'More player controls' }).click();
+      await bar(page).getByRole('button', { name: 'Captions' }).click();
+      await expect.poll(() => pill.count(), { timeout: 30_000 }).toBe(1);
+
+      await openTheView(page);
+      await expect.poll(() => pill.count(), { timeout: 30_000 }).toBe(0);
+      // The remembered position is applied once the element has its metadata, so the seek that pins
+      // which line is expected comes after the view is open rather than racing it.
+      await seekTo(page, 0);
+      await expect
+        .poll(() => heroCaption(page).textContent(), { timeout: 30_000 })
+        .toContain('Line 1 of');
+
+      await view(page).getByRole('button', { name: 'Close now playing' }).click();
+      await page.waitForURL(`${baseUrl}${recordingPagePath(coveredId)}`, { timeout: 30_000 });
+      await expect.poll(() => pill.count(), { timeout: 30_000 }).toBe(1);
+    } finally {
+      await page.context().close();
+    }
+  }, 180_000);
+});
+
+// =================================================================================================
+
+describe('the notes near this moment sit under the hero', () => {
+  const notesRow = (page: Page): Locator =>
+    page.getByRole('region', { name: 'Notes near this moment' });
+
+  // Two minutes ahead is in the window; the whole minute-long teaching is, at the start.
+  it('lists the notes within two minutes ahead of the playhead, soonest first', async () => {
+    const { page } = await openTeaching(coveredId);
+    try {
+      await openTheView(page);
+      await seekTo(page, 0);
+
+      await expect.poll(() => notesRow(page).count(), { timeout: 30_000 }).toBe(1);
+      const texts = await notesRow(page).getByRole('listitem').allTextContents();
+      expect(texts).toHaveLength(2);
+      expect(texts[0]).toContain(EARLY_NOTE_TEXT);
+      expect(texts[0]).toContain('0:10');
+      expect(texts[0]).toContain(member.displayName);
+      expect(texts[1]).toContain(LATE_NOTE_TEXT);
+    } finally {
+      await page.context().close();
+    }
+  }, 180_000);
+
+  // A note stays a quarter of a minute past its moment, then leaves.
+  it('drops a note once the playhead is more than fifteen seconds past it', async () => {
+    const { page } = await openTeaching(coveredId);
+    try {
+      await openTheView(page);
+      await seekTo(page, 0);
+      await expect
+        .poll(() => notesRow(page).getByRole('listitem').count(), { timeout: 30_000 })
+        .toBe(2);
+
+      await seekTo(page, 30);
+
+      await expect
+        .poll(() => notesRow(page).getByRole('listitem').allTextContents(), { timeout: 30_000 })
+        .toEqual([expect.stringContaining(LATE_NOTE_TEXT)]);
+    } finally {
+      await page.context().close();
+    }
+  }, 180_000);
+
+  // Nothing near means no row at all — not a heading over an empty list.
+  it('draws no notes row for a teaching with nothing near', async () => {
+    const { page } = await openTeaching(looseId);
+    try {
+      await openTheView(page);
+      await expect
+        .poll(() => view(page).textContent(), { timeout: 30_000 })
+        .toContain('no scripture references');
+
+      expect(await notesRow(page).count()).toBe(0);
+      expect(await view(page).getByText('Notes near this moment').count()).toBe(0);
+    } finally {
+      await page.context().close();
+    }
+  }, 180_000);
+
+  // Read here, acted on there: the card is the way to the Notes tab.
+  it('opens the teaching\u2019s Notes tab when a note is pressed', async () => {
+    const { page } = await openTeaching(coveredId);
+    try {
+      await openTheView(page);
+      await expect.poll(() => notesRow(page).count(), { timeout: 30_000 }).toBe(1);
+
+      await notesRow(page).getByRole('link').first().click();
+      await page.waitForURL(`${baseUrl}${recordingPagePath(coveredId)}?tab=notes`, {
+        timeout: 30_000,
+      });
+      await expect
+        .poll(() => page.getByRole('tab', { name: 'Notes' }).getAttribute('aria-selected'), {
+          timeout: 30_000,
+        })
+        .toBe('true');
+    } finally {
+      await page.context().close();
+    }
+  }, 180_000);
+});
+
+// =================================================================================================
+
 /**
  * **The scripture beneath it** (scope plan 3.3) — `pages/player.png`'s list of references.
  *
@@ -505,7 +714,7 @@ describe('the view lists the playing teaching`s scripture', () => {
         .poll(() => citationsOnScreen(page), { timeout: 30_000 })
         .toEqual(['Genesis 1:1–2', 'Exodus 3:1–2', 'Romans 8:1–4']);
 
-      const entries = view(page).getByRole('listitem');
+      const entries = scripture(page).getByRole('listitem');
       expect(await entries.nth(0).textContent()).toContain(
         'Stand-in verse text for Genesis 1:1. Stand-in verse text for Genesis 1:2.',
       );
@@ -552,7 +761,7 @@ describe('the view lists the playing teaching`s scripture', () => {
       await expect
         .poll(() => view(page).textContent(), { timeout: 30_000 })
         .toContain('This teaching has no scripture references.');
-      expect(await view(page).getByRole('listitem').count()).toBe(0);
+      expect(await scripture(page).getByRole('listitem').count()).toBe(0);
     } finally {
       await page.context().close();
     }
