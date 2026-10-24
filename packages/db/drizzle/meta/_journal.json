@@ -309,13 +309,6 @@
       "when": 1792874905858,
       "tag": "0043_passage_windows",
       "breakpoints": true
-    },
-    {
-      "idx": 44,
-      "version": "7",
-      "when": 1792878540003,
-      "tag": "0044_friendly_harrier",
-      "breakpoints": true
     }
   ]
 }
