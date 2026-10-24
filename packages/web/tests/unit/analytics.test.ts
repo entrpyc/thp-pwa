@@ -127,3 +127,44 @@ describe('stripUrlProperties', () => {
     });
   });
 });
+
+describe('stripUrlProperties, on a Web Vitals event', () => {
+  // observability.md § 5.7: the number and its rating leave; the page URL, the raw performance
+  // entries (an LCP entry names the element and its resource URL — a signed grant, for artwork)
+  // and any attribution do not.
+  it('keeps each metric’s numbers and drops its URL, entries and attribution', () => {
+    const clean = stripUrlProperties({
+      $current_url: 'https://thp.example/recordings/abc',
+      $web_vitals_LCP_value: 1234,
+      $web_vitals_LCP_event: {
+        name: 'LCP',
+        value: 1234,
+        rating: 'good',
+        delta: 1234,
+        id: 'v3-1',
+        navigationType: 'navigate',
+        timestamp: 1,
+        $current_url: 'https://thp.example/recordings/abc',
+        $session_id: 's',
+        entries: [{ url: 'https://media.example/artwork?X-Amz-Signature=secret', element: 'img' }],
+        attribution: { element: 'img', url: 'https://media.example/artwork?X-Amz-Signature=secret' },
+      },
+      $web_vitals_CLS_value: 0.01,
+    });
+    expect(clean).toEqual({
+      $web_vitals_LCP_value: 1234,
+      $web_vitals_LCP_event: {
+        name: 'LCP',
+        value: 1234,
+        rating: 'good',
+        delta: 1234,
+        id: 'v3-1',
+        navigationType: 'navigate',
+        timestamp: 1,
+        $session_id: 's',
+      },
+      $web_vitals_CLS_value: 0.01,
+    });
+    expect(JSON.stringify(clean)).not.toContain('secret');
+  });
+});

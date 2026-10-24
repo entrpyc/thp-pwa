@@ -1,7 +1,9 @@
 import { CORRELATION_ID_HEADER } from '@thp/shared';
+import { apiRoutePattern } from '@thp/shared/observability/exceptions';
 import { isAllowlisted } from '@/server/auth/allowlist';
 import { can, type Actor } from '@/server/auth/policy';
 import { actorForToken, readSessionCookie } from '@/server/auth/session';
+import { captureServerException } from '@/server/observability/analytics';
 import { resolveCorrelationId, withCorrelationId } from '@/server/observability/correlation';
 import { logger } from '@/server/observability/logger';
 import type { ActorFor, RouteAccess } from './access';
@@ -97,7 +99,15 @@ export function apiRoute<TAccess extends RouteAccess>(
           );
         }
 
-        // Unhandled: the detail is logged server-side and never put on the wire.
+        // Unhandled: the detail is logged server-side and never put on the wire. The same failure
+        // is reported to the error tracker under the same correlation id, with the route pattern
+        // rather than the path and nothing of the request's body (observability.md § 5.6).
+        const reported = captureServerException(caught, {
+          correlation_id: correlationId,
+          method: request.method,
+          route: apiRoutePattern(url.pathname),
+          status: 500,
+        });
         logger.error('request.unhandled', {
           method: request.method,
           path: url.pathname,
@@ -105,6 +115,7 @@ export function apiRoute<TAccess extends RouteAccess>(
           errorName: caught instanceof Error ? caught.name : typeof caught,
           errorMessage: caught instanceof Error ? caught.message : String(caught),
           stack: caught instanceof Error ? caught.stack : undefined,
+          reported,
         });
         return errorResponse('internal_error', GENERIC_INTERNAL_MESSAGE, 500, correlationId);
       }

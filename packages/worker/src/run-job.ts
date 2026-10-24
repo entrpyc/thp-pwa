@@ -20,6 +20,7 @@ import {
 import { withCorrelationId } from '@thp/shared/observability/correlation';
 import { logger } from '@thp/shared/observability/logger';
 import type { HandlerRegistry } from './handlers';
+import { NO_EXCEPTION_REPORTER, type ExceptionReporter } from './observability/exceptions';
 
 export interface RunJobOptions {
   /** Where the outcome is written. Defaults to the process's pool. */
@@ -34,6 +35,12 @@ export interface RunJobOptions {
    * absent; handed in by tests so a ceiling of one dollar can be driven against a ledger of two.
    */
   readonly spendCeilingUsd?: number;
+  /**
+   * Where a handler's throw is reported beyond the row and the log (observability/exceptions.ts).
+   * Absent means nowhere. A refusal the runner makes itself — no handler, the ceiling — is a
+   * decision, not a crash, and is never reported.
+   */
+  readonly exceptions?: ExceptionReporter;
 }
 
 /**
@@ -67,7 +74,7 @@ export async function runJob(
   handlers: HandlerRegistry,
   options: RunJobOptions = {},
 ): Promise<JobRow> {
-  const { executor, steps = PIPELINE_STEPS } = options;
+  const { executor, steps = PIPELINE_STEPS, exceptions = NO_EXCEPTION_REPORTER } = options;
 
   return withCorrelationId(job.correlationId, async () => {
     const fields = {
@@ -136,8 +143,17 @@ export async function runJob(
       const row = await failJob(job.id, reason, executor);
       // **The chain stops here.** A failed step enqueues nothing, which is what turns
       // docs/project/prd.md 3.21.2.3's "halt and flag" into a property of the mechanism rather than
-      // a rule each handler has to remember.
-      logger.error('job.failed', { ...fields, reason, error: describeError(cause) });
+      // a rule each handler has to remember. The same failure goes to the error tracker under the
+      // same correlation id (observability.md § 5.6), after the row is written: the row is the
+      // record, the report is the notice.
+      const reported = exceptions.report(cause, {
+        correlation_id: job.correlationId,
+        job_id: job.id,
+        step: job.step,
+        attempt: job.attempt,
+        recording_id: job.recordingId,
+      });
+      logger.error('job.failed', { ...fields, reason, error: describeError(cause), reported });
       return row;
     }
 

@@ -3,6 +3,7 @@ import { PIPELINE_STEPS, type PipelineStep } from '@thp/shared';
 import { withCorrelationId } from '@thp/shared/observability/correlation';
 import { logger } from '@thp/shared/observability/logger';
 import { createHandlers, type HandlerRegistry } from './handlers';
+import { NO_EXCEPTION_REPORTER, type ExceptionReporter } from './observability/exceptions';
 import { runJob } from './run-job';
 
 /**
@@ -28,6 +29,11 @@ export interface WorkerLoopOptions {
    * rather than on a timer beside it so that a loop that stops iterating stops beating.
    */
   readonly heartbeat?: () => void;
+  /**
+   * Where a failed job is reported beyond the row and the log (observability/exceptions.ts).
+   * Absent means nowhere, which is what every test and every development machine wants.
+   */
+  readonly exceptions?: ExceptionReporter;
 }
 
 export interface WorkerLoop {
@@ -62,6 +68,7 @@ export function startWorkerLoop(options: WorkerLoopOptions = {}): WorkerLoop {
     executor,
     pollIntervalMs = POLL_INTERVAL_MS,
     heartbeat,
+    exceptions = NO_EXCEPTION_REPORTER,
   } = options;
 
   let stopped = false;
@@ -88,7 +95,7 @@ export function startWorkerLoop(options: WorkerLoopOptions = {}): WorkerLoop {
   // Spread rather than passed as `{ executor }`: with `exactOptionalPropertyTypes`, an absent
   // executor and one explicitly set to `undefined` are different types, and only the first means
   // "use the process's pool".
-  const runOptions = { steps, ...(executor === undefined ? {} : { executor }) };
+  const runOptions = { steps, exceptions, ...(executor === undefined ? {} : { executor }) };
 
   async function loop(): Promise<void> {
     logger.info('worker.started', { pollIntervalMs, steps: [...steps] });
@@ -125,8 +132,16 @@ export function startWorkerLoop(options: WorkerLoopOptions = {}): WorkerLoop {
         continue;
       } catch (cause) {
         // The ledger refused the outcome. The job stays `running` and the sweep takes it back at
-        // the next boot; nothing here can improve on that.
-        logger.error('worker.run.failed', { jobId: job.id, error: describeError(cause) });
+        // the next boot; nothing here can improve on that — but it is reported, because a worker
+        // that cannot write its ledger is the failure least likely to be noticed from a row.
+        const reported = exceptions.report(cause, {
+          correlation_id: job.correlationId,
+          job_id: job.id,
+          step: job.step,
+          attempt: job.attempt,
+          recording_id: job.recordingId,
+        });
+        logger.error('worker.run.failed', { jobId: job.id, error: describeError(cause), reported });
         await sleep(pollIntervalMs);
       }
     }

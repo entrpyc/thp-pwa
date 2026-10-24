@@ -1,4 +1,4 @@
-import { afterAll, beforeAll, beforeEach, describe, expect, it, inject } from 'vitest';
+import { afterAll, beforeAll, beforeEach, describe, expect, it, inject, vi } from 'vitest';
 import postgres from 'postgres';
 import {
   MAX_JOB_ERROR_LENGTH,
@@ -118,6 +118,48 @@ describe('running a claimed job', () => {
     expect(row.status).toBe('failed');
     expect(row.error).toBe('the provider refused the audio');
     expect(row.finishedAt).toBeInstanceOf(Date);
+  });
+
+  it('reports a handler’s throw to the exception reporter with the job’s ids, after the row is written', async () => {
+    const job = await claimedJob();
+    const reports: { cause: unknown; context: Record<string, unknown>; rowWritten: boolean }[] = [];
+    const handlers: HandlerRegistry = {
+      transcribe: () => {
+        throw new Error('the provider refused the audio');
+      },
+    };
+
+    await runJob(job, handlers, {
+      executor: handle,
+      exceptions: {
+        report(cause, context) {
+          reports.push({ cause, context, rowWritten: false });
+          return true;
+        },
+      },
+    });
+
+    expect(reports).toHaveLength(1);
+    expect((reports[0]?.cause as Error).message).toBe('the provider refused the audio');
+    expect(reports[0]?.context).toEqual({
+      correlation_id: job.correlationId,
+      job_id: job.id,
+      step: 'transcribe',
+      attempt: job.attempt,
+      recording_id: job.recordingId,
+    });
+    // The log line says a report was handed over, so a box can tell "sent" from "not configured".
+    const line = captured.find((entry) => entry.message === 'job.failed');
+    expect(line?.['reported']).toBe(true);
+  });
+
+  it('does not report the runner’s own refusals — no handler is a decision, not a crash', async () => {
+    const job = await claimedJob('generate_draft');
+    const report = vi.fn(() => true);
+
+    await runJob(job, { transcribe: () => undefined }, { executor: handle, exceptions: { report } });
+
+    expect(report).not.toHaveBeenCalled();
   });
 
   it('truncates a failure too large to keep, and keeps the whole of it in the log', async () => {

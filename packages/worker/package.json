@@ -12,6 +12,7 @@
     "@thp/db": "*",
     "@thp/media": "*",
     "@thp/push": "*",
-    "@thp/shared": "*"
+    "@thp/shared": "*",
+    "posthog-node": "^5.56.4"
   }
 }

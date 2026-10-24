@@ -1,5 +1,12 @@
 import posthog from 'posthog-js';
+// Side effect only: registers the Web Vitals callbacks on the SDK so it needs nothing from its CDN.
+import 'posthog-js/dist/web-vitals';
 import { sanitiseAnalyticsProperties, type AnalyticsPerson, type TrackFunction } from '@thp/shared';
+import {
+  exceptionProperties,
+  normaliseException,
+  type ExceptionContext,
+} from '@thp/shared/observability/exceptions';
 import {
   ANALYTICS_PROXY_PATH,
   detectInstallSource,
@@ -71,7 +78,13 @@ export function initAnalytics(): boolean {
       capture_pageview: false,
       capture_pageleave: false,
       capture_heatmaps: false,
-      capture_performance: false,
+      // Web Vitals (observability.md § 5.7): the four metrics, without attribution — attribution
+      // names elements and resource URLs, and a resource URL here is a signed media grant. The
+      // SDK's `$web_vitals` payload still carries the page URL inside each metric; the sanitiser
+      // below strips it along with the raw performance entries. The metric code is imported into
+      // this bundle above because the SDK would otherwise fetch it from its CDN at runtime, which
+      // `disable_external_dependency_loading` refuses. `network_timing` is a replay feature; off.
+      capture_performance: { web_vitals: true, web_vitals_attribution: [], network_timing: false },
       disable_session_recording: true,
       disable_surveys: true,
       // Nothing is fetched from PostHog's CDN at runtime: no recorder, no survey widget.
@@ -86,8 +99,12 @@ export function initAnalytics(): boolean {
       // The SDK stamps every event with the URL it happened on. The vocabulary sends the route
       // pattern and the id instead, and nothing with a path in it leaves.
       sanitize_properties: (properties) => stripUrlProperties(properties),
+      // The SDK's own exception autocapture is an external chunk, which the line above refuses.
+      // The listeners below do the same job in this bundle, through the same sanitiser.
+      capture_exceptions: false,
     });
     state = 'on';
+    installExceptionListeners(window);
     return true;
   } catch (error) {
     state = 'off';
@@ -182,3 +199,40 @@ export const track: TrackFunction = (name, properties) => {
     // A dropped event costs a count, not a member anything.
   }
 };
+
+/**
+ * **Report an exception from the client** (docs/project/observability.md § 5.6).
+ *
+ * Under the same consent as every event — a member who has turned analytics off sends no stack
+ * traces either — and through the same sanitiser: the SDK's own URL stamps are stripped by
+ * `sanitize_properties`, the context is what `exceptionProperties` allows, and the message is
+ * bounded. Nothing here names a URL; a caller that wants a route passes the pattern.
+ */
+export function captureClientException(
+  cause: unknown,
+  context: Omit<ExceptionContext, 'process' | 'correlation_id'> = {},
+): void {
+  if (state !== 'on' || consent !== 'granted') return;
+  try {
+    posthog.captureException(normaliseException(cause), exceptionProperties({ ...context, process: 'client' }));
+  } catch {
+    // A dropped report costs a count, not a member anything.
+  }
+}
+
+/**
+ * The two browser events an uncaught failure surfaces as. Installed once, with the SDK, and
+ * inside its own guard: a window that cannot take a listener loses error reports, not analytics.
+ */
+function installExceptionListeners(view: Window): void {
+  try {
+    view.addEventListener('error', (event) => {
+      captureClientException(event.error ?? event.message);
+    });
+    view.addEventListener('unhandledrejection', (event) => {
+      captureClientException(event.reason);
+    });
+  } catch (error) {
+    console.error('Client exceptions will not be reported.', error);
+  }
+}
