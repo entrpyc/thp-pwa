@@ -28,8 +28,14 @@
   composes: rowGroup from '../screens.module.css';
 }
 
+/*
+ * The row's text is the link to the teaching's page, so it takes the recipe's layout and drops the
+ * browser's link dressing: the title and meta keep their own colours, and nothing is underlined.
+ */
 .rowText {
   composes: rowText from '../screens.module.css';
+  color: inherit;
+  text-decoration: none;
 }
 
 .rowTitle {

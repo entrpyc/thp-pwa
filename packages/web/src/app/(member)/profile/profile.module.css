@@ -60,18 +60,17 @@
 /* ------------------------------------------------------------------------ the section strip */
 
 /*
- * The strip under the heading: the recording page's tab recipe, as links. One row that scrolls
- * sideways rather than wrapping, so five sections on a phone stay a strip and never a second line
- * pushing the cards down; the scrollbar is the browser's, because a strip that hides its overflow
- * hides its last section.
+ * The strip under the heading: the recording page's tab recipe, as links. Pills that do not fit the
+ * row wrap onto a second line, as the recording page's tabs do — a strip that scrolled sideways hid
+ * its last section behind an edge nothing announced, and a page should never scroll two ways.
  */
 .sectionList {
   display: flex;
+  flex-wrap: wrap;
   gap: var(--space-3);
   margin: 0;
   padding: var(--space-2) 0 0;
   list-style: none;
-  overflow-x: auto;
 }
 
 .sectionLink {
