@@ -41,11 +41,18 @@ describe('what the worker decides', () => {
     expect(listeners.get('message')).toHaveLength(1);
   });
 
-  it('passes a plain request to the network, and never touches sign-in, admin or the worker itself', () => {
+  it('passes a plain request to the network, and never caches sign-in, admin or the worker itself', () => {
     expect(offline.decide({ url: 'https://hub.test/' }).kind).toBe('pass');
-    expect(offline.decide({ url: 'https://hub.test/sign-in', mode: 'navigate' }).kind).toBe('pass');
-    expect(offline.decide({ url: 'https://hub.test/admin/recordings', mode: 'navigate' }).kind).toBe('pass');
-    expect(offline.decide({ url: 'https://hub.test/sw.js', mode: 'navigate' }).kind).toBe('pass');
+    expect(offline.decide({ url: 'https://hub.test/sign-in', rsc: true }).kind).toBe('pass');
+    expect(offline.decide({ url: 'https://hub.test/admin/recordings', rsc: true }).kind).toBe('pass');
+    expect(offline.decide({ url: 'https://hub.test/sw.js' }).kind).toBe('pass');
+  });
+
+  it('answers a navigation to a page it does not keep from the network, with the offline screen when there is none', () => {
+    expect(offline.decide({ url: 'https://hub.test/sign-in', mode: 'navigate' })).toEqual({ kind: 'fallback' });
+    expect(offline.decide({ url: 'https://hub.test/admin/recordings', mode: 'navigate' })).toEqual({ kind: 'fallback' });
+    expect(offline.decide({ url: 'https://hub.test/highlights', mode: 'navigate' })).toEqual({ kind: 'fallback' });
+    expect(offline.decide({ url: 'https://hub.test/highlights', mode: 'navigate', prefetch: true }).kind).toBe('pass');
   });
 
   it('never claims an API request, except to notice the sign-out', () => {
