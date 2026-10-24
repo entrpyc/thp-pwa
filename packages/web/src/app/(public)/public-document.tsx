@@ -1,6 +1,6 @@
 import type { ReactNode } from 'react';
 import { currentActor } from '@/server/auth/current-actor';
-import { BackRoute } from './back-route';
+import { BackRoute } from '../back-route';
 import styles from './public-document.module.css';
 
 /** One titled run of prose. `body` is the paragraphs, lists and links under the heading. */

@@ -501,14 +501,37 @@ describe('one series at /series/[id]', () => {
     }
   }, 120_000);
 
-  it('returns to the listing from the back control, however the page was reached', async () => {
+  it('goes back through history from the back control, to the listing it was opened from', async () => {
     const page = await signInAs(member);
     try {
+      await page.goto(`${baseUrl}${MEMBER_SERIES_PAGE_PATH}`, { waitUntil: 'domcontentloaded' });
       await page.goto(`${baseUrl}${seriesPagePath(seriesId)}`, { waitUntil: 'domcontentloaded' });
       const back = page.getByRole('link', { name: 'Back to series' });
       await expect.poll(() => back.count(), { timeout: 30_000 }).toBe(1);
+      const entries = await page.evaluate(() => window.history.length);
       await back.click();
       await page.waitForURL(`${baseUrl}${MEMBER_SERIES_PAGE_PATH}`, { timeout: 30_000 });
+      // Back *through history*: the stack is no longer than it was, so the browser's own back from
+      // here does not loop to the series again.
+      expect(await page.evaluate(() => window.history.length)).toBe(entries);
+    } finally {
+      await page.context().close();
+    }
+  }, 120_000);
+
+  it('falls back to the listing when there is nothing to go back to', async () => {
+    const page = await signInAs(member);
+    try {
+      // A fresh tab opened straight on the series — a shared link — has no history of ours behind
+      // it, and the control navigates to the listing instead.
+      const fresh = await page.context().newPage();
+      await fresh.goto(`${baseUrl}${seriesPagePath(seriesId)}`, { waitUntil: 'domcontentloaded' });
+      const back = fresh.getByRole('link', { name: 'Back to series' });
+      await expect.poll(() => back.count(), { timeout: 30_000 }).toBe(1);
+      // A fresh Playwright tab starts on about:blank, so the signal is the Navigation API's own.
+      expect(await fresh.evaluate(() => (window as { navigation?: { canGoBack: boolean } }).navigation?.canGoBack)).toBe(false);
+      await back.click();
+      await fresh.waitForURL(`${baseUrl}${MEMBER_SERIES_PAGE_PATH}`, { timeout: 30_000 });
     } finally {
       await page.context().close();
     }
@@ -568,7 +591,8 @@ describe('the hero band carries the series` cover', () => {
       // control would swallow the click and the URL would never change.
       expect(await heroBand(page, 'Back to series').locator('img').count()).toBe(1);
       await back.click();
-      await page.waitForURL(`${baseUrl}${MEMBER_SERIES_PAGE_PATH}`, { timeout: 30_000 });
+      // Back through history: the dashboard the sign-in landed on, which this page was opened over.
+      await page.waitForURL(`${baseUrl}${DASHBOARD_PAGE_PATH}`, { timeout: 30_000 });
     } finally {
       await page.context().close();
     }
@@ -803,39 +827,59 @@ describe('the breadcrumb', () => {
   }, 180_000);
 
   /**
-   * **The back control returns to the study**, not to the library.
-   *
-   * Opened directly by URL, which is the case browser history cannot serve and the whole reason
-   * this control is a destination rather than a `history.back()`. The label is part of the
-   * assertion: a control that said *Back to recordings* and landed on a series page would be a lie
-   * told to everybody who cannot see where it points.
+   * **The back control goes back through history**, and when there is none it falls back to the
+   * study — not to the library. Opened in a fresh tab, which is a shared link's case. The label is
+   * part of the assertion: a control that said *Back to recordings* and landed on a series page
+   * would be a lie told to everybody who cannot see where it points.
    */
-  it('returns to the series from the back control on a teaching in one', async () => {
+  it('falls back to the series from a teaching in one, opened with nothing behind it', async () => {
     const page = await signInAs(member);
     try {
-      await page.goto(`${baseUrl}${recordingPagePath(firstId)}`, { waitUntil: 'domcontentloaded' });
+      const fresh = await page.context().newPage();
+      await fresh.goto(`${baseUrl}${recordingPagePath(firstId)}`, { waitUntil: 'domcontentloaded' });
 
-      const back = page.getByRole('link', { name: `Back to ${SERIES_TITLE}` });
+      const back = fresh.getByRole('link', { name: `Back to ${SERIES_TITLE}` });
       await expect.poll(() => back.count(), { timeout: 30_000 }).toBe(1);
-      expect(await page.getByRole('link', { name: 'Back to recordings' }).count()).toBe(0);
+      expect(await fresh.getByRole('link', { name: 'Back to recordings' }).count()).toBe(0);
+      // A fresh Playwright tab starts on about:blank, so the signal is the Navigation API's own.
+      expect(await fresh.evaluate(() => (window as { navigation?: { canGoBack: boolean } }).navigation?.canGoBack)).toBe(false);
 
       await back.click();
-      await page.waitForURL(`${baseUrl}${seriesPagePath(seriesId)}`, { timeout: 30_000 });
+      await fresh.waitForURL(`${baseUrl}${seriesPagePath(seriesId)}`, { timeout: 30_000 });
     } finally {
       await page.context().close();
     }
   }, 180_000);
 
-  /** A teaching in no study has no study page to return to, so it keeps the library. */
-  it('returns to the library from a teaching in no series', async () => {
+  it('goes back through history from a teaching to wherever it was opened from', async () => {
     const page = await signInAs(member);
     try {
-      await page.goto(`${baseUrl}${recordingPagePath(looseId)}`, { waitUntil: 'domcontentloaded' });
+      // Walked in from the listing, not the series — so history, not the fallback, is what decides.
+      await page.goto(`${baseUrl}${MEMBER_SERIES_PAGE_PATH}`, { waitUntil: 'domcontentloaded' });
+      await page.goto(`${baseUrl}${recordingPagePath(firstId)}`, { waitUntil: 'domcontentloaded' });
+      const back = page.getByRole('link', { name: `Back to ${SERIES_TITLE}` });
+      await expect.poll(() => back.count(), { timeout: 30_000 }).toBe(1);
+      const entries = await page.evaluate(() => window.history.length);
 
-      const back = page.getByRole('link', { name: 'Back to recordings' });
+      await back.click();
+      await page.waitForURL(`${baseUrl}${MEMBER_SERIES_PAGE_PATH}`, { timeout: 30_000 });
+      expect(await page.evaluate(() => window.history.length)).toBe(entries);
+    } finally {
+      await page.context().close();
+    }
+  }, 180_000);
+
+  /** A teaching in no study has no study page to fall back to, so it keeps the library. */
+  it('falls back to the library from a teaching in no series', async () => {
+    const page = await signInAs(member);
+    try {
+      const fresh = await page.context().newPage();
+      await fresh.goto(`${baseUrl}${recordingPagePath(looseId)}`, { waitUntil: 'domcontentloaded' });
+
+      const back = fresh.getByRole('link', { name: 'Back to recordings' });
       await expect.poll(() => back.count(), { timeout: 30_000 }).toBe(1);
       await back.click();
-      await page.waitForURL(`${baseUrl}${MEMBER_LIBRARY_PAGE_PATH}`, { timeout: 30_000 });
+      await fresh.waitForURL(`${baseUrl}${MEMBER_LIBRARY_PAGE_PATH}`, { timeout: 30_000 });
     } finally {
       await page.context().close();
     }
@@ -851,6 +895,20 @@ describe('the breadcrumb', () => {
       await expect.poll(() => current.count(), { timeout: 30_000 }).toBe(1);
       expect(await current.textContent()).toBe(LOOSE_TITLE);
       // Home and the title, and nothing between them.
+      expect(await crumbs.getByRole('listitem').count()).toBe(2);
+    } finally {
+      await page.context().close();
+    }
+  }, 120_000);
+
+  it('names the listing on the listing, as a crumb of its own', async () => {
+    const page = await signInAs(member);
+    try {
+      await page.goto(`${baseUrl}${MEMBER_SERIES_PAGE_PATH}`, { waitUntil: 'domcontentloaded' });
+      const crumbs = page.getByRole('navigation', { name: 'Breadcrumb' });
+      const current = crumbs.locator('[aria-current="page"]');
+      await expect.poll(() => current.count(), { timeout: 30_000 }).toBe(1);
+      expect(await current.textContent()).toBe('All series');
       expect(await crumbs.getByRole('listitem').count()).toBe(2);
     } finally {
       await page.context().close();

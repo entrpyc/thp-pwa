@@ -108,6 +108,12 @@ describe('getting to the form', () => {
           { timeout: 30_000 },
         )
         .toBe(1);
+      // And the breadcrumb names it, under the menu entry's own name.
+      const current = page
+        .getByRole('navigation', { name: 'Breadcrumb' })
+        .locator('[aria-current="page"]');
+      await expect.poll(() => current.count(), { timeout: 30_000 }).toBe(1);
+      expect(await current.textContent()).toBe('Report a bug');
     } finally {
       await page.context().close();
     }

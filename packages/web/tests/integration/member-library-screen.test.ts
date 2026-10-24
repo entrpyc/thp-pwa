@@ -325,17 +325,33 @@ describe('the recording page at /recordings/[id]', () => {
     }
   }, 120_000);
 
-  it('returns to the library from the back control, however the page was reached', async () => {
+  it('goes back through history from the back control, and to the library when there is none', async () => {
     const page = await signInAs(member);
     try {
-      // Opened directly rather than navigated to, which is the case browser history cannot serve.
+      // Walked in from the library: back is the library's own entry, and the stack does not grow.
+      await page.goto(`${baseUrl}${MEMBER_LIBRARY_PAGE_PATH}`, { waitUntil: 'domcontentloaded' });
       await page.goto(`${baseUrl}${recordingPagePath(publishedId)}`, {
         waitUntil: 'domcontentloaded',
       });
       const back = page.getByRole('link', { name: 'Back to recordings' });
       await expect.poll(() => back.count(), { timeout: 30_000 }).toBe(1);
+      const entries = await page.evaluate(() => window.history.length);
       await back.click();
       await page.waitForURL(`${baseUrl}${MEMBER_LIBRARY_PAGE_PATH}`, { timeout: 30_000 });
+      expect(await page.evaluate(() => window.history.length)).toBe(entries);
+
+      // Opened in a fresh tab — a shared link — there is nothing of ours behind it, and the
+      // control navigates to the library instead.
+      const fresh = await page.context().newPage();
+      await fresh.goto(`${baseUrl}${recordingPagePath(publishedId)}`, {
+        waitUntil: 'domcontentloaded',
+      });
+      const fallback = fresh.getByRole('link', { name: 'Back to recordings' });
+      await expect.poll(() => fallback.count(), { timeout: 30_000 }).toBe(1);
+      // A fresh Playwright tab starts on about:blank, so the signal is the Navigation API's own.
+      expect(await fresh.evaluate(() => (window as { navigation?: { canGoBack: boolean } }).navigation?.canGoBack)).toBe(false);
+      await fallback.click();
+      await fresh.waitForURL(`${baseUrl}${MEMBER_LIBRARY_PAGE_PATH}`, { timeout: 30_000 });
     } finally {
       await page.context().close();
     }
@@ -360,7 +376,7 @@ describe('the recording page at /recordings/[id]', () => {
 });
 
 describe('the top navigation', () => {
-  it('carries the home icon alone on the landing and the library', async () => {
+  it('carries the home icon alone on the landing, and home › All recordings on the library', async () => {
     const page = await signInAs(member);
     try {
       const crumbs = page.getByRole('navigation', { name: 'Breadcrumb' });
@@ -369,9 +385,10 @@ describe('the top navigation', () => {
       expect(await page.locator('[aria-current="page"]').count()).toBe(0);
 
       await page.goto(`${baseUrl}${MEMBER_LIBRARY_PAGE_PATH}`, { waitUntil: 'domcontentloaded' });
-      await expect
-        .poll(() => page.locator('[aria-current="page"]').count(), { timeout: 30_000 })
-        .toBe(0);
+      const current = crumbs.locator('[aria-current="page"]');
+      await expect.poll(() => current.count(), { timeout: 30_000 }).toBe(1);
+      expect(await current.textContent()).toBe('All recordings');
+      expect(await crumbs.getByRole('listitem').count()).toBe(2);
     } finally {
       await page.context().close();
     }

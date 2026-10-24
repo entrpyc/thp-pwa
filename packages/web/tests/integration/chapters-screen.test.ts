@@ -382,19 +382,36 @@ describe('the chapter page (3.22.13, 3.22.14, 3.22.15)', () => {
         .toContain('The cost of pruning.');
       expect(await page.getByRole('heading', { name: 'The branches' }).count()).toBe(1);
 
-      // 3.22.13's route back — to the teaching this chapter divides, with its chapter list open,
-      // rather than to the library. Opened from a link here, so there is no entry behind this one
-      // to go back to and the control navigates: the stack grows by one, and the list is at the top.
+      // 3.22.13's route back goes back through history, and this page was opened on top of the
+      // teaching's own entry — so back lands on that entry, and the stack is no longer than it was.
       const entries = await page.evaluate(() => window.history.length);
       await page.getByRole('link', { name: 'Back to the teaching' }).click();
-      await page.waitForURL(
+      await page.waitForURL(`${baseUrl}${recordingPagePath(chapteredId)}`, { timeout: 30_000 });
+      expect(await page.evaluate(() => window.history.length)).toBe(entries);
+
+      // Opened from a link in a fresh tab, there is no entry behind it to go back to, and the
+      // control navigates instead — to the teaching with its chapter list open, which is the list
+      // this chapter is a row of, rather than to the library. The stack grows by one.
+      const fresh = await page.context().newPage();
+      await fresh.goto(`${baseUrl}${chapterPagePath(chapteredId, chapterIds[1]!)}`, {
+        waitUntil: 'domcontentloaded',
+      });
+      await expect
+        .poll(async () => (await fresh.textContent('body')) ?? '', { timeout: 30_000 })
+        .toContain('The cost of pruning.');
+      // Playwright's fresh tab starts on about:blank, which is why the proof is `canGoBack` and a
+      // stack that grows by one, rather than a stack of exactly one entry.
+      expect(await fresh.evaluate(() => (window as { navigation?: { canGoBack: boolean } }).navigation?.canGoBack)).toBe(false);
+      const before = await fresh.evaluate(() => window.history.length);
+      await fresh.getByRole('link', { name: 'Back to the teaching' }).click();
+      await fresh.waitForURL(
         (url) =>
           url.pathname === recordingPagePath(chapteredId) && url.searchParams.get('tab') === 'chapters',
         { timeout: 30_000 },
       );
-      await expect.poll(() => panel(page).count(), { timeout: 30_000 }).toBe(1);
-      expect(await page.evaluate(() => window.history.length)).toBe(entries + 1);
-      expect(await page.evaluate(() => window.scrollY)).toBe(0);
+      await expect.poll(() => panel(fresh).count(), { timeout: 30_000 }).toBe(1);
+      expect(await fresh.evaluate(() => window.history.length)).toBe(before + 1);
+      expect(await fresh.evaluate(() => window.scrollY)).toBe(0);
     } finally {
       await page.context().close();
     }

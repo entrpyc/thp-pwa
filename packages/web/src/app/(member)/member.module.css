@@ -187,10 +187,11 @@
 }
 
 /*
- * A study, a teaching or a chapter in the trail: its icon on a phone, its title from 641px up —
- * the width the transport takes one row at, so the two bars change shape together. The title is
- * never removed, only taken off the screen, so the trail reads the same to a screen reader and the
- * segment's accessible name stays its title.
+ * The current page, when it is a study, a teaching or a chapter: its icon on a phone, its title
+ * from 641px up — the width the transport takes one row at, so the two bars change shape together.
+ * The title is never removed, only taken off the screen, so the trail reads the same to a screen
+ * reader. An ancestor keeps its title at every width: it is a link, and a link a member cannot
+ * read is a link they cannot choose — so on a phone it is the current segment alone that folds.
  */
 .crumbLink,
 .crumbCurrent {
@@ -212,19 +213,23 @@
 }
 
 @media (max-width: 640px) {
-  /* Each segment is the home link's 44px square with its icon centred, one gap between each and the next. */
   .crumb {
     min-width: 0;
   }
 
+  /* Every segment stands as tall as the home link's 44px square; a titled one stays as wide as its words. */
   .crumbLink,
   .crumbCurrent {
-    justify-content: center;
-    min-width: calc(var(--space-8) + var(--space-3));
     min-height: calc(var(--space-8) + var(--space-3));
   }
 
-  /* The arrow between two icons stands as tall as their boxes, and no wider than itself. */
+  /* The icon-only current segment is the home link's square, its icon centred. */
+  .crumbIconic {
+    justify-content: center;
+    min-width: calc(var(--space-8) + var(--space-3));
+  }
+
+  /* The arrow between two segments stands as tall as their boxes, and no wider than itself. */
   .separator {
     display: inline-flex;
     align-items: center;
@@ -232,11 +237,11 @@
     min-height: calc(var(--space-8) + var(--space-3));
   }
 
-  .crumbIcon {
+  .crumbIconic .crumbIcon {
     display: block;
   }
 
-  .crumbLabel {
+  .crumbIconic .crumbLabel {
     position: absolute;
     width: 1px;
     height: 1px;
@@ -247,8 +252,8 @@
 }
 
 /*
- * Boxed on the right, as the reference has it. There is deliberately no search control beside it:
- * §3.10 is deferred, and a magnifier that opens nothing is a promise this epic cannot keep.
+ * Boxed on the right, as the reference has it, with the magnifier and the bell beside it in the
+ * same shape (see *the search* below).
  */
 /*
  * **The menu is pressed, never read.** A tap held a moment on a phone — which is what a tap on a
@@ -395,10 +400,11 @@
 /* ---------------------------------------------------------------------------------- the search */
 
 /*
- * The magnifier is the bell's recipe as a button: the same boxed shape, the same icon colour, so
- * the three controls at the right of the bar read as one group (`top-navigation/search.png`).
+ * The magnifier is the bell's recipe: the same boxed shape, the same icon colour, so the three
+ * controls at the right of the bar read as one group (`top-navigation/search.png`). A link, like
+ * the bell — it goes to the search page rather than opening a bar.
  */
-.searchButton {
+.searchLink {
   display: inline-flex;
   align-items: center;
   justify-content: center;
@@ -408,89 +414,12 @@
   border: 1px solid var(--color-border);
   border-radius: var(--radius-md);
   color: var(--color-primary-icon);
-  cursor: pointer;
+  text-decoration: none;
   -webkit-user-select: none;
   user-select: none;
-  -webkit-touch-callout: none;
 }
 
-.searchButton:hover,
-.searchButton[aria-expanded='true'] {
-  border-color: var(--color-border-strong);
-}
-
-/*
- * `search.png`'s second bar: the first bar's own recipe — dark, rounded, bordered, the shell's
- * width — drawn in the flow under it rather than overlaid, because unlike the menu it is not a
- * question about where to go next but a thing the member types into, and a field that floated over
- * the page would float over whatever it was about to replace. The region is a column, so the bar
- * simply follows the first.
- */
-.searchBar {
-  width: 100%;
-  max-width: 48rem;
-  margin: var(--space-2) auto 0;
-  pointer-events: auto;
-  display: flex;
-  align-items: center;
-  gap: var(--space-3);
-  background: var(--color-bg-deep);
-  border: 1px solid var(--color-border);
-  border-radius: var(--radius-lg);
-  padding: var(--space-2) var(--space-3) var(--space-2) var(--space-4);
-}
-
-.searchGlyph {
-  flex: none;
-  display: inline-flex;
-  color: var(--color-text-muted);
-}
-
-/* The field is the bar: no box of its own, the bar's background showing through. */
-.searchField {
-  flex: 1 1 auto;
-  min-width: 0;
-  background: transparent;
-  border: none;
-  padding: var(--space-2) 0;
-  color: var(--color-text);
-  font-family: inherit;
-  font-size: var(--fs-card-title);
-}
-
-/*
- * The bar is the box, so the bar is what says "focused": its border takes the focus colour while
- * the field inside it has focus, and the field itself draws nothing (the global rule in
- * `globals.css` would otherwise ring the bare field inside the bar).
- */
-.searchField:focus-visible {
-  outline: none !important;
-}
-
-.searchBar:focus-within {
-  border-color: var(--color-primary-icon);
-}
-
-.searchField::placeholder {
-  color: var(--color-text-dim);
-}
-
-/* The × at the right, in the bar's own raised circle, as the reference draws it. */
-.searchClear {
-  flex: none;
-  display: inline-flex;
-  align-items: center;
-  justify-content: center;
-  width: var(--space-8);
-  height: var(--space-8);
-  background: var(--color-surface-raised);
-  border: 1px solid var(--color-border);
-  border-radius: var(--radius-pill);
-  color: var(--color-text);
-  cursor: pointer;
-}
-
-.searchClear:hover {
+.searchLink:hover {
   border-color: var(--color-border-strong);
 }
 

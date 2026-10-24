@@ -9,6 +9,7 @@ import {
   type SeriesView,
 } from '@thp/shared';
 import { ApiClientError, apiFetch } from '@/client/api-client';
+import { useBreadcrumbTrail } from '../player-context';
 import styles from '../screens.module.css';
 
 /**
@@ -65,6 +66,7 @@ export function seriesMeta(series: SeriesView): string {
 }
 
 export function SeriesListing() {
+  useBreadcrumbTrail('All series');
   const [series, setSeries] = useState<readonly SeriesView[] | null>(null);
   const [failure, setFailure] = useState<string | null>(null);
 

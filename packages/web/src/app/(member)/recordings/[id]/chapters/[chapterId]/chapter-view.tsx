@@ -1,6 +1,5 @@
 'use client';
 
-import Link from 'next/link';
 import { useSearchParams } from 'next/navigation';
 import { useEffect, useState } from 'react';
 import { PinMomentControl } from '../../../../highlights/pin-moment-control';
@@ -15,6 +14,7 @@ import {
   type RecordingView as Recording,
 } from '@thp/shared';
 import { ApiClientError, apiFetch } from '@/client/api-client';
+import { BackRoute } from '../../../../../back-route';
 import { track } from '@/client/observability/analytics';
 import { useBreadcrumbTrail, usePlayer } from '../../../../player-context';
 import { NotesPanel } from '../../notes-panel';
@@ -23,13 +23,7 @@ import {
   toLoaded,
   useRecordingContentFor,
 } from '../../recording-content';
-import {
-  arrivedFromList,
-  isPlainPress,
-  recordingTabHref,
-  tabFromAddress,
-  writeTabToAddress,
-} from '../../round-trip';
+import { recordingTabHref, tabFromAddress, writeTabToAddress } from '../../round-trip';
 import { ScripturePanel } from '../../scripture-panel';
 import { TranscriptPanel } from '../../transcript-panel';
 import styles from '../../../../screens.module.css';
@@ -56,12 +50,11 @@ type OpenTab = (typeof TABS)[number] | null;
  * - **The recording's tabs sit beside them, each scoped to this chapter's span**
  *   ([3.22.14](docs/project/prd.md)). A note belongs to the chapter its timestamp falls in, a
  *   citation to the chapter its anchor falls in, and the transcript stops at the boundaries.
- * - **It offers a route back to the recording it came from** ([3.22.13](docs/project/prd.md)) — the
- *   back control over the band, pointing at the teaching with its chapter list open rather than at
- *   the library. The address is what decides that, so a member who arrived from a link gets the
- *   same route back as one who walked here. A member who *did* walk here — pressed a row on that
- *   list — goes back through history instead, which is what brings the list back at the offset
- *   they left it; see the control below and `round-trip.ts`.
+ * - **It offers a route back** ([3.22.13](docs/project/prd.md)) — the back control over the band,
+ *   which goes back through history to wherever the chapter was opened from. From the teaching's
+ *   chapter list that brings the list back at the offset it was left at (`round-trip.ts`); a member
+ *   who arrived from a link, with nothing behind them, is taken to the teaching with its chapter
+ *   list open rather than to the library.
  * - **The breadcrumb draws the whole path** — `home › series › recording › chapter` — which is a
  *   different question from the one the back control answers. Back is *one press up*; the trail is
  *   *where this page sits*, and a chapter sits inside a teaching inside a study. Naming only the
@@ -104,15 +97,6 @@ export function ChapterScreen({
     setOpenTab(open);
     writeTabToAddress(open, 'notes');
   };
-  /**
-   * Whether the teaching's page is the history entry behind this one — a row on its chapter list
-   * was pressed to get here. Decided once, on arrival, and false until then, so the back control is
-   * a plain link for the first paint and stays one for a page opened from a link (`round-trip.ts`).
-   */
-  const [fromList, setFromList] = useState(false);
-  useEffect(() => {
-    setFromList(arrivedFromList(recordingId, chapterId));
-  }, [chapterId, recordingId]);
   /** The stored position, kept for the moment the play control hands the player over. */
   const [startAtMs, setStartAtMs] = useState<number | null>(null);
 
@@ -157,8 +141,8 @@ export function ChapterScreen({
       : [
           ...(recording.series == null
             ? []
-            : [{ label: recording.series.title, href: seriesPagePath(recording.series.id), kind: 'series' as const }]),
-          { label: recording.title, href: recordingPagePath(recordingId), kind: 'recording' as const },
+            : [{ label: recording.series.title, href: seriesPagePath(recording.series.id) }]),
+          { label: recording.title, href: recordingPagePath(recordingId) },
         ],
     'chapter',
   );
@@ -226,30 +210,22 @@ export function ChapterScreen({
           </>
         )}
         {/*
-          **The route back to the recording** ([3.22.13](docs/project/prd.md)) — to the teaching this
-          chapter divides, with its chapter list open: that list is what this chapter is a row of.
-          The recording page's own back control goes to the study or the library, which makes two
-          presses out of here and each of them somewhere a member meant to be.
+          **The route back** ([3.22.13](docs/project/prd.md)) — through history, to whatever this
+          chapter was opened from. From the teaching's chapter list that is the teaching's own
+          entry, which is what puts the list back at the offset it was left at and keeps the
+          browser's own back from looping to this chapter again (`round-trip.ts`).
 
-          The href is that address, always, so the control reads the same when the page was opened
-          from a link and a middle-click opens the teaching in a tab. A plain press when the
-          teaching's page is the entry behind this one goes back through history instead — the one
-          way to land on *that* entry rather than on a fresh one, which is what puts the list back
-          at the offset it was left at, and what keeps the browser's own back from looping to this
-          chapter again.
+          The href is the teaching with its chapter list open — the list this chapter is a row of —
+          so a member who arrived from a link, with nothing behind them, still lands somewhere that
+          makes sense, and a middle-click opens the teaching in a tab.
         */}
-        <Link
+        <BackRoute
           className={styles.back}
-          href={recordingTabHref(recordingId, 'chapters')}
+          fallbackHref={recordingTabHref(recordingId, 'chapters')}
           aria-label="Back to the teaching"
-          onClick={(event) => {
-            if (!fromList || !isPlainPress(event)) return;
-            event.preventDefault();
-            window.history.back();
-          }}
         >
           <span aria-hidden="true">‹</span>
-        </Link>
+        </BackRoute>
       </div>
 
       {failure === null ? null : <p className={styles.failure}>{failure}</p>}

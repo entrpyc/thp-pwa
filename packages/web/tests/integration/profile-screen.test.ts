@@ -227,6 +227,12 @@ describe('the sections', () => {
       // The identity page: the strip is the list, and the root entry is the one marked current.
       await expect.poll(() => strip.getByRole('link').allInnerTexts()).toEqual(labels);
       expect(await currentSection(page)).toBe('Profile');
+      // The breadcrumb names the place: home › My profile, and nothing between.
+      const crumbs = page.getByRole('navigation', { name: 'Breadcrumb' });
+      const crumb = crumbs.locator('[aria-current="page"]');
+      await expect.poll(() => crumb.count(), { timeout: 30_000 }).toBe(1);
+      expect(await crumb.textContent()).toBe('My profile');
+      expect(await crumbs.getByRole('listitem').count()).toBe(2);
 
       // Across to settings by the strip: same heading, same strip, the mark has moved, and the
       // page beneath is the settings page — its own h2 and its first section, the way out.
@@ -239,6 +245,11 @@ describe('the sections', () => {
         .toBe(1);
       expect(await page.getByRole('heading', { level: 1, name: 'My profile' }).count()).toBe(1);
       await expect.poll(() => currentSection(page)).toBe(settings.label);
+      // A section is one level down: home › My profile › Settings, with My profile a link back.
+      await expect.poll(() => crumb.textContent(), { timeout: 30_000 }).toBe(settings.label);
+      expect(await crumbs.getByRole('link', { name: 'My profile' }).getAttribute('href')).toBe(
+        PROFILE_PAGE_PATH,
+      );
       expect(await page.getByRole('region', { name: 'Session' }).isVisible()).toBe(true);
       expect(await page.getByRole('button', { name: 'Save name' }).count()).toBe(0);
 

@@ -13,6 +13,7 @@ import {
   type RecordingView as Recording,
 } from '@thp/shared';
 import { ApiClientError, apiFetch } from '@/client/api-client';
+import { BackRoute } from '../../../back-route';
 import { track } from '@/client/observability/analytics';
 import { useBreadcrumbTrail, usePlayer } from '../../player-context';
 import { DownloadControl } from '../../downloads/download-control';
@@ -82,11 +83,10 @@ type OpenTab = (typeof TABS)[number] | null;
  * once the element has metadata — seeking before that is silently clamped to zero — and the member
  * presses play when they want sound.
  *
- * **The back control returns to the series this teaching is in**, and to the library only for a
- * teaching that is in none. Never to browser history, so it behaves the same when the page was
- * opened from a link as when it was walked to — which is the whole reason it is a destination rather
- * than a `history.back()`: a member who arrived from a shared link has no history to go back to, and
- * the study is where the teaching actually lives.
+ * **The back control goes back through browser history** — to the study, the library, a search,
+ * whatever the teaching was opened from — and falls back to the series this teaching is in, or to
+ * the library for a teaching in none, for a member who arrived from a shared link and has no history
+ * to go back to (`back-route.tsx`).
  */
 export function RecordingScreen({
   recordingId,
@@ -213,7 +213,7 @@ export function RecordingScreen({
     recording?.title ?? null,
     recording?.series == null
       ? []
-      : [{ label: recording.series.title, href: seriesPagePath(recording.series.id), kind: 'series' }],
+      : [{ label: recording.series.title, href: seriesPagePath(recording.series.id) }],
     'recording',
   );
 
@@ -324,12 +324,12 @@ export function RecordingScreen({
   const covered = cover !== null || (recording === null && failure === null);
 
   /**
-   * **Back goes to the study this teaching is part of**, and to the library only for a teaching that
-   * is in none.
+   * **Where back lands when there is no history to step through**: the study this teaching is part
+   * of, and the library only for a teaching that is in none.
    *
    * It is the same destination the breadcrumb's parent segment points at, read off the same field of
-   * the same payload — so the two controls that mean "up from here" cannot disagree, which they
-   * would the moment one of them derived its answer from the navigation that reached the page.
+   * the same payload — so the two controls that mean "up from here" cannot disagree. The label names
+   * that fallback, because it is the one destination the control is sure of before it is pressed.
    *
    * A teaching in no series keeps the library, because there is no study page to return to; that is
    * the ordinary case rather than a degraded one, exactly as the missing cover above is. The same
@@ -356,9 +356,9 @@ export function RecordingScreen({
             <span className={styles.heroFade} aria-hidden="true" />
           </>
         )}
-        <Link className={styles.back} href={back.href} aria-label={back.label}>
+        <BackRoute className={styles.back} fallbackHref={back.href} aria-label={back.label}>
           <span aria-hidden="true">‹</span>
-        </Link>
+        </BackRoute>
       </div>
 
       {failure === null ? null : <p className={styles.failure}>{failure}</p>}
