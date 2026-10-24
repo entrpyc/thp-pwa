@@ -11,9 +11,14 @@
 # a minified frame in a browser exception into a file and a line.
 #
 # **Optional, and says so.** A box with no CLI credentials in `.env` skips the upload with one
-# line and leaves the maps where the build put them; it does not fail the deploy, because readable
-# stack traces are a convenience and a deploy is not. The two variables, `POSTHOG_CLI_API_KEY` and
+# line; it does not fail the deploy, because readable stack traces are a convenience and a deploy
+# is not. The maps are deleted either way: a map nobody uploaded is still the source, and the box
+# serves whatever the build left under .next/static. The two variables, `POSTHOG_CLI_API_KEY` and
 # `POSTHOG_CLI_PROJECT_ID`, are read by the CLI itself from the environment (see .env.example).
+#
+# `verify:production`'s `source-maps` check is what notices when this did not run: it fetches the
+# served chunks and refuses a map it can download, and — with the credentials set — a chunk the
+# CLI never stamped.
 
 set -euo pipefail
 
@@ -40,7 +45,9 @@ if [[ ! -d "$CHUNKS" ]]; then
 fi
 
 if [[ -z "${POSTHOG_CLI_API_KEY:-}" || -z "${POSTHOG_CLI_PROJECT_ID:-}" ]]; then
-  echo "upload-sourcemaps: POSTHOG_CLI_API_KEY or POSTHOG_CLI_PROJECT_ID is not set — skipping; browser stack traces will be minified"
+  echo "upload-sourcemaps: POSTHOG_CLI_API_KEY or POSTHOG_CLI_PROJECT_ID is not set — skipping the upload; browser stack traces will be minified"
+  echo "upload-sourcemaps: deleting the $(find "$CHUNKS" -name '*.map' | wc -l | tr -d ' ') .map file(s) under $CHUNKS so the box serves none"
+  find "$CHUNKS" -name '*.map' -delete
   exit 0
 fi
 

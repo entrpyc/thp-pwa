@@ -372,8 +372,19 @@ PostHog CLI (`@posthog/cli`, a pinned dev dependency) stamp each chunk with a co
 chunk and map as a symbol set tied to the release tag, and delete the maps and their
 `sourceMappingURL` comments — so **the box never serves a map**, and the script deletes any
 straggler itself. It needs `POSTHOG_CLI_API_KEY` (a personal API key) and `POSTHOG_CLI_PROJECT_ID`
-in `.env` (section 6.7); without them it says so in one line and the deploy goes on with minified
-traces. Server and worker traces are Node's own and need no map.
+in `.env` (section 6.7); without them it says so in one line, still deletes the maps, and the
+deploy goes on with minified traces. Server and worker traces are Node's own and need no map.
+
+**How it failed the first time, and what now catches it.** v1.3.1 carried the upload step and was
+deployed without it running: `deploy.sh` checks out the tag from inside itself, and bash goes on
+reading the copy it opened — the *previous* release's script, which had no such step. The deploy
+log showed `Checking the built client calls the right origin` followed by `Restarting`, nothing
+skipped and nothing failed, and the box served every map. Two things changed on 24 October 2026.
+`deploy.sh` now does nothing after the checkout but hand over to the copy the checkout wrote
+(`exec … --checked-out`), so a change to the script runs on the deploy that ships it. And
+`verify:production` gained `source-maps` (section 6.6): it fetches the served chunks, refuses any
+map it can download, and — with the CLI credentials set — refuses chunks the CLI never stamped,
+because a stamp (`//# chunkId=`, `_posthogChunkIds`) is the one witness that the upload ran.
 
 **The alert** is A8 in section 7: PostHog's *new issue* alert on the project, to the operator's
 e-mail. The other eight alerts cut in 2.5 stay cut; this one came back because it is the only one
@@ -534,6 +545,7 @@ recreate them, and the HogQL query is recorded there verbatim.
 | `alloy` | The `alloy` systemd unit is active, its `/-/ready` endpoint on `127.0.0.1:12345` answers, and every component in `/api/v0/web/components` reports itself healthy — which is how a wrong Postgres password or a dead Grafana token shows up. |
 | `backup-pings` | `/etc/thp/healthchecks.env` names an `https` URL for all three pings, and the *installed* `thp-backup` and `thp-backup-check` units carry the `ExecStartPost` that sends theirs. |
 | `analytics` | The built client chunks under `packages/web/.next` carry a `phc_` key and the EU host — read from disk, because the adapter is in the member layout's chunk and an anonymous fetch of the origin is handed the sign-in page — and `POSTHOG_KEY` is set for the API. |
+| `source-maps` | Over HTTP, from the served chunks: no `sourceMappingURL` target and no `<chunk>.map` answers 200, and — when `POSTHOG_CLI_API_KEY` and `POSTHOG_CLI_PROJECT_ID` are set — at least one served chunk carries the PostHog CLI's chunk id. Fails the deploy that built maps and never uploaded them (section 5.6). |
 | `analytics-proxy` | An empty POST to `/relay/e/` on the origin is answered by PostHog's plain-text `400 request missing data payload` rather than by Next — which is what a live nginx block that was never given the `location /relay/` would do, silently losing every event. |
 | `heartbeat` | `HEALTHCHECK_WORKER_URL` is set and the worker's pm2 log carries a `worker.heartbeat.sent` line in the last 10 min. |
 | `not-mocked` | Already exists; unchanged — `THP_MOCK_EXTERNAL` is not `true` on the box. |

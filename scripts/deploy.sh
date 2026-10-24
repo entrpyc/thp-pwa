@@ -36,10 +36,25 @@ if [[ -n "$(git status --porcelain)" ]]; then
   exit 1
 fi
 
-# Detached at the tag, deliberately: there is no branch on the box to drift from the release.
-echo "==> Checking out $TAG"
-git fetch --tags origin
-git checkout --quiet --detach "refs/tags/$TAG"
+# **The checkout replaces this file while it is running**, and bash keeps reading the copy it
+# opened — so everything after the checkout would run from the *previous* release's deploy.sh, and
+# a step added to this script would first run one deploy late (v1.3.1 shipped the source-map upload
+# and was deployed without it). So the checkout is the only thing the first pass does: it then
+# hands over to the deploy.sh the checkout just wrote, which skips straight past this block.
+if [[ "${2:-}" != "--checked-out" ]]; then
+  # Detached at the tag, deliberately: there is no branch on the box to drift from the release.
+  echo "==> Checking out $TAG"
+  git fetch --tags origin
+  git checkout --quiet --detach "refs/tags/$TAG"
+  exec "${BASH_SOURCE[0]}" "$TAG" --checked-out
+fi
+
+# The second pass refuses to run from anything but the tag it was handed, so the flag cannot be
+# used to deploy whatever happens to be checked out.
+if [[ "$(git describe --tags --exact-match 2>/dev/null)" != "$TAG" ]]; then
+  echo "The checkout is not at $TAG — run ./scripts/deploy.sh $TAG without --checked-out" >&2
+  exit 1
+fi
 
 echo "==> Installing (npm ci — the lockfile, exactly)"
 npm ci

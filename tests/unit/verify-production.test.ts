@@ -1,5 +1,7 @@
 import { describe, expect, it } from 'vitest';
 import {
+  carriesPostHogChunkId,
+  sourceMapReferences,
   daysUntil,
   parsePgBackRestConfig,
   parsePgBackRestInfo,
@@ -257,5 +259,42 @@ describe('what a failed command said', () => {
 
   it('falls back to the message when the command wrote nothing', () => {
     expect(lastLines(new Error('sudo: a password is required'), 3)).toBe('sudo: a password is required');
+  });
+});
+
+describe('the source maps a served chunk points at', () => {
+  const chunk = 'https://thp.example/_next/static/chunks/1qgxedji5cv89.js';
+
+  it('resolves the comment against the chunk, which is how Turbopack names a map after a different id', () => {
+    const body = 'console.log(1);\n\n//# sourceMappingURL=234k1f8-znr94.js.map\n';
+    expect(sourceMapReferences(chunk, body)).toEqual([
+      'https://thp.example/_next/static/chunks/234k1f8-znr94.js.map',
+    ]);
+  });
+
+  it('answers nothing for a stamped chunk whose comment the CLI removed, and for an inline map', () => {
+    expect(sourceMapReferences(chunk, 'console.log(1);\n//# chunkId=0191a1b2\n')).toEqual([]);
+    expect(sourceMapReferences(chunk, '//# sourceMappingURL=data:application/json;base64,e30=')).toEqual([]);
+  });
+
+  it('reads a CSS-style block comment and an absolute URL as a browser would', () => {
+    expect(sourceMapReferences(chunk, '/*# sourceMappingURL=https://cdn.example/x.map */')).toEqual([
+      'https://cdn.example/x.map',
+    ]);
+  });
+});
+
+describe('the PostHog chunk id stamp', () => {
+  it('recognises both halves of what the CLI injects', () => {
+    expect(carriesPostHogChunkId('//# chunkId=0191a1b2-3c4d\nconsole.log(1);')).toBe(true);
+    expect(
+      carriesPostHogChunkId(
+        '!function(){try{var e=globalThis;e._posthogChunkIds=e._posthogChunkIds||{}}catch(e){}}();',
+      ),
+    ).toBe(true);
+  });
+
+  it('does not mistake an ordinary chunk for a stamped one', () => {
+    expect(carriesPostHogChunkId('console.log(1);\n//# sourceMappingURL=a.js.map\n')).toBe(false);
   });
 });

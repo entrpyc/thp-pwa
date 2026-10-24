@@ -550,7 +550,7 @@ Two commands matter after the first setup:
 
 | Command                      | What it does                                                                         |
 | :--------------------------- | :----------------------------------------------------------------------------------- |
-| `./scripts/deploy.sh vX.Y.Z` | Check out the tag, install, migrate, build, check the origin, restart, verify. The whole deploy. The Deploy workflow runs it — see **Releasing**. |
+| `./scripts/deploy.sh vX.Y.Z` | Check out the tag, install, migrate, build, check the origin, upload source maps, restart, verify. The whole deploy. The Deploy workflow runs it — see **Releasing**. After the checkout it re-executes itself from the tag just checked out, so a change to the script runs on the deploy that ships it rather than the one after. |
 | `npm run verify:production`  | Reads the box and prints one PASS/FAIL line per check. Repairs nothing.               |
 
 `npm run verify:production -- --remote-only` runs just the checks that need nothing but HTTP, so

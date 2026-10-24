@@ -307,16 +307,56 @@ function hostname(): string {
   return new URL(origin()).hostname;
 }
 
+/** One served client script: its absolute URL and what the browser receives at it. */
+interface ServedScript {
+  readonly url: string;
+  readonly body: string;
+}
+
 /** Every `<script src>` the origin's HTML pulls in — the client bundle, as a browser receives it. */
-async function servedClientScripts(): Promise<string> {
+async function servedClientScriptFiles(): Promise<ServedScript[]> {
   const html = await (await fetch(origin(), { redirect: 'follow' })).text();
   const sources = [...html.matchAll(/<script[^>]+src="([^"]+)"/g)]
     .map((match) => match[1])
     .filter((source): source is string => source !== undefined && source.startsWith('/'));
-  const bodies = await Promise.all(
-    sources.map(async (source) => (await fetch(`${origin()}${source}`)).text()),
+  return Promise.all(
+    sources.map(async (source) => {
+      const url = `${origin()}${source}`;
+      return { url, body: await (await fetch(url)).text() };
+    }),
   );
-  return bodies.join('\n');
+}
+
+async function servedClientScripts(): Promise<string> {
+  return (await servedClientScriptFiles()).map((script) => script.body).join('\n');
+}
+
+/**
+ * The source maps a served chunk points at, as absolute URLs — every `sourceMappingURL` comment
+ * resolved against the chunk's own URL, which is how a browser's devtools would resolve it.
+ * An inline (`data:`) map is not a file the box serves and is left out.
+ */
+export function sourceMapReferences(scriptUrl: string, body: string): string[] {
+  const found: string[] = [];
+  for (const match of body.matchAll(/\/[/*]#\s*sourceMappingURL=(\S+)/g)) {
+    const reference = (match[1] ?? '').replace(/\*\/$/, '');
+    if (reference === '' || reference.startsWith('data:')) continue;
+    try {
+      found.push(new URL(reference, scriptUrl).href);
+    } catch {
+      // Not a URL. Nothing a browser could fetch either.
+    }
+  }
+  return found;
+}
+
+/**
+ * Whether `scripts/upload-sourcemaps.sh` ran on this chunk: the PostHog CLI's inject stamps every
+ * chunk with a `//# chunkId=` comment and a snippet that registers it in `_posthogChunkIds`
+ * (`@posthog/cli`'s `sourcemaps/content.rs`), and that is what ties a frame to a symbol set.
+ */
+export function carriesPostHogChunkId(body: string): boolean {
+  return /\/\/#\s*chunkId=/.test(body) || body.includes('_posthogChunkIds');
 }
 
 interface Check {
@@ -586,6 +626,47 @@ const CHECKS: readonly Check[] = [
       if (!scripts.includes(origin())) return bad(`no client script carries ${origin()}`);
       if (scripts.includes('http://localhost')) return bad('a client script carries http://localhost');
       return ok(`the served bundle calls ${origin()}`);
+    },
+  },
+  {
+    name: 'source-maps',
+    reach: 'remote',
+    async run() {
+      // docs/project/observability.md § 5.6. The box must never serve a map, and with the CLI
+      // credentials set the served chunks must carry the CLI's chunk id — which is the one witness
+      // that the upload step ran at all. v1.3.1 was deployed with the step in deploy.sh and
+      // without it running, and every other check passed.
+      const scripts = await servedClientScriptFiles();
+      if (scripts.length === 0) return bad('the origin served no client scripts — is the app running?');
+
+      const candidates = new Set<string>();
+      for (const script of scripts) {
+        candidates.add(`${script.url}.map`);
+        for (const reference of sourceMapReferences(script.url, script.body)) candidates.add(reference);
+      }
+      const served: string[] = [];
+      await Promise.all(
+        [...candidates].map(async (url) => {
+          const response = await fetch(url, { method: 'HEAD', redirect: 'manual' });
+          if (response.status === 200) served.push(url);
+        }),
+      );
+      if (served.length > 0) {
+        return bad(`the box serves a source map: ${served[0]} — scripts/upload-sourcemaps.sh did not run after the build`);
+      }
+
+      const uploading =
+        (process.env['POSTHOG_CLI_API_KEY']?.trim() ?? '') !== '' &&
+        (process.env['POSTHOG_CLI_PROJECT_ID']?.trim() ?? '') !== '';
+      const stamped = scripts.filter((script) => carriesPostHogChunkId(script.body)).length;
+      if (uploading && stamped === 0) {
+        return bad('POSTHOG_CLI_API_KEY is set but no served chunk carries a PostHog chunk id — the upload step did not run; browser traces will not resolve');
+      }
+      return ok(
+        uploading
+          ? `no map served; ${stamped} of ${scripts.length} served chunks stamped for PostHog`
+          : 'no map served; CLI credentials unset, so traces stay minified',
+      );
     },
   },
   {
