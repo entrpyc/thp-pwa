@@ -19,5 +19,6 @@ coverage/
 # every deploy after the first refuse. Next writes it back whenever it is missing.
 packages/web/next-env.d.ts
 
-# Per-worktree dev-server logs written by the handover skill
+# Per-worktree dev-server and worker logs written by the handover skill
 dev-*.log
+worker-*.log
