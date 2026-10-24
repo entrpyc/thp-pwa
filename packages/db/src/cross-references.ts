@@ -50,7 +50,7 @@ export interface NewCrossReference {
   readonly basis: CrossReferenceBasis;
 }
 
-/** A candidate the index answered for one source sentence. */
+/** A candidate the index answered for one source window. Both ids are the windows' seek-point segments. */
 export interface NearestSegmentRow {
   readonly sourceSegmentId: string;
   readonly targetSegmentId: string;
@@ -60,7 +60,13 @@ export interface NearestSegmentRow {
 }
 
 /**
- * **The `k` nearest sentences of other published teachings, for each of these sentences.**
+ * **The `k` nearest passage windows of other published teachings, for each of these windows.**
+ *
+ * A `segment` row in the index is a **passage window** (`@thp/shared` `passages.ts`), keyed on
+ * the id of its first non-filler sentence; only window-start sentences have rows. So the ids
+ * passed in are window `sourceId`s, the ids answered are other teachings' window `sourceId`s, and
+ * a link is window-to-window — anchored, on both sides, to the sentence a member would seek to.
+ * The `cross_reference` table still points at segments and nothing about it changes.
  *
  * One statement for the whole batch: a lateral subquery per source vector, ordered by cosine
  * distance with a `limit`, which is the shape pgvector's HNSW index serves (project tdd 4.4).
@@ -69,20 +75,20 @@ export interface NearestSegmentRow {
  *
  * Three filters inside the lateral, in the order they matter:
  *
- * - **segments only** — a sentence is linked to a sentence, never to a chapter summary or a note
- *   ([3.9.1](docs/project/prd.md));
- * - **another recording** — a teaching's nearest sentence is usually its own next sentence, and
- *   a link to itself is not a cross-reference;
+ * - **segments only** — a passage is linked to a passage, never to a chapter summary, a note or
+ *   a recording's own words ([3.9.1](docs/project/prd.md));
+ * - **another recording** — a teaching's nearest window is usually its own overlapping neighbour,
+ *   and a link to itself is not a cross-reference;
  * - **a published one** — the gate, as `visibility.ts` spells it. A draft neither gives nor
- *   receives links, and asking the index for its sentences would be the step deciding visibility.
+ *   receives links, and asking the index for its passages would be the step deciding visibility.
  *
  * A filtered HNSW scan can answer **fewer than `k`** rows when many of the nearest candidates are
  * filtered out — pgvector widens its candidate set only up to `hnsw.ef_search`. That is accepted
- * rather than worked around with a larger `k` and a second pass: a source sentence whose nearest
+ * rather than worked around with a larger `k` and a second pass: a source window whose nearest
  * forty neighbours are all its own teaching or all drafts has, for the step's purposes, no
  * strong match, and the per-chapter cap keeps the step from needing many candidates anyway.
  *
- * A source sentence with no vector — one `embed` has not reached yet — answers nothing, which is
+ * A source window with no vector — one `embed` has not reached yet — answers nothing, which is
  * the honest state rather than an error; the chain runs this step after `embed` for that reason.
  */
 export async function findNearestSegments(

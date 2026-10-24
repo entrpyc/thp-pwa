@@ -134,20 +134,34 @@ describe('what the adapter makes of the answer', () => {
         // Not diarised, so nobody is attributed anything — which is a real answer rather than a
         // failure, and is what every segment written before this column existed says.
         speaker: null,
+        // The provider's grouping is kept as an index: the first two sentences are one paragraph,
+        // the third opens another, and the passage-window builder reads the break between them.
+        paragraphIndex: 0,
       },
       {
         startMs: 4123,
         endMs: 9880,
         text: 'We are picking up where we left off last week, in the second chapter.',
         speaker: null,
+        paragraphIndex: 0,
       },
       {
         startMs: 10_400,
         endMs: 15_340,
         text: 'Before we read, I want to say a word about why this passage matters.',
         speaker: null,
+        paragraphIndex: 1,
       },
     ]);
+  });
+
+  it('gives every sentence the index of the paragraph it came from, counted over the response', () => {
+    const result = mapDeepgramResponse(DIARISED_FIXTURE, 'en');
+
+    // Four paragraphs, five sentences: the index rises with the provider's grouping and never
+    // repeats across a break, so two adjacent sentences with different indexes had a pause between
+    // them — which is all the window builder asks of it.
+    expect(result.segments.map((one) => one.paragraphIndex)).toEqual([0, 0, 1, 2, 3]);
   });
 
   it('gives every sentence the speaker of the paragraph it came from', () => {
@@ -200,7 +214,7 @@ describe('what the adapter makes of the answer', () => {
     // Channels, alternatives and words are the provider's vocabulary and stop at this file.
     expect(Object.keys(result).sort()).toEqual(['confidence', 'language', 'segments', 'spend']);
     for (const segment of result.segments) {
-      expect(Object.keys(segment).sort()).toEqual(['endMs', 'speaker', 'startMs', 'text']);
+      expect(Object.keys(segment).sort()).toEqual(['endMs', 'paragraphIndex', 'speaker', 'startMs', 'text']);
     }
   });
 });

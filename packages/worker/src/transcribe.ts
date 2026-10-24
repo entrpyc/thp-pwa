@@ -128,6 +128,8 @@ export function createTranscribeHandler(deps: TranscribeDependencies = {}): JobH
           // What the port answered, persisted as it came. Nothing here turns an index into a name,
           // and nothing reads the column yet — the data exists before the surface that would.
           speaker: one.speaker,
+          // Likewise the paragraph the provider put it in, which the passage-window builder reads.
+          paragraphIndex: one.paragraphIndex,
         })),
       },
       deps.executor,

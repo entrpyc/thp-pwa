@@ -19,6 +19,16 @@ export interface Segment {
    * defect, and because every segment written before this column existed has no answer at all.
    */
   readonly speaker: number | null;
+  /**
+   * The provider's **paragraph**, as an index that rises through the transcript: two adjacent
+   * sentences with different indexes have a paragraph break between them, which is where the
+   * speaker paused. The passage-window builder prefers to end a window there.
+   *
+   * Nullable, and nothing back-fills it: every segment written before this column existed keeps
+   * `null` until its recording is re-transcribed, and the builder reads `null` as "no break
+   * information" rather than as a break.
+   */
+  readonly paragraphIndex: number | null;
   /** Set when a human has corrected the machine output. */
   readonly correctedAt: string | null;
   readonly correctedByUserId: string | null;

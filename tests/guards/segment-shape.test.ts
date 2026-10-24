@@ -24,9 +24,11 @@ function actualColumns(): string[] {
 
 describe('the segment table is the shared Segment type', () => {
   it('reads fields off the shared type at all — otherwise every assertion here is vacuous', () => {
-    // Eight fields, and the parse can see them. A silently empty parse would make "the two agree"
+    // Nine fields, and the parse can see them. A silently empty parse would make "the two agree"
     // pass for a table that agreed with nothing. `speaker` is the eighth (Story 2 Ticket 04–05):
-    // what a segment *is* now includes who the provider heard saying it.
+    // what a segment *is* now includes who the provider heard saying it. `paragraphIndex` is the
+    // ninth: which of the provider's paragraphs the sentence fell in, which the passage-window
+    // builder reads to end a window where the speaker paused.
     expect(interfaceFields(sharedSource, 'Segment')).toEqual([
       'id',
       'transcriptId',
@@ -34,6 +36,7 @@ describe('the segment table is the shared Segment type', () => {
       'endMs',
       'text',
       'speaker',
+      'paragraphIndex',
       'correctedAt',
       'correctedByUserId',
     ]);

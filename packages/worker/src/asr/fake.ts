@@ -35,6 +35,8 @@ export interface FakeScriptSegment {
   readonly endMs: number;
   readonly text: string;
   readonly speaker?: number | null;
+  /** The provider paragraph the sentence fell in. Optional, as `speaker` is: a script without it says nothing about breaks. */
+  readonly paragraphIndex?: number | null;
 }
 
 export interface FakeScript {
@@ -62,6 +64,7 @@ export function fakeTranscriber(script: FakeScript): FakeTranscriber {
           endMs: one.endMs,
           text: one.text,
           speaker: one.speaker ?? null,
+          paragraphIndex: one.paragraphIndex ?? null,
         })),
         spend: {
           model: 'fake',

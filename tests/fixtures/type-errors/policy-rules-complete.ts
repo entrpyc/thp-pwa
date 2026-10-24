@@ -91,6 +91,7 @@ export const rules: PolicyRules = {
   'sos.reply.delete': { roles: { admin: true, member: true }, requiresOwnership: true },
   'sos.moderate': { roles: { admin: true, member: false } },
   'search.query': { roles: { admin: true, member: true } },
+  'search.tune': { roles: { admin: true, member: false } },
   'flow.read': { roles: { admin: true, member: true } },
   'flow.start': { roles: { admin: true, member: true } },
   'flow.answer': { roles: { admin: true, member: true } },

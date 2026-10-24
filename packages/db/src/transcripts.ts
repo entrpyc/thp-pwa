@@ -32,6 +32,8 @@ export interface SegmentRow {
   readonly text: string;
   /** The provider's anonymous speaker index, or `null` when it attributed the sentence to nobody. */
   readonly speaker: number | null;
+  /** The provider's paragraph index, or `null` for a segment written before the column existed. */
+  readonly paragraphIndex: number | null;
   readonly correctedAt: Date | null;
   readonly correctedByUserId: string | null;
 }
@@ -47,6 +49,11 @@ export interface NewSegmentText {
    * says.
    */
   readonly speaker?: number | null;
+  /**
+   * The provider's paragraph index. Omitted or `null` is "no paragraph information", which the
+   * passage-window builder reads as no break anywhere — the same as every segment already written.
+   */
+  readonly paragraphIndex?: number | null;
 }
 
 export interface NewTranscript {
@@ -98,6 +105,7 @@ export async function replaceTranscript(
           endMs: one.endMs,
           text: one.text,
           speaker: one.speaker ?? null,
+          paragraphIndex: one.paragraphIndex ?? null,
         })),
       );
     }

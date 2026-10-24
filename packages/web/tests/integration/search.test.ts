@@ -1,23 +1,23 @@
 import { afterAll, beforeAll, describe, expect, it, inject } from 'vitest';
 import {
   API_PREFIX,
+  MEANING_LABELS,
   ROLE,
   SEARCH_BUDGET_PER_HOUR,
-  SEARCH_FILTERS_PATH,
+  SEARCH_MARK_END,
+  SEARCH_MARK_START,
+  SEARCH_PAGE_SIZE,
+  meaningLabel,
   searchPath,
   type ApiErrorBody,
-  type SearchFiltersPayload,
   type SearchPayload,
 } from '@thp/shared';
 import {
   createDatabase,
-  ensureTags,
   insertNote,
   insertRecording,
   insertSeries,
   listSegments,
-  replaceRecordingTags,
-  replaceScriptureReferences,
   replaceTranscript,
   setRecordingPublication,
   setRecordingSeries,
@@ -31,11 +31,12 @@ import { closeTestDatabase, signedInAccount, type TestAccount } from '../support
  * **`GET /api/v1/search`, end to end** ([3.10](docs/project/prd.md)): the route, the budget, and
  * the payload the page prints — against the real server, whose embedder is the fake.
  *
- * The query's own properties — visibility inside the top-k, every filter, the fusion order — are
- * proved in `packages/db/tests/integration/search.test.ts`. What this file pins is the layer on
- * top: who may call, what a bad address is refused with, that the member's own notes come back
- * under `mine`, that a chapter hit and a segment hit carry what the page needs to go somewhere,
- * and that the sixty-first search in an hour is refused with a wait.
+ * The query's own properties — visibility inside the top-k, the blend, the per-teaching cap, the
+ * paging, the fusion order — are proved in `packages/db/tests/integration/search.test.ts`. What
+ * this file pins is the layer on top: who may call, what a bad address is refused with, that a
+ * hit carries what the page needs to go somewhere and to say how it matched, that the scores are
+ * disclosed to an admin and to nobody else, that "Words only" spends no provider call, and that
+ * the sixty-first search in an hour is refused with a wait.
  */
 
 const baseUrl = inject('apiBaseUrl');
@@ -49,7 +50,6 @@ let member: TestAccount;
 let cookie: string;
 let recordingId: string;
 let seriesId: string;
-let tagId: string;
 let segmentId: string;
 let myNoteId: string;
 
@@ -115,14 +115,6 @@ beforeAll(async () => {
     ],
     handle,
   );
-  const [tag] = await ensureTags([`search-tag-${RUN}`], handle);
-  tagId = tag?.id ?? '';
-  await replaceRecordingTags(recordingId, [tagId], handle);
-  await replaceScriptureReferences(
-    recordingId,
-    [{ book: 'john', chapter: 15, verseStart: 1, verseEnd: 8, origin: 'machine', editedByAdmin: false, anchorMs: 0 }],
-    handle,
-  );
   await setRecordingPublication(recordingId, new Date(), handle);
 }, 120_000);
 
@@ -137,23 +129,26 @@ describe('who may search, and with what', () => {
     expect(status).toBe(401);
   });
 
-  it('refuses an empty query and an unreadable filter before anything is spent', async () => {
+  it('refuses an empty query and an unreadable control before anything is spent', async () => {
     const empty = await get<ApiErrorBody>('/search?q=%20', cookie);
     expect(empty.status).toBe(400);
     expect(empty.body.error.code).toBe('invalid_input');
-    const badSeries = await get<ApiErrorBody>('/search?q=line&series=not-a-uuid', cookie);
-    expect(badSeries.status).toBe(400);
-    const badBook = await get<ApiErrorBody>('/search?q=line&book=hezekiah', cookie);
-    expect(badBook.status).toBe(400);
+    for (const bad of ['kinds=series', 'mix=0.6', 'per=2', 'offset=7']) {
+      const refused = await get<ApiErrorBody>(`/search?q=line&${bad}`, cookie);
+      expect(refused.status, bad).toBe(400);
+      expect(refused.body.error.code).toBe('invalid_input');
+    }
   });
 });
 
 describe('what comes back (3.10.3, 3.10.6, 3.10.7)', () => {
-  it('a segment hit carries its moment, its teaching, its series and its passage in context', async () => {
+  it('a segment hit carries its moment, its teaching, its series, its passage in context and how it matched', async () => {
     const { status, body } = await get<SearchPayload>(searchPath({ query: LINE }), cookie);
     expect(status).toBe(200);
     expect(body.query).toBe(LINE);
     expect(body.meaningAvailable).toBe(true);
+    expect(body.offset).toBe(0);
+    expect(body.showScores).toBe(false);
     const hit = body.hits.find((one) => one.sourceId === segmentId);
     expect(hit).toBeDefined();
     expect(hit?.kind).toBe('segment');
@@ -165,35 +160,57 @@ describe('what comes back (3.10.3, 3.10.6, 3.10.7)', () => {
     expect(hit?.before).toBe('An opening line.');
     expect(hit?.after).toBeNull();
     expect(hit?.matchedBy).toEqual(['meaning', 'words']);
+    // The exact words: a similarity of one, bucketed as a strong match; the words marked.
+    expect(hit?.similarity).toBeCloseTo(1, 4);
+    expect(meaningLabel(hit?.similarity ?? 0)).toBe(MEANING_LABELS.strong);
+    expect(hit?.passageMarked).toContain(`${SEARCH_MARK_START}search${SEARCH_MARK_END}`);
+    expect(hit?.passageMarked).toContain(`${SEARCH_MARK_START}route${SEARCH_MARK_END}`);
+    expect(hit?.scores).toMatchObject({ vectorRank: 1, textRank: expect.any(Number), similarity: expect.any(Number) });
+    expect(hit?.scores.score).toBeGreaterThan(0);
     // The first hit is the line itself: both arms place it first.
     expect(body.hits[0]?.sourceId).toBe(segmentId);
   });
 
-  it('every filter is read off the address and narrows', async () => {
-    const on = await get<SearchPayload>(
-      searchPath({ query: LINE, seriesId, tagId, book: 'john', recordedFrom: '2026-09-09', recordedTo: '2026-09-09' }),
-      cookie,
-    );
-    expect(on.status).toBe(200);
-    expect(on.body.hits.map((hit) => hit.sourceId)).toContain(segmentId);
-    const off = await get<SearchPayload>(searchPath({ query: LINE, book: 'romans' }), cookie);
-    expect(off.body.hits).toEqual([]);
-  });
-
-  it('`mine` answers the member’s own notes and nothing else (3.10.10)', async () => {
-    const { body } = await get<SearchPayload>(searchPath({ query: RUN, onlyMine: true }), cookie);
+  it('narrows to the kinds asked for', async () => {
+    // Words only, so the meaning arm's nearest-whatever-the-distance rows from other suites' notes
+    // do not trail in: the one note that says the run's token is the one hit.
+    const { body } = await get<SearchPayload>(searchPath({ query: RUN, kinds: ['note'], blend: 0 }), cookie);
     expect(body.hits.map((hit) => hit.sourceId)).toEqual([myNoteId]);
     expect(body.hits[0]?.kind).toBe('note');
     expect(body.hits[0]?.startMs).toBe(5_000);
+    // And by meaning too, every row is a note.
+    const byMeaning = await get<SearchPayload>(searchPath({ query: RUN, kinds: ['note'] }), cookie);
+    expect(byMeaning.body.hits.length).toBeGreaterThan(0);
+    expect(byMeaning.body.hits.every((hit) => hit.kind === 'note')).toBe(true);
   });
 
-  it('the filters route offers exactly what the published library carries (3.10.8)', async () => {
-    const { status, body } = await get<SearchFiltersPayload>(SEARCH_FILTERS_PATH, cookie);
-    expect(status).toBe(200);
-    expect(body.series.map((one) => one.id)).toContain(seriesId);
-    expect(body.tags.map((one) => one.id)).toContain(tagId);
-    expect(body.books.map((one) => one.id)).toContain('john');
-    expect(body.books.find((one) => one.id === 'john')?.name).toBe('John');
+  it('answers words alone at the "Words only" stop, without calling the provider', async () => {
+    const { body } = await get<SearchPayload>(searchPath({ query: RUN, blend: 0 }), cookie);
+    expect(body.meaningAvailable).toBe(true);
+    expect(body.hits.length).toBeGreaterThan(0);
+    expect(body.hits.every((hit) => hit.matchedBy.length === 1 && hit.matchedBy[0] === 'words')).toBe(true);
+    expect(body.hits.every((hit) => hit.similarity === null && hit.scores.vectorRank === null)).toBe(true);
+  });
+
+  it('pages by offset and says whether there is more', async () => {
+    const first = await get<SearchPayload>(searchPath({ query: 'line' }), cookie);
+    expect(first.body.hits.length).toBeLessThanOrEqual(SEARCH_PAGE_SIZE);
+    const second = await get<SearchPayload>(searchPath({ query: 'line', offset: SEARCH_PAGE_SIZE }), cookie);
+    expect(second.status).toBe(200);
+    expect(second.body.offset).toBe(SEARCH_PAGE_SIZE);
+    const firstIds = new Set(first.body.hits.map((hit) => hit.id));
+    expect(second.body.hits.some((hit) => firstIds.has(hit.id))).toBe(false);
+    if (!first.body.hasMore) expect(second.body.hits).toEqual([]);
+  });
+
+  it('discloses the raw scores to an admin and to nobody else', async () => {
+    const admin = await signedInAccount(baseUrl, databaseUrl, ROLE.admin, 'search-admin');
+    const { body } = await get<SearchPayload>(searchPath({ query: LINE }), admin.cookie);
+    expect(body.showScores).toBe(true);
+    const asMember = await get<SearchPayload>(searchPath({ query: LINE }), cookie);
+    expect(asMember.body.showScores).toBe(false);
+    // The numbers ride on every hit either way; the flag decides whether the page draws them.
+    expect(asMember.body.hits[0]?.scores).toBeDefined();
   });
 });
 

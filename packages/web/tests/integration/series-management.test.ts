@@ -291,7 +291,13 @@ describe('an admin assigns, moves and clears a recording`s series', () => {
       expect(assigned.body.seriesId).toBe(seriesId);
     }
 
-    expect(await snapshot(recordingId)).toEqual(before);
+    // One thing beside the column: the series title is part of the recording's own embedding row,
+    // so each move asks the worker to re-embed — one `embed` job, since the three enqueues
+    // coalesce into the one still pending. Nothing else in the snapshot moves.
+    const after = await snapshot(recordingId);
+    const jobs = after['jobs'] as { readonly step: string }[];
+    expect(jobs.filter((job) => job.step === 'embed')).toHaveLength(1);
+    expect({ ...after, jobs: jobs.filter((job) => job.step !== 'embed') }).toEqual(before);
 
     // And the column really did move each time, so the comparison above is not vacuous.
     await call(recordingSeriesPath(recordingId), {

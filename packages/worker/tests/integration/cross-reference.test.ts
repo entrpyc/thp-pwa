@@ -18,7 +18,12 @@ import {
   type DatabaseHandle,
   type JobRow,
 } from '@thp/db';
-import { CROSS_REFERENCES_PER_CHAPTER, PIPELINE_STEPS, type PipelineStep } from '@thp/shared';
+import {
+  CROSS_REFERENCES_PER_CHAPTER,
+  PIPELINE_STEPS,
+  buildPassageWindows,
+  type PipelineStep,
+} from '@thp/shared';
 import { DOMAIN_EVENT_MESSAGE } from '@thp/shared/observability/events';
 import { setLogSink, type LogLine } from '@thp/shared/observability/logger';
 import {
@@ -54,7 +59,13 @@ import { createThrowawayDatabase, type ThrowawayDatabase } from '../../../../tes
 
 const databaseUrl = inject('databaseUrl');
 
-const LINE_MS = 10_000;
+/**
+ * Forty seconds a line. The index holds **passage windows**, not sentences, and a window closes
+ * once it would span more than a minute — so at forty seconds a line every sentence is a window of
+ * its own, and "plant this sentence in two teachings" means what it meant when a row was a sentence.
+ * A filler ("Amen.") is still no window at all, which one test below leans on.
+ */
+const LINE_MS = 40_000;
 
 /** One test's sentences — all above the word floor, all unique to the tag. */
 function lines(tag: string) {
@@ -116,7 +127,8 @@ async function teaching(
     },
     handle,
   );
-  const segmentIds = (await listSegments(transcript.id, handle)).map((one) => one.id);
+  const segments = await listSegments(transcript.id, handle);
+  const segmentIds = segments.map((one) => one.id);
   if (options.chapterStarts !== undefined) {
     await replaceChapters(
       recording.id,
@@ -131,15 +143,18 @@ async function teaching(
     );
   }
   if (options.embedded !== false) {
+    // Written the way the embed step writes them: one row per passage window, with its extent.
     await upsertEmbeddings(
-      segmentIds.map((id, index) => ({
+      buildPassageWindows(segments).map((window) => ({
         sourceKind: 'segment' as const,
-        sourceId: id,
+        sourceId: window.sourceId,
         recordingId: recording.id,
         ownerUserId: null,
-        text: texts[index] as string,
-        vector: fakeVector(texts[index] as string),
+        text: window.text,
+        vector: fakeVector(window.text),
         model: FAKE_EMBED_MODEL,
+        windowFirstSegmentId: window.firstSegmentId,
+        windowLastSegmentId: window.lastSegmentId,
       })),
       handle,
     );
@@ -174,6 +189,8 @@ async function setVector(seeded: Seeded, index: number, anchorText: string, simi
         text: seeded.texts[index] as string,
         vector: atSimilarity(fakeVector(anchorText), similarity),
         model: FAKE_EMBED_MODEL,
+        windowFirstSegmentId: seeded.segmentIds[index] as string,
+        windowLastSegmentId: seeded.segmentIds[index] as string,
       },
     ],
     handle,
@@ -288,8 +305,9 @@ describe('what the step links', () => {
 
     const row = await run(await claimed(a.id));
     expect(row.status).toBe('succeeded');
-    // Two of the three sentences were asked about; the short one was not.
-    expect(row.providerMeta).toMatchObject({ segments: 3, asked: 2, links: 1 });
+    // Three sentences, two windows: the short one is a filler and never a window at all, so it is
+    // not asked about — and would be refused by the word floor if it were.
+    expect(row.providerMeta).toMatchObject({ segments: 3, windows: 2, asked: 2, links: 1 });
 
     const outgoing = await listOutgoingCrossReferences(a.id, handle);
     expect(outgoing.map((one) => one.targetRecordingId)).toEqual([over.id]);

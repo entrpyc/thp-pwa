@@ -67,6 +67,7 @@ export {
 } from './cross-references';
 export {
   deleteEmbeddingsForSources,
+  deleteEmbeddingsOfKindForRecording,
   findEmbeddingsForSources,
   listEmbeddingsForRecording,
   upsertEmbeddings,
@@ -358,11 +359,9 @@ export {
   type NewVerseText,
   type ScriptureReferenceRow,
   type VerseTextRow,
-  listCitedBooks,
 } from './scripture';
 export {
   searchEmbeddings,
-  type SearchFilters,
   type SearchHitRow,
   type SearchQuery,
 } from './search';

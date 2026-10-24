@@ -726,6 +726,17 @@ export const segment = pgTable(
      * write a name into it, which is a labelling surface no epic has asked for.
      */
     speaker: integer('speaker'),
+    /**
+     * The provider's **paragraph index** for this sentence: Deepgram groups sentences into
+     * paragraphs at the speaker's pauses, and the passage-window builder (`@thp/shared`
+     * `passages.ts`) prefers to end a window at one of those breaks.
+     *
+     * Nullable, and nothing back-fills it: every segment written before this column existed keeps
+     * null until its recording is re-transcribed, and the builder reads null as "no break
+     * information" rather than as a break. An index rather than a boolean "starts a paragraph" so
+     * a sentence deleted or corrected in the middle changes nothing about its neighbours' answer.
+     */
+    paragraphIndex: integer('paragraph_index'),
     /** Set when a human has corrected the machine output. Story 5; nothing writes it yet. */
     correctedAt: timestamp('corrected_at', { withTimezone: true }),
     correctedByUserId: uuid('corrected_by_user_id').references(() => user.id, {
@@ -1761,12 +1772,30 @@ export const embedding = pgTable(
     text: text('text').notNull(),
     embedding: vector('embedding', { dimensions: EMBEDDING_DIMENSIONS }).notNull(),
     model: text('model').notNull(),
+    /**
+     * **The passage window's extent**, on a `segment` row and nothing else: the ids of the
+     * window's first and last sentences (`@thp/shared` `passages.ts`). `source_id` is the window's
+     * first *non-filler* sentence — the seek point — which may not be the first sentence, so the
+     * search's read-back needs both ends to find the line before the passage and the line after
+     * it ([3.10.6](docs/project/prd.md)). Not foreign keys: `source_id` is not one either, and the
+     * embed step removes a window's row when its sentences go.
+     *
+     * Null on every other kind, and null on a segment row written before the columns existed,
+     * which the read-back treats as a window of the one sentence.
+     */
+    windowFirstSegmentId: uuid('window_first_segment_id'),
+    windowLastSegmentId: uuid('window_last_segment_id'),
     createdAt: timestamp('created_at', { withTimezone: true }).notNull().defaultNow(),
     updatedAt: timestamp('updated_at', { withTimezone: true }).notNull().defaultNow(),
   },
   (table) => [
     /** One vector per source: embedding a source again replaces it. */
     uniqueIndex('embedding_source_unique').on(table.sourceKind, table.sourceId),
+    /** Only a passage window has an extent. */
+    check(
+      'embedding_window_only_on_segment',
+      sql`(${table.windowFirstSegmentId} is null and ${table.windowLastSegmentId} is null) or ${table.sourceKind} = 'segment'`,
+    ),
     /** Every write is "this recording's rows", and this index is that read. */
     index('embedding_recording_idx').on(table.recordingId),
     /**

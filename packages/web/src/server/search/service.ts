@@ -1,26 +1,16 @@
-import {
-  listCitedBooks,
-  listTagsForRecordings,
-  listTagsForSeries,
-  listVisibleRecordings,
-  searchEmbeddings,
-  type SearchHitRow,
-} from '@thp/db';
+import { searchEmbeddings, type SearchHitRow } from '@thp/db';
 import { EmbeddingError, embedder as configuredEmbedder, type Embedder } from '@thp/embed';
 import {
-  BIBLE_BOOKS,
   SEARCH_CANDIDATES_PER_ARM,
+  SEARCH_PAGE_SIZE,
   SEARCH_RESULT_LIMIT,
   readSearchRequest,
-  type SearchFiltersPayload,
   type SearchHit,
   type SearchPayload,
-  type SearchRequest,
-  type TagRef,
 } from '@thp/shared';
 import { actorGuard } from '@/server/api/actor-limits';
 import { ApiError } from '@/server/api/errors';
-import type { Actor } from '@/server/auth/policy';
+import { can, type Actor } from '@/server/auth/policy';
 import { logger } from '@/server/observability/logger';
 import { mintArtworkGrant } from '@/server/series/artwork-grant';
 
@@ -33,6 +23,9 @@ import { mintArtworkGrant } from '@/server/series/artwork-grant';
  * database and discarded. Nothing is cached — two members typing the same words is rare and the
  * call is a fraction of a cent (`@thp/embed`'s adapter names the price) — and the budget in
  * `actor-limits.ts` is spent *before* the call, because here the call is what the budget guards.
+ * **At the "Words only" stop the call is not made at all**: the member asked for no meaning, so
+ * no vector is bought and the query runs the word arm alone, exactly as the degraded search does.
+ * A "Show more" page is a second request and a second call, under the same budget.
  *
  * **The provider failing degrades the search; the database failing fails it**
  * ([3.10.11](docs/project/prd.md)). The operator chose words-only results over no results: an
@@ -44,19 +37,20 @@ import { mintArtworkGrant } from '@/server/series/artwork-grant';
  *
  * **Nothing a member typed is logged.** A search is a private act — the word a member is
  * struggling with, the passage they are looking for — and the log is read by an operator. What
- * is recorded is the length of the query, how many hits came back, which arms ran and how long
- * it took: enough to tune and to notice a provider outage, nothing that says what was asked. The
- * words go to the provider, as every note already does (`.env.example`, `EMBED_PROVIDER`), and
- * nowhere else.
+ * is recorded is the length of the query, how many hits came back, which arms ran, how the
+ * member weighed them and how long it took: enough to tune and to notice a provider outage,
+ * nothing that says what was asked. The words go to the provider, as every note already does
+ * (`.env.example`, `EMBED_PROVIDER`), and nowhere else.
+ *
+ * **The scores are an operator's.** Every hit carries its ranks, similarity and fused score, and
+ * the payload says whether the actor may see them — `search.tune`, an admin's action — so the
+ * thresholds in `@thp/shared` can be judged against the real library from the page itself.
  */
 
 export interface SearchDependencies {
   /** The embedder to use; the process's configured one unless a test hands one in. */
   readonly embedder?: Embedder;
 }
-
-/** Hits per search. Named here so the route and a test agree without reading the shared constant twice. */
-export const RESULT_LIMIT = SEARCH_RESULT_LIMIT;
 
 export async function searchFor(
   actor: Actor,
@@ -71,41 +65,51 @@ export async function searchFor(
   actorGuard().spend('search', actor);
 
   const startedAt = performance.now();
-  const queryVector = await embedQuery(request.query, deps.embedder ?? configuredEmbedder(), actor);
+  const wantsMeaning = request.blend > 0;
+  const embedded = wantsMeaning
+    ? await embedQuery(request.query, deps.embedder ?? configuredEmbedder(), actor)
+    : { vector: null, available: true };
   const embeddedAt = performance.now();
 
+  // One more than the page, so "is there another page" is answered by the same statement.
   const rows = await searchEmbeddings({
     readerId: actor.id,
     queryText: request.query,
-    queryVector,
-    filters: {
-      seriesId: request.seriesId,
-      recordedFrom: request.recordedFrom,
-      recordedTo: request.recordedTo,
-      tagId: request.tagId,
-      book: request.book,
-      onlyMine: request.onlyMine,
-    },
+    queryVector: embedded.vector,
+    kinds: request.kinds,
+    blend: request.blend,
+    perTeaching: request.perTeaching,
     perArm: SEARCH_CANDIDATES_PER_ARM,
-    limit: RESULT_LIMIT,
+    offset: request.offset,
+    limit: SEARCH_PAGE_SIZE + 1,
   });
+  const page = rows.slice(0, SEARCH_PAGE_SIZE);
+  const hasMore =
+    rows.length > SEARCH_PAGE_SIZE && request.offset + SEARCH_PAGE_SIZE < SEARCH_RESULT_LIMIT;
 
   logger.info('search.performed', {
     actorId: actor.id,
     action: 'search.query',
     target: 'library',
     queryLength: request.query.length,
-    hits: rows.length,
-    meaningAvailable: queryVector !== null,
-    filtered: describeFilters(request),
+    hits: page.length,
+    hasMore,
+    offset: request.offset,
+    blend: request.blend,
+    perTeaching: request.perTeaching,
+    kinds: request.kinds,
+    meaningAvailable: embedded.available,
     embedMs: Math.round(embeddedAt - startedAt),
     queryMs: Math.round(performance.now() - embeddedAt),
   });
 
   return {
     query: request.query,
-    hits: await Promise.all(rows.map(describeHit)),
-    meaningAvailable: queryVector !== null,
+    hits: await Promise.all(page.map(describeHit)),
+    offset: request.offset,
+    hasMore,
+    meaningAvailable: embedded.available,
+    showScores: can(actor, 'search.tune'),
   };
 }
 
@@ -117,14 +121,18 @@ export async function searchFor(
  * process and is left to become a `500`, because hiding it behind words-only results would hide
  * it from the operator too.
  */
-async function embedQuery(query: string, embedder: Embedder, actor: Actor): Promise<number[] | null> {
+async function embedQuery(
+  query: string,
+  embedder: Embedder,
+  actor: Actor,
+): Promise<{ readonly vector: number[] | null; readonly available: boolean }> {
   try {
     const result = await embedder.embed([query]);
     const vector = result.vectors[0];
     if (vector === undefined) {
       throw new EmbeddingError('The embedding provider answered no vector for the query.');
     }
-    return [...vector];
+    return { vector: [...vector], available: true };
   } catch (cause) {
     if (!(cause instanceof EmbeddingError)) throw cause;
     logger.warn('search.embed-failed', {
@@ -134,19 +142,8 @@ async function embedQuery(query: string, embedder: Embedder, actor: Actor): Prom
       reason: cause.message,
       provider: embedder.name,
     });
-    return null;
+    return { vector: null, available: false };
   }
-}
-
-/** Which filters were on, as names — never their values, which could name a member's interest. */
-function describeFilters(request: SearchRequest): string[] {
-  const on: string[] = [];
-  if (request.seriesId !== null) on.push('series');
-  if (request.recordedFrom !== null || request.recordedTo !== null) on.push('date');
-  if (request.tagId !== null) on.push('tag');
-  if (request.book !== null) on.push('book');
-  if (request.onlyMine) on.push('mine');
-  return on;
 }
 
 /**
@@ -177,64 +174,16 @@ async function describeHit(row: SearchHitRow): Promise<SearchHit> {
     },
     startMs: row.startMs,
     passage: row.text,
+    passageMarked: row.textMarked,
     before: row.before,
     after: row.after,
     matchedBy,
-  };
-}
-
-/**
- * What there is to narrow by ([3.10.8](docs/project/prd.md)): the series, tags and books of the
- * teachings this member may see — the member's view whatever the caller's role, because the
- * results the filters narrow are the member's view too.
- *
- * Three reads over the ids the visibility read allowed, rather than one query with a publication
- * predicate: which teachings are visible is `visibility.ts`'s one answer, and these are narrowings
- * of it. Tags are the union of each recording's and its series', which is the set the tag filter
- * in the query matches against.
- */
-export async function searchFiltersFor(actor: Actor): Promise<SearchFiltersPayload> {
-  const visible = await listVisibleRecordings({ includeUnpublished: false });
-  const recordingIds = visible.map((row) => row.id);
-  const seriesIds = [...new Set(visible.flatMap((row) => (row.seriesId === null ? [] : [row.seriesId])))];
-
-  const [recordingTags, seriesTags, books] = await Promise.all([
-    listTagsForRecordings(recordingIds),
-    listTagsForSeries(seriesIds),
-    listCitedBooks(recordingIds),
-  ]);
-  const cited = new Set(books);
-
-  const tags = new Map<string, TagRef>();
-  for (const list of [...recordingTags.values(), ...seriesTags.values()]) {
-    for (const tag of list) tags.set(tag.id, { id: tag.id, name: tag.name });
-  }
-
-  const series = new Map<string, string>();
-  for (const row of visible) {
-    if (row.seriesId !== null && row.seriesTitle !== null) series.set(row.seriesId, row.seriesTitle);
-  }
-
-  logger.info('search.filters', {
-    actorId: actor.id,
-    action: 'search.query',
-    target: 'library',
-    series: series.size,
-    tags: tags.size,
-    books: books.length,
-  });
-
-  return {
-    series: [...series.entries()]
-      .map(([id, title]) => ({ id, title }))
-      .sort((a, b) => a.title.localeCompare(b.title)),
-    tags: [...tags.values()].sort((a, b) => a.name.localeCompare(b.name)),
-    // Walked in canon order, which is the order a reader expects a list of books in, and dropping
-    // any stored identity the canon does not know — there should be none, and a filter offering one
-    // would be refused by the request parser anyway.
-    books: BIBLE_BOOKS.filter((book) => cited.has(book.id)).map((book) => ({
-      id: book.id,
-      name: book.name,
-    })),
+    similarity: row.similarity,
+    scores: {
+      vectorRank: row.vectorRank,
+      textRank: row.textRank,
+      similarity: row.similarity,
+      score: row.score,
+    },
   };
 }
