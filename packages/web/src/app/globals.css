@@ -46,10 +46,28 @@ body {
 }
 
 /*
- * One visible focus treatment for the whole product, in the one accent. The sign-in screen has to
- * be operable by keyboard alone, and an invisible focus ring is the usual reason that fails.
+ * One visible focus treatment for the whole product: **the focused element's own border turns the
+ * bright purple, and nothing is drawn outside it.** Every screen has to be operable by keyboard
+ * alone, and an invisible focus state is the usual reason that fails — but a ring floating outside
+ * the box is not how this product says "here"; the border is.
+ *
+ * Two declarations do it for every input, textarea, button, link, tab and card:
+ *
+ * - `border-color` repaints whatever border the element already has. It is `!important` because
+ *   the border is nearly always set by a component's own class rule (`border: 1px solid …`), or by
+ *   a hover rule on the same element, and either outranks a bare pseudo-class — without the flag
+ *   this rule would lose to the stylesheet of every screen that has one.
+ * - The one-pixel outline is drawn **inward** (`outline-offset: -1px`), so it lies on top of the
+ *   border rather than beyond it: on a bordered element it covers the same pixels the border does
+ *   and adds nothing, and on a borderless control — a filled button, a text link, an icon press — it
+ *   is the border that control does not otherwise have. It follows the element's radius.
+ *
+ * A component that needs to say "focused" on a different element than the one holding focus (the
+ * search bar around its bare field, the switch's knob) opts out of the outline with the same flag
+ * and paints its own border instead. Both are intentionally rare; look for `!important` to find them.
  */
 :focus-visible {
-  outline: 2px solid var(--color-primary-strong);
-  outline-offset: 2px;
+  outline: 1px solid var(--color-primary-icon) !important;
+  outline-offset: -1px !important;
+  border-color: var(--color-primary-icon) !important;
 }

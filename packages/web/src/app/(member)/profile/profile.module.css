@@ -175,11 +175,10 @@
   white-space: nowrap;
 }
 
-/* The picker's label takes the primary shape; this is the ring the button would have shown. */
+/* The picker's label takes the button shape; this is the border the button would have shown. */
 .fileInput:focus-visible + .secondary,
 .fileInput:focus-visible ~ .primary {
-  outline: 2px solid var(--color-primary-icon);
-  outline-offset: 2px;
+  border-color: var(--color-primary-icon);
 }
 
 .actions {
@@ -257,11 +256,6 @@
   cursor: pointer;
 }
 
-.portraitPress:focus-visible {
-  outline: 2px solid var(--color-primary-icon);
-  outline-offset: 2px;
-}
-
 /*
  * The layer both the crop sheet and the viewer sit on. Fixed over everything, above the menu
  * region's 2 and the transport dock, because each is an answer the member owes before the page
@@ -337,11 +331,6 @@
 
 .cropSquare:active {
   cursor: grabbing;
-}
-
-.cropSquare:focus-visible {
-  outline: 2px solid var(--color-primary-icon);
-  outline-offset: 2px;
 }
 
 .zoom {

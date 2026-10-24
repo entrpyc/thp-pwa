@@ -432,8 +432,17 @@
   font-size: var(--fs-card-title);
 }
 
-.searchField:focus {
-  outline: none;
+/*
+ * The bar is the box, so the bar is what says "focused": its border takes the focus colour while
+ * the field inside it has focus, and the field itself draws nothing (the global rule in
+ * `globals.css` would otherwise ring the bare field inside the bar).
+ */
+.searchField:focus-visible {
+  outline: none !important;
+}
+
+.searchBar:focus-within {
+  border-color: var(--color-primary-icon);
 }
 
 .searchField::placeholder {

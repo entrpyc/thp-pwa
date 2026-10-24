@@ -42,9 +42,8 @@
   color: var(--color-text-dim);
 }
 
-.queryInput:focus {
-  outline: none;
-  border-color: var(--color-primary-strong);
+.queryInput:focus-visible {
+  border-color: var(--color-primary-icon);
 }
 
 .submit {

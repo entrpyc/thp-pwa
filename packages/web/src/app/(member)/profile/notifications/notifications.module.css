@@ -99,9 +99,14 @@
   transform: translateX(calc(var(--space-8) - var(--space-5)));
 }
 
+/* The knob is the switch's one box, so its border is what says "focused" — not a ring around the
+ * word beside it. The switch itself has no border, so it draws nothing. */
+.switch:focus-visible {
+  outline: none !important;
+}
+
 .switch:focus-visible .switchKnob {
-  outline: 2px solid var(--color-primary-strong);
-  outline-offset: 2px;
+  border-color: var(--color-primary-icon);
 }
 
 .switchState {

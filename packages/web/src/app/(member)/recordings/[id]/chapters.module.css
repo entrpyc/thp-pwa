@@ -52,9 +52,8 @@
   font-size: var(--fs-body);
 }
 
-.searchField:focus {
-  outline: none;
-  border-color: var(--color-primary-strong);
+.searchField:focus-visible {
+  border-color: var(--color-primary-icon);
 }
 
 /* -------------------------------------------------------------------------------------- the list */
@@ -242,10 +241,9 @@
   resize: vertical;
 }
 
-.input:focus,
-.textarea:focus {
-  outline: none;
-  border-color: var(--color-primary-strong);
+.input:focus-visible,
+.textarea:focus-visible {
+  border-color: var(--color-primary-icon);
 }
 
 .formActions {
