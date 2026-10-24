@@ -1,0 +1,474 @@
+/*
+ * The Flow Tracker's three screens ([3.14](docs/project/prd.md)) — the page that holds the
+ * member's sessions, the start screen that picks the point of divergence, and one session's page,
+ * which is the question screen while it runs and the reading list once it is complete.
+ *
+ * No reference image draws any of them, so the surface is the member furniture's own: the page
+ * head, the card, the panel of rows and the two buttons are `screens.module.css`'s and
+ * `feedback.module.css`'s, composed so this stylesheet cannot become a second opinion about any of
+ * them. The one filled control on each screen is the one press that moves the member on — Start,
+ * Continue — and the five answers are outlined pills, because five filled controls would be five
+ * things claiming to be the main one (style guide, principle 3).
+ *
+ * Everything composes from tokens.css. Nothing here spells a colour, a radius or a spacing value.
+ */
+
+/* ------------------------------------------------------------------------- the member furniture */
+
+.pageHead {
+  composes: pageHead from '../screens.module.css';
+}
+
+.pageTitle {
+  composes: pageTitle from '../screens.module.css';
+}
+
+.pageLead {
+  composes: pageLead from '../screens.module.css';
+}
+
+.card {
+  composes: card from '../screens.module.css';
+}
+
+.cardTitle {
+  composes: cardTitle from '../screens.module.css';
+}
+
+.quiet {
+  composes: quiet from '../screens.module.css';
+}
+
+.failure {
+  composes: failure from '../screens.module.css';
+}
+
+.rows {
+  composes: rows from '../screens.module.css';
+}
+
+.rowGroup {
+  composes: rowGroup from '../screens.module.css';
+}
+
+.rowCover {
+  composes: rowCover from '../screens.module.css';
+}
+
+.rowText {
+  composes: rowText from '../screens.module.css';
+}
+
+.rowTitle {
+  composes: rowTitle from '../screens.module.css';
+}
+
+.rowMeta {
+  composes: rowMeta from '../screens.module.css';
+}
+
+.rowChevron {
+  composes: rowChevron from '../screens.module.css';
+}
+
+.primary {
+  composes: primary from '../feedback/feedback.module.css';
+  text-decoration: none;
+  text-align: center;
+}
+
+.secondary {
+  composes: secondary from '../feedback/feedback.module.css';
+  text-decoration: none;
+  text-align: center;
+}
+
+.actions {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: var(--space-3);
+}
+
+/* ---------------------------------------------------------------------------- the sessions page */
+
+/* A session's row on the page: a link the whole way across, the library row's shape. */
+.sessionRow {
+  composes: row from '../screens.module.css';
+}
+
+/* The in-progress card's one line of numbers, tabular so a count does not jitter as it changes. */
+.progress {
+  margin: 0;
+  font-size: var(--fs-meta);
+  color: var(--color-text-dim);
+  font-variant-numeric: tabular-nums;
+}
+
+/* ------------------------------------------------------------------------------ the start screen */
+
+/*
+ * A teaching to pick: a button rather than a link, because pressing it chooses rather than opens.
+ * `aria-pressed` carries the chosen state, and the pressed state is the transport tool's wash — the
+ * soft primary fill with the strong border — so "this is the one" reads the way "pinned" does.
+ */
+.pick {
+  composes: row from '../screens.module.css';
+  width: 100%;
+  background: transparent;
+  border: none;
+  border-left: 3px solid transparent;
+  font-family: inherit;
+  text-align: left;
+  cursor: pointer;
+  color: var(--color-text);
+}
+
+.pick[aria-pressed='true'] {
+  background: var(--color-primary-soft);
+  border-left-color: var(--color-primary-strong);
+}
+
+/* The line under the list that says what a pick covers, and the press that confirms it. */
+.startFoot {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--space-3);
+}
+
+/* -------------------------------------------------------------------------- the question screen */
+
+/* One question per screen: the card, with the teaching named above the chapter it is about. */
+.question {
+  composes: card from '../screens.module.css';
+  gap: var(--space-5);
+}
+
+.teaching {
+  display: flex;
+  align-items: center;
+  gap: var(--space-4);
+  min-width: 0;
+}
+
+.teachingText {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-1);
+  min-width: 0;
+}
+
+.teachingTitle {
+  margin: 0;
+  font-size: var(--fs-body);
+  font-weight: 600;
+  color: var(--color-text);
+}
+
+.teachingMeta {
+  margin: 0;
+  font-size: var(--fs-meta);
+  color: var(--color-text-dim);
+}
+
+/* What the question is about — the chapter's title and its summary under it. */
+.subject {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-2);
+}
+
+.subjectKind {
+  margin: 0;
+  font-size: var(--fs-meta);
+  font-weight: 600;
+  letter-spacing: 0.02em;
+  text-transform: uppercase;
+  color: var(--color-primary-strong);
+}
+
+.subjectTitle {
+  margin: 0;
+  font-size: var(--fs-card-title);
+  font-weight: 600;
+  color: var(--color-text);
+}
+
+.subjectSummary {
+  margin: 0;
+  font-size: var(--fs-body);
+  color: var(--color-text-muted);
+  white-space: pre-wrap;
+  overflow-wrap: anywhere;
+}
+
+/* The question itself, at the title size: it is what the screen is for. */
+.prompt {
+  margin: 0;
+  font-size: var(--fs-title);
+  font-weight: 600;
+  line-height: 1.3;
+  color: var(--color-text);
+  overflow-wrap: anywhere;
+}
+
+/* The five answers, stacked, each the full width — one column reads as one scale. */
+.answers {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-2);
+}
+
+.answer {
+  width: 100%;
+  background: transparent;
+  border: 1px solid var(--color-border-strong);
+  border-radius: var(--radius-pill);
+  padding: var(--space-3) var(--space-5);
+  color: var(--color-text);
+  font-family: inherit;
+  font-size: var(--fs-body);
+  text-align: left;
+  cursor: pointer;
+}
+
+.answer:hover:not(:disabled) {
+  border-color: var(--color-primary-strong);
+  background: var(--color-surface-raised);
+}
+
+/* The answer already given, when the member steps back to a question they answered. */
+.answer[aria-pressed='true'] {
+  border-color: var(--color-primary-strong);
+  background: var(--color-primary-soft);
+}
+
+.answer:disabled {
+  cursor: progress;
+  color: var(--color-text-muted);
+}
+
+/* Back on the left, pause on the right: neither is the main press, so neither is filled. */
+.questionFoot {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--space-3);
+}
+
+.textLink {
+  background: transparent;
+  border: none;
+  padding: 0;
+  color: var(--color-primary-strong);
+  font-family: inherit;
+  font-size: var(--fs-body);
+  text-decoration: none;
+  cursor: pointer;
+}
+
+.textLink:hover {
+  text-decoration: underline;
+}
+
+.textLink:disabled {
+  color: var(--color-text-dim);
+  cursor: default;
+  text-decoration: none;
+}
+
+/* ---------------------------------------------------------------------------- the reading list */
+
+/* One teaching's group: its name as a heading, its rows beneath. */
+.group {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-3);
+}
+
+.groupHead {
+  display: flex;
+  align-items: center;
+  gap: var(--space-3);
+  min-width: 0;
+}
+
+.groupTitle {
+  margin: 0;
+  font-size: var(--fs-card-title);
+  font-weight: 600;
+  color: var(--color-text);
+}
+
+.groupMeta {
+  margin: 0;
+  font-size: var(--fs-meta);
+  color: var(--color-text-dim);
+}
+
+.readingRows {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+}
+
+/*
+ * A row: the tick at the left, the chapter's text in the middle, and the two ways in at the right.
+ * Divided by hairlines, as every list in the product is.
+ */
+.readingRow {
+  display: grid;
+  grid-template-columns: auto minmax(0, 1fr) auto;
+  grid-template-areas:
+    'tick text ways'
+    'tick related ways';
+  align-items: start;
+  column-gap: var(--space-4);
+  row-gap: var(--space-2);
+  padding: var(--space-3) 0;
+  border-top: 1px solid var(--color-border);
+}
+
+.readingRow:first-child {
+  border-top: none;
+  padding-top: 0;
+}
+
+/* The tick: a real checkbox, large enough for a thumb, its label the chapter's title. */
+.tick {
+  grid-area: tick;
+  width: var(--space-6);
+  height: var(--space-6);
+  margin: var(--space-1) 0 0;
+  accent-color: var(--color-primary-strong);
+  cursor: pointer;
+}
+
+.readingText {
+  grid-area: text;
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-1);
+  min-width: 0;
+}
+
+.readingTitle {
+  font-size: var(--fs-body);
+  font-weight: 600;
+  color: var(--color-text);
+  overflow-wrap: anywhere;
+}
+
+/* The member's own answer, as a quiet label — their word, never a mark. */
+.readingAnswer {
+  font-size: var(--fs-meta);
+  color: var(--color-text-dim);
+}
+
+/* A ticked row reads as done without disappearing: the text goes quiet. */
+.readingDone .readingTitle {
+  color: var(--color-text-muted);
+  text-decoration: line-through;
+}
+
+.ways {
+  grid-area: ways;
+  display: flex;
+  flex-direction: column;
+  align-items: flex-end;
+  gap: var(--space-2);
+}
+
+/* Play from the chapter's start: the resume card's circle, at the row's size. */
+.play {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: calc(var(--space-8) + var(--space-2));
+  height: calc(var(--space-8) + var(--space-2));
+  border: 1px solid var(--color-primary);
+  border-radius: var(--radius-pill);
+  background: var(--color-primary-soft);
+  color: var(--color-primary-icon);
+  font-family: inherit;
+  cursor: pointer;
+}
+
+.play:hover {
+  border-color: var(--color-primary-strong);
+}
+
+/* Open the chapter's page: a link in the accent, the series link's own shape. */
+.openLink {
+  font-size: var(--fs-meta);
+  font-weight: 500;
+  color: var(--color-primary-strong);
+  text-decoration: none;
+  white-space: nowrap;
+}
+
+.openLink:hover {
+  text-decoration: underline;
+}
+
+/* The related chapters of other teachings, nested under the row at the meta size. */
+.related {
+  grid-area: related;
+  list-style: none;
+  margin: 0;
+  padding: 0 0 0 var(--space-3);
+  border-left: 2px solid var(--color-border);
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-1);
+}
+
+.relatedLead {
+  margin: 0;
+  font-size: var(--fs-meta);
+  color: var(--color-text-dim);
+}
+
+.relatedRow {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: baseline;
+  gap: var(--space-2);
+  font-size: var(--fs-meta);
+  color: var(--color-text-muted);
+}
+
+.relatedLink {
+  color: var(--color-text);
+  text-decoration: none;
+}
+
+.relatedLink:hover {
+  text-decoration: underline;
+}
+
+/* -------------------------------------------------------------------------------------- a phone */
+
+@media (max-width: 48rem) {
+  .readingRow {
+    grid-template-columns: auto minmax(0, 1fr);
+    grid-template-areas:
+      'tick text'
+      'tick related'
+      'tick ways';
+  }
+
+  .ways {
+    flex-direction: row;
+    align-items: center;
+    justify-content: flex-start;
+  }
+}

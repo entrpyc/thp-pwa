@@ -338,6 +338,26 @@ export const POLICY_ACTIONS = [
   'highlight.remove',
   'highlight.list',
   /**
+   * **The Flow Tracker** ([3.14](docs/project/prd.md)). A member reads the teachings a session can
+   * start from and their own sessions, starts one, answers its questions, abandons it, and ticks
+   * the reading list — five actions, the split every group above takes. Both roles and no
+   * ownership flag on any, for the reason the highlight actions have none: every session is the
+   * caller's own by construction — the route is `/users/me/flow-sessions` — and 3.14.8's "no
+   * result is visible to admins" is the absence of any route that could list another account's.
+   *
+   * Two more for the admin's half ([3.14.11](docs/project/prd.md)): rewriting the generated
+   * question on a chapter, and curating a tag's question bank. Two rather than one, because a
+   * Contributor who may edit the chapters they uploaded ([3.22.7](docs/project/prd.md)) is a
+   * foreseeable role that should not thereby own the taxonomy's banks.
+   */
+  'flow.read',
+  'flow.start',
+  'flow.answer',
+  'flow.abandon',
+  'flow.mark',
+  'flow.question.edit',
+  'flow.bank.manage',
+  /**
    * The SOS channel ([3.16](docs/project/prd.md)). Both roles read the board, raise a signal and
    * respond to one — a praying press or a reply — because the channel is the whole group's
    * (3.16.13). `sos.close` is **owned**: an author ends their own signal (3.16.8), and an admin
@@ -567,6 +587,15 @@ const RULES: PolicyRules = {
   'highlight.create': { roles: { admin: true, member: true } },
   'highlight.remove': { roles: { admin: true, member: true } },
   'highlight.list': { roles: { admin: true, member: true } },
+  // Both roles, over their own sessions only ([3.14.8](docs/project/prd.md)).
+  'flow.read': { roles: { admin: true, member: true } },
+  'flow.start': { roles: { admin: true, member: true } },
+  'flow.answer': { roles: { admin: true, member: true } },
+  'flow.abandon': { roles: { admin: true, member: true } },
+  'flow.mark': { roles: { admin: true, member: true } },
+  // Curating questions is operator work ([3.14.11](docs/project/prd.md), [3.19.7](docs/project/prd.md)).
+  'flow.question.edit': { roles: { admin: true, member: false } },
+  'flow.bank.manage': { roles: { admin: true, member: false } },
   // The whole group reads, raises and responds ([3.16.1](docs/project/prd.md), 3.16.5, 3.16.6).
   'sos.read': { roles: { admin: true, member: true } },
   'sos.raise': { roles: { admin: true, member: true } },

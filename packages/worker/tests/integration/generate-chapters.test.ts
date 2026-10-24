@@ -290,6 +290,7 @@ describe('a run that fails (3.21.2.3, 3.22.9)', () => {
     const refusing: Generator = {
       name: 'refusing',
       generate: () => Promise.reject(new GenerationError('not asked for here')),
+      writeReflections: () => Promise.reject(new GenerationError('not asked for here')),
       segmentChapters: () =>
         Promise.reject(new GenerationError('the model answered without calling the tool')),
     };

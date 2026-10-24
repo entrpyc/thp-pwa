@@ -48,8 +48,8 @@ function download(recordingId: string, seriesId: string | null, recordedAt: stri
       tags: [],
     },
     chapters: [
-      { id: 'c1', position: 1, startMs: 0, endMs: 60_000, title: 'One', summary: '', editedByAdmin: false },
-      { id: 'c2', position: 2, startMs: 60_000, endMs: 120_000, title: 'Two', summary: '', editedByAdmin: false },
+      { id: 'c1', position: 1, startMs: 0, endMs: 60_000, title: 'One', summary: '', editedByAdmin: false, question: null },
+      { id: 'c2', position: 2, startMs: 60_000, endMs: 120_000, title: 'Two', summary: '', editedByAdmin: false, question: null },
     ],
     scripture: [],
     notes: [

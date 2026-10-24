@@ -17,8 +17,10 @@ import {
   type GenerationResult,
   type Generator,
   type ProposedChapter,
+  type ReflectionRequest,
+  type ReflectionResult,
 } from './generator';
-import { CHAPTER_PROMPT_VERSION, PROMPT_VERSION } from './prompt';
+import { CHAPTER_PROMPT_VERSION, PROMPT_VERSION, REFLECTION_PROMPT_VERSION } from './prompt';
 
 /**
  * A generator that reads a fixed script off disk.
@@ -41,6 +43,17 @@ export interface FakeGeneratorCalls {
   readonly requests: readonly GenerationRequest[];
   /** The segmentations it was asked for, in order. Read for the same reason `requests` is. */
   readonly chapterRequests: readonly ChapterRequest[];
+  /** The reflection requests, in order ([3.14.4](docs/project/prd.md)). */
+  readonly reflectionRequests: readonly ReflectionRequest[];
+}
+
+/**
+ * **What the fake writes for a subject** ([3.14.4](docs/project/prd.md)): a question that names
+ * the subject's title, so a test can find the chapter's words in the question a member is shown
+ * without a script that has to know the chapter titles in advance.
+ */
+export function fakeReflectionFor(title: string): string {
+  return `Thinking about "${title}" — where has this shown up in your week, and where has it not yet?`;
 }
 
 /**
@@ -77,11 +90,37 @@ export interface FakeGenerator extends Generator, FakeGeneratorCalls {}
 export function fakeGenerator(script: FakeDraftScript): FakeGenerator {
   const requests: GenerationRequest[] = [];
   const chapterRequests: ChapterRequest[] = [];
+  const reflectionRequests: ReflectionRequest[] = [];
 
   return {
     name: 'fake',
     requests,
     chapterRequests,
+    reflectionRequests,
+
+    /**
+     * One question per subject, written from the subject's title — see {@link fakeReflectionFor}.
+     * Every key asked for is answered, so the handler's "which came back missing" path is reached
+     * only by a test that hands in a generator built to drop one.
+     */
+    async writeReflections(request: ReflectionRequest): Promise<ReflectionResult> {
+      reflectionRequests.push(request);
+      return {
+        reflections: request.subjects.map((one) => ({
+          key: one.key,
+          question: fakeReflectionFor(one.title),
+        })),
+        promptVersion: REFLECTION_PROMPT_VERSION,
+        spend: {
+          model: 'fake',
+          modelVersion: 'fake-1',
+          inputTokens: 0,
+          outputTokens: 0,
+          costUsd: 0,
+          requestId: `fake-reflections-${reflectionRequests.length}`,
+        },
+      };
+    },
 
     /**
      * **Cut the teaching into even parts, at the target chapter length.**

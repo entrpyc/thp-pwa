@@ -4,6 +4,9 @@ import {
   BIBLE_BOOKS,
   CROSS_REFERENCE_BASES,
   FEEDBACK_KINDS,
+  FLOW_ANSWERS,
+  FLOW_QUESTION_SCOPES,
+  FLOW_SESSION_STATUSES,
   HIGHLIGHT_KINDS,
   JOB_STATUSES,
   NOTE_VISIBILITIES,
@@ -148,6 +151,24 @@ export const DOMAIN_DECLARATIONS: readonly DomainDeclaration[] = [
     members: SOS_URGENCIES,
   },
   { name: 'SosUrgency', canonicalFile: 'packages/shared/src/sos.ts' },
+  {
+    name: 'FLOW_ANSWERS',
+    canonicalFile: 'packages/shared/src/flow-tracker.ts',
+    members: FLOW_ANSWERS,
+  },
+  { name: 'FlowAnswer', canonicalFile: 'packages/shared/src/flow-tracker.ts' },
+  {
+    name: 'FLOW_SESSION_STATUSES',
+    canonicalFile: 'packages/shared/src/flow-tracker.ts',
+    members: FLOW_SESSION_STATUSES,
+  },
+  { name: 'FlowSessionStatus', canonicalFile: 'packages/shared/src/flow-tracker.ts' },
+  {
+    name: 'FLOW_QUESTION_SCOPES',
+    canonicalFile: 'packages/shared/src/flow-tracker.ts',
+    members: FLOW_QUESTION_SCOPES,
+  },
+  { name: 'FlowQuestionScope', canonicalFile: 'packages/shared/src/flow-tracker.ts' },
 ];
 
 export interface DeclarationViolation {

@@ -7,6 +7,7 @@ import {
   ADMIN_PAGE_PATH,
   DASHBOARD_PAGE_PATH,
   FEEDBACK_PAGE_PATH,
+  FLOW_TRACKER_PAGE_PATH,
   HIGHLIGHTS_PAGE_PATH,
   MAX_SEARCH_QUERY_LENGTH,
   MEMBER_LIBRARY_PAGE_PATH,
@@ -399,6 +400,12 @@ export function TopNavigation({ canSeeConsole }: { canSeeConsole: boolean }) {
             <li>
               <Link className={styles.menuLink} href={HIGHLIGHTS_PAGE_PATH} onClick={() => setOpen(false)}>
                 Highlights
+              </Link>
+            </li>
+            {/* The member's route back into the teaching (3.14.1) — its own page, reached from here and nowhere else. */}
+            <li>
+              <Link className={styles.menuLink} href={FLOW_TRACKER_PAGE_PATH} onClick={() => setOpen(false)}>
+                Flow Tracker
               </Link>
             </li>
             {canSeeConsole ? (

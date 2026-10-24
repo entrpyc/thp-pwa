@@ -297,14 +297,15 @@ Conceptual only — project prd 4 already defines the fields; this is how the en
   project prd 3.4.7 work: a recording records which profile version processed it, so changing the
   profile cannot retroactively alter anything.
 
-- **6.9 Flow Tracker assessment is a judgment, never a record.** project prd 3.14.6 needs a free-text
-  answer evaluated to find a gap in understanding, and project prd 3.14.9 says no score, grade or
-  pass mark exists. **Both hold, by never persisting the evaluation:** the model reads the answer,
-  emits recommendations, and the judgment itself is written nowhere — not to `FlowTrackerSession`,
-  not to logs, not to the provider-spend record beyond the fact that a call happened. What is stored
-  is the answer the member gave and the reading list it produced. The consequence is accepted
-  deliberately: recommendation quality cannot improve across runs, because there is nothing kept to
-  improve it from. This sits under 6.3, and it is the strictest reading of project prd 3.14.8.
+- **6.9 Flow Tracker assessment is the member's own word, never a judgment.** project prd 3.14.6
+  finds a gap from the answer the member chose on a five-point scale, and project prd 3.14.9 says no
+  score, grade or pass mark exists. **Both hold, by evaluating nothing:** no model reads an answer —
+  the model's only part is writing the question, once, at pipeline time (project prd 3.14.4) — and
+  which answers count as a gap is a fixed rule in the shared vocabulary, not a verdict about the
+  member. What is stored is the question as it was asked, the answer the member gave and their own
+  tick on the reading list; the list itself is derived from those on every read and persisted
+  nowhere. Nothing about a member's answers reaches the logs beyond that an answer was given. This
+  sits under 6.3, and it is the strictest reading of project prd 3.14.8.
 
 - **6.10 Budgets.** Two mechanisms, split by what they protect. **Request budgets** — registration,
   sign-in, the reset request, and the per-account budgets on feedback and upload grants (project

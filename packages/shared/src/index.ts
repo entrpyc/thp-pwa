@@ -7,6 +7,7 @@ export * from './chapters';
 export * from './cross-references';
 export * from './embeddings';
 export * from './feedback';
+export * from './flow-tracker';
 export * from './health';
 export * from './highlights';
 export * from './invitations';

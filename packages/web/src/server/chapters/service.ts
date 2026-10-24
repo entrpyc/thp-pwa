@@ -1,16 +1,19 @@
 import {
   deleteChapter,
+  deleteQuestionsOfChapters,
   findChapterById,
   findTranscriptByRecording,
   findTranscriptEndMs,
   findVisibleRecording,
   insertChapter,
+  listChapterQuestionsForRecording,
   listChapters,
   listSegments,
   updateChapter,
   withTransaction,
   type ChapterRow,
   type Executor,
+  type FlowQuestionRow,
 } from '@thp/db';
 import {
   MAX_CHAPTER_SUMMARY_LENGTH,
@@ -74,6 +77,7 @@ import { logger } from '@/server/observability/logger';
 export function describeChapters(
   rows: readonly ChapterRow[],
   transcriptEndMs: number | null,
+  questions: ReadonlyMap<string, FlowQuestionRow> = new Map(),
 ): ChapterView[] {
   return rows.map((row, index) => ({
     id: row.id,
@@ -83,6 +87,7 @@ export function describeChapters(
     title: row.title,
     summary: row.summary,
     editedByAdmin: row.editedByAdmin,
+    question: questions.get(row.id)?.text ?? null,
   }));
 }
 
@@ -134,11 +139,14 @@ export async function readChapterList(
   recordingId: string,
   executor?: Executor,
 ): Promise<ChapterView[]> {
-  const [rows, endMs] = await Promise.all([
+  const [rows, endMs, questions] = await Promise.all([
     listChapters(recordingId, executor),
     findTranscriptEndMs(recordingId, executor),
+    // The Flow Tracker's question on each chapter rides the list ([3.14.11](docs/project/prd.md)),
+    // because the chapter's editor is where an admin rewrites it.
+    listChapterQuestionsForRecording(recordingId, executor),
   ]);
-  return describeChapters(rows, endMs);
+  return describeChapters(rows, endMs, questions);
 }
 
 /**
@@ -280,8 +288,11 @@ export async function splitChapter(
       },
       tx,
     );
-    // A new chapter is a new source to embed ([3.22.7](docs/project/prd.md)).
+    // A new chapter is a new source to embed ([3.22.7](docs/project/prd.md)) — and a chapter with
+    // no Flow Tracker question yet, which the step writes without touching the others
+    // ([3.14.12](docs/project/prd.md)).
     await queue().enqueue({ recordingId: chapter.recordingId, step: 'embed' }, tx);
+    await queue().enqueue({ recordingId: chapter.recordingId, step: 'generate_questions' }, tx);
     return chapter.recordingId;
   });
 
@@ -332,9 +343,17 @@ export async function mergeChapter(
       await deleteChapter(one.id, tx);
     }
 
+    // The survivor now spans what two chapters did, so the question written about the smaller
+    // span no longer asks about the whole of it ([3.14.12](docs/project/prd.md)): it goes, and the
+    // step writes a fresh one. The deleted chapter's question went with the chapter. An emptied
+    // teaching has no chapters left to carry a question, and the step writes the whole-teaching one.
+    const survivor = siblings[index - 1];
+    if (!emptied && survivor !== undefined) await deleteQuestionsOfChapters([survivor.id], tx);
+
     // A chapter that is gone has a vector that is gone with it; the step removes rows for sources
     // it no longer finds ([3.22.7](docs/project/prd.md)).
     await queue().enqueue({ recordingId: chapter.recordingId, step: 'embed' }, tx);
+    await queue().enqueue({ recordingId: chapter.recordingId, step: 'generate_questions' }, tx);
 
     return { recordingId: chapter.recordingId, emptied };
   });
