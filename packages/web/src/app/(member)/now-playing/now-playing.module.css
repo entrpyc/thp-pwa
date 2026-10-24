@@ -1,22 +1,27 @@
 /*
- * The now-playing view — `pages/player.png`.
+ * The now-playing view — the screen for this moment of the teaching.
  *
- * The reference is a column on the page's own background: a large rounded square near the top, then
- * a panel of scripture cards under it. There is no card around the cover, no chrome over it and no
- * transport on it — the docked bar of `bottom-navigation/default.png` is what sits at the foot of
- * this screen, and it is drawn by `transport.module.css` as it is on every other member screen.
+ * A tall hero at the top: the series cover filling it edge to edge, blurred and dimmed into a
+ * backdrop, with the line being spoken written large and centred across it and the chapter named
+ * at its foot. Under the hero, the page's own surface again: the notes near the playhead as the
+ * guide's standard cards, then the scripture panel the recording page draws. The docked bar of
+ * `bottom-navigation/default.png` still sits at the foot of the screen, drawn by
+ * `transport.module.css` as it is on every other member screen.
  *
  * Everything composes from tokens.css, which is the style guide's Quick token block; nothing here
- * declares a colour, a radius or a spacing value of its own.
+ * declares a colour, a radius or a spacing value of its own. The blur radius is a spacing token
+ * because the guide has no blur scale and a pixel literal fails the build — three steps of the
+ * spacing scale is what turns a cover into a wash without turning it into a flat colour.
  *
- * Two extrapolations, each read off a rule in the guide rather than invented:
+ * Extrapolations, each read off a rule in the guide rather than invented:
  *
- * 1. **The cover is capped rather than fluid to the column.** The reference draws it at roughly
- *    two thirds of the reading column and centred, which at the column's 48rem cap is about 26rem —
- *    a square any wider stops reading as artwork and starts reading as a background.
- * 2. **The close control is the hero band's back control**, same recipe and same `‹`. It is the
- *    same gesture on the same surface, and giving it a second appearance would be a second idea of
- *    what "back" looks like.
+ * 1. **The hero is the dashboard's hero band**, taller: same full-width art, same fade into the
+ *    page's background at the foot, same back control in its top corner. Taller because the art is
+ *    not the subject here — the words are, and they need room to be read from across a room.
+ * 2. **The caption is the title size.** The guide's largest type is the page title, and the line
+ *    being spoken is what this page is titled by, moment to moment.
+ * 3. **The dimmed caption is a held note**, not a new style: the same text at reduced opacity,
+ *    which is how the guide marks every "still here, not current" state.
  */
 
 .view {
@@ -26,16 +31,10 @@
   min-width: 0;
 }
 
-.head {
-  display: flex;
-  align-items: center;
-}
-
 /*
- * `pages/player.png` prints no page title. The heading is here for a screen reader and painted
- * nowhere — the same unpainted `h1` `screens.module.css` gives the dashboard, repeated rather than
- * shared because the two stylesheets have no other rule in common and importing one into the other
- * would couple two surfaces for four lines.
+ * The heading is here for a screen reader and painted nowhere — the same unpainted `h1`
+ * `screens.module.css` gives the dashboard, repeated rather than shared because the two stylesheets
+ * have no other rule in common.
  */
 .hiddenTitle {
   position: absolute;
@@ -46,6 +45,61 @@
   overflow: hidden;
   clip-path: inset(50%);
   white-space: nowrap;
+}
+
+/* ---- the hero ------------------------------------------------------------------------------- */
+
+/*
+ * Tall and full width: three fifths of the viewport, so the words are what the screen is about and
+ * the notes begin where a thumb rests. `isolation` so the blurred art's stacking stays inside the
+ * frame; `overflow: hidden` so the scaled-up art does not spill past the rounded corners.
+ */
+.hero {
+  position: relative;
+  display: flex;
+  flex-direction: column;
+  min-height: 60vh;
+  min-height: 60dvh;
+  overflow: hidden;
+  isolation: isolate;
+  border-radius: var(--radius-lg);
+  background: var(--color-surface);
+}
+
+/*
+ * The cover as a wash. Blurred, so its detail does not fight the words on top of it; dimmed, so
+ * white text reads against any artwork; and scaled up a step so the blur's soft edge falls outside
+ * the frame rather than fading to the surface colour along the border. `object-fit: cover` crops
+ * whatever shape was uploaded to the frame rather than stretching it.
+ */
+.heroArt {
+  position: absolute;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+  filter: blur(var(--space-3)) brightness(0.45) saturate(1.1);
+  transform: scale(1.1);
+}
+
+/* The foot of the hero fading into the page, as the dashboard's hero band does. Decorative. */
+.heroShade {
+  position: absolute;
+  inset: 0;
+  background: linear-gradient(to bottom, transparent 40%, var(--color-bg));
+}
+
+/* Above the art and the shade, so the close control takes the press rather than the picture. */
+.heroTop,
+.heroBody,
+.heroChapter {
+  position: relative;
+}
+
+.heroTop {
+  display: flex;
+  align-items: center;
+  padding: var(--space-4);
 }
 
 /* The hero band's back control, unchanged: the guide's outlined circle at a thumb's size. */
@@ -69,42 +123,160 @@
   border-color: var(--color-border-strong);
 }
 
+/* The middle of the hero, where the line being spoken is centred both ways. */
+.heroBody {
+  flex: 1;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: var(--space-4) var(--space-6);
+}
+
 /*
- * The square of `pages/player.png` (scope prd 3.3.2).
- *
- * `aspect-ratio: 1 / 1` rather than a height, so the square scales with the column instead of being
- * a number that is only right at one width — and `object-fit: cover` with the default centre origin
- * crops whatever shape was uploaded into it. `fill`, the default, would stretch a landscape cover
- * into a square, which is what scope prd 3.3.2 rules out in as many words.
+ * The line being spoken, at the page-title size. Capped at a reading measure so a long sentence
+ * wraps into a block rather than a ribbon; `text-wrap: balance` so its last line is not one word.
+ * Opacity transitions so a line arriving replaces a dimmed one by brightening rather than popping.
  */
-.cover {
-  display: block;
-  width: 100%;
-  max-width: 26rem;
-  margin: 0 auto;
-  aspect-ratio: 1 / 1;
-  object-fit: cover;
-  border-radius: var(--radius-md);
+.caption {
+  margin: 0;
+  max-width: 28ch;
+  text-align: center;
+  color: var(--color-text);
+  font-size: var(--fs-title);
+  font-weight: 600;
+  line-height: 1.3;
+  text-wrap: balance;
+  overflow-wrap: anywhere;
+  transition: opacity 400ms ease;
+}
+
+/* A pause in the voice: the last line stays, held rather than current. */
+.captionDim {
+  opacity: 0.5;
+}
+
+/* The chapter playing, small at the foot of the hero, where a video player prints its title. */
+.heroChapter {
+  margin: 0;
+  padding: 0 var(--space-6) var(--space-5);
+  text-align: center;
+  color: var(--color-text-muted);
+  font-size: var(--fs-body);
+  font-weight: 500;
 }
 
 /* The one line this view says for itself, in the tone every other quiet line in the product takes. */
 .quiet {
   margin: 0;
+  text-align: center;
   font-size: var(--fs-body);
   color: var(--color-text-dim);
 }
 
-/*
- * The chapter playing, under the cover (3.22.19).
- *
- * Centred under the square and in the body size rather than a heading's, because it is a caption on
- * the picture above it rather than a title of the screen — the screen's title is the teaching, and
- * the transport underneath is what carries that.
- */
-.chapter {
+/* ---- notes near this moment ----------------------------------------------------------------- */
+
+.notesRow {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-3);
+}
+
+/* The row's title, in the card-title size the scripture panel beneath uses for its own. */
+.rowTitle {
   margin: 0;
-  text-align: center;
+  color: var(--color-text);
+  font-size: var(--fs-card-title);
+  font-weight: 600;
+}
+
+.notes {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-3);
+}
+
+/* The guide's standard card, as the notes tab draws it. */
+.note {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-3);
+  background: var(--color-surface);
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-md);
+  padding: var(--space-5);
+}
+
+/* The whole card body is the way to the Notes tab; the pictures below it are not. */
+.noteLink {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-3);
+  color: inherit;
+  text-decoration: none;
+}
+
+.noteLink:hover .noteAuthor {
+  text-decoration: underline;
+}
+
+.noteHead {
+  display: flex;
+  align-items: center;
+  gap: var(--space-3);
+  min-width: 0;
+}
+
+.avatar {
+  flex: none;
+  width: var(--space-8);
+  height: var(--space-8);
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-pill);
+  object-fit: cover;
+  background: var(--color-surface-raised);
+}
+
+.monogram {
+  flex: none;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: var(--space-8);
+  height: var(--space-8);
+  background: var(--color-surface-raised);
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-pill);
+  color: var(--color-text-muted);
+  font-size: var(--fs-meta);
+}
+
+.noteAuthor {
+  flex: 1;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
   color: var(--color-text);
   font-size: var(--fs-body);
+  font-weight: 600;
+}
+
+.noteTime {
+  flex: none;
+  color: var(--color-primary-strong);
+  font-size: var(--fs-meta);
   font-weight: 500;
+  font-variant-numeric: tabular-nums;
+}
+
+/* Whole, never clamped: the line breaks the member typed are the line breaks they get back. */
+.noteText {
+  display: block;
+  color: var(--color-text);
+  font-size: var(--fs-body);
+  white-space: pre-wrap;
+  overflow-wrap: anywhere;
 }
