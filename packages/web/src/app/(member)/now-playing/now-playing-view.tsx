@@ -27,10 +27,11 @@ import styles from './now-playing.module.css';
  * cannot interrupt the audio: the element is mounted in the member layout and this route is a
  * sibling of the one the member came from, so neither transition unmounts anything.
  *
- * **Captions are always on here, and the pill is not.** The view asks the player for the transcript
- * and the finer caption clock through `attendCaptions` without touching the pill's switch; the
- * transport, for its part, draws no pill while this is the screen. Between lines the previous line
- * stays, dimmed, so a pause in the voice is not a flash of empty hero.
+ * **Captions are always on here, whatever the pill's switch says.** The view asks the player for
+ * the transcript and the finer caption clock through `attendCaptions` without touching the switch;
+ * the transport keeps drawing its pill here as on every other screen when the switch is on, so the
+ * bar is the same bar wherever it is docked. Between lines the previous line stays, dimmed, so a
+ * pause in the voice is not a flash of empty hero.
  *
  * **Notes are read, not written.** A card is the author, the moment, the whole text and its
  * pictures; pressing it opens the teaching's Notes tab, where the composer, replies, reactions and

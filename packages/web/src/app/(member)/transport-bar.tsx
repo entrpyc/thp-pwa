@@ -1,7 +1,6 @@
 'use client';
 
 import Link from 'next/link';
-import { usePathname } from 'next/navigation';
 import { useEffect, useRef, useState, type PointerEvent as ReactPointerEvent } from 'react';
 import {
   NOW_PLAYING_PAGE_PATH,
@@ -159,8 +158,6 @@ function ChaptersIcon() {
 
 export function TransportBar() {
   const player = usePlayer();
-  // Which member screen the bar is docked under — read for one thing only, the caption pill below.
-  const pathname = usePathname();
   const { highlights } = useHighlights();
   const [toolbarOpen, setToolbarOpen] = useState(false);
   const [sheetOpen, setSheetOpen] = useState(false);
@@ -589,12 +586,12 @@ export function TransportBar() {
         the length of a pause — so a gap draws a dash instead, which says the captions are running
         and this moment has no words rather than leaving a member to wonder which.
 
-        **Not on the now-playing view**, where the same line is already written large across the
-        cover: two copies of one sentence stacked on one screen read as a fault, and the view's copy
-        is the one that is on purpose. The switch itself is untouched — the pill is back the moment
-        the member leaves.
+        **On the now-playing view too.** The view writes the line large across the cover regardless
+        of the switch, and the pill is drawn there exactly as on every other screen when the switch
+        is on: the operator asked that the bar keep its ordinary shape wherever it is docked, so a
+        member who turned captions on is not shown a bar that changed under them.
       */}
-      {player.captionsOn && pathname !== NOW_PLAYING_PAGE_PATH ? (
+      {player.captionsOn ? (
         <section className={styles.caption} aria-label="Caption">
           <span className={`${styles.captionText}${captionHighlighted ? ` ${styles.captionHighlighted}` : ''}`}>
             {caption === null ? <span aria-hidden="true">–</span> : caption}

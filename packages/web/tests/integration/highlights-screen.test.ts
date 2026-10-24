@@ -4,6 +4,7 @@ import {
   DASHBOARD_PAGE_PATH,
   HIGHLIGHTS_PAGE_PATH,
   HIGHLIGHT_AT_PARAM,
+  HIGHLIGHT_NOTE_PARAM,
   ROLE,
   chapterPagePath,
   recordingPagePath,
@@ -326,6 +327,67 @@ describe('/highlights', () => {
       await expect
         .poll(async () => (await audioState(page)).currentTime, { timeout: 30_000 })
         .toBeGreaterThanOrEqual(9.5);
+    } finally {
+      await page.context().close();
+    }
+  }, 180_000);
+
+  /**
+   * A note's row opens the teaching **at the note** ([3.15.7](docs/project/prd.md)): the address
+   * names the note as well as its moment, and the Notes tab scrolls that card into the window once
+   * the list is on screen. Enough other notes come first that the card would otherwise sit below
+   * the fold, so the assertion is on the card being in view, not merely present.
+   */
+  it('opens a note’s row on the teaching with that note scrolled into view', async () => {
+    const where = await publishedTeaching(`Landing ${RUN}`);
+    for (let index = 0; index < 12; index += 1) {
+      await insertNote(
+        {
+          recordingId: where,
+          authorId: curator.id,
+          visibility: 'private',
+          text: `Filler ${index} ${RUN}.\n\n\n\n\n\n`,
+          timestampMs: 1_000 + index * 1_000,
+        },
+        handle,
+      );
+    }
+    const wanted = await insertNote(
+      { recordingId: where, authorId: curator.id, visibility: 'private', text: 'The one I pinned.', timestampMs: 30_000 },
+      handle,
+    );
+    await insertHighlight({ userId: curator.id, recordingId: where, kind: 'note', noteId: wanted.id }, handle);
+
+    const page = await signInAs(curator);
+    try {
+      await page.goto(`${baseUrl}${HIGHLIGHTS_PAGE_PATH}`, { waitUntil: 'domcontentloaded' });
+      // Found by its own link: the curator's list holds what earlier cases left on it.
+      const open = page.getByRole('link', { name: `Open Landing ${RUN} at 00:30` });
+      await expect.poll(() => open.count(), { timeout: 60_000 }).toBe(1);
+      const href = (await open.getAttribute('href')) ?? '';
+      expect(href).toContain(`${HIGHLIGHT_AT_PARAM}=30000`);
+      expect(href).toContain(`${HIGHLIGHT_NOTE_PARAM}=${wanted.id}`);
+      await open.click();
+      await page.waitForURL((url) => url.pathname === recordingPagePath(where), { timeout: 30_000 });
+
+      const card = page.locator(`#note-${wanted.id}`);
+      await expect.poll(() => card.count(), { timeout: 60_000 }).toBe(1);
+      await expect
+        .poll(
+          async () =>
+            card.evaluate((node) => {
+              const box = node.getBoundingClientRect();
+              return box.top >= 0 && box.bottom <= window.innerHeight;
+            }),
+          { timeout: 30_000 },
+        )
+        .toBe(true);
+      // And the page did not simply land at the top: the first filler is above the window.
+      const firstTop = await page
+        .locator('[id^="note-"]')
+        .first()
+        .evaluate((node) => node.getBoundingClientRect().top);
+      expect(firstTop).toBeLessThan(0);
     } finally {
       await page.context().close();
     }

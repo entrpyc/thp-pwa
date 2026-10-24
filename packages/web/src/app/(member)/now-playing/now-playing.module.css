@@ -18,8 +18,9 @@
  * 1. **The hero is the dashboard's hero band**, taller: same full-width art, same fade into the
  *    page's background at the foot, same back control in its top corner. Taller because the art is
  *    not the subject here — the words are, and they need room to be read from across a room.
- * 2. **The caption is the title size.** The guide's largest type is the page title, and the line
- *    being spoken is what this page is titled by, moment to moment.
+ * 2. **The caption sits just under the title size.** The line being spoken is what this page is
+ *    titled by, moment to moment, so it is the largest type on the view — but a step below the
+ *    page title, so a long sentence fits the hero without crowding the controls under it.
  * 3. **The dimmed caption is a held note**, not a new style: the same text at reduced opacity,
  *    which is how the guide marks every "still here, not current" state.
  */
@@ -133,16 +134,17 @@
 }
 
 /*
- * The line being spoken, at the page-title size. Capped at a reading measure so a long sentence
- * wraps into a block rather than a ribbon; `text-wrap: balance` so its last line is not one word.
- * Opacity transitions so a line arriving replaces a dimmed one by brightening rather than popping.
+ * The line being spoken, a step under the page-title size. Capped at a reading measure so a long
+ * sentence wraps into a block rather than a ribbon; `text-wrap: balance` so its last line is not
+ * one word. Opacity transitions so a line arriving replaces a dimmed one by brightening rather
+ * than popping.
  */
 .caption {
   margin: 0;
-  max-width: 28ch;
+  max-width: 32ch;
   text-align: center;
   color: var(--color-text);
-  font-size: var(--fs-title);
+  font-size: 1.625rem;
   font-weight: 600;
   line-height: 1.3;
   text-wrap: balance;

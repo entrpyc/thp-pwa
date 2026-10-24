@@ -23,7 +23,7 @@
 import { RECORDINGS_PATH } from './recordings';
 
 /**
- * The seven steps, in the order the control renders them ([3.2.4](docs/project/prd.md)).
+ * The nine steps, in the order the control renders them ([3.2.4](docs/project/prd.md)).
  *
  * A tuple rather than a range: the reference draws a pill cycling through named values, and a
  * continuous rate is a different control answering a different question. `1` is the default and is
@@ -31,9 +31,11 @@ import { RECORDINGS_PATH } from './recordings';
  *
  * `1.75` joined the six in a later pass. The gap between `1.5` and `2` was the widest on the scale
  * and the one a listener working through a long teaching lands in, so the step goes where the
- * cycling order already puts it rather than at the end.
+ * cycling order already puts it rather than at the end. `2.25` and `2.5` came after that, for the
+ * listener who has heard a teaching before and wants it faster than `2` — the same quarter steps,
+ * continued past the old ceiling.
  */
-export const PLAYBACK_SPEEDS = [0.5, 0.75, 1, 1.25, 1.5, 1.75, 2] as const;
+export const PLAYBACK_SPEEDS = [0.5, 0.75, 1, 1.25, 1.5, 1.75, 2, 2.25, 2.5] as const;
 
 export type PlaybackSpeed = (typeof PLAYBACK_SPEEDS)[number];
 

@@ -27,7 +27,11 @@ import { NoteImages } from './note-images';
 import { BlockConfirm, ReportForm } from './note-moderation';
 import { TermsPrompt, isTermsRequired } from './terms-prompt';
 import { PinNoteControl } from '../../highlights/pin-note-control';
+import { noteFromAddress } from '../../highlights/open-at';
 import styles from './notes.module.css';
+
+/** How long the card a highlight landed on stays marked, in milliseconds — long enough to find it. */
+const LANDED_FOR_MS = 2_500;
 
 /**
  * **The `Notes` tab of `pages/recording.png`** — the composer, the filter, the pinned group and the
@@ -121,6 +125,29 @@ export function NotesPanel({
    * which has no panel to filter it.
    */
   const held = content.notes;
+
+  /**
+   * **A highlight of a note lands on that note** ([3.15.7](docs/project/prd.md)). The address a
+   * playlist row opens names the note, and once the list is on screen the card is scrolled into
+   * view and marked for a moment so the eye finds it. Read once at mount and done once: a refresh
+   * of the list after a write is not a second arrival, and must not pull the member back. A note
+   * that is not in the list — removed since, or filtered out — scrolls nowhere.
+   */
+  const landingOn = useRef<string | null | undefined>(undefined);
+  if (landingOn.current === undefined) landingOn.current = noteFromAddress();
+  useEffect(() => {
+    const target = landingOn.current;
+    if (target === null || target === undefined || held === null) return;
+    landingOn.current = null;
+    const card = document.getElementById(cardId(target));
+    if (card === null) return;
+    card.scrollIntoView({ block: 'center' });
+    const landed = styles.landed;
+    if (landed === undefined) return;
+    card.classList.add(landed);
+    const timer = window.setTimeout(() => card.classList.remove(landed), LANDED_FOR_MS);
+    return () => window.clearTimeout(timer);
+  }, [held]);
 
   /*
    * The chapter's span, when the page asked for one ([3.22.14](docs/project/prd.md)). `null` while
@@ -746,7 +773,7 @@ function EditForm({
   const [text, setText] = useState(note.text);
   const [saving, setSaving] = useState(false);
   const count = text.trim().length;
-  // The pictures the note has, to keep, reorder-by-removal or add to ([3.12.22](docs/project/prd.md)).
+  // The pictures the note has, to keep, reorder-by-removal or add to ([3.12.22](docs/project/prd.md)).
   const fieldId = useId();
   const attachments = useImageAttachments(note.images);
   const attached = attachments.images.filter((one) => one.status !== 'refused').length;

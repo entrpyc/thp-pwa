@@ -1,4 +1,4 @@
-import { HIGHLIGHT_AT_PARAM, recordingPagePath } from '@thp/shared';
+import { HIGHLIGHT_AT_PARAM, HIGHLIGHT_NOTE_PARAM, recordingPagePath } from '@thp/shared';
 
 /**
  * **Opening a teaching at a highlight's moment** ([3.15.7](docs/project/prd.md)), without sound
@@ -12,10 +12,33 @@ import { HIGHLIGHT_AT_PARAM, recordingPagePath } from '@thp/shared';
  * address a bookmark holds keeps meaning the same moment.
  */
 
-/** The row's address: the teaching, at the entry's moment — or just the teaching, for a whole one. */
-export function highlightHref(recordingId: string, positionMs: number | null): string {
+/**
+ * The row's address: the teaching, at the entry's moment — or just the teaching, for a whole one.
+ * A note entry also names its note, so the Notes tab can scroll to the card the member pressed.
+ */
+export function highlightHref(
+  recordingId: string,
+  positionMs: number | null,
+  noteId: string | null = null,
+): string {
   const path = recordingPagePath(recordingId);
-  return positionMs === null ? path : `${path}?${HIGHLIGHT_AT_PARAM}=${positionMs}`;
+  const params = new URLSearchParams();
+  if (positionMs !== null) params.set(HIGHLIGHT_AT_PARAM, String(positionMs));
+  if (noteId !== null) params.set(HIGHLIGHT_NOTE_PARAM, noteId);
+  const query = params.toString();
+  return query === '' ? path : `${path}?${query}`;
+}
+
+/**
+ * The note the current address asks the Notes tab to scroll to, or `null` when it names none —
+ * including on the server. Only the id's shape is checked here; whether the note is in the list
+ * is the panel's to find out.
+ */
+export function noteFromAddress(): string | null {
+  if (typeof window === 'undefined') return null;
+  const raw = new URLSearchParams(window.location.search).get(HIGHLIGHT_NOTE_PARAM);
+  if (raw === null || !/^[A-Za-z0-9_-]{1,64}$/.test(raw)) return null;
+  return raw;
 }
 
 /**

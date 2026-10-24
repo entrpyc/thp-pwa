@@ -169,7 +169,8 @@ export const user = pgTable(
      * already exists plays at normal speed and nobody should have to be back-filled by hand. The
      * check constraint is the steps themselves, **derived from the shared tuple** rather than
      * restated — so the column cannot hold a rate no control can produce, and another step is one
-     * edit there plus one migration. `1.75` was exactly that, in `0017`.
+     * edit there plus one migration. `1.75` was exactly that, in `0017`; `2.25` and `2.5` followed
+     * the same road.
      */
     preferredPlaybackSpeed: real('preferred_playback_speed')
       .notNull()

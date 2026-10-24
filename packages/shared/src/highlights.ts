@@ -91,6 +91,15 @@ export const HIGHLIGHTS_PAGE_PATH = '/highlights';
  */
 export const HIGHLIGHT_AT_PARAM = 'at';
 
+/**
+ * **The address parameter a note entry's row adds**: `/recordings/{id}?at=<ms>&note=<noteId>`.
+ *
+ * A note's moment positions the player, but the member pressed the *note*, so the page also
+ * scrolls its Notes tab to that card once the list is on screen. Read once at mount like `at`,
+ * and written back by nothing. A note that is no longer in the list scrolls nowhere.
+ */
+export const HIGHLIGHT_NOTE_PARAM = 'note';
+
 // =================================================================================================
 // Bodies and payloads
 // =================================================================================================

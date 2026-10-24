@@ -13,7 +13,6 @@ import {
   JOB_STEPS,
   NOTIFICATION_KINDS,
   PIPELINE_STEPS,
-  PLAYBACK_SPEEDS,
   REPORT_OUTCOMES,
   REPORT_REASONS,
   REVIEW_KINDS,
@@ -1904,9 +1903,10 @@ describe('the series artwork pointer, and nothing beside it', () => {
  * and the six that were already allowed still being allowed — a widened constraint that quietly
  * dropped one of the old steps would be a member's saved rate becoming unwritable.
  *
- * `PLAYBACK_SPEEDS` is read live here, unlike in the `0010` block above, because this is the
- * migration that catches the schema up to it: if the two ever disagree again, this is the test that
- * says so rather than a route failing in production.
+ * The seven are spelled out, as the `0010` block spells out its six: this database is migrated to
+ * `0017` and no further, and the tuple has since grown `2.25` and `2.5`, which a later migration is
+ * what admits. The test that holds the live tuple against the live schema is the API's
+ * (`playback-speed.test.ts` in the web package), which runs against every migration there is.
  */
 describe('the 1.75 playback step, and nothing beside it', () => {
   let target: ThrowawayDatabase;
@@ -1951,13 +1951,13 @@ describe('the 1.75 playback step, and nothing beside it', () => {
     expect([...after.keys()].sort()).toEqual([...before.keys()].sort());
   });
 
-  it('admits every step the tuple names, and nothing outside it', async () => {
-    for (const allowed of PLAYBACK_SPEEDS) {
+  it('admits the seven steps as of this migration, and nothing outside them', async () => {
+    for (const allowed of [0.5, 0.75, 1, 1.25, 1.5, 1.75, 2]) {
       await expect(
         sql`update "user" set preferred_playback_speed = ${allowed} where id = ${existingUserId}`,
       ).resolves.toBeTruthy();
     }
-    for (const rejected of [0, 0.6, 1.1, 1.9, 3]) {
+    for (const rejected of [0, 0.6, 1.1, 1.9, 2.25, 2.5, 3]) {
       await expect(
         sql`update "user" set preferred_playback_speed = ${rejected} where id = ${existingUserId}`,
       ).rejects.toThrow();

@@ -3,6 +3,7 @@ import { chromium, type Browser, type Page } from 'playwright';
 import {
   API_PREFIX,
   DASHBOARD_PAGE_PATH,
+  PLAYBACK_SPEEDS,
   PLAYBACK_SPEED_PATH,
   ROLE,
   recordingPagePath,
@@ -150,7 +151,10 @@ describe('the API is what refuses a speed no control could produce', () => {
       return response.status;
     };
 
-    for (const speed of [0.5, 0.75, 1, 1.25, 1.5, 1.75, 2]) {
+    // The live tuple: every step the control offers is a step the account can keep. The check
+    // constraint on the column has to agree, so a step added to the tuple without its migration
+    // is caught here rather than by a member's save failing.
+    for (const speed of PLAYBACK_SPEEDS) {
       expect(await write(speed), `${speed}`).toBe(200);
     }
     // The client holds no decision: a caller that is not the player is refused by the API, and the
@@ -160,7 +164,9 @@ describe('the API is what refuses a speed no control could produce', () => {
     }
 
     // The last accepted value is what stands; the refusals wrote nothing.
-    expect((await findUserById(listener.id, handle))?.preferredPlaybackSpeed).toBe(2);
+    expect((await findUserById(listener.id, handle))?.preferredPlaybackSpeed).toBe(
+      PLAYBACK_SPEEDS[PLAYBACK_SPEEDS.length - 1],
+    );
   }, 120_000);
 
   it('refuses an anonymous caller', async () => {

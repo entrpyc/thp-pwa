@@ -17,7 +17,7 @@ import {
 
 describe('the speed control offers exactly the steps the tuple names', () => {
   it('is the set the requirement names, in the order a control cycles them', () => {
-    expect([...PLAYBACK_SPEEDS]).toEqual([0.5, 0.75, 1, 1.25, 1.5, 1.75, 2]);
+    expect([...PLAYBACK_SPEEDS]).toEqual([0.5, 0.75, 1, 1.25, 1.5, 1.75, 2, 2.25, 2.5]);
   });
 
   it('starts every account at normal speed', () => {
@@ -50,7 +50,9 @@ describe('the control is one pill that cycles', () => {
     expect(nextPlaybackSpeed(0.5)).toBe(0.75);
     expect(nextPlaybackSpeed(1)).toBe(1.25);
     expect(nextPlaybackSpeed(1.5)).toBe(1.75);
-    expect(nextPlaybackSpeed(2)).toBe(0.5);
+    expect(nextPlaybackSpeed(2)).toBe(2.25);
+    expect(nextPlaybackSpeed(2.25)).toBe(2.5);
+    expect(nextPlaybackSpeed(2.5)).toBe(0.5);
   });
 
   it('returns to where it started after one press per step, so every step is reachable', () => {

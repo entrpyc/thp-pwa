@@ -582,10 +582,11 @@ describe('the words being spoken are written across the hero', () => {
   }, 180_000);
 
   /**
-   * The pill is hidden **only while this is the screen**: a member who had captions on keeps them
-   * on, and finds the pill back where it was the moment they close the view.
+   * The pill is **the same pill on this screen as on every other**: a member who had captions on
+   * keeps the bar they know, with the hero writing the line large above it, and finds the pill
+   * still there on the way back.
    */
-  it('hides the transport caption pill on this view and restores it on the way back', async () => {
+  it('keeps the transport caption pill on this view, and on the way back', async () => {
     const { page } = await openTeaching(coveredId);
     try {
       const pill = page.getByRole('region', { name: 'Caption' });
@@ -594,13 +595,15 @@ describe('the words being spoken are written across the hero', () => {
       await expect.poll(() => pill.count(), { timeout: 30_000 }).toBe(1);
 
       await openTheView(page);
-      await expect.poll(() => pill.count(), { timeout: 30_000 }).toBe(0);
       // The remembered position is applied once the element has its metadata, so the seek that pins
       // which line is expected comes after the view is open rather than racing it.
       await seekTo(page, 0);
       await expect
         .poll(() => heroCaption(page).textContent(), { timeout: 30_000 })
         .toContain('Line 1 of');
+      // Both copies of the line: the hero's, and the pill's, which the switch asked for.
+      expect(await pill.count()).toBe(1);
+      await expect.poll(() => pill.textContent(), { timeout: 30_000 }).toContain('Line 1 of');
 
       await view(page).getByRole('button', { name: 'Close now playing' }).click();
       await page.waitForURL(`${baseUrl}${recordingPagePath(coveredId)}`, { timeout: 30_000 });

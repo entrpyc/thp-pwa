@@ -611,6 +611,12 @@
   border-color: var(--color-border-strong);
 }
 
+/* The card a highlight landed on, marked for a moment — the primary ring, then gone. */
+.landed {
+  outline: 2px solid var(--color-primary);
+  outline-offset: 2px;
+}
+
 .pinnedPill {
   background: var(--color-primary-soft);
   border-radius: var(--radius-pill);
