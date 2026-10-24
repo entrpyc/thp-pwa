@@ -19,6 +19,7 @@ import { DownloadControl } from '../../downloads/download-control';
 import { openAtFromAddress } from '../../highlights/open-at';
 import { ChaptersPanel } from './chapters-panel';
 import { CollapsibleProse } from './collapsible-prose';
+import { MindMapPanel } from './mind-map-panel';
 import { NotesPanel } from './notes-panel';
 import { RecordingContentProvider, toLoaded, useRecordingContentFor } from './recording-content';
 import { listOffsetLeftHere, tabFromAddress, writeTabToAddress } from './round-trip';
@@ -29,7 +30,7 @@ import { TagLabels } from '../../tag-labels';
 import styles from '../../screens.module.css';
 
 /** The strip's tabs, by the name each takes in the address (`?tab=chapters`). */
-const TABS = ['notes', 'chapters', 'scripture', 'transcript'] as const;
+const TABS = ['notes', 'chapters', 'scripture', 'transcript', 'mindmap'] as const;
 
 /** The strip is single-select: opening one tab closes the others, and `null` is all closed. */
 type OpenTab = (typeof TABS)[number] | null;
@@ -43,18 +44,18 @@ type OpenTab = (typeof TABS)[number] | null;
  *   `pages/chapter.png` draws it, with the back control over it (scope prd 3.2.3, 3.2.7). The
  *   cover is the *series'* — a recording has none of its own — so every teaching in one study
  *   shows the same picture, and a teaching in no series keeps the flat band (scope prd 3.2.6).
- * - **A tab strip holding four tabs.** The reference draws five — `Chapter`, `Scripture`, `Notes`,
- *   `Transcript`, `Mindmap` — and four of them have data: `Chapters` arrived with
- *   [3.22.10](docs/project/prd.md) and `Mindmap` is still dropped rather than rendered disabled,
- *   which is the line the whole member surface draws for a deferred destination. Summary and
- *   description render directly in the page body, above the strip — description first, then
- *   summary, which is what a member reads in: the chosen line about the teaching, then what was
- *   said in it. The strip is **single-select**,
- *   the way the reference reads it: opening `Notes` closes `Scripture`.
- * - **`Transcript` is always drawn** (3.5.3, 3.5.4). `Mindmap` is absent because nothing was
- *   built; `Scripture` and `Chapters` come and go with what a teaching has; the transcript is the
- *   one thing every published teaching has, so its tab is the one entry besides `Notes` that is
- *   always there.
+ * - **A tab strip holding the reference's five tabs** — `Chapter`, `Scripture`, `Notes`,
+ *   `Transcript`, `Mindmap` — each drawn when the teaching has something behind it: `Chapters`
+ *   arrived with [3.22.10](docs/project/prd.md) and `Mindmap` with [3.8.3](docs/project/prd.md).
+ *   Summary and description render directly in the page body, above the strip — description
+ *   first, then summary, which is what a member reads in: the chosen line about the teaching, then
+ *   what was said in it. The strip is **single-select**, the way the reference reads it: opening
+ *   `Notes` closes `Scripture`.
+ * - **`Transcript` is always drawn** (3.5.3, 3.5.4). `Scripture`, `Chapters` and `Mindmap` come
+ *   and go with what a teaching has; the transcript is the one thing every published teaching
+ *   has, so its tab is the one entry besides `Notes` that is always there.
+ * - **`Mindmap` is drawn only for a teaching whose map an admin approved**
+ *   ([3.8.2](docs/project/prd.md)) — the same line as `Scripture`, off the payload's `hasMindMap`.
  * - **`Scripture` is drawn only for a teaching that has some** (active-scope prd 3.4.4) — the same
  *   line, one step further: a destination with no data behind it is left out rather than offered
  *   empty. The recording payload carries `hasScripture` so that decision costs no request.
@@ -280,7 +281,8 @@ export function RecordingScreen({
     if (recording === null) return;
     const undrawn =
       (openTab === 'chapters' && content.chapters !== null && !hasChapters) ||
-      (openTab === 'scripture' && !recording.hasScripture);
+      (openTab === 'scripture' && !recording.hasScripture) ||
+      (openTab === 'mindmap' && !recording.hasMindMap);
     if (!undrawn) return;
     setOpenTab('notes');
     writeTabToAddress('notes', 'notes');
@@ -502,6 +504,22 @@ export function RecordingScreen({
             >
               Transcript
             </button>
+            {/*
+              `Mindmap`, last as the reference draws it, and **drawn only for a teaching whose map
+              an admin has approved** ([3.8.2](docs/project/prd.md), [3.8.3](docs/project/prd.md))
+              — the same line `Scripture` draws, decided off the same payload flag.
+            */}
+            {recording.hasMindMap ? (
+              <button
+                className={styles.tab}
+                type="button"
+                role="tab"
+                aria-selected={openTab === 'mindmap'}
+                onClick={() => chooseTab('mindmap')}
+              >
+                Mindmap
+              </button>
+            ) : null}
           </div>
 
           {/*
@@ -528,6 +546,10 @@ export function RecordingScreen({
 
               {openTab === 'transcript' ? (
                 <TranscriptPanel recordingId={recordingId} canCorrect={canCorrect} />
+              ) : null}
+
+              {openTab === 'mindmap' && recording.hasMindMap ? (
+                <MindMapPanel recordingId={recordingId} />
               ) : null}
             </div>
           )}

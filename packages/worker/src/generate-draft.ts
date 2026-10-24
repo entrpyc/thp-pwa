@@ -17,12 +17,14 @@ import {
   type ReviewKind,
   type ReviewProvenance,
   type DraftedCitation,
+  type MindMapNode,
   type ScriptureCitation,
 } from '@thp/shared';
 import { resolvePassages, type BibleSource } from '@thp/bible';
 import { emitDomainEvent } from '@thp/shared/observability/events';
 import { logger } from '@thp/shared/observability/logger';
 import { generator as configuredGenerator, type Generator } from './generate';
+import { resolveProposedMindMap } from './mind-map-draft';
 import { readProposedCitations, resolveProposedCitations } from './scripture-draft';
 import { notifySummaryReady } from './summary-ready';
 import type { JobHandler } from './handlers';
@@ -158,12 +160,29 @@ export function createGenerateDraftHandler(deps: GenerateDraftDependencies = {})
     // number is read as "how much of this run's answer was not usable".
     let dropped = 0;
     let duplicates = 0;
+    // The same count for the tree: themes past the eighth, points past the sixth, anything under
+    // a point, and nodes with no words on them ([3.8.1](docs/project/prd.md)).
+    let nodesDropped = 0;
 
-    const draftOf = (kind: ReviewKind): string | readonly DraftedCitation[] => {
+    const draftOf = (kind: ReviewKind): string | readonly DraftedCitation[] | MindMapNode => {
       const field = REVIEW_FIELD[kind];
       const value = result.drafts[kind];
 
       if (field.shape === 'text') return typeof value === 'string' ? value : '';
+
+      if (field.shape === 'tree') {
+        // The same refusal as the list below: a tree that is not an object with themes in it is
+        // prose by another name, and nothing is written.
+        if (typeof value !== 'object' || value === null || Array.isArray(value)) {
+          throw fail(
+            fields,
+            `the ${field.name} came back as ${typeof value} rather than as a tree of themes`,
+          );
+        }
+        const resolved = resolveProposedMindMap(recording.title, value);
+        nodesDropped += resolved.dropped;
+        return resolved.root;
+      }
 
       // **The structure was required, so prose is a failure** (scope prd 3.1.2).
       // Thrown before anything is written, so a run that answered in the wrong shape leaves no
@@ -208,6 +227,9 @@ export function createGenerateDraftHandler(deps: GenerateDraftDependencies = {})
       // number on the run that proposed it, so a prompt going wrong is visible rather than quiet.
       citationsDropped: dropped,
       citationsDuplicated: duplicates,
+      // The tree's own number, read the same way: how much of the map the model proposed did not
+      // fit the three levels and the caps a map has ([3.8.1](docs/project/prd.md)).
+      mindMapNodesDropped: nodesDropped,
       // scope prd 3.3.9: what the lookups cost, on the job that caused them. A
       // free source spends nothing and says so; what is worth reading is the second number — the
       // calls the cache meant nobody had to make.
@@ -227,6 +249,9 @@ export function createGenerateDraftHandler(deps: GenerateDraftDependencies = {})
       // Its own line, at warn, because it is the one thing about a *successful* run that somebody
       // should look at: the step worked and part of what the model said was not usable.
       logger.warn('generate_draft.citations_discarded', { ...fields, dropped, duplicates });
+    }
+    if (nodesDropped > 0) {
+      logger.warn('generate_draft.mind_map_nodes_discarded', { ...fields, dropped: nodesDropped });
     }
 
     emitDomainEvent({ type: 'draft_generated', recordingId: job.recordingId, kinds });

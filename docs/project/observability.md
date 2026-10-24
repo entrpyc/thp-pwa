@@ -223,7 +223,7 @@ sign-out.
 | :--- | :--- | :--- | :--- |
 | Streams, listeners, returns | `playback_started` | `recording_id`, `series_id`, `resumed` (position above zero), `speed` | A unique play, as defined above. In `player-context.tsx`, where a flag reset on load is cleared by the first `play`. |
 | Completions | `playback_completed` | `recording_id`, `series_id` | **Server-side**, the moment the progress write crosses 80% (section 5.3). |
-| Tabs | `tab_opened` | `tab` (`chapters`, `scripture`, `notes`, `transcript`), `surface` (`recording`, `chapter`), `recording_id` | A tab is opened. The recording page's `chooseTab` and the chapter page's toggle are the two call sites; closing a tab fires nothing. Chapters and scripture are the two asked for; the other two cost nothing extra. |
+| Tabs | `tab_opened` | `tab` (`chapters`, `scripture`, `notes`, `transcript`, `mindmap`), `surface` (`recording`, `chapter`), `recording_id` | A tab is opened. The recording page's `chooseTab` and the chapter page's toggle are the two call sites; closing a tab fires nothing. Chapters and scripture are the two asked for; the others cost nothing extra — `mindmap` arrived with prd 3.8.3 and rides the same call. |
 | Private notes | `note_created` | `recording_id`, `visibility` (`public`, `private`), `is_reply` | The note form's submit succeeds. Public notes and replies ride along for free. |
 | Chapter jumps | `chapter_jumped` | `recording_id`, `chapter_index` | The chapters panel's `playFromMs` is called from a chapter row. |
 | Speed changes | `speed_changed` | `speed` | `chooseSpeed` accepts a new rate. |

@@ -2,6 +2,7 @@ import {
   closeReviewItem,
   findReviewItem,
   listPendingReviews,
+  publishMindMap,
   publishSummary,
   replaceScriptureReferences,
   setRecordingDescription,
@@ -15,11 +16,14 @@ import {
   SCRIPTURE_ORIGINS,
   checkAnchorMs,
   checkCitation,
+  checkMindMapTree,
   citationKey,
   citationsEqual,
   formatCitation,
   isScriptureCitation,
+  mindMapsEqual,
   type FieldProvenance,
+  type MindMapNode,
   type RegenerateReviewPayload,
   type RegenerateReviewRequest,
   type ResolveReviewPayload,
@@ -117,6 +121,9 @@ export async function resolveReview(
 
   if (spec.shape === 'list') {
     return approveList(actor, id, item, spec.name, request.references);
+  }
+  if (spec.shape === 'tree') {
+    return approveTree(actor, id, item, spec.name, request.tree);
   }
 
   const field = spec.name;
@@ -243,6 +250,74 @@ async function approveList(
 }
 
 /** The two things a reference can have come from, spelled once, where the enum declares them. */
+/**
+ * **Approving a tree makes it the teaching's mind map** ([3.8.2](docs/project/prd.md)).
+ *
+ * The admin's tree, or the machine's when none was sent, read **strictly**: a tree that breaks the
+ * depth or the caps, or carries a node with no words, is refused with the sentence that says which
+ * node — never trimmed to fit, because a map an admin did not see is not a map they approved.
+ *
+ * The close goes first for the reason `approveList` gives: two admins pressing together have the
+ * second refused on the row lock rather than racing the upsert. The approved tree is written into
+ * the closed item's `fields`, as a text approval writes its text, so the item reads as what was
+ * approved; whether it differs from the proposal is the field-level flag, decided by comparing the
+ * two trees rather than trusting the form.
+ */
+async function approveTree(
+  actor: Actor,
+  id: string,
+  item: ReviewItemRow,
+  field: string,
+  submitted: unknown,
+): Promise<ResolveReviewPayload> {
+  const proposed = readTree(item.fields, field);
+  if (proposed === null) {
+    throw ApiError.invalidInput('This draft holds no tree to approve. Discard it and regenerate.');
+  }
+
+  let root: MindMapNode;
+  if (submitted === undefined) {
+    root = proposed;
+  } else {
+    const checked = checkMindMapTree(submitted);
+    if (!checked.ok) throw ApiError.invalidInput(checked.problem.message);
+    root = checked.root;
+  }
+  if (root.children.length === 0) {
+    throw ApiError.invalidInput('A mind map needs at least one theme. Add one, or discard this draft.');
+  }
+  const edited = !mindMapsEqual(root, proposed);
+
+  await withTransaction(async (tx) => {
+    const closed = await closeReviewItem(
+      {
+        id,
+        status: 'published',
+        reviewedBy: actor.id,
+        fields: { ...readFields(item.fields), [field]: root },
+        provenance: withEdit(item.provenance, field, edited),
+      },
+      tx,
+    );
+    if (closed === null) throw closedAlready();
+
+    await publishMindMap(item.recordingId, root, edited, tx);
+  });
+
+  logger.info('review.approve', {
+    actorId: actor.id,
+    actorEmail: actor.email,
+    action: 'review.resolve',
+    target: `review_item:${id}`,
+    recordingId: item.recordingId,
+    kind: item.kind,
+    edited,
+    themes: root.children.length,
+  });
+
+  return { id, status: 'published' };
+}
+
 const [MACHINE, PERSON] = SCRIPTURE_ORIGINS;
 
 /**
@@ -451,7 +526,12 @@ function readFields(value: unknown): Record<string, ReviewFieldValue> {
   const found: Record<string, ReviewFieldValue> = {};
   for (const [key, entry] of Object.entries(value as Record<string, unknown>)) {
     if (typeof entry === 'string') found[key] = entry;
-    else if (Array.isArray(entry)) {
+    else if (typeof entry === 'object' && entry !== null && !Array.isArray(entry)) {
+      // A tree, read through the same check that admits one on the way in — so a row written by
+      // this release and a row somebody edited by hand read the same way, or not at all.
+      const checked = checkMindMapTree(entry);
+      if (checked.ok) found[key] = checked.root;
+    } else if (Array.isArray(entry)) {
       /*
        * The citation's shape is checked, and the anchor is **normalised on the way out**
        * ([3.7.10](docs/project/prd.md)): a draft written before anchors existed carries none at
@@ -485,6 +565,14 @@ function readField(fields: unknown, name: string): string {
 function readCitations(fields: unknown, name: string): readonly DraftedCitation[] {
   const value = readFields(fields)[name];
   return Array.isArray(value) ? value : [];
+}
+
+function readTree(fields: unknown, name: string): MindMapNode | null {
+  const value = readFields(fields)[name];
+  // `readFields` already admitted it through `checkMindMapTree`; this only tells it from a list.
+  return typeof value === 'object' && value !== null && !Array.isArray(value)
+    ? (value as MindMapNode)
+    : null;
 }
 
 /**
@@ -526,6 +614,8 @@ interface ParsedResolve {
   readonly fields?: Record<string, string>;
   /** The list an admin corrected, unchecked. `undefined` when they sent none. */
   readonly references?: readonly unknown[];
+  /** The tree an admin curated, unchecked. `undefined` when they took the machine's. */
+  readonly tree?: unknown;
 }
 
 function parseResolveRequest(body: unknown, kind: ReviewKind): ParsedResolve {
@@ -556,6 +646,15 @@ function parseResolveRequest(body: unknown, kind: ReviewKind): ParsedResolve {
       throw ApiError.invalidInput(`Send the ${name} as a list of references.`);
     }
     return { action, references: value as readonly unknown[] };
+  }
+
+  // A tree-shaped draft arrives as the root node the canvas rendered. Whether every node in it
+  // fits a map is `approveTree`'s question — this is only that an object is what came.
+  if (spec.shape === 'tree') {
+    if (typeof value !== 'object' || value === null || Array.isArray(value)) {
+      throw ApiError.invalidInput(`Send the ${name} as a tree with a root node.`);
+    }
+    return { action, tree: value };
   }
 
   if (typeof value !== 'string' || value.length > MAX_FIELD_LENGTH) {

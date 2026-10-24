@@ -1,4 +1,4 @@
-import type { ProposedCitation, ReviewKind } from '@thp/shared';
+import type { ProposedCitation, ProposedMindMap, ReviewKind } from '@thp/shared';
 
 /**
  * **The generation port — what drafting is, as far as this application is concerned.**
@@ -85,8 +85,12 @@ export interface GenerationSpend {
  * those name a book of the canon is not a question about the provider's response and is not
  * answered inside a vendor adapter — it is answered once, in `scripture-draft.ts`, where the
  * dropping is counted.
+ *
+ * **The mind map arrives as themes and points**, unchecked for depth and breadth, for the same
+ * reason: what fits a map is `@thp/shared`'s rule, applied once in `mind-map-draft.ts`, where what
+ * did not fit is counted.
  */
-export type GeneratedDraft = string | readonly ProposedCitation[];
+export type GeneratedDraft = string | readonly ProposedCitation[] | ProposedMindMap;
 
 /**
  * What the model wrote, per kind asked for.

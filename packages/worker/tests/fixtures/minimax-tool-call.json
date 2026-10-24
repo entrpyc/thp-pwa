@@ -28,7 +28,23 @@
             "book": "Psalm",
             "chapter": 23
           }
-        ]
+        ],
+        "mindMap": {
+          "themes": [
+            {
+              "label": "Where the letter left off",
+              "anchorMs": 0,
+              "points": [
+                { "label": "Last week's ground, named", "anchorMs": 0 },
+                { "label": "The passage is short and easy to pass over" }
+              ]
+            },
+            {
+              "label": "Everything after rests on this chapter",
+              "points": [{ "label": "Read slowly, phrase by phrase", "anchorMs": 4000 }]
+            }
+          ]
+        }
       }
     }
   ],

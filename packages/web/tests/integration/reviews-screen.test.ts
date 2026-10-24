@@ -86,6 +86,20 @@ const MACHINE = {
     { book: 'john', chapter: 3, verseStart: 16, verseEnd: 16 },
     { book: 'romans', chapter: 8, verseStart: 1, verseEnd: 4 },
   ],
+  // A tree-shaped draft, the way the handler writes it: the root, one theme, one point.
+  mind_map: {
+    id: 'n1',
+    label: 'The teaching',
+    anchorMs: null,
+    children: [
+      {
+        id: 'n2',
+        label: 'Grace',
+        anchorMs: 4000,
+        children: [{ id: 'n3', label: 'Unearned', anchorMs: 4000, children: [] }],
+      },
+    ],
+  },
 } as const;
 
 /** A recording with a transcript, so the queue's word count has something to count. */

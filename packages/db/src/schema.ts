@@ -1187,6 +1187,42 @@ export const scriptureReference = pgTable(
 );
 
 /**
+ * A teaching's approved mind map ([3.8.1](docs/project/prd.md)–[3.8.4](docs/project/prd.md)) —
+ * **one row per recording, written only by the review gate.**
+ *
+ * The machine's proposal lives in the `review_item` of kind `mind_map`; what an admin approved,
+ * curated or not ([3.8.2](docs/project/prd.md)), is this row. It takes the shape `summary` takes
+ * rather than `scripture_reference`'s: the artefact is one tree, not a set of rows, so the tree is
+ * one `jsonb` document and approving a second draft **updates** the row rather than growing a
+ * history beside it. The unique index is what says "one map per recording".
+ *
+ * `root` is a `MindMapNode` as `@thp/shared` declares it — root, themes, points, each with a label
+ * and an optional offset into the recording — and is validated by `checkMindMapTree` before it is
+ * written, so nothing here reads a document it did not shape.
+ *
+ * **No publication column of its own.** A map is member-visible when the recording is published
+ * (project tdd 6.2): approving it is the gate, and taking it away is approving a regenerated draft
+ * or deleting nothing — [3.8.2](docs/project/prd.md) asks for curation before visibility, not a
+ * second withdraw path, so the second gate `summary.published_at` carries is not restated here.
+ */
+export const mindMap = pgTable(
+  'mind_map',
+  {
+    id: uuid('id').primaryKey().defaultRandom(),
+    recordingId: uuid('recording_id')
+      .notNull()
+      .references(() => recording.id, { onDelete: 'cascade' }),
+    /** The whole tree, root first. */
+    root: jsonb('root').notNull(),
+    /** Whether the approving admin changed the machine's tree ([4.17.5](docs/project/prd.md)). */
+    editedByAdmin: boolean('edited_by_admin').notNull().default(false),
+    createdAt: timestamp('created_at', { withTimezone: true }).notNull().defaultNow(),
+    updatedAt: timestamp('updated_at', { withTimezone: true }).notNull().defaultNow(),
+  },
+  (table) => [uniqueIndex('mind_map_recording_unique').on(table.recordingId)],
+);
+
+/**
  * **The verse text cache** (scope prd 3.3.1, scope prd 4).
  *
  * One row per verse, per translation. Not a column on `scripture_reference`, and that is the whole

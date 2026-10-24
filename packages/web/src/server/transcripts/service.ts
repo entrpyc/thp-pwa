@@ -227,11 +227,11 @@ export async function regenerateSummary(
   const enqueued = await queue().enqueue({
     recordingId,
     step: 'generate_draft',
-    // **The summary and the scripture references** (scope prd 3.1.10). Both are
-    // read out of the words that just changed, so a correction invalidates both — which is the half
-    // of docs/project/prd.md 3.5.6 that could not be honoured until scripture existed. Mind maps and
-    // tags are not generated yet, so they are not here.
-    payload: { kinds: ['summary', 'scripture'] },
+    // **The summary, the scripture references and the mind map** (scope prd 3.1.10,
+    // [3.8.1](docs/project/prd.md)). All three are read out of the words that just changed, so a
+    // correction invalidates all three — which is the whole of docs/project/prd.md 3.5.6 for the
+    // artefacts the draft step produces. Tags are not generated, so they are not here.
+    payload: { kinds: ['summary', 'scripture', 'mind_map'] },
   });
 
   logger.info('summary.regenerate', {

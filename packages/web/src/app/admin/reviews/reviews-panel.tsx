@@ -13,10 +13,13 @@ import {
   citationsEqual,
   findBook,
   formatCitation,
+  isMindMapNode,
+  mindMapsEqual,
   passagePath,
   reviewPath,
   reviewRegeneratePath,
   type CitationCheck,
+  type MindMapNode,
   type PassagePayload,
   type ReviewItemView,
   type ReviewListPayload,
@@ -24,6 +27,7 @@ import {
   type SubmittedReference,
 } from '@thp/shared';
 import { ApiClientError, apiFetch } from '@/client/api-client';
+import { MindMapCanvas } from '@/client/mind-map/mind-map-canvas';
 import styles from './reviews.module.css';
 
 /**
@@ -283,6 +287,15 @@ function ReviewRow({
   const [rows, setRows] = useState<DraftRow[]>(() => rowsFrom(proposed));
   /** How many rows this admin has added, so an added row's key is its own. */
   const [addedCount, setAddedCount] = useState(0);
+  /**
+   * **A tree-shaped draft, as the admin is curating it** ([3.8.2](docs/project/prd.md)). The
+   * machine's tree stays on `item.fields`; this is the admin's version, and the two are compared
+   * — not flagged — to say whether anything was edited.
+   */
+  const proposedTree: MindMapNode | null = isMindMapNode(item.fields[field])
+    ? (item.fields[field] as MindMapNode)
+    : null;
+  const [tree, setTree] = useState<MindMapNode | null>(proposedTree);
   const [prompt, setPrompt] = useState('');
   const [busy, setBusy] = useState<Busy>(null);
   const [note, setNote] = useState<string | null>(null);
@@ -292,7 +305,9 @@ function ReviewRow({
   const edited =
     spec.shape === 'list'
       ? listChanged(rows, proposed)
-      : (values[field] ?? '') !== (item.fields[field] ?? '');
+      : spec.shape === 'tree'
+        ? tree !== null && proposedTree !== null && !mindMapsEqual(tree, proposedTree)
+        : (values[field] ?? '') !== (item.fields[field] ?? '');
 
   async function send(what: Busy, path: string, body: unknown): Promise<void> {
     if (busy !== null) return;
@@ -324,6 +339,18 @@ function ReviewRow({
    * what is on the screen.
    */
   function approve(): void {
+    if (spec.shape === 'tree') {
+      if (tree === null) {
+        setNote('This draft holds no tree to approve. Regenerate it or discard it.');
+        return;
+      }
+      if (tree.children.length === 0) {
+        setNote('A mind map needs at least one theme. Add one, or discard this draft.');
+        return;
+      }
+      void send('approve', reviewPath(item.id), { action: 'approve', fields: { [field]: tree } });
+      return;
+    }
     if (spec.shape !== 'list') {
       void send('approve', reviewPath(item.id), {
         action: 'approve',
@@ -366,9 +393,9 @@ function ReviewRow({
               rather than one, and each row names its own. The list names itself through
               `aria-labelledby` instead.
             */}
-            {spec.shape === 'list' ? (
+            {spec.shape === 'list' || spec.shape === 'tree' ? (
               <p className={styles.label} id={`${promptId}-draft`}>
-                {labelFor(field)}
+                {spec.shape === 'tree' ? 'Mind map' : labelFor(field)}
               </p>
             ) : (
               <label className={styles.label} htmlFor={`${promptId}-draft`}>
@@ -384,7 +411,33 @@ function ReviewRow({
               Nothing truncates a paragraph: an admin cannot judge a summary they can only see the
               first line of, which is the whole of 3.6.5.
             */}
-            {spec.shape === 'list' ? (
+            {spec.shape === 'tree' ? (
+              /*
+                **A tree-shaped draft is the member's canvas with the editing controls on**
+                ([3.8.2](docs/project/prd.md)): rename a node, remove it, move it under another, add
+                a point. What the admin sees is exactly what a member will, which is what an
+                in-place editor is for.
+              */
+              tree === null ? (
+                <p className={styles.empty}>
+                  This draft holds no tree the form can draw. Regenerate it or discard it.
+                </p>
+              ) : (
+                <>
+                  <p className={styles.treeHint}>
+                    Press a theme to open it. Rename, move or remove any node; add a point under a
+                    theme. Approving publishes the map as drawn.
+                  </p>
+                  <MindMapCanvas
+                    root={tree}
+                    label="Mind map draft"
+                    className={styles.treeCanvas}
+                    editable={busy === null}
+                    onChange={setTree}
+                  />
+                </>
+              )
+            ) : spec.shape === 'list' ? (
               <CitationList
                 rows={rows}
                 problems={problems}

@@ -385,11 +385,12 @@ describe('accepting the offer produces a draft the approve press publishes', () 
     // The published summary is still what a member reads, before the worker has done anything.
     expect(await summaryAsMember(recordingId)).toBe(LIVE_SUMMARY);
 
-    await runWorkerUntil(async () => (await queueFor(recordingId)).length > 1);
+    await runWorkerUntil(async () => (await queueFor(recordingId)).length > 2);
 
-    // 2.3.3 — both artefacts the offer names, from the one job it enqueued.
+    // 2.3.3 — every artefact the offer names, from the one job it enqueued: the summary, the
+    // scripture references and, since prd 3.8.1, the mind map.
     const waiting = await queueFor(recordingId);
-    expect(waiting.map((one) => one.kind).sort()).toEqual(['scripture', 'summary']);
+    expect(waiting.map((one) => one.kind).sort()).toEqual(['mind_map', 'scripture', 'summary']);
     const fresh = waiting.find((one) => one.kind === 'summary');
     expect(fresh?.status).toBe('draft');
     expect(fresh?.fields['summary']).toBe(REGENERATED.summary);
@@ -424,7 +425,7 @@ describe('accepting the offer produces a draft the approve press publishes', () 
     `;
     // One job, the same handler, naming both artefacts — not a second enqueue for the second one.
     expect(job?.step).toBe('generate_draft');
-    expect(job?.payload).toEqual({ kinds: ['summary', 'scripture'] });
+    expect(job?.payload).toEqual({ kinds: ['summary', 'scripture', 'mind_map'] });
   });
 
   it('refuses a second regeneration while one is in flight', async () => {

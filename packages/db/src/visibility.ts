@@ -3,6 +3,7 @@ import type { EmbeddingSourceKind } from '@thp/shared';
 import { getDatabase, queryable, type Executor } from './client';
 import {
   embedding,
+  mindMap,
   playbackProgress,
   recording,
   scriptureReference,
@@ -89,6 +90,8 @@ export interface VisibleRecordingRow {
    * gate to apply here — the row gate above is the whole of who may see this.
    */
   readonly hasScripture: boolean;
+  /** `true` when an admin has approved a mind map for this recording ([3.8.3](docs/project/prd.md)). Same gate. */
+  readonly hasMindMap: boolean;
 }
 
 /**
@@ -99,6 +102,11 @@ export interface VisibleRecordingRow {
  */
 const hasScripture = sql<boolean>`exists (
   select 1 from ${scriptureReference} where ${scriptureReference.recordingId} = ${recording.id}
+)`;
+
+/** The same question of the approved mind map, asked the same way. */
+const hasMindMap = sql<boolean>`exists (
+  select 1 from ${mindMap} where ${mindMap.recordingId} = ${recording.id}
 )`;
 
 export interface VisibilityOptions {
@@ -146,6 +154,7 @@ export async function listVisibleRecordings(
       seriesTitle: series.title,
       seriesArtworkKey: series.artworkKey,
       hasScripture,
+      hasMindMap,
     })
     .from(recording)
     .leftJoin(summary, eq(summary.recordingId, recording.id))
@@ -198,6 +207,7 @@ export async function findVisibleRecording(
       seriesTitle: series.title,
       seriesArtworkKey: series.artworkKey,
       hasScripture,
+      hasMindMap,
     })
     .from(recording)
     .leftJoin(summary, eq(summary.recordingId, recording.id))

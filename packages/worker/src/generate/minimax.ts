@@ -1,4 +1,4 @@
-import { REVIEW_FIELD, type ProposedCitation, type ReviewKind } from '@thp/shared';
+import { REVIEW_FIELD, type ProposedCitation, type ProposedMindMap, type ReviewKind } from '@thp/shared';
 import { readGenerateApiKey, type EnvSource } from './env';
 import {
   GenerationError,
@@ -263,6 +263,24 @@ export function mapResponse(body: string, kinds: readonly ReviewKind[]): Generat
         );
       }
       drafts[kind] = value as readonly ProposedCitation[];
+      continue;
+    }
+
+    if (field.shape === 'tree') {
+      // **A tree is required to be an object with themes in it.** Prose, a bare list or nothing at
+      // all is the same failure a prose citation list is: no structure to record, run it again.
+      if (
+        typeof value !== 'object' ||
+        value === null ||
+        Array.isArray(value) ||
+        !Array.isArray((value as ProposedMindMap).themes)
+      ) {
+        throw new GenerationError(
+          `The generation provider answered the ${field.name} as something other than a tree of ` +
+            'themes, so there is nothing structured to record. Run this step again.',
+        );
+      }
+      drafts[kind] = value as ProposedMindMap;
       continue;
     }
 

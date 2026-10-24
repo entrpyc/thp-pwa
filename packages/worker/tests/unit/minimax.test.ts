@@ -102,11 +102,13 @@ describe('the request the adapter builds', () => {
     expect(Object.keys(body.tools[0]?.input_schema.properties ?? {}).sort()).toEqual([
       'citations',
       'description',
+      'mindMap',
       'summary',
     ]);
     expect(body.tools[0]?.input_schema.required.sort()).toEqual([
       'citations',
       'description',
+      'mindMap',
       'summary',
     ]);
     // 1.3.1 — the list-shaped field is asked for as a list of structured entries, in the same one

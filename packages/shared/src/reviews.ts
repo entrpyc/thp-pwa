@@ -14,6 +14,7 @@
  * `JOB_STATUSES`.
  */
 
+import type { MindMapNode } from './mind-maps';
 import type {
   DraftedCitation,
   ProposedCitation,
@@ -24,11 +25,13 @@ import type {
 /**
  * What kind of artefact is waiting on an admin.
  *
- * Two in this epic. `summary` is the teaching's summary ([3.6.1](docs/project/prd.md));
- * `recording_metadata` is the suggested description ([4.17.1](docs/project/prd.md) — topics, tags
- * and scripture references are deferred with the scopes that generate them).
+ * `summary` is the teaching's summary ([3.6.1](docs/project/prd.md)); `recording_metadata` is the
+ * suggested description ([4.17.1](docs/project/prd.md)); `scripture` is the passages it was built
+ * on ([3.7.1](docs/project/prd.md)); `mind_map` is the teaching's concept tree
+ * ([3.8.1](docs/project/prd.md)). Topics, tags and video scripts are deferred with the scopes that
+ * generate them.
  */
-export const REVIEW_KINDS = ['summary', 'recording_metadata', 'scripture'] as const;
+export const REVIEW_KINDS = ['summary', 'recording_metadata', 'scripture', 'mind_map'] as const;
 
 export type ReviewKind = (typeof REVIEW_KINDS)[number];
 
@@ -59,15 +62,15 @@ export function isReviewStatus(value: unknown): value is ReviewStatus {
  * **What shape a kind's draft is.**
  *
  * `text` is one string, which is what every kind was until scripture arrived. `list` is a list of
- * structured entries — the first artefact whose draft is not a paragraph, and, per
- * scope prd 1.4, the first of four: tags, mind maps and video scripts are queued
- * behind it and are not one string either.
+ * structured entries — the first artefact whose draft is not a paragraph. `tree` is a mind map's
+ * concept tree ([3.8](docs/project/prd.md)) — one root node with children under it, rendered and
+ * edited on a canvas rather than as rows. Tags and video scripts are still queued behind these.
  *
  * The distinction lives here rather than in the form so that the form can *ask* rather than
  * branch: a renderer is chosen by shape, and a kind added to {@link REVIEW_KINDS} says which
  * renderer it wants by saying what shape it is.
  */
-export const REVIEW_FIELD_SHAPES = ['text', 'list'] as const;
+export const REVIEW_FIELD_SHAPES = ['text', 'list', 'tree'] as const;
 
 export type ReviewFieldShape = (typeof REVIEW_FIELD_SHAPES)[number];
 
@@ -99,6 +102,7 @@ export const REVIEW_FIELD: Record<ReviewKind, ReviewFieldSpec> = {
   summary: { name: 'summary', shape: 'text' },
   recording_metadata: { name: 'description', shape: 'text' },
   scripture: { name: 'citations', shape: 'list' },
+  mind_map: { name: 'mindMap', shape: 'tree' },
 };
 
 /** What a kind is called on screen. A kind with no entry here would be a compiler error. */
@@ -106,6 +110,7 @@ export const REVIEW_KIND_LABEL: Record<ReviewKind, string> = {
   summary: 'Summary',
   recording_metadata: 'Description',
   scripture: 'Scripture',
+  mind_map: 'Mind map',
 };
 
 /** Paths of the review resource, relative to the `/api/v1` prefix. */
@@ -140,12 +145,12 @@ export const MAX_STEERING_PROMPT_LENGTH = 500;
 /**
  * What one field of a draft holds.
  *
- * One member per {@link ReviewFieldShape} — a paragraph, or a list of citations. The list arm names
- * scripture because scripture is the only list-shaped artefact there is; tags and mind maps widen
- * this union when they arrive, and everything reading it already asks the shape rather than the
- * kind.
+ * One member per {@link ReviewFieldShape} — a paragraph, a list of citations, or a mind map's root
+ * node. The list arm names scripture because scripture is the only list-shaped artefact there is;
+ * tags widen this union when they arrive, and everything reading it already asks the shape rather
+ * than the kind.
  */
-export type ReviewFieldValue = string | readonly DraftedCitation[];
+export type ReviewFieldValue = string | readonly DraftedCitation[] | MindMapNode;
 
 /** What the machine wrote for one field, and whether a person has changed it since. */
 export interface FieldProvenance {
@@ -241,12 +246,14 @@ export interface ReviewListPayload {
  *
  * `approve` writes through to the canonical entity and closes the item; `discard` closes it with
  * no replacement ([3.6.10](docs/project/prd.md)). `fields` is the admin's own version of the draft
- * — a paragraph for a text field, the list they corrected for a list-shaped one — and absent when
- * they took the machine's as it stands.
+ * — a paragraph for a text field, the list they corrected for a list-shaped one, the tree they
+ * curated for a tree-shaped one — and absent when they took the machine's as it stands.
  */
 export interface ResolveReviewRequest {
   readonly action: 'approve' | 'discard';
-  readonly fields?: Readonly<Record<string, string | readonly SubmittedReference[]>>;
+  readonly fields?: Readonly<
+    Record<string, string | readonly SubmittedReference[] | MindMapNode>
+  >;
 }
 
 /** Payload of `POST /api/v1/reviews/{id}` — the item as it now reads. */
