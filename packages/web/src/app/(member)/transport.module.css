@@ -785,6 +785,8 @@
 .chapterRow {
   width: 100%;
   min-width: 0;
+  box-sizing: border-box;
+  text-decoration: none;
   display: flex;
   align-items: center;
   gap: var(--space-3);

@@ -6,11 +6,11 @@ import { useEffect, useRef, useState, type PointerEvent as ReactPointerEvent } f
 import {
   NOW_PLAYING_PAGE_PATH,
   PLAYBACK_SPEEDS,
+  chapterPagePath,
   formatPlaybackSpeed,
   formatTimecode,
   type NoteView,
 } from '@thp/shared';
-import { track } from '@/client/observability/analytics';
 import { segmentAt } from '@/client/transcript/current-segment';
 import { NoteComposer } from './recordings/[id]/note-composer';
 import { momentEntry } from './highlights/highlights-lookup';
@@ -496,13 +496,14 @@ export function TransportBar() {
         **The chapters sheet** — where the list icon goes, over whatever screen the member is on,
         on the composer sheet's pattern beneath it. Every chapter in order with its number, its
         title and the time it starts — the row of [3.22.10](docs/project/prd.md), read here rather
-        than on the page — with the chapter playing now marked, and **the whole row is the play
-        control**: a press seeks to the chapter's start and plays ([3.22.12](docs/project/prd.md))
-        and puts the sheet away, because a member who chose a chapter has finished choosing.
+        than on the page — with the chapter playing now marked, and **the whole row opens the
+        chapter's page** ([3.22.12](docs/project/prd.md)), as the tab's row does. Opening it does
+        not start playback, for the reason the tab gives: a member who tapped a chapter has not
+        asked for sound, and the page's own play control is the press that does. The sheet goes
+        away on the press, because a member who chose a chapter has finished choosing.
 
-        No row opens the chapter's page. That is the tab's business, and this sheet stays in the
-        transport: a member who reached for it from the library wanted to hear a chapter, not to
-        be taken somewhere.
+        A link rather than a button, so the row keeps the browser's own behaviours — a new tab, a
+        copied address — and so the chapter page is a real navigation with a real entry behind it.
       */}
       {chaptersOpen ? (
         <section className={styles.sheet} aria-label="Jump to a chapter">
@@ -524,21 +525,13 @@ export function TransportBar() {
                     deliberate: a flex row drops them from the layout and keeps them in the name,
                     so the row is announced as "1 The vine 00:00" rather than run together.
                   */}
-                  <button
+                  <Link
                     className={`${styles.chapterRow}${
                       current ? ` ${styles.chapterRowCurrent}` : ''
                     }`}
-                    type="button"
+                    href={chapterPagePath(loaded.id, chapter.id)}
                     aria-current={current ? 'true' : undefined}
-                    onClick={() => {
-                      // The index in the teaching's own order — the same number the tab reports.
-                      track('chapter_jumped', {
-                        recording_id: loaded.id,
-                        chapter_index: chapterList.indexOf(chapter),
-                      });
-                      player.playFromMs(chapter.startMs);
-                      setChaptersOpenFor(null);
-                    }}
+                    onClick={() => setChaptersOpenFor(null)}
                   >
                     <span className={styles.chapterNumber}>{chapter.position}</span>{' '}
                     <span className={styles.chapterTitle}>{chapter.title}</span>{' '}
@@ -548,7 +541,7 @@ export function TransportBar() {
                     >
                       {formatTimecode(chapter.startMs)}
                     </time>
-                  </button>
+                  </Link>
                 </li>
               );
             })}

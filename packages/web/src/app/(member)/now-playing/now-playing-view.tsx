@@ -3,9 +3,16 @@
 import Link from 'next/link';
 import { useRouter } from 'next/navigation';
 import { useEffect, useState } from 'react';
-import { formatTimecode, monogramFor, recordingPagePath, type NoteView } from '@thp/shared';
+import {
+  chapterPagePath,
+  formatTimecode,
+  monogramFor,
+  type ChapterView,
+  type NoteView,
+} from '@thp/shared';
 import { segmentAt } from '@/client/transcript/current-segment';
 import { NoteImages } from '../recordings/[id]/note-images';
+import { noteHref } from '../recordings/[id]/round-trip';
 import { ScripturePanel } from '../recordings/[id]/scripture-panel';
 import { useBreadcrumbTrail, usePlayer } from '../player-context';
 import { notesNear } from './notes-near';
@@ -16,9 +23,10 @@ import styles from './now-playing.module.css';
  *
  * Everything on it answers one question: what is being said right now, and what has been written
  * about it? The cover is a backdrop rather than the subject — blurred, dimmed and filling the top of
- * the screen so that the line being spoken can be read large across it. Under the hero, the notes
- * anchored near the playhead; under those, the teaching's scripture. (Mind maps and time-anchored
- * scripture come later; for now the scripture panel is the recording page's own, unfiltered.)
+ * the screen so that the line being spoken can be read large across it. Under the hero, the chapter
+ * playing; under that, the notes anchored near the playhead; under those, the teaching's scripture.
+ * (Mind maps and time-anchored scripture come later; for now the scripture panel is the recording
+ * page's own, unfiltered.)
  *
  * **It owns no playback state and renders no transport control** (scope prd 3.3.4; scope tdd 1.7).
  * What is playing is read from the same player context the docked bar reads, and the docked bar is
@@ -32,10 +40,15 @@ import styles from './now-playing.module.css';
  * transport, for its part, draws no pill while this is the screen. Between lines the previous line
  * stays, dimmed, so a pause in the voice is not a flash of empty hero.
  *
+ * **The chapter playing is a block of its own, and a way out** ([3.22.19](docs/project/prd.md)).
+ * It names the chapter on the same footing as the recording — the heading carries both — and the
+ * whole block opens the chapter's page, which is the recording page read through that chapter and
+ * offers its own route on to the teaching. A teaching with no chapters draws no block.
+ *
  * **Notes are read, not written.** A card is the author, the moment, the whole text and its
- * pictures; pressing it opens the teaching's Notes tab, where the composer, replies, reactions and
- * the rest already live. The row is gone entirely when nothing is near — a heading over an empty
- * list would be a promise about a quiet stretch.
+ * pictures; pressing it opens the teaching's Notes tab **at that note**, where the composer,
+ * replies, reactions and the rest already live. The row is gone entirely when nothing is near — a
+ * heading over an empty list would be a promise about a quiet stretch.
  *
  * **Closing goes back rather than to a fixed screen** (scope prd 3.3.1). A member reaches this from
  * the transport, and the transport travels — so the only honest destination is wherever they were.
@@ -132,20 +145,21 @@ export function NowPlayingScreen() {
             </p>
           )}
         </div>
-
-        {/*
-          **The chapter playing, named where a member can see it** ([3.22.19](docs/project/prd.md)).
-          The heading above carries both names for a screen reader; this is the visible half, and it
-          is the chapter alone because the teaching is already named on the transport underneath. A
-          teaching with no chapters draws nothing here rather than an empty line (3.22.4).
-        */}
-        {player.currentChapter === null ? null : (
-          <p className={styles.heroChapter}>{player.currentChapter.title}</p>
-        )}
       </div>
 
       {loaded === null ? null : (
         <>
+          {/*
+            **The chapter playing, as its own block** ([3.22.19](docs/project/prd.md)). The visible
+            half of what the heading above says to a screen reader — and the way to the chapter's
+            page, which is where its summary, its own notes and its scripture are read. A teaching
+            with no chapters, and the seconds before the first chapter starts, draw nothing here
+            rather than an empty card (3.22.4).
+          */}
+          {player.currentChapter === null ? null : (
+            <CurrentChapter chapter={player.currentChapter} recordingId={loaded.id} />
+          )}
+
           {near.length === 0 ? null : (
             <section className={styles.notesRow} aria-label="Notes near this moment">
               <h2 className={styles.rowTitle}>Notes near this moment</h2>
@@ -171,16 +185,45 @@ export function NowPlayingScreen() {
 }
 
 /**
+ * The chapter playing now, as one card that is wholly the link to its page.
+ *
+ * The number and the span are the row's as the Chapters tab draws it, so a member who has read the
+ * list recognises the card; the kicker says *playing now* because, unlike that list, this card is
+ * only ever the current one. Opening the page does not touch playback — the chapter page itself
+ * holds that rule ([3.22.12](docs/project/prd.md)) — so a member reading on while listening keeps
+ * hearing the same moment.
+ */
+function CurrentChapter({ chapter, recordingId }: { chapter: ChapterView; recordingId: string }) {
+  return (
+    <section className={styles.chapterBlock} aria-label="Chapter playing">
+      <Link className={styles.chapterLink} href={chapterPagePath(recordingId, chapter.id)}>
+        <span className={styles.chapterText}>
+          <span className={styles.chapterKicker}>Chapter {chapter.position} · Playing now</span>
+          <span className={styles.chapterName}>{chapter.title}</span>
+          <span className={styles.chapterSpan}>
+            {formatTimecode(chapter.startMs)}–{formatTimecode(chapter.endMs)}
+          </span>
+        </span>
+        <span className={styles.chapterChevron} aria-hidden="true">
+          ›
+        </span>
+      </Link>
+    </section>
+  );
+}
+
+/**
  * One note near the playhead, read-only.
  *
- * The author line, the moment and the text are one link to the teaching's Notes tab — the surface
- * that can do something about the note. The pictures sit outside the link, because each already
- * opens its own viewer and a control inside a link is two presses competing for one finger.
+ * The author line, the moment and the text are one link to the note itself on the teaching's Notes
+ * tab — the surface that can do something about it. The pictures sit outside the link, because
+ * each already opens its own viewer and a control inside a link is two presses competing for one
+ * finger.
  */
 function NearNote({ note, recordingId }: { note: NoteView; recordingId: string }) {
   return (
     <li className={styles.note}>
-      <Link className={styles.noteLink} href={`${recordingPagePath(recordingId)}?tab=notes`}>
+      <Link className={styles.noteLink} href={noteHref(recordingId, note.id)}>
         <span className={styles.noteHead}>
           {note.authorAvatarUrl === null ? (
             <span className={styles.monogram} aria-hidden="true">
