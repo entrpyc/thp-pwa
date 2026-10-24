@@ -5,6 +5,7 @@ import { currentActor } from '@/server/auth/current-actor';
 import { pendingOnboardingFor } from '@/server/onboarding/completion';
 import { analyticsPerson, can } from '@/server/auth/policy';
 import { AnalyticsProvider } from '@/client/observability/analytics-provider';
+import { OfflineBanner } from './downloads/offline-banner';
 import { OfflineStatus } from './downloads/offline-status';
 import { NotificationsProvider } from './notifications-context';
 import { PlayerProvider } from './player-context';
@@ -61,13 +62,15 @@ export default async function MemberLayout({ children }: { children: ReactNode }
           <div className={styles.screen}>
             <div className={styles.shell}>
               <TopNavigation canSeeConsole={can(actor, 'account.list')} />
-              <main className={styles.content}>
-                {/* The offline and pending-sync strip (3.18.16); also what keys downloads to this account. */}
-                <OfflineStatus userId={actor.id} />
-                {children}
-              </main>
+              {/* The download notices (3.18.16), floating under the bar; also what keys downloads to this account. */}
+              <OfflineStatus userId={actor.id} />
+              <main className={styles.content}>{children}</main>
             </div>
-            <TransportBar />
+            {/* The bottom chrome: the transport, and under it the offline and pending-sync banner (3.18.16). */}
+            <div className={styles.bottomRegion}>
+              <TransportBar />
+              <OfflineBanner />
+            </div>
           </div>
         </NotificationsProvider>
       </PlayerProvider>

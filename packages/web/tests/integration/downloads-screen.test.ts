@@ -202,15 +202,20 @@ describe('offline', () => {
       // strip on here is the failed flush — the manager's second reading of "offline".
       await page.reload({ waitUntil: 'domcontentloaded' });
       const status = page.getByRole('status', { name: 'Offline status' });
-      expect(await textOf(status)).toContain('You are offline. Showing your downloaded teachings.');
+      expect(await textOf(status)).toBe('You are offline.');
       const rows = page.getByRole('list', { name: 'Recordings' });
       await countOf(rows.getByRole('listitem'), 1);
       const held = await textOf(rows);
       expect(held).toContain(`Held teaching ${RUN}`);
       expect(held).not.toContain(`Streamed teaching ${RUN}`);
 
+      // A page the worker never keeps — highlights need the server — is the app's own screen, not
+      // the browser's: the worker answers the failed navigation itself.
+      await page.goto(`${baseUrl}/highlights`, { waitUntil: 'domcontentloaded' });
+      await expect.poll(() => page.getByRole('heading').first().textContent()).toBe('This page is not accessible offline.');
+
       await context.setOffline(false);
-      await page.reload({ waitUntil: 'domcontentloaded' });
+      await page.goto(`${baseUrl}${MEMBER_LIBRARY_PAGE_PATH}`, { waitUntil: 'domcontentloaded' });
       await countOf(page.getByRole('list', { name: 'Recordings' }).getByRole('listitem').filter({ hasText: `Streamed teaching ${RUN}` }), 1);
       await deleteEveryDownload(page);
     } finally {

@@ -14,6 +14,10 @@
  *    server has not just admitted, except on a device where that member signed in and lost signal.
  * 3. **Warming** (`thp:warm`): a download pre-fetches the pages it will need, in both forms a page
  *    is requested in, so a teaching downloaded online opens offline without having been visited.
+ * 4. **Every other navigation** — sign-in, the console, the member pages that need the server to
+ *    mean anything — goes to the network and is never kept, but when the network cannot be reached
+ *    the member sees the app's own screen saying the page is not accessible offline, instead of
+ *    the browser's. The same screen answers a member page with no copy.
  *
  * What it deliberately does **not** do: answer `/api/v1` requests. The library, a series and a
  * downloaded teaching's chapters, scripture and notes are answered offline by the page itself
@@ -52,7 +56,12 @@ function decide(input) {
   const isRsc = input.rsc === true;
   if (input.mode === 'navigate' || isRsc) {
     if (input.prefetch === true) return { kind: 'pass' };
-    if (!isMemberPage(path)) return { kind: 'pass' };
+    if (!isMemberPage(path)) {
+      // A document for anything else: the network, and the offline screen when it cannot be
+      // reached. The RSC form of such a page is not claimed — Next falls back to a full
+      // navigation when that fetch fails, and the full navigation lands here.
+      return input.mode === 'navigate' ? { kind: 'fallback' } : { kind: 'pass' };
+    }
     return { kind: 'page', key: pageKey(url, isRsc) };
   }
   return { kind: 'pass' };
@@ -85,7 +94,28 @@ async function handleStatic(request) {
   return response;
 }
 
-const OFFLINE_PAGE = `<!doctype html><html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1"><title>Offline</title><style>body{margin:0;min-height:100vh;display:flex;align-items:center;justify-content:center;font-family:Inter,system-ui,sans-serif;background:#01101F;color:#FCFCFC}main{max-width:28rem;padding:24px;text-align:center}a{color:#8B5CF6}</style></head><body><main><h1>You are offline</h1><p>This page has not been opened on this device while connected, so there is no copy to show. Your downloaded teachings are still here: <a href="/">go to the dashboard</a>.</p></main></body></html>`;
+/*
+ * The screen for a page that cannot be shown offline. Self-contained — no stylesheet of the app's
+ * is guaranteed to be cached — so the colours are the token values written out (`tokens.css`:
+ * `--color-bg`, `--color-text`, `--color-text-muted`, `--color-primary-icon`). Try again
+ * reloads, which is the only thing that helps once the signal is back; the dashboard link leads to
+ * the one page a member with downloads most likely has a copy of.
+ */
+const OFFLINE_PAGE = `<!doctype html><html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover"><title>Not accessible offline</title><style>body{margin:0;min-height:100vh;display:flex;align-items:center;justify-content:center;font-family:Inter,system-ui,-apple-system,sans-serif;background:#01101F;color:#FCFCFC}main{max-width:28rem;padding:24px;text-align:center}h1{font-size:1.125rem;margin:0 0 12px}p{margin:0 0 24px;font-size:0.875rem;line-height:1.5;color:#8A97AC}a,button{display:inline-block;margin:0 8px;font:inherit;font-size:0.875rem;color:#8B5CF6;background:transparent;border:0;padding:0;cursor:pointer;text-decoration:underline}</style></head><body><main><h1>This page is not accessible offline.</h1><p>You are offline, and this page is not saved on this device. Your downloaded teachings are still here.</p><button type="button" onclick="location.reload()">Try again</button><a href="/">Go to the dashboard</a></main></body></html>`;
+
+/** The offline screen as a response: a 503, so nothing caches it as the page. */
+function offlineResponse() {
+  return new Response(OFFLINE_PAGE, { status: 503, headers: { 'content-type': 'text/html; charset=utf-8' } });
+}
+
+/** A document that is never kept: the network, or the offline screen when there is none. */
+async function handleFallback(request) {
+  try {
+    return await fetch(request);
+  } catch {
+    return offlineResponse();
+  }
+}
 
 async function handlePage(request, key) {
   const cache = await caches.open(PAGE_CACHE);
@@ -99,9 +129,7 @@ async function handlePage(request, key) {
   } catch (caught) {
     const held = await cache.match(key);
     if (held) return held;
-    if (request.mode === 'navigate') {
-      return new Response(OFFLINE_PAGE, { status: 503, headers: { 'content-type': 'text/html; charset=utf-8' } });
-    }
+    if (request.mode === 'navigate') return offlineResponse();
     throw caught;
   }
 }
@@ -132,6 +160,9 @@ self.addEventListener('fetch', (event) => {
       break;
     case 'page':
       event.respondWith(handlePage(request, decision.key));
+      break;
+    case 'fallback':
+      event.respondWith(handleFallback(request));
       break;
     case 'sign-out':
       event.respondWith(handleSignOut(request));

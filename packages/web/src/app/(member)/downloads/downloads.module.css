@@ -189,12 +189,36 @@
   line-height: 1;
 }
 
-/* The status strip: one line under the navigation, drawn only while there is something to say. */
+/*
+ * The download notices **float directly under the navigation bar** and stay there while the page
+ * scrolls, the way the bar does — the operator's decision; they were a strip at the top of the
+ * page, out of sight the moment the member read on. `top` is the bar's bottom edge: the 8px inset
+ * the bar stands in plus the 62px it measures, the same composition the shell's own top padding is
+ * derived from, and the notch inset the bar pads itself with. Under the navigation region's
+ * `z-index` so the open menu hangs over a notice rather than behind it; over the page, which has
+ * no raised layer of its own.
+ */
+.notices {
+  position: fixed;
+  top: calc(var(--space-8) * 2 + var(--space-2) + env(safe-area-inset-top));
+  left: 0;
+  right: 0;
+  z-index: 1;
+  padding: var(--space-2) var(--space-4) 0;
+  pointer-events: none;
+  display: flex;
+  flex-direction: column;
+}
+
+/* The lines themselves, the shell's own width and centred in the gutters like the bar above. */
 .status {
+  width: 100%;
+  max-width: 48rem;
+  margin: 0 auto;
+  pointer-events: auto;
   display: flex;
   flex-direction: column;
   gap: var(--space-2);
-  margin: 0 0 var(--space-4);
 }
 
 .statusLine {
@@ -224,6 +248,29 @@
 
 .dismiss:hover {
   color: var(--color-text);
+}
+
+/*
+ * The offline banner: one row in the bottom chrome's column, under the transport bar, at the bar's
+ * own width. Left-aligned when it carries a sentence to read — the count waiting to sync — and
+ * centred (`.bannerCentred`) when it is the two-word state alone.
+ */
+.banner {
+  width: 100%;
+  max-width: 48rem;
+  margin: 0 auto;
+  pointer-events: auto;
+  padding: var(--space-3) var(--space-4);
+  background: var(--color-bg-deep);
+  border: 1px solid var(--color-border-strong);
+  border-radius: var(--radius-md);
+  font-size: var(--fs-body);
+  color: var(--color-text);
+  text-align: left;
+}
+
+.bannerCentred {
+  text-align: center;
 }
 
 .rowActions {
