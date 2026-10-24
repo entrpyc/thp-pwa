@@ -117,6 +117,12 @@ async function openTeaching(page: Page, recordingId: string): Promise<void> {
     .toBe(1);
 }
 
+/**
+ * Press a pin control and wait for its label to flip. The locator has to match the control under
+ * **both** of its names: one that names only the pre-press label stops matching the moment the
+ * press succeeds, and every attribute read then waits out Playwright's own timeout for an element
+ * that is no longer there — a test that times out instead of failing.
+ */
 async function pressAndExpect(control: Locator, expectedLabel: string): Promise<void> {
   await expect.poll(() => control.isEnabled(), { timeout: 30_000 }).toBe(true);
   await control.click();
@@ -252,13 +258,53 @@ describe('the chapter page', () => {
       await page.goto(`${baseUrl}${chapterPagePath(where, middle.id)}`, {
         waitUntil: 'domcontentloaded',
       });
-      const control = page.getByRole('button', { name: 'Highlight this chapter' });
+      // Located by either name, since the press is what changes it (see `pressAndExpect`).
+      const control = page.getByRole('button', { name: /^(Highlight|Remove highlight from) this chapter$/u });
       await expect.poll(() => control.count(), { timeout: 60_000 }).toBe(1);
       await pressAndExpect(control, 'Remove highlight from this chapter');
 
       const [entry] = (await entriesOf(member)).filter((one) => one.recordingId === where);
       expect(entry?.kind).toBe('segment');
       expect(entry?.positionMs).toBe(20_000);
+    } finally {
+      await page.context().close();
+    }
+  });
+
+  /**
+   * The same control on every row of the Chapters tab, named by the chapter, so a member can pin a
+   * chapter from the list without opening its page — and the entry is the chapter's opening moment,
+   * exactly what the page's own control pins.
+   */
+  it('offers the marker on every row of the chapters tab, pinning that chapter’s opening moment', async () => {
+    const where = await publishedTeaching(`Chapter rows ${RUN}`);
+    await replaceChapters(
+      where,
+      [
+        { startMs: 0, title: 'First', summary: 'The start.' },
+        { startMs: 20_000, title: 'Second', summary: 'The middle.' },
+      ],
+      GENERATED,
+      handle,
+    );
+
+    const page = await signInAs(member);
+    try {
+      await page.goto(`${baseUrl}${recordingPagePath(where)}`, { waitUntil: 'domcontentloaded' });
+      await expect.poll(() => page.getByRole('tab', { name: 'Chapters' }).count(), { timeout: 60_000 }).toBe(1);
+      await page.getByRole('tab', { name: 'Chapters' }).click();
+
+      const list = page.getByRole('region', { name: 'Chapters' });
+      await expect.poll(() => list.getByRole('button', { name: /^Highlight /u }).count(), { timeout: 60_000 }).toBe(2);
+      // Located by either name, since the press is what changes it (see `pressAndExpect`).
+      const second = list.getByRole('button', { name: /^(Highlight|Remove highlight from) Second$/u });
+      await pressAndExpect(second, 'Remove highlight from Second');
+
+      const [entry] = (await entriesOf(member)).filter((one) => one.recordingId === where);
+      expect(entry?.kind).toBe('segment');
+      expect(entry?.positionMs).toBe(20_000);
+      // The other row is untouched.
+      expect(await list.getByRole('button', { name: 'Highlight First' }).count()).toBe(1);
     } finally {
       await page.context().close();
     }

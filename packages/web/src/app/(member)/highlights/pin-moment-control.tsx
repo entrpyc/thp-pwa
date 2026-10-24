@@ -15,17 +15,23 @@ import styles from './highlights.module.css';
  *
  * `label` names the thing for the accessible name — *Highlight this chapter* — because *Highlight
  * this moment* on a page that shows no moment would be a label about the mechanism rather than
- * the thing.
+ * the thing. On the chapters list, where every row has one, the label is the chapter's title, so
+ * each control says which chapter it is about.
+ *
+ * `className` places it: the detail header's far end by default, or the caller's own class when
+ * the control sits in a row beside other controls and the header's margins would misplace it.
  */
 export function PinMomentControl({
   recordingId,
   positionMs,
   label,
+  className,
 }: {
   recordingId: string;
   positionMs: number;
-  /** The noun: `this chapter`. Prefixed with *Highlight* or *Remove highlight from*. */
+  /** The noun: `this chapter`, or a chapter's title. Prefixed with *Highlight* or *Remove highlight from*. */
   label: string;
+  className?: string | undefined;
 }) {
   const { highlights, busy, toggle } = useHighlights();
   const existing = highlights === null ? null : momentEntry(highlights, recordingId, positionMs);
@@ -33,7 +39,7 @@ export function PinMomentControl({
 
   return (
     <button
-      className={`${styles.pin} ${styles.headerPin}`}
+      className={`${styles.pin} ${className ?? styles.headerPin}`}
       type="button"
       aria-pressed={pinned}
       aria-label={`${pinned ? 'Remove highlight from' : 'Highlight'} ${label}`}

@@ -172,6 +172,14 @@
   border-color: var(--color-primary-strong);
 }
 
+/* The highlight marker beside the play control: the same circle, so the two read as one pair. */
+.rowPin {
+  flex: none;
+  width: var(--space-8);
+  height: var(--space-8);
+  padding: 0;
+}
+
 /* ---------------------------------------------------------------- the admin controls (3.22.7) */
 
 .tools {

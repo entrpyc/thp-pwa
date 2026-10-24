@@ -20,6 +20,7 @@ import { ApiClientError, apiFetch } from '@/client/api-client';
 import { track } from '@/client/observability/analytics';
 import { useRecordingContent } from './recording-content';
 import { isPlainPress, leaveForChapter } from './round-trip';
+import { PinMomentControl } from '../../highlights/pin-moment-control';
 import styles from './chapters.module.css';
 
 /**
@@ -215,6 +216,18 @@ export function ChaptersPanel({
                 >
                   <span aria-hidden="true">▶</span>
                 </button>
+
+                {/*
+                  Highlight this chapter from the list, without opening its page — the same control
+                  the chapter page carries in its header (3.15.2), pinning the chapter's opening
+                  moment, so a chapter pinned here and the same one pinned there are one entry.
+                */}
+                <PinMomentControl
+                  recordingId={recordingId}
+                  positionMs={chapter.startMs}
+                  label={chapter.title}
+                  className={styles.rowPin}
+                />
               </div>
 
               {canEdit ? (
