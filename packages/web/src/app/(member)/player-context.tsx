@@ -298,17 +298,17 @@ const PlayerContext = createContext<PlayerApi | null>(null);
  * the two-segment trail the library and the landing have always drawn.
  */
 /**
- * What a segment names, for the narrow bar: a phone's width has no room for a study's title, a
- * teaching's and a chapter's in one line, so there each of these is drawn as its icon with the
- * title kept for the screen reader. A segment with no kind — Highlights, Search — is a word
- * short enough to stay one.
+ * What the current segment names, for the narrow bar: a phone's width has no room for a study's
+ * title, a teaching's and a chapter's in one line, so there the current page is drawn as its icon
+ * with the title kept for the screen reader. The ancestors keep their titles at every width — each
+ * is a link, and a link a member cannot read is a link they cannot choose. A page with no kind —
+ * Highlights, Search — is a word short enough to stay one.
  */
 export type BreadcrumbKind = 'series' | 'recording' | 'chapter';
 
 export interface BreadcrumbParent {
   readonly label: string;
   readonly href: string;
-  readonly kind?: BreadcrumbKind;
 }
 
 export interface BreadcrumbTrail {
@@ -356,9 +356,7 @@ export function useBreadcrumbTrail(
   // or a path — so no two different trails collide on one key, which a readable separator like
   // `|` would eventually let them do. Written as escapes: a literal control character in source
   // is invisible in every editor and is lost by the first tool that trims the line.
-  const key = ancestors
-    .map((one) => `${one.label}\u0000${one.href}\u0000${one.kind ?? ''}`)
-    .join('\u0001');
+  const key = ancestors.map((one) => `${one.label}\u0000${one.href}`).join('\u0001');
 
   const latest = useRef(ancestors);
   latest.current = ancestors;

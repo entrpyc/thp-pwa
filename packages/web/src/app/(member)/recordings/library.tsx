@@ -11,6 +11,7 @@ import {
 } from '@thp/shared';
 import { ApiClientError, apiFetch } from '@/client/api-client';
 import { DownloadedMark } from '../downloads/downloaded-mark';
+import { useBreadcrumbTrail } from '../player-context';
 import styles from '../screens.module.css';
 
 /**
@@ -58,6 +59,7 @@ function formatDay(iso: string): string {
 }
 
 export function Library() {
+  useBreadcrumbTrail('All recordings');
   const [recordings, setRecordings] = useState<readonly RecordingView[] | null>(null);
   const [failure, setFailure] = useState<string | null>(null);
 

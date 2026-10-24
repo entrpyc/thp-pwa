@@ -14,6 +14,7 @@ import {
   type FeedbackSubmittedPayload,
 } from '@thp/shared';
 import { ApiClientError, apiFetch } from '@/client/api-client';
+import { useBreadcrumbTrail } from '../player-context';
 import styles from './feedback.module.css';
 
 /**
@@ -52,6 +53,7 @@ const SEND_FAILED_MESSAGE =
   'Could not send your report. Your text is still here — try again in a moment.';
 
 export function FeedbackForm() {
+  useBreadcrumbTrail('Report a bug');
   const titleId = useId();
   const descriptionId = useId();
   const errorId = useId();

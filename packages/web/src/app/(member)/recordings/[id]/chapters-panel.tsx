@@ -181,7 +181,7 @@ export function ChaptersPanel({
                     // where the list is, so the way back can put it there. A middle-click or a
                     // modified press opens the chapter elsewhere and leaves this page where it
                     // is, so there is nothing to note.
-                    if (isPlainPress(event)) leaveForChapter(recordingId, chapter.id);
+                    if (isPlainPress(event)) leaveForChapter();
                   }}
                 >
                   <span className={styles.position}>{chapter.position}</span>

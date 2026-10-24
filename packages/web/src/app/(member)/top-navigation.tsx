@@ -1,22 +1,20 @@
 'use client';
 
 import Link from 'next/link';
-import { useRouter } from 'next/navigation';
-import { useEffect, useRef, useState, type FormEvent } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import {
   ADMIN_PAGE_PATH,
   DASHBOARD_PAGE_PATH,
   FEEDBACK_PAGE_PATH,
   FLOW_TRACKER_PAGE_PATH,
   HIGHLIGHTS_PAGE_PATH,
-  MAX_SEARCH_QUERY_LENGTH,
   MEMBER_LIBRARY_PAGE_PATH,
   MEMBER_SERIES_PAGE_PATH,
   NEW_USER_ONBOARDING_ID,
   NOTIFICATIONS_PAGE_PATH,
   PROFILE_PAGE_PATH,
+  SEARCH_PAGE_PATH,
   onboardingPagePath,
-  searchPagePath,
 } from '@thp/shared';
 import { SignOutButton } from '../sign-out-button';
 import { InstallApp } from './install-app';
@@ -32,13 +30,12 @@ import styles from './member.module.css';
  * is the point of the component:
  *
  * - **The search control arrived with [§3.10](docs/project/prd.md)** — `top-navigation/search.png`.
- *   The magnifier opens a second bar under the first, the reference's own shape: magnifier, the
- *   query, a clear control at the right. Enter goes to the results page; nothing is searched until
- *   then, because every search is one provider call and the operator chose a search that runs on
- *   Enter over one that runs on every pause in typing. The reference also draws a preview result
- *   and *View all results* under the box, and that is what the Enter-only decision drops: the box
- *   here is a way to the results page, and the page is where results are. A search box on every
- *   screen is [3.10.1](docs/project/prd.md)'s "from anywhere in the app".
+ *   The reference draws the magnifier opening a second bar under the first; here the magnifier is
+ *   a **link to the search page**, where the box, the filters and the results all are. A bar that
+ *   dropped down over the page was a second search box that did less than the page's own — no
+ *   filters, nothing searched until Enter — and one more panel for the menu to fight with under
+ *   the bar. A way to the search from every screen is [3.10.1](docs/project/prd.md)'s "from
+ *   anywhere in the app", and a link is one that survives a reload and opens in a new tab.
  * - **No *All chapters*.** Chapters have no model in this epic at all. *All series* **arrived in
  *   Story 6** and sits where the reference puts it — between *Dashboard* and *All recordings* —
  *   which is what the dropped-not-disabled rule buys: a destination lands in a slot that already
@@ -60,8 +57,10 @@ import styles from './member.module.css';
  *
  * The breadcrumb is home → every ancestor the page named, outermost first → the current page's
  * title. Each ancestor is a **link** rather than text: getting back up in one press is the whole of
- * what those segments are for. A page that names none renders exactly the two segments it always
- * did.
+ * what those segments are for — and a link always shows its page's title, at every width, because
+ * a member choosing where to go back to has to be able to read the choices. Only the current
+ * segment, which goes nowhere, folds to an icon on a phone. A page that names none renders exactly
+ * the two segments it always did.
  *
  * How many there are is the page's business and not this component's. A teaching in a series names
  * one; a chapter names the series and then the teaching, so a member three levels down reads the
@@ -83,8 +82,8 @@ function HomeIcon() {
 }
 
 /**
- * **A segment's icon, for the narrow bar** — a study, a teaching, a chapter — in the home icon's
- * line style. Drawn beside the title always; the stylesheet decides which of the two is seen.
+ * **The current segment's icon, for the narrow bar** — a study, a teaching, a chapter — in the home
+ * icon's line style. Drawn beside the title always; the stylesheet decides which of the two is seen.
  */
 function CrumbIcon({ kind }: { kind: BreadcrumbKind }) {
   const stroke = { fill: 'none', stroke: 'currentColor', strokeWidth: 1.6, strokeLinejoin: 'round' as const };
@@ -110,12 +109,12 @@ function CrumbIcon({ kind }: { kind: BreadcrumbKind }) {
   );
 }
 
-/** A segment's words, beside its icon when it has one. */
-function CrumbText({ label, kind }: { label: string; kind: BreadcrumbKind | undefined }) {
+/** The current segment's words, beside its icon when it has one. */
+function CrumbText({ label, kind }: { label: string; kind: BreadcrumbKind | null }) {
   return (
     <>
-      {kind === undefined ? null : <CrumbIcon kind={kind} />}
-      <span className={kind === undefined ? undefined : styles.crumbLabel}>{label}</span>
+      {kind === null ? null : <CrumbIcon kind={kind} />}
+      <span className={kind === null ? undefined : styles.crumbLabel}>{label}</span>
     </>
   );
 }
@@ -171,77 +170,6 @@ function SearchIcon() {
   );
 }
 
-function ClearIcon() {
-  return (
-    <svg viewBox="0 0 24 24" width="14" height="14" aria-hidden="true" focusable="false">
-      <path d="M6 6l12 12M18 6L6 18" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" />
-    </svg>
-  );
-}
-
-/**
- * **The search bar** — `top-navigation/search.png`'s second bar, drawn under the first while the
- * magnifier is open. One field, submitted on Enter to the results page; the clear control at the
- * right empties the field when it holds something and closes the bar when it does not, which is
- * the two things an × on a search field means.
- *
- * The field is focused the moment the bar opens, because a member who pressed a magnifier has
- * said what they want to do next. Escape closes it, as it closes the menu.
- */
-function SearchBar({ onClose }: { onClose: () => void }) {
-  const router = useRouter();
-  const [query, setQuery] = useState('');
-  const fieldRef = useRef<HTMLInputElement>(null);
-
-  useEffect(() => {
-    fieldRef.current?.focus();
-  }, []);
-
-  function submit(event: FormEvent<HTMLFormElement>) {
-    event.preventDefault();
-    const trimmed = query.trim();
-    if (trimmed === '') return;
-    router.push(searchPagePath({ query: trimmed }));
-    onClose();
-  }
-
-  return (
-    <form className={styles.searchBar} role="search" onSubmit={submit}>
-      <span className={styles.searchGlyph} aria-hidden="true">
-        <SearchIcon />
-      </span>
-      <input
-        ref={fieldRef}
-        className={styles.searchField}
-        type="search"
-        name="q"
-        aria-label="Search the library"
-        placeholder="Search the library"
-        value={query}
-        maxLength={MAX_SEARCH_QUERY_LENGTH}
-        autoComplete="off"
-        enterKeyHint="search"
-        onChange={(event) => setQuery(event.target.value)}
-      />
-      <button
-        className={styles.searchClear}
-        type="button"
-        aria-label={query === '' ? 'Close search' : 'Clear search'}
-        onClick={() => {
-          if (query === '') {
-            onClose();
-          } else {
-            setQuery('');
-            fieldRef.current?.focus();
-          }
-        }}
-      >
-        <ClearIcon />
-      </button>
-    </form>
-  );
-}
-
 function MenuIcon() {
   return (
     <svg viewBox="0 0 24 24" width="18" height="18" aria-hidden="true" focusable="false">
@@ -258,7 +186,6 @@ function MenuIcon() {
 
 export function TopNavigation({ canSeeConsole }: { canSeeConsole: boolean }) {
   const [open, setOpen] = useState(false);
-  const [searching, setSearching] = useState(false);
   const { ancestors, current, currentKind } = useBreadcrumbTrailValue();
   const regionRef = useRef<HTMLDivElement>(null);
 
@@ -267,26 +194,18 @@ export function TopNavigation({ canSeeConsole }: { canSeeConsole: boolean }) {
    * of a menu, and the only way out on touch, where there is no Escape. `pointerdown` rather than
    * `click`, so the menu is gone before the press lands on whatever was underneath it, and the
    * listeners exist only while the menu is open.
-   *
-   * The search bar closes the same two ways, for the same reasons — and the two are one effect
-   * because they are one behaviour: whatever the bar has open goes away on a press elsewhere.
    */
   useEffect(() => {
-    if (!open && !searching) return;
-
-    function closeAll() {
-      setOpen(false);
-      setSearching(false);
-    }
+    if (!open) return;
 
     function onPointerDown(event: PointerEvent) {
       const target = event.target;
       if (target instanceof Node && regionRef.current?.contains(target)) return;
-      closeAll();
+      setOpen(false);
     }
 
     function onKeyDown(event: KeyboardEvent) {
-      if (event.key === 'Escape') closeAll();
+      if (event.key === 'Escape') setOpen(false);
     }
 
     document.addEventListener('pointerdown', onPointerDown);
@@ -295,7 +214,7 @@ export function TopNavigation({ canSeeConsole }: { canSeeConsole: boolean }) {
       document.removeEventListener('pointerdown', onPointerDown);
       document.removeEventListener('keydown', onKeyDown);
     };
-  }, [open, searching]);
+  }, [open]);
 
   return (
     <div className={styles.navRegion} ref={regionRef}>
@@ -308,8 +227,9 @@ export function TopNavigation({ canSeeConsole }: { canSeeConsole: boolean }) {
           </li>
           {/*
             Every ancestor the page named, outermost first — one segment for a teaching in a series,
-            two for a chapter inside one. Keyed on the href rather than the index: a trail that grows
-            a segment when the payload lands would otherwise re-key the ones already drawn.
+            two for a chapter inside one — each by its page's title. Keyed on the href rather than
+            the index: a trail that grows a segment when the payload lands would otherwise re-key
+            the ones already drawn.
           */}
           {ancestors.map((ancestor) => (
             <li className={styles.crumb} key={ancestor.href}>
@@ -317,7 +237,7 @@ export function TopNavigation({ canSeeConsole }: { canSeeConsole: boolean }) {
                 ›
               </span>
               <Link className={styles.crumbLink} href={ancestor.href}>
-                <CrumbText label={ancestor.label} kind={ancestor.kind} />
+                <span className={styles.crumbLabel}>{ancestor.label}</span>
               </Link>
             </li>
           ))}
@@ -326,8 +246,11 @@ export function TopNavigation({ canSeeConsole }: { canSeeConsole: boolean }) {
               <span className={styles.separator} aria-hidden="true">
                 ›
               </span>
-              <span className={styles.crumbCurrent} aria-current="page">
-                <CrumbText label={current} kind={currentKind ?? undefined} />
+              <span
+                className={`${styles.crumbCurrent}${currentKind === null ? '' : ` ${styles.crumbIconic}`}`}
+                aria-current="page"
+              >
+                <CrumbText label={current} kind={currentKind} />
               </span>
             </li>
           )}
@@ -335,39 +258,24 @@ export function TopNavigation({ canSeeConsole }: { canSeeConsole: boolean }) {
 
         <div className={styles.navControls}>
           {/*
-            The magnifier, where `search.png` boxes it: left of the menu, the bell's own shape. A
-            toggle — pressing it again closes the bar — and opening it closes the menu, so the two
-            panels never hang under the bar at once.
+            The magnifier, where `search.png` boxes it: left of the menu, the bell's own shape, and
+            like the bell a link to a page — the search page, where the box and the results are.
           */}
-          <button
-            className={styles.searchButton}
-            type="button"
-            aria-expanded={searching}
-            aria-label="Search"
-            onClick={() => {
-              setSearching((was) => !was);
-              setOpen(false);
-            }}
-          >
+          <Link className={styles.searchLink} href={SEARCH_PAGE_PATH} aria-label="Search">
             <SearchIcon />
-          </button>
+          </Link>
           <Bell />
           <button
             className={styles.menuButton}
             type="button"
             aria-expanded={open}
             aria-label="Menu"
-            onClick={() => {
-              setOpen((was) => !was);
-              setSearching(false);
-            }}
+            onClick={() => setOpen((was) => !was)}
           >
             <MenuIcon />
           </button>
         </div>
       </nav>
-
-      {searching ? <SearchBar onClose={() => setSearching(false)} /> : null}
 
       {open ? (
         <div className={styles.menuPanel}>

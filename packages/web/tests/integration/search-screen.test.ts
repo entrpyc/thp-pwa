@@ -136,16 +136,18 @@ afterAll(async () => {
   await closeTestDatabase();
 });
 
-describe('the search box in the navigation (3.10.1)', () => {
-  it('opens from the magnifier on any screen and goes to the results page on Enter', async () => {
+describe('the way to the search from the navigation (3.10.1)', () => {
+  it('goes to the search page from the magnifier on any screen, and searches on Enter there', async () => {
     const page = await signedInPage();
-    await page.getByRole('button', { name: 'Search' }).click();
-    const box = page.getByRole('searchbox', { name: 'Search the library' });
-    await expect.poll(() => box.isVisible()).toBe(true);
+    // A link, not a button that opens a bar: the search page is where the box and the results are.
+    await page.getByRole('link', { name: 'Search' }).click();
+    await page.waitForURL((url) => url.pathname === SEARCH_PAGE_PATH, { timeout: 30_000 });
+    const box = page.getByRole('searchbox', { name: 'Search for' });
+    await expect.poll(() => box.isVisible(), { timeout: 30_000 }).toBe(true);
     await box.fill(LINES[1] ?? '');
     await box.press('Enter');
-    await page.waitForURL((url) => url.pathname === SEARCH_PAGE_PATH, { timeout: 30_000 });
-    expect(new URL(page.url()).searchParams.get('q')).toBe(LINES[1]);
+    await page.waitForURL((url) => url.searchParams.get('q') === LINES[1], { timeout: 30_000 });
+    expect(new URL(page.url()).pathname).toBe(SEARCH_PAGE_PATH);
     await page.context().close();
   });
 });

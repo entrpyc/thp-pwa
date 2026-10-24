@@ -10,6 +10,7 @@ import {
   type SeriesPayload,
 } from '@thp/shared';
 import { ApiClientError, apiFetch } from '@/client/api-client';
+import { BackRoute } from '../../../back-route';
 import { useBreadcrumbTrail } from '../../player-context';
 import { DownloadAllControl } from '../../downloads/download-all-control';
 import { seriesMeta } from '../series-listing';
@@ -126,9 +127,14 @@ export function SeriesScreen({ seriesId }: { seriesId: string }) {
             <span className={styles.heroFade} aria-hidden="true" />
           </>
         )}
-        <Link className={styles.back} href={MEMBER_SERIES_PAGE_PATH} aria-label="Back to series">
+        {/*
+          Back through history to wherever this study was opened from — the listing, the
+          dashboard, a search — and to the listing for a member who arrived from a link and has
+          nothing behind them (`back-route.tsx`).
+        */}
+        <BackRoute className={styles.back} fallbackHref={MEMBER_SERIES_PAGE_PATH} aria-label="Back to series">
           <span aria-hidden="true">‹</span>
-        </Link>
+        </BackRoute>
       </div>
 
       {failure === null ? null : <p className={styles.failure}>{failure}</p>}
