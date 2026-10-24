@@ -71,6 +71,13 @@ export interface ChapterView {
    * what it discards is exactly the rows carrying this.
    */
   readonly editedByAdmin: boolean;
+  /**
+   * The Flow Tracker's self-reflection question on this chapter ([3.14.4](docs/project/prd.md)),
+   * or `null` while the step that writes it has not run. It rides the chapter list because the
+   * one place an admin edits it is the chapter's own editor ([3.14.11](docs/project/prd.md)); a
+   * member surface drawing the list leaves it out.
+   */
+  readonly question: string | null;
 }
 
 /**

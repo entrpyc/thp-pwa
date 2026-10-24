@@ -130,3 +130,46 @@
   gap: var(--space-3);
   min-width: 0;
 }
+
+/*
+ * The tag's Flow Tracker question bank (3.14.11), opened beneath its row: the same full-width
+ * break-out the rename editor takes, holding a short list and the field that adds to it.
+ */
+.bank {
+  flex: 1 1 100%;
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-3);
+  min-width: 0;
+}
+
+.bankList {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-2);
+}
+
+.bankRow {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--space-3);
+  min-width: 0;
+}
+
+.bankText {
+  margin: 0;
+  flex: 1 1 auto;
+  font-size: var(--fs-body);
+  color: var(--color-text);
+  overflow-wrap: anywhere;
+}
+
+/* A question is a sentence, so unlike a tag's name the field takes the width it can. */
+.fieldWide {
+  composes: field from '../admin.module.css';
+  flex: 1 1 20rem;
+}

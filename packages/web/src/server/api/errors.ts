@@ -297,6 +297,15 @@ export class ApiError extends Error {
     return new ApiError('sos_limit', 409, message);
   }
 
+  /**
+   * A start while a session is already in progress ([3.14.10](docs/project/prd.md)). `409` for the
+   * reason `highlights_full` is: permitted, well-formed, and refused by a state the member can
+   * change in one press — continue the session, or abandon it.
+   */
+  static flowSessionInProgress(message: string): ApiError {
+    return new ApiError('flow_session_in_progress', 409, message);
+  }
+
   static notFound(message = 'The requested resource does not exist.'): ApiError {
     return new ApiError('not_found', 404, message);
   }

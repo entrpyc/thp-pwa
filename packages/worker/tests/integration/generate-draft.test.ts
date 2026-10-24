@@ -68,7 +68,9 @@ const DRAFT = {
 const neverSegments = {
   segmentChapters: () =>
     Promise.reject(new Error('this suite is about generate_draft; nothing here segments chapters')),
-} satisfies Pick<Generator, 'segmentChapters'>;
+  writeReflections: () =>
+    Promise.reject(new Error('this suite is about generate_draft; nothing here writes questions')),
+} satisfies Pick<Generator, 'segmentChapters' | 'writeReflections'>;
 
 let target: ThrowawayDatabase;
 let sql: postgres.Sql;

@@ -81,6 +81,7 @@ const STEP_LABEL: Record<PipelineStep, string> = {
   transcribe: 'Transcribe',
   generate_draft: 'Generate draft',
   generate_chapters: 'Generate chapters',
+  generate_questions: 'Generate questions',
   embed: 'Embed',
   cross_reference: 'Cross-reference',
 };
@@ -115,6 +116,9 @@ const CONFIRMS_RERUN: Record<PipelineStep, boolean> = {
   transcribe: true,
   generate_draft: false,
   generate_chapters: true,
+  // Fills in the Flow Tracker question of any chapter that has none and touches the rest
+  // ([3.14.12](docs/project/prd.md)) — nothing a human wrote is lost, so no confirmation.
+  generate_questions: false,
   // Re-embedding replaces vectors with vectors of the same words. Nothing a human wrote is lost
   // and the cost is a fraction of a cent, so a confirmation would be friction with no guardrail.
   embed: false,
@@ -149,8 +153,13 @@ function confirmationFor(step: PipelineStep, title: string, editedChapters: numb
         (editedChapters === 0
           ? ', and nothing an admin has changed is lost, because nothing has been changed.'
           : `, discarding the ${editedChapters === 1 ? 'title, summary and boundary of the one chapter' : `titles, summaries and boundaries of the ${editedChapters} chapters`} an admin has changed.`) +
+        // 3.14.12 — the questions follow their chapters, and the confirmation says so.
+        ' The Flow Tracker questions on these chapters go with them and are written again for the new list.' +
         ' Chapters have no review step, so if this teaching is published the new list is what members see straight away.'
       );
+    case 'generate_questions':
+      // Never shown — CONFIRMS_RERUN says so — and here because the switch is exhaustive.
+      return `Generate the Flow Tracker questions of “${title}” again? Only chapters with no question get one; nothing is lost.`;
     case 'generate_draft':
       return `Generate the drafts of “${title}” again?`;
     case 'process_audio':
@@ -174,6 +183,7 @@ const CONFIRM_ACTION: Record<PipelineStep, string> = {
   transcribe: 'Yes, transcribe again',
   generate_draft: 'Yes, generate again',
   generate_chapters: 'Yes, replace the chapters',
+  generate_questions: 'Yes, generate again',
   embed: 'Yes, embed again',
   cross_reference: 'Yes, cross-reference again',
 };
@@ -388,7 +398,8 @@ function SpendCard({
   const [note, setNote] = useState<string | null>(null);
 
   const reached = isSpendCeilingReached(spend);
-  const generationUsd = spend.byStep.generate_draft + spend.byStep.generate_chapters;
+  const generationUsd =
+    spend.byStep.generate_draft + spend.byStep.generate_chapters + spend.byStep.generate_questions;
 
   async function raise(event: FormEvent<HTMLFormElement>): Promise<void> {
     event.preventDefault();

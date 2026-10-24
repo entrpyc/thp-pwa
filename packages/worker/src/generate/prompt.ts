@@ -1,5 +1,16 @@
-import { MAX_CHAPTER_MS, MIN_CHAPTER_MS, REVIEW_FIELD, type ReviewKind } from '@thp/shared';
-import type { ChapterRequest, GenerationRequest, TranscriptLine } from './generator';
+import {
+  MAX_CHAPTER_MS,
+  MAX_FLOW_QUESTION_LENGTH,
+  MIN_CHAPTER_MS,
+  REVIEW_FIELD,
+  type ReviewKind,
+} from '@thp/shared';
+import type {
+  ChapterRequest,
+  GenerationRequest,
+  ReflectionRequest,
+  TranscriptLine,
+} from './generator';
 
 /**
  * **What the model is asked for, and the label that says which version asked.**
@@ -275,4 +286,83 @@ export const CHAPTER_TOOL_SCHEMA = {
     },
   },
   required: ['chapters'],
+} as const;
+
+// =================================================================================================
+// Self-reflection questions ([3.14.4](docs/project/prd.md))
+// =================================================================================================
+
+/**
+ * The prompt version stamped on every question this prompt produces ([4.17.5](docs/project/prd.md)).
+ * Its own label, separate from the other two, for the reason {@link CHAPTER_PROMPT_VERSION} is.
+ */
+export const REFLECTION_PROMPT_VERSION = 'reflections-1';
+
+/** The tool the model is forced to call for a list of questions. */
+export const REFLECTION_TOOL_NAME = 'record_reflections';
+
+/**
+ * The instruction the model is given about what a self-reflection question is.
+ *
+ * **Not a recall question.** The Flow Tracker is a self-assessment, never a test
+ * ([3.14.9](docs/project/prd.md)): the member answers on a scale that runs from *I don't remember
+ * this* to *I experience this daily*, so the question has to be one that scale can answer — about
+ * their own week, their own practice, their own response to what was taught — and never a question
+ * with a right answer.
+ */
+export const REFLECTION_SYSTEM_PROMPT =
+  'You are writing self-reflection questions for the members of a ministry, about a recorded Bible ' +
+  'teaching they have heard. Each question is about one stretch of the teaching, and it asks the ' +
+  'member how they have been able to live that teaching out in their own life since — in their ' +
+  'week, their relationships, their prayer, their choices. It is never a test of whether they ' +
+  'remember what was said and it never has a right answer. Write warmly and directly, in the second ' +
+  'person, one question of one or two sentences each, in plain text with no markdown. Write only ' +
+  'from the title and summary you are given: do not invent scripture references or claims that are ' +
+  `not in them. Keep each question under ${MAX_FLOW_QUESTION_LENGTH} characters. ` +
+  `Answer by calling the ${REFLECTION_TOOL_NAME} tool and in no other way.`;
+
+/** The subjects, each under its key, so the answer can name which question is about which. */
+export function buildReflectionUserPrompt(request: ReflectionRequest): string {
+  const subjects = request.subjects
+    .map(
+      (one) =>
+        `Key: ${one.key}\nTitle: ${one.title}\nSummary: ${one.summary}`,
+    )
+    .join('\n\n');
+  return (
+    `Teaching title: ${request.title}\n\n` +
+    `Write one self-reflection question for each of the following parts of this teaching, ` +
+    `and return each under the key it is listed with.\n\n${subjects}`
+  );
+}
+
+/**
+ * The reflection tool's parameter schema: a list of `{ key, question }` pairs, so a question
+ * cannot come back without saying which part it is about.
+ */
+export const REFLECTION_TOOL_SCHEMA = {
+  type: 'object',
+  properties: {
+    reflections: {
+      type: 'array',
+      description: 'One question per part, each under the key that part was listed with.',
+      items: {
+        type: 'object',
+        properties: {
+          key: {
+            type: 'string',
+            description: 'The key of the part this question is about, copied exactly.',
+          },
+          question: {
+            type: 'string',
+            description:
+              'One or two sentences asking the member how they have lived this part of the ' +
+              'teaching out.',
+          },
+        },
+        required: ['key', 'question'],
+      },
+    },
+  },
+  required: ['reflections'],
 } as const;

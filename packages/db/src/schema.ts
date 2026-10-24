@@ -26,11 +26,15 @@ import {
   DEFAULT_PLAYBACK_SPEED,
   EMBEDDING_DIMENSIONS,
   EMBEDDING_SOURCE_KINDS,
+  FLOW_ANSWERS,
+  FLOW_QUESTION_SCOPES,
+  FLOW_SESSION_STATUSES,
   HIGHLIGHT_KINDS,
   JOB_STATUSES,
   JOB_STEPS,
   MAX_ANNOUNCEMENT_BODY_LENGTH,
   MAX_ANNOUNCEMENT_TITLE_LENGTH,
+  MAX_FLOW_QUESTION_LENGTH,
   MAX_NOTE_IMAGES,
   MAX_NOTE_IMAGE_ALT_LENGTH,
   MAX_NOTE_LENGTH,
@@ -119,6 +123,10 @@ export const crossReferenceBasis = pgEnum('cross_reference_basis', CROSS_REFEREN
 export const highlightKind = pgEnum('highlight_kind', HIGHLIGHT_KINDS);
 /** The four SOS colours ([3.16.1](docs/project/prd.md)), derived from the shared tuple. */
 export const sosUrgency = pgEnum('sos_urgency', SOS_URGENCIES);
+/** The Flow Tracker's three vocabularies ([3.14](docs/project/prd.md)), each derived, never restated. */
+export const flowAnswer = pgEnum('flow_answer', FLOW_ANSWERS);
+export const flowSessionStatus = pgEnum('flow_session_status', FLOW_SESSION_STATUSES);
+export const flowQuestionScope = pgEnum('flow_question_scope', FLOW_QUESTION_SCOPES);
 
 /**
  * An account. Columns arrive with the steps that use them: `deactivated_at` comes with ticket 4
@@ -2264,6 +2272,165 @@ export const noteImage = pgTable(
     check(
       'note_image_position_range',
       sql`${table.position} >= 0 and ${table.position} < ${sql.raw(String(MAX_NOTE_IMAGES))}`,
+    ),
+  ],
+);
+
+/**
+ * **A Flow Tracker question** ([3.14.4](docs/project/prd.md), [3.14.11](docs/project/prd.md);
+ * [4.13](docs/project/prd.md)) — one self-reflection question, attached to exactly one of three
+ * things: a chapter, a chapterless recording, or a tag.
+ *
+ * One table for the three scopes rather than a column on `chapter` and another on `recording`,
+ * because the entity is one thing with one lifecycle however it is attached: it has a text, it was
+ * written by a model or a person, and an admin edits it in place. The `scope` column says which
+ * foreign key is set and the check below makes it exactly one, so a question on nothing, or on two
+ * things, is a row the database cannot hold.
+ *
+ * **Every scope cascades.** A chapter that is regenerated away takes its question with it — which
+ * is [3.14.12](docs/project/prd.md)'s "questions follow their chapters" as a property of the key
+ * rather than of code the regeneration step has to remember; the step then writes a fresh one. A
+ * tag deleted from the taxonomy takes its bank with it. What a session already asked is **not**
+ * here: an item snapshots the text, so nothing a member answered points at a row that can go.
+ *
+ * `generated_by` is `null` on a question a person wrote from nothing (a tag bank entry) and the
+ * model's provenance on a generated one ([4.17.5](docs/project/prd.md)); `edited_by_admin` is set
+ * by the one write a human makes, exactly as on `chapter`.
+ */
+export const flowQuestion = pgTable(
+  'flow_question',
+  {
+    id: uuid('id').primaryKey().defaultRandom(),
+    scope: flowQuestionScope('scope').notNull(),
+    chapterId: uuid('chapter_id').references(() => chapter.id, { onDelete: 'cascade' }),
+    recordingId: uuid('recording_id').references(() => recording.id, { onDelete: 'cascade' }),
+    tagId: uuid('tag_id').references(() => tag.id, { onDelete: 'cascade' }),
+    text: text('text').notNull(),
+    generatedBy: jsonb('generated_by'),
+    editedByAdmin: boolean('edited_by_admin').notNull().default(false),
+    createdAt: timestamp('created_at', { withTimezone: true }).notNull().defaultNow(),
+    updatedAt: timestamp('updated_at', { withTimezone: true }).notNull().defaultNow(),
+  },
+  (table) => [
+    /** One question per chapter and one per chapterless recording; a tag holds a bank. */
+    uniqueIndex('flow_question_chapter_unique')
+      .on(table.chapterId)
+      .where(sql`${table.scope} = 'chapter'`),
+    uniqueIndex('flow_question_recording_unique')
+      .on(table.recordingId)
+      .where(sql`${table.scope} = 'recording'`),
+    index('flow_question_tag_idx').on(table.tagId, table.createdAt),
+    /** The scope says which key is set, and exactly that one is. */
+    check(
+      'flow_question_shape',
+      sql`(${table.scope} = 'chapter') = (${table.chapterId} is not null)
+        and (${table.scope} = 'recording') = (${table.recordingId} is not null)
+        and (${table.scope} = 'tag') = (${table.tagId} is not null)`,
+    ),
+    check(
+      'flow_question_text_length',
+      sql`char_length(${table.text}) between 1 and ${sql.raw(String(MAX_FLOW_QUESTION_LENGTH))}`,
+    ),
+  ],
+);
+
+/**
+ * **A Flow Tracker session** ([3.14.10](docs/project/prd.md); [4.12](docs/project/prd.md)) — one
+ * run of the tracker by one member, from the teaching they fell behind at to the most recent one.
+ *
+ * **Strictly the member's** ([3.14.8](docs/project/prd.md)): every read and write in
+ * `flow-tracker.ts` takes the member's id into the `where`, and the row cascades with the account
+ * ([3.1.9](docs/project/prd.md)) — a session is a fact about a person and means nothing without
+ * them. It cascades with the divergence teaching too: a teaching deleted at the database takes the
+ * sessions that started from it, because the range they covered no longer has a start.
+ *
+ * **One in progress per member**, said by the partial unique index rather than by the service
+ * checking first: two starts racing each other land one session, and the other is a unique
+ * violation the service reads as "you already have one".
+ *
+ * No score column, and no column a score could be derived into ([3.14.9](docs/project/prd.md)).
+ * What a session holds beyond its status is its items.
+ */
+export const flowSession = pgTable(
+  'flow_session',
+  {
+    id: uuid('id').primaryKey().defaultRandom(),
+    userId: uuid('user_id')
+      .notNull()
+      .references(() => user.id, { onDelete: 'cascade' }),
+    /** The teaching the member fell behind at ([3.14.2](docs/project/prd.md)). */
+    divergenceRecordingId: uuid('divergence_recording_id')
+      .notNull()
+      .references(() => recording.id, { onDelete: 'cascade' }),
+    status: flowSessionStatus('status').notNull().default('in_progress'),
+    /** How many teachings the range covered when the session was assembled. */
+    teachingCount: integer('teaching_count').notNull(),
+    createdAt: timestamp('created_at', { withTimezone: true }).notNull().defaultNow(),
+    completedAt: timestamp('completed_at', { withTimezone: true }),
+    abandonedAt: timestamp('abandoned_at', { withTimezone: true }),
+  },
+  (table) => [
+    uniqueIndex('flow_session_one_in_progress')
+      .on(table.userId)
+      .where(sql`${table.status} = 'in_progress'`),
+    /** The page's own order: a member's sessions, newest first. */
+    index('flow_session_user_created_idx').on(table.userId, table.createdAt),
+    check(
+      'flow_session_status_timestamps',
+      sql`(${table.status} = 'complete') = (${table.completedAt} is not null)
+        and (${table.status} = 'abandoned') = (${table.abandonedAt} is not null)`,
+    ),
+  ],
+);
+
+/**
+ * **One question of a session, as it was asked** ([3.14.3](docs/project/prd.md),
+ * [3.14.10](docs/project/prd.md)).
+ *
+ * **A snapshot with a live pointer.** `question`, `title` and `start_ms` are copied from the
+ * question and chapter at the moment the session is assembled, so an admin's later rewrite or a
+ * regeneration changes nothing about a question the member already saw. `chapter_id` is the one
+ * live column: it **sets null** when the chapter goes, which is how a read tells an answered item
+ * that keeps its place from an unanswered one that is dropped
+ * ([3.14.10](docs/project/prd.md)). `tag_id` sets null the same way; `recording_id` cascades,
+ * because an item about a teaching that is gone has nowhere to send anybody.
+ *
+ * `answer` is the member's own word and nothing is derived from it into another column
+ * ([3.14.9](docs/project/prd.md)); `done_at` is the member's tick on the reading list.
+ */
+export const flowSessionItem = pgTable(
+  'flow_session_item',
+  {
+    id: uuid('id').primaryKey().defaultRandom(),
+    sessionId: uuid('session_id')
+      .notNull()
+      .references(() => flowSession.id, { onDelete: 'cascade' }),
+    /** Its place in the session, counting from 1, in the order the questions are asked. */
+    position: integer('position').notNull(),
+    kind: flowQuestionScope('kind').notNull(),
+    /** The teaching the question is about; `null` on a tag item, which is about several. */
+    recordingId: uuid('recording_id').references(() => recording.id, { onDelete: 'cascade' }),
+    chapterId: uuid('chapter_id').references(() => chapter.id, { onDelete: 'set null' }),
+    tagId: uuid('tag_id').references(() => tag.id, { onDelete: 'set null' }),
+    question: text('question').notNull(),
+    /** The chapter's title, the teaching's, or the tag's name — whatever the screen heads the question with. */
+    title: text('title').notNull(),
+    /** The chapter's summary as asked, shown under its title ([3.14.5](docs/project/prd.md)); `null` off a chapter. */
+    summary: text('summary'),
+    /** The chapter's start when asked, so the reading list can still open the moment. `null` off a chapter. */
+    startMs: integer('start_ms'),
+    answer: flowAnswer('answer'),
+    answeredAt: timestamp('answered_at', { withTimezone: true }),
+    doneAt: timestamp('done_at', { withTimezone: true }),
+  },
+  (table) => [
+    uniqueIndex('flow_session_item_position_unique').on(table.sessionId, table.position),
+    check('flow_session_item_position_positive', sql`${table.position} >= 1`),
+    check(
+      'flow_session_item_shape',
+      sql`(${table.kind} = 'tag') = (${table.recordingId} is null)
+        and (${table.answer} is null) = (${table.answeredAt} is null)
+        and (${table.startMs} is null or ${table.startMs} >= 0)`,
     ),
   ],
 );

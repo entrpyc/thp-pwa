@@ -26,6 +26,15 @@ import { RECORDINGS_PATH } from './recordings';
  * exactly where the reservation put it — the rendition is what members hear, so it is the thing to
  * produce before anything downstream spends money.
  *
+ * `generate_questions` is the Flow Tracker's step ([3.14.4](docs/project/prd.md)): one
+ * self-reflection question per chapter the step before it wrote, or one for the whole teaching when
+ * it was too short to hold chapters. It runs **after** `generate_chapters` because it reads the
+ * chapters, and it is its own step rather than a tail on that one for the reason chapters are their
+ * own step: it is re-run on its own — a split or a merge ([3.22.7](docs/project/prd.md)) leaves a
+ * chapter with no question, and the edit enqueues this step and never the chapter list's. It
+ * **fills gaps and discards nothing**: a chapter that already has a question keeps it, which is
+ * what makes re-running it safe without a confirming press ([3.14.12](docs/project/prd.md)).
+ *
  * `embed` is the foundation semantic search ([3.10](docs/project/prd.md)) and cross-referencing
  * ([3.9](docs/project/prd.md)) stand on: every segment, chapter and published summary of the
  * recording as a vector in the same database as the rows that say who may read it
@@ -54,6 +63,7 @@ export const PIPELINE_STEPS = [
   'transcribe',
   'generate_draft',
   'generate_chapters',
+  'generate_questions',
   'embed',
   'cross_reference',
 ] as const;
@@ -129,6 +139,7 @@ export const SPENDING_STEPS: readonly PipelineStep[] = [
   'transcribe',
   'generate_draft',
   'generate_chapters',
+  'generate_questions',
   'embed',
 ];
 

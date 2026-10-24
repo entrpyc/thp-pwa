@@ -71,10 +71,22 @@ export interface RecordingCrossReferencedEvent {
   readonly recordingId: string;
 }
 
+/**
+ * A teaching's Flow Tracker questions were filled in ([3.14.4](docs/project/prd.md)). Emitted on
+ * every run that wrote at least one, and not on a run that found nothing missing: the latter
+ * changed nothing a member could be asked.
+ */
+export interface QuestionsGeneratedEvent {
+  readonly type: 'questions_generated';
+  readonly recordingId: string;
+  readonly written: number;
+}
+
 export type DomainEvent =
   | DraftGeneratedEvent
   | RecordingPublishedEvent
   | ChaptersGeneratedEvent
+  | QuestionsGeneratedEvent
   | RecordingEmbeddedEvent
   | RecordingCrossReferencedEvent;
 

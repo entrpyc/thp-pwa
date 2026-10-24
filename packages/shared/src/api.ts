@@ -171,6 +171,7 @@ export const API_ERROR_CODES = [
   'terms_required',
   'highlights_full',
   'sos_limit',
+  'flow_session_in_progress',
   'not_found',
   'internal_error',
   'service_unavailable',

@@ -44,6 +44,7 @@ function tiling(...starts: readonly number[]): ChapterView[] {
     title: `Part ${index + 1}`,
     summary: `The ${index + 1}th part.`,
     editedByAdmin: false,
+    question: null,
   }));
 }
 

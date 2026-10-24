@@ -166,10 +166,58 @@ export interface ChapterResult {
   readonly spend: GenerationSpend;
 }
 
+// =================================================================================================
+// The third thing this port does: write a self-reflection question per chapter
+// ([3.14.4](docs/project/prd.md)).
+//
+// A third method, for the reason chapters are a second one: what it produces reaches members with
+// the recording and is edited in place ([3.14.11](docs/project/prd.md)), never through the review
+// queue, and it is a list keyed by chapter rather than a field of a draft. Still one adapter and
+// one vendor named in configuration (project tdd 4.10).
+//
+// **It takes titles and summaries, never the transcript.** A question about how a member has lived
+// a chapter out is written from what the chapter is about, which the chapter's own two pieces of
+// text already say — sending ninety minutes of transcript to ask five questions would be the
+// expensive half of the request paid for an answer the summaries carry.
+// =================================================================================================
+
+/** One stretch of teaching the model is asked to write a question for. */
+export interface ReflectionSubject {
+  /** Echoed back on the answer, so the handler can place each question without trusting order. */
+  readonly key: string;
+  readonly title: string;
+  readonly summary: string;
+}
+
+export interface ReflectionRequest {
+  /** What the teaching is called. */
+  readonly title: string;
+  readonly subjects: readonly ReflectionSubject[];
+}
+
+/** One question as the model wrote it, under the key of the subject it is about. */
+export interface ProposedReflection {
+  readonly key: string;
+  readonly question: string;
+}
+
+export interface ReflectionResult {
+  /** In the order the model gave them. Which keys are missing is the handler's question. */
+  readonly reflections: readonly ProposedReflection[];
+  /** Which prompt produced it. Its own label, because it is its own prompt. */
+  readonly promptVersion: string;
+  readonly spend: GenerationSpend;
+}
+
 export interface Generator {
   /** Which adapter is in use, for the log line. Never a vendor decision made in code. */
   readonly name: string;
   generate(request: GenerationRequest): Promise<GenerationResult>;
+  /**
+   * Write one self-reflection question per subject ([3.14.4](docs/project/prd.md)) — how the
+   * member has lived that stretch of teaching out, never whether they remember it.
+   */
+  writeReflections(request: ReflectionRequest): Promise<ReflectionResult>;
   /**
    * Cut this teaching into chapters ([3.22.1](docs/project/prd.md)).
    *

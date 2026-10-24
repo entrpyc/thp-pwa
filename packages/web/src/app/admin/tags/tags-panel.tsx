@@ -2,12 +2,17 @@
 
 import { useCallback, useEffect, useId, useState, type FormEvent } from 'react';
 import {
+  MAX_FLOW_QUESTION_LENGTH,
   MAX_TAG_LENGTH,
   TAGS_PATH,
   normaliseTagName,
   tagPath,
+  tagQuestionPath,
+  tagQuestionsPath,
   type DeleteTagPayload,
+  type SetFlowQuestionRequest,
   type TagListPayload,
+  type TagQuestionsPayload,
   type TagView,
 } from '@thp/shared';
 import { ApiClientError, apiFetch } from '@/client/api-client';
@@ -192,6 +197,7 @@ function TagRow({
 }) {
   const [editing, setEditing] = useState(false);
   const [confirming, setConfirming] = useState(false);
+  const [questionsOpen, setQuestionsOpen] = useState(false);
   const [busy, setBusy] = useState<'rename' | 'delete' | null>(null);
   const [note, setNote] = useState<string | null>(null);
   const [name, setName] = useState(entry.name);
@@ -259,6 +265,20 @@ function TagRow({
         >
           {editing ? 'Cancel rename' : 'Rename'}
         </button>
+        {/* The tag's Flow Tracker question bank (3.14.11), opened in place beneath the row. */}
+        <button
+          className={styles.action}
+          type="button"
+          disabled={busy !== null}
+          aria-expanded={questionsOpen}
+          onClick={() => {
+            setEditing(false);
+            setConfirming(false);
+            setQuestionsOpen(!questionsOpen);
+          }}
+        >
+          {questionsOpen ? 'Close questions' : 'Questions'}
+        </button>
         <button
           className={styles.action}
           type="button"
@@ -271,6 +291,8 @@ function TagRow({
           Delete
         </button>
       </div>
+
+      {questionsOpen ? <TagQuestions tag={entry} /> : null}
 
       {editing ? (
         <div className={styles.editor}>
@@ -334,5 +356,126 @@ function TagRow({
         </p>
       )}
     </li>
+  );
+}
+
+/**
+ * **A tag's Flow Tracker question bank** ([3.14.11](docs/project/prd.md)), beneath its row: every
+ * question in it, oldest first, each with a Remove; and a field to add one. A session asks each of
+ * these once when its range carries the tag ([3.14.3](docs/project/prd.md)).
+ *
+ * Every write renders the bank the API answered rather than patching the list by hand.
+ */
+function TagQuestions({ tag }: { tag: TagView }) {
+  const fieldId = useId();
+  const [questions, setQuestions] = useState<TagQuestionsPayload['questions'] | null>(null);
+  const [text, setText] = useState('');
+  const [busy, setBusy] = useState(false);
+  const [failure, setFailure] = useState<string | null>(null);
+
+  useEffect(() => {
+    let stale = false;
+    void apiFetch<TagQuestionsPayload>(tagQuestionsPath(tag.id), { credentials: 'include' })
+      .then((payload) => {
+        if (!stale) setQuestions(payload.questions);
+      })
+      .catch((caught: unknown) => {
+        if (!stale) setFailure(describeFailure(caught));
+      });
+    return () => {
+      stale = true;
+    };
+  }, [tag.id]);
+
+  async function write(path: string, method: 'POST' | 'DELETE', body?: SetFlowQuestionRequest): Promise<void> {
+    if (busy) return;
+    setBusy(true);
+    setFailure(null);
+    try {
+      const payload = await apiFetch<TagQuestionsPayload>(path, {
+        method,
+        credentials: 'include',
+        ...(body === undefined
+          ? {}
+          : { headers: { 'content-type': 'application/json' }, body: JSON.stringify(body) }),
+      });
+      setQuestions(payload.questions);
+      if (method === 'POST') setText('');
+    } catch (caught) {
+      setFailure(describeFailure(caught));
+    } finally {
+      setBusy(false);
+    }
+  }
+
+  return (
+    <div className={styles.bank} aria-label={`Flow Tracker questions for ${tag.name}`}>
+      <p className={styles.sectionNote}>
+        Asked once in any Flow Tracker session whose teachings carry “{tag.name}”. Ask how the
+        member has lived the theme out, never whether they remember it.
+      </p>
+
+      {questions === null && failure === null ? (
+        <p className={styles.sectionNote}>Loading questions…</p>
+      ) : null}
+
+      {questions !== null && questions.length === 0 ? (
+        <p className={styles.empty}>No questions on this tag yet.</p>
+      ) : null}
+
+      {questions !== null && questions.length > 0 ? (
+        <ul className={styles.bankList}>
+          {questions.map((one) => (
+            <li className={styles.bankRow} key={one.id}>
+              <p className={styles.bankText}>{one.text}</p>
+              <button
+                className={styles.action}
+                type="button"
+                disabled={busy}
+                aria-label={`Remove question: ${one.text}`}
+                onClick={() => void write(tagQuestionPath(tag.id, one.id), 'DELETE')}
+              >
+                Remove
+              </button>
+            </li>
+          ))}
+        </ul>
+      ) : null}
+
+      <form
+        className={styles.editor}
+        noValidate
+        onSubmit={(event) => {
+          event.preventDefault();
+          if (text.trim() === '') return;
+          void write(tagQuestionsPath(tag.id), 'POST', { text: text.trim() });
+        }}
+      >
+        <div className={styles.fieldWide}>
+          <label className={styles.label} htmlFor={fieldId}>
+            New question
+          </label>
+          <input
+            className={styles.input}
+            id={fieldId}
+            type="text"
+            autoComplete="off"
+            maxLength={MAX_FLOW_QUESTION_LENGTH}
+            disabled={busy}
+            value={text}
+            onChange={(event) => setText(event.target.value)}
+          />
+        </div>
+        <button className={styles.submit} type="submit" disabled={busy || text.trim() === ''}>
+          {busy ? 'Saving…' : 'Add question'}
+        </button>
+      </form>
+
+      {failure === null ? null : (
+        <p className={styles.rowRefusal} role="alert">
+          {failure}
+        </p>
+      )}
+    </div>
   );
 }

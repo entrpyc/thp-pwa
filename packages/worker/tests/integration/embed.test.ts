@@ -464,10 +464,14 @@ describe('re-embedding after a correction (3.5.5) and a chapter edit (3.22.7)', 
 });
 
 describe('its place in the chain', () => {
-  it('follows generate_chapters and hands on to cross_reference', async () => {
-    // After the chapters, because it embeds them; before cross-referencing, which reads what it
-    // wrote ([3.9](docs/project/prd.md)). The successor is asserted by running it below.
-    expect(PIPELINE_STEPS.indexOf('embed')).toBe(PIPELINE_STEPS.indexOf('generate_chapters') + 1);
+  it('follows generate_questions and hands on to cross_reference', async () => {
+    // After the chapters and the questions written about them, because it embeds the chapters;
+    // before cross-referencing, which reads what it wrote ([3.9](docs/project/prd.md)). The
+    // successor is asserted by running it below.
+    expect(PIPELINE_STEPS.indexOf('embed')).toBe(PIPELINE_STEPS.indexOf('generate_questions') + 1);
+    expect(PIPELINE_STEPS.indexOf('generate_questions')).toBe(
+      PIPELINE_STEPS.indexOf('generate_chapters') + 1,
+    );
 
     const seeded = await teaching();
     const generated = await run(await claimed(seeded.recordingId, 'generate_chapters'));
@@ -479,10 +483,17 @@ describe('its place in the chain', () => {
     `;
     expect(ledger.map((row) => [row.step, row.status])).toEqual([
       ['generate_chapters', 'succeeded'],
-      ['embed', 'pending'],
+      ['generate_questions', 'pending'],
     ]);
 
-    // Run what it enqueued, and it hands on to cross-referencing in turn.
+    // Run the questions step it enqueued, which hands on to embedding.
+    const questions = await findUnfinishedJob(seeded.recordingId, 'generate_questions', handle);
+    expect(questions).not.toBeNull();
+    await sql`update job set status = 'running', started_at = now() where id = ${questions?.id as string}`;
+    const asked = await run({ ...(questions as JobRow), status: 'running', startedAt: new Date() });
+    expect(asked.status).toBe('succeeded');
+
+    // Run what that enqueued, and it hands on to cross-referencing in turn.
     const pending = await findUnfinishedJob(seeded.recordingId, 'embed', handle);
     expect(pending).not.toBeNull();
     expect(pending?.correlationId).toBe(generated.correlationId);
@@ -495,6 +506,7 @@ describe('its place in the chain', () => {
     `;
     expect(after.map((one) => [one.step, one.status])).toEqual([
       ['generate_chapters', 'succeeded'],
+      ['generate_questions', 'succeeded'],
       ['embed', 'succeeded'],
       ['cross_reference', 'pending'],
     ]);

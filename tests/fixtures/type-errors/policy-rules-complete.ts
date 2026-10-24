@@ -91,4 +91,11 @@ export const rules: PolicyRules = {
   'sos.reply.delete': { roles: { admin: true, member: true }, requiresOwnership: true },
   'sos.moderate': { roles: { admin: true, member: false } },
   'search.query': { roles: { admin: true, member: true } },
+  'flow.read': { roles: { admin: true, member: true } },
+  'flow.start': { roles: { admin: true, member: true } },
+  'flow.answer': { roles: { admin: true, member: true } },
+  'flow.abandon': { roles: { admin: true, member: true } },
+  'flow.mark': { roles: { admin: true, member: true } },
+  'flow.question.edit': { roles: { admin: true, member: false } },
+  'flow.bank.manage': { roles: { admin: true, member: false } },
 };

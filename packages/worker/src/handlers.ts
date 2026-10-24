@@ -10,6 +10,10 @@ import {
 } from './generate-chapters';
 import { createEmbedHandler, type EmbedDependencies } from './embed-recording';
 import { createGenerateDraftHandler, type GenerateDraftDependencies } from './generate-draft';
+import {
+  createGenerateQuestionsHandler,
+  type GenerateQuestionsDependencies,
+} from './generate-questions';
 import { createPreviewAudioHandler } from './preview-audio';
 import { createProcessAudioHandler, type ProcessAudioDependencies } from './process-audio';
 import { createTranscribeHandler, type TranscribeDependencies } from './transcribe';
@@ -57,6 +61,7 @@ export interface WorkerDependencies
     TranscribeDependencies,
     GenerateDraftDependencies,
     GenerateChaptersDependencies,
+    GenerateQuestionsDependencies,
     EmbedDependencies,
     CrossReferenceDependencies {}
 
@@ -87,6 +92,7 @@ export function createHandlers(deps: WorkerDependencies = {}): HandlerRegistry {
     transcribe: createTranscribeHandler(deps),
     generate_draft: createGenerateDraftHandler(deps),
     generate_chapters: createGenerateChaptersHandler(deps),
+    generate_questions: createGenerateQuestionsHandler(deps),
     embed: createEmbedHandler(deps),
     cross_reference: createCrossReferenceHandler(deps),
     reprocess_audio: processAudio,

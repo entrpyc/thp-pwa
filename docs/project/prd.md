@@ -339,21 +339,22 @@ It is built as a Progressive Web App on a single codebase, reachable from any br
 
 ### 📝 3.14 Flow tracker
 
-*For the member who has lost the thread of a series. It identifies where they fell behind and gives them a route back in. It is a self-assessment and recommendation tool, never a test.*
+*For the member who has lost the thread of the teaching. It identifies where they fell behind and gives them a route back in. It is a self-reflection and recommendation tool, never a test: the question is not whether they remember a teaching but whether they have been able to live it out.*
 
 **Functional requirements**
 
-- 📝 **3.14.1** A member starts the Flow Tracker from their profile or from a series page.
-- 📝 **3.14.2** The member selects the teaching from which they feel they lost the flow, setting the point of divergence.
-- 📝 **3.14.3** The system assembles questions covering each teaching topic from the most recent teaching back to the selected starting point.
-- 📝 **3.14.4** Questions are drawn from teaching content and from admin-curated question banks.
-- 📝 **3.14.5** Questions are presented in reverse chronological order — from the latest teaching back to the point of divergence.
-- 📝 **3.14.6** Where a response indicates a gap in understanding, the system surfaces the teachings that address it, using the cross-referencing layer (3.9.8).
-- 📝 **3.14.7** Each recommendation links directly to the relevant recording and to the timestamp where that topic is covered.
-- 📝 **3.14.8** Flow Tracker responses are strictly private to the member. No result is visible to admins or to other members.
-- 📝 **3.14.9** There is no score, grade or pass mark. The output is a reading list, not a result.
-- 📝 **3.14.10** A member can run the Flow Tracker as often as they like, and can leave a session and resume it.
-- 📝 **3.14.11** Admins curate the question banks that feed 3.14.4, per teaching or per tag, from the admin dashboard (3.19.7).
+- 📝 **3.14.1** The Flow Tracker is its own page, reached from the navigation menu (the same menu that carries Highlights, 3.15.5). It is not offered on a series page or on the profile. (Originally profile and series page; the operator moved it to the menu.)
+- 📝 **3.14.2** Starting a session, the member picks the teaching from which they feel they lost the flow — the point of divergence — from a single chronological list of every published teaching, newest first, each row carrying cover, title, series label and date. Beneath the list, a line states how many teachings and how many questions the session will cover before the member confirms. The range is not scoped to a series: it runs across the whole library from the picked teaching to the most recent one.
+- 📝 **3.14.3** The system assembles one question per chapter (3.22) of every teaching in range, from the most recent teaching back to the point of divergence. A teaching too short to hold chapters (3.22.4) contributes one question for the whole teaching instead, so it still appears once. A chapter whose question has not been generated yet is skipped silently.
+- 📝 **3.14.4** Questions are generated from teaching content as a step in the content pipeline (3.21.1): when a recording's chapters are generated, each chapter receives one self-reflection question written from its title and summary, asking how the member has lived that chapter out rather than whether they recall it. A chapterless recording receives one question written from its summary. Questions are stored on the chapter (or on the recording, for the chapterless case) and go live with the recording (3.22.6), with no review gate of their own. Admin-curated tag question banks (3.14.11) add to, and never replace, generated questions.
+- 📝 **3.14.5** Questions are presented one per screen, in reverse chronological order — from the latest teaching back to the point of divergence, and within a teaching from its last chapter back to its first. The screen shows the teaching's cover, title and date, the chapter's title and summary, the question, and a progress line (position in the session). Answering advances to the next question; the member can step back to change an answer, and can leave at any point.
+- 📝 **3.14.6** Each question is answered on one five-point scale, worded close to: *I don't remember this* · *I can recall it slightly* · *I remember it well* · *I haven't fully embodied this yet* · *I experience this daily*. The first two and the fourth indicate a gap; the third and fifth do not. Where a response indicates a gap, the system recommends the chapter the question came from and, where cross-references exist for that chapter's segments (3.9.8), the most related chapters of other teachings beneath it. Recommendations work from day one on the chapter alone and grow richer as 3.9 lands.
+- 📝 **3.14.7** Each recommendation links directly to the relevant recording at the chapter's start timestamp (play from there) and to the chapter's own page (3.22.13).
+- 📝 **3.14.8** Flow Tracker sessions and responses are strictly private to the member. No result is visible to admins or to other members, and nothing aggregates across members.
+- 📝 **3.14.9** There is no score, grade or pass mark. The output is a reading list — *your route back in* — grouped by teaching from the oldest in range forward, so the member reads from where they lost the flow towards today. Each row names the chapter, shows the member's own answer as a quiet label, offers the two links of 3.14.7, nests any related chapters beneath it, and can be ticked off as done. Ticks are the member's own bookkeeping and change nothing else.
+- 📝 **3.14.10** A member can run the Flow Tracker as often as they like. One session is in progress at a time: the Flow Tracker page shows it with a *Continue* control, or a *Start* control when there is none, and starting a new session while one is in progress asks to abandon the current one first. Completed sessions are kept and listed beneath by date, each opening its reading list. A session snapshots the question text and the chapter it points at as asked, so answered items survive later chapter edits; an unanswered item whose chapter no longer exists is dropped from the session.
+- 📝 **3.14.11** Admins curate questions from the admin dashboard (3.19.7) in two places. The generated question is edited in place on the chapter, in the same editor as the chapter's title and summary (3.22.7). A per-tag question bank on the Tags panel (3.19.15) lets admins write questions attached to a tag; a session asks each such question once when its range includes a teaching carrying that tag.
+- 📝 **3.14.12** Questions follow their chapters. Regenerating chapters (3.22.8) regenerates their questions and the confirmation names the questions among what it discards; splitting or merging chapters (3.22.7) regenerates the question of every chapter the edit produced. Editing a chapter's title or summary leaves its question as it is.
 
 ### 📝 3.15 Highlights playlist
 
@@ -478,7 +479,7 @@ Seven rows reach the in-app centre today — 3.17.4, 3.17.6, 3.17.7, 3.17.8, 3.1
 - ✅ **3.19.4** A processing status view showing which recordings are in processing, transcription or generation, which have failed and why each failure happened, with a control to re-run any single step (3.21.2.4). Every run of a step is kept rather than overwritten, so an admin reads the latest attempt and can still see that it was the third. The view refreshes itself while work is in flight and stops asking once nothing is running.
 - 🔨 **3.19.5** Series management (3.3.6), including artwork upload.
 - 📝 **3.19.6** Video creation entry point and generation status (3.11.4.1).
-- 📝 **3.19.7** Questionnaire authoring (3.13.2) and Flow Tracker question bank curation (3.14.11).
+- 📝 **3.19.7** Questionnaire authoring (3.13.2) and Flow Tracker question curation (3.14.11): generated questions edited on the chapter, tag question banks on the Tags panel.
 - ✅ **3.19.8** Announcement composition and broadcast (3.17.15), with the list of past sends — who sent each, when, and how many accounts it reached.
 - ✅ **3.19.9** User management: invitations, role assignment, deactivation and the member list (3.1.3–3.1.7). The list is every account, however it arrived — registered (3.1.15) and invited accounts are one list with one set of controls, because an admin managing roles is not interested in which door somebody came through.
 - 📝 **3.19.10** Audio processing settings and sound profile configuration (3.4.6).
@@ -732,21 +733,23 @@ Mind maps carry no title: the source recording or video title labels them in the
 
 ### 4.12 Flow tracker session
 
-| Field               | Set by         | Notes                                     |
-| :------------------ | :------------- | :---------------------------------------- |
-| Member              | Auto-set       | Strictly private (3.14.8)                 |
-| Divergence point    | User-set       | The teaching they fell behind at (3.14.2) |
-| Questions presented | Auto-assembled | From content and question banks (3.14.4)  |
-| Responses           | User-set       | Never scored (3.14.9)                     |
-| Recommendations     | Auto-generated | Recording plus timestamp links (3.14.7)   |
-| Session status      | Auto-set       | In progress or complete (3.14.10)         |
+| Field               | Set by         | Notes                                                                      |
+| :------------------ | :------------- | :------------------------------------------------------------------------- |
+| Member              | Auto-set       | Strictly private (3.14.8)                                                  |
+| Divergence point    | User-set       | The teaching they fell behind at (3.14.2)                                  |
+| Questions presented | Auto-assembled | One per chapter in range, snapshotted as asked (3.14.3, 3.14.10)           |
+| Responses           | User-set       | Five-point scale, never scored (3.14.6, 3.14.9)                            |
+| Recommendations     | Auto-generated | Gap chapters plus related chapters, recording and timestamp links (3.14.7) |
+| Done marks          | User-set       | Per reading-list row (3.14.9)                                              |
+| Session status      | Auto-set       | In progress, complete or abandoned (3.14.10)                               |
 
-### 4.13 Question bank
+### 4.13 Flow tracker question
 
-| Field     | Set by        | Notes                             |
-| :-------- | :------------ | :-------------------------------- |
-| Scope     | Admin-set     | Attached to a teaching or a tag   |
-| Questions | Admin-written | Feeds the Flow Tracker (3.14.11)  |
+| Field     | Set by                 | Notes                                                              |
+| :-------- | :--------------------- | :----------------------------------------------------------------- |
+| Scope     | Auto-set or Admin-set  | A chapter (or a chapterless recording), or a tag (3.14.4, 3.14.11) |
+| Text      | AI-generated, editable | Written from the chapter's title and summary; admin edits in place |
+| Lifecycle | Auto-set               | Follows its chapter: regenerated with it (3.14.12)                 |
 
 ### 4.14 Highlight entry
 

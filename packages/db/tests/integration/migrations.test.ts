@@ -186,14 +186,18 @@ describe('migrations apply to an empty database by one command', () => {
       // at a note (Apple 1.2, Google Play UGC); the terms acceptance is two columns on `user`.
       // Cross-referencing adds `cross_reference` ([3.9](docs/project/prd.md)) — the derived edge
       // table over segment pairs, a cache of the index rather than content. Push adds
-      // `notification_preference` and `push_subscription`, Highlights adds `highlight`, and
-      // offline sync adds `sync_receipt`.
+      // `notification_preference` and `push_subscription`, Highlights adds `highlight`, offline
+      // sync adds `sync_receipt`, and the Flow Tracker ([3.14](docs/project/prd.md)) adds
+      // `flow_question`, `flow_session` and `flow_session_item`.
       expect(tables.map((row) => row.tablename)).toEqual([
         'account_deletion_request',
         'announcement',
         'chapter',
         'cross_reference',
         'embedding',
+        'flow_question',
+        'flow_session',
+        'flow_session_item',
         'highlight',
         'invitation',
         'job',

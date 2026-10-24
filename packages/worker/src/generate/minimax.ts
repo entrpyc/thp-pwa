@@ -11,6 +11,9 @@ import {
   type GenerationSpend,
   type Generator,
   type ProposedChapter,
+  type ProposedReflection,
+  type ReflectionRequest,
+  type ReflectionResult,
 } from './generator';
 import {
   CHAPTER_PROMPT_VERSION,
@@ -19,8 +22,13 @@ import {
   CHAPTER_TOOL_SCHEMA,
   DRAFT_TOOL_NAME,
   PROMPT_VERSION,
+  REFLECTION_PROMPT_VERSION,
+  REFLECTION_SYSTEM_PROMPT,
+  REFLECTION_TOOL_NAME,
+  REFLECTION_TOOL_SCHEMA,
   SYSTEM_PROMPT,
   buildChapterUserPrompt,
+  buildReflectionUserPrompt,
   buildToolSchema,
   buildUserPrompt,
 } from './prompt';
@@ -174,7 +182,96 @@ export function miniMaxGenerator(options: MiniMaxOptions = {}): Generator {
     async segmentChapters(request: ChapterRequest): Promise<ChapterResult> {
       return mapChapterResponse(await call(buildChapterRequestBody(request)));
     },
+
+    async writeReflections(request: ReflectionRequest): Promise<ReflectionResult> {
+      return mapReflectionResponse(await call(buildReflectionRequestBody(request)));
+    },
   };
+}
+
+/**
+ * The body of a reflection call ([3.14.4](docs/project/prd.md)): the chapter titles and summaries,
+ * never the transcript, and the forced tool. Chapter-sized output is enough — a question is a
+ * sentence or two per subject.
+ *
+ * Exported so a unit test can assert what one call asks for without a transport in the way.
+ */
+export function buildReflectionRequestBody(request: ReflectionRequest): Record<string, unknown> {
+  return {
+    model: MINIMAX_MODEL,
+    max_tokens: MINIMAX_MAX_CHAPTER_TOKENS,
+    system: REFLECTION_SYSTEM_PROMPT,
+    messages: [{ role: 'user', content: buildReflectionUserPrompt(request) }],
+    tools: [
+      {
+        name: REFLECTION_TOOL_NAME,
+        description: 'Record one self-reflection question per part of this teaching.',
+        input_schema: REFLECTION_TOOL_SCHEMA,
+      },
+    ],
+    tool_choice: { type: 'tool', name: REFLECTION_TOOL_NAME },
+  };
+}
+
+/**
+ * A reflection call's response, turned into the port's answer.
+ *
+ * **A prose answer fails**, as a prose chapter list does. **A question under a key nobody asked
+ * for is kept** — the handler matches keys and ignores the rest — and a blank question is dropped
+ * here rather than written, because a question with no words is not a question a member can be
+ * asked. Which subjects came back without one is the handler's question, and it fails the job
+ * naming them.
+ */
+export function mapReflectionResponse(body: string): ReflectionResult {
+  let parsed: unknown;
+  try {
+    parsed = JSON.parse(body);
+  } catch (cause) {
+    throw new GenerationError('The generation provider answered with something that is not JSON', {
+      cause,
+    });
+  }
+
+  const response = parsed as MiniMaxResponse;
+  const call = (response.content ?? []).find(
+    (block) => block.type === 'tool_use' && block.name === REFLECTION_TOOL_NAME,
+  );
+
+  if (!call || typeof call.input !== 'object' || call.input === null) {
+    throw new GenerationError(
+      `The generation provider answered without calling ${REFLECTION_TOOL_NAME}, so there are no ` +
+        'questions to record. Run this step again.',
+    );
+  }
+
+  const proposed = (call.input as Record<string, unknown>)['reflections'];
+  if (!Array.isArray(proposed)) {
+    throw new GenerationError(
+      'The generation provider answered the questions as something other than a list, so there ' +
+        'is nothing structured to record. Run this step again.',
+    );
+  }
+
+  const reflections: ProposedReflection[] = [];
+  for (const entry of proposed) {
+    if (typeof entry !== 'object' || entry === null) {
+      throw new GenerationError(
+        'The generation provider answered with a question that is not an object. Run this step again.',
+      );
+    }
+    const { key, question } = entry as Record<string, unknown>;
+    if (typeof key !== 'string' || typeof question !== 'string') {
+      throw new GenerationError(
+        'The generation provider answered with a question missing its key or its text. Run this ' +
+          'step again.',
+      );
+    }
+    const text = question.trim();
+    if (text === '') continue;
+    reflections.push({ key: key.trim(), question: text });
+  }
+
+  return { reflections, promptVersion: REFLECTION_PROMPT_VERSION, spend: spendOf(response) };
 }
 
 /**

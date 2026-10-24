@@ -3,14 +3,18 @@
 import Link from 'next/link';
 import { useState } from 'react';
 import {
+  MAX_FLOW_QUESTION_LENGTH,
   chapterMergePath,
   chapterPagePath,
   chapterPath,
+  chapterQuestionPath,
   chapterSplitPath,
   filterChapters,
   formatTimecode,
+  type ChapterQuestionPayload,
   type ChapterView,
   type ChapterWritePayload,
+  type SetFlowQuestionRequest,
 } from '@thp/shared';
 import { ApiClientError, apiFetch } from '@/client/api-client';
 import { track } from '@/client/observability/analytics';
@@ -99,6 +103,40 @@ export function ChaptersPanel({
           : 'That change could not be saved. Check your connection and try again.',
       );
     }
+  }
+
+  /**
+   * An edit that also rewrote the Flow Tracker question ([3.14.11](docs/project/prd.md)) writes
+   * the question first — its own sub-resource — and then the chapter, whose answer is the whole list
+   * with the new question on it. A question left as it was is not sent: the step that fills missing
+   * questions never touches one an admin has not either.
+   */
+  async function writeEdit(
+    chapter: ChapterView,
+    values: { title: string; summary: string; startMs: number; question: string },
+  ): Promise<void> {
+    const question = values.question.trim();
+    if (question !== (chapter.question ?? '')) {
+      setFailure(null);
+      try {
+        const body: SetFlowQuestionRequest = { text: question };
+        await apiFetch<ChapterQuestionPayload>(chapterQuestionPath(chapter.id), {
+          method: 'PUT',
+          credentials: 'include',
+          headers: { 'content-type': 'application/json' },
+          body: JSON.stringify(body),
+        });
+      } catch (caught: unknown) {
+        setFailure(
+          caught instanceof ApiClientError
+            ? caught.message
+            : 'The question could not be saved. Check your connection and try again.',
+        );
+        return;
+      }
+    }
+    const { title, summary, startMs } = values;
+    await write(chapterPath(chapter.id), 'PUT', { title, summary, startMs });
   }
 
   return (
@@ -223,7 +261,8 @@ export function ChaptersPanel({
                   legend="Edit this chapter"
                   submitLabel="Save"
                   currentMs={content.positionMs}
-                  onSubmit={(values) => void write(chapterPath(chapter.id), 'PUT', values)}
+                  withQuestion
+                  onSubmit={(values) => void writeEdit(chapter, values)}
                 />
               ) : null}
 
@@ -271,6 +310,7 @@ function ChapterForm({
   submitLabel,
   currentMs,
   blank = false,
+  withQuestion = false,
   onSubmit,
 }: {
   chapter: ChapterView;
@@ -279,18 +319,24 @@ function ChapterForm({
   /** Where the player is now, so *use the current position* has something to read. */
   currentMs: number;
   blank?: boolean;
-  onSubmit: (values: { title: string; summary: string; startMs: number }) => void;
+  /**
+   * Whether to offer the Flow Tracker question ([3.14.11](docs/project/prd.md)). On an edit only:
+   * a split's new chapter has no question yet, and the step writes it once the split lands.
+   */
+  withQuestion?: boolean;
+  onSubmit: (values: { title: string; summary: string; startMs: number; question: string }) => void;
 }) {
   const [title, setTitle] = useState(blank ? '' : chapter.title);
   const [summary, setSummary] = useState(blank ? '' : chapter.summary);
   const [startMs, setStartMs] = useState(blank ? currentMs : chapter.startMs);
+  const [question, setQuestion] = useState(chapter.question ?? '');
 
   return (
     <form
       className={styles.form}
       onSubmit={(event) => {
         event.preventDefault();
-        onSubmit({ title, summary, startMs });
+        onSubmit({ title, summary, startMs, question });
       }}
     >
       <fieldset className={styles.fields}>
@@ -315,6 +361,22 @@ function ChapterForm({
             onChange={(event) => setSummary(event.target.value)}
           />
         </label>
+
+        {withQuestion ? (
+          <label className={styles.field}>
+            <span className={styles.fieldLabel}>
+              Flow Tracker question
+              {chapter.question === null ? ' (not generated yet — write one, or leave it blank)' : ''}
+            </span>
+            <textarea
+              className={styles.textarea}
+              rows={2}
+              maxLength={MAX_FLOW_QUESTION_LENGTH}
+              value={question}
+              onChange={(event) => setQuestion(event.target.value)}
+            />
+          </label>
+        ) : null}
 
         <label className={styles.field}>
           <span className={styles.fieldLabel}>Starts at (milliseconds)</span>
