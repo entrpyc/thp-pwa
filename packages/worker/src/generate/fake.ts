@@ -4,6 +4,7 @@ import {
   TARGET_CHAPTER_MS,
   chaptersThatFit,
   type ProposedCitation,
+  type ProposedMindMap,
 } from '@thp/shared';
 import { readGenerateFakeScriptPath, type EnvSource } from './env';
 import {
@@ -47,7 +48,10 @@ export interface FakeGeneratorCalls {
  * paragraph for a text field, a list of proposed citations for a list-shaped one.
  */
 export type FakeDraftScript = Readonly<
-  Record<string, string | readonly ProposedCitation[] | readonly FakeChapterText[]>
+  Record<
+    string,
+    string | readonly ProposedCitation[] | readonly FakeChapterText[] | ProposedMindMap
+  >
 >;
 
 /**
@@ -152,6 +156,17 @@ export function fakeGenerator(script: FakeDraftScript): FakeGenerator {
           continue;
         }
 
+        if (field.shape === 'tree') {
+          // A tree the script says nothing about is **built from the transcript** rather than
+          // refused: every chain run produces a map, and a fixture written before maps existed
+          // should keep producing one. A script that does name one has to name a tree.
+          if (value !== undefined && (typeof value !== 'object' || Array.isArray(value))) {
+            throw new GenerationError(`the fake script's ${field.name} is not a tree of themes`);
+          }
+          drafts[kind] = (value as ProposedMindMap | undefined) ?? treeFromLines(request);
+          continue;
+        }
+
         if (typeof value !== 'string' || value.trim() === '') {
           throw new GenerationError(
             `the fake script has no ${field.name} in it, and one was asked for`,
@@ -184,6 +199,27 @@ export function fakeGenerator(script: FakeDraftScript): FakeGenerator {
 }
 
 /** Build the fake from the file `GENERATE_FAKE_SCRIPT` names. */
+/**
+ * A small, deterministic map read off the transcript: up to three themes, one per line from the
+ * start, middle and end of the teaching, each carrying the line's offset and one point under it.
+ * Enough for a screen to draw and a test to expand; nothing a fixture has to say.
+ */
+function treeFromLines(request: GenerationRequest): ProposedMindMap {
+  const lines = request.lines;
+  const picks = [0, Math.floor(lines.length / 2), lines.length - 1]
+    .filter((index, at, all) => index >= 0 && all.indexOf(index) === at)
+    .map((index) => lines[index])
+    .filter((line): line is NonNullable<typeof line> => line !== undefined);
+
+  return {
+    themes: picks.map((line, index) => ({
+      label: `Theme ${index + 1}`,
+      anchorMs: line.startMs,
+      points: [{ label: line.text.slice(0, 60), anchorMs: line.startMs }],
+    })),
+  };
+}
+
 export function fakeGeneratorFromEnv(env: EnvSource = process.env): FakeGenerator {
   const path = readGenerateFakeScriptPath(env);
   let script: FakeDraftScript;

@@ -183,7 +183,7 @@ It is built as a Progressive Web App on a single codebase, reachable from any br
 - ✅ **3.7.9** Verse text is drawn from one free-to-use translation, named in deployment configuration rather than in code. The product holds one translation at a time and offers a member no choice between translations; the translation in use is named wherever its verse text is read, so nobody has to guess which words they are looking at.
 - ✅ **3.7.10** A reference carries the position in the recording where the passage is cited, which is what scopes a citation to the chapter it falls in (3.22.14) and what will later let a member reach the moment it was spoken. It is optional: a reference an admin added by hand (3.7.2), or one the transcript gave no position for, carries none and belongs to the recording rather than to any chapter.
 
-### 📝 3.8 Mind maps
+### 🔨 3.8 Mind maps
 
 *Visual, interconnected representations of a teaching's concepts. Two distinct kinds: curated maps that belong to a recording, and personal maps that belong to a member.*
 
@@ -191,10 +191,10 @@ It is built as a Progressive Web App on a single codebase, reachable from any br
 
 *Recording mind maps*
 
-- 📝 **3.8.1** A mind map is automatically generated for each recording from its transcript (3.5).
-- 📝 **3.8.2** Admins and Contributors can edit and curate a recording's mind map — renaming nodes, removing them, and adjusting relationships — before it is visible to members.
-- 📝 **3.8.3** The recording mind map is visual and interactive: members can expand, collapse and navigate between concept nodes.
-- 📝 **3.8.4** Nodes that correspond to a moment in the teaching link to that timestamp in the recording.
+- ✅ **3.8.1** A mind map is automatically generated for each recording from its transcript (3.5). It is a strict tree three levels deep — the teaching, its themes, and the points under each theme — capped at eight themes and six points a theme so that a ninety-minute teaching still fits a phone; what the model proposes beyond that is dropped and counted on the job that proposed it. It is a fourth kind of review item (4.17.6), generated in the same call as the summary and the scripture references, and regenerated with them when a transcript is corrected (3.5.6).
+- ✅ **3.8.2** Admins and Contributors can edit and curate a recording's mind map — renaming nodes, removing them, and adjusting relationships — before it is visible to members. The curation happens in the review form, on the same canvas a member will see: rename a node in place, remove it with its subtree, move it under another node, add a point under a theme. Approving publishes the tree as drawn; nothing reaches a member until then, and the same depth and breadth caps the generator keeps are refused rather than trimmed on approval.
+- ✅ **3.8.3** The recording mind map is visual and interactive: members can expand, collapse and navigate between concept nodes. It is a horizontal tree, root at the left, opening with the teaching and its themes on screen and the points folded away under a count; a theme opens on a press, the canvas pans by touch or by dragging, and a full-screen control gives the same canvas the whole viewport. It is the `Mindmap` tab of the recording page, drawn only for a teaching whose map an admin has approved.
+- ✅ **3.8.4** Nodes that correspond to a moment in the teaching link to that timestamp in the recording. A placed node carries a timecode chip; pressing it goes to the moment **without starting playback**, as selecting a transcript line does (3.5.4).
 
 *Personal mind maps*
 
@@ -791,7 +791,7 @@ An announcement (3.17.9, 3.17.17) is kept once as a record of the send — kind,
 - ✅ **4.17.3** Nothing publishes automatically. An admin must confirm before a recording goes live (3.2.2, 3.21.2.2).
 - 📝 **4.17.4** Back-catalogue batches follow the bulk review path defined at 3.21.3.4.
 - ✅ **4.17.5** Every AI-suggested field records that it was AI-suggested and whether an admin changed it, alongside the model, model version and prompt version that produced it and any steering prompt used (3.6.14).
-- ✅ **4.17.6** Every AI artefact awaiting review is the same kind of item, distinguished by what kind of artefact it holds. Summary and description are the two kinds today; scripture references, mind maps and video scripts become further kinds of the same item rather than queues of their own, which is what keeps 3.19.2 one queue and one review form however many artefacts the pipeline learns to produce.
+- ✅ **4.17.6** Every AI artefact awaiting review is the same kind of item, distinguished by what kind of artefact it holds. Summary, description, scripture references and the mind map (3.8.1) are the four kinds today; video scripts become a further kind of the same item rather than a queue of its own, which is what keeps 3.19.2 one queue and one review form however many artefacts the pipeline learns to produce. The form renders each by the *shape* of its field — a paragraph, a list, a tree — never by which artefact it is.
 
 ### 4.18 Pipeline job
 

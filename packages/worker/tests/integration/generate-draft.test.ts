@@ -56,6 +56,22 @@ const DRAFT = {
     { book: 'Romans', chapter: 8, verseStart: 1, verseEnd: 4 },
     { book: 'Hezekiah', chapter: 2, verseStart: 1, verseEnd: 1 },
   ],
+  // The tree as a model proposes it: themes with points, offsets copied from the lines. One blank
+  // point and one point nested under a point, so a run's ordinary answer exercises the dropping.
+  mindMap: {
+    themes: [
+      {
+        label: 'Picking up the second chapter',
+        anchorMs: 4000,
+        points: [
+          { label: 'Where the letter left off', anchorMs: 0 },
+          { label: '   ' },
+          { label: 'Slowed down phrase by phrase', points: [{ label: 'too deep' }] },
+        ],
+      },
+      { label: 'A closing charge', points: [] },
+    ],
+  },
 };
 
 /**
@@ -188,6 +204,80 @@ beforeEach(() => {
   captured = [];
   restoreSink = setLogSink((line) => captured.push(line));
   return () => restoreSink();
+});
+
+describe('the mind map draft ([3.8.1](docs/project/prd.md))', () => {
+  it('writes a tree-shaped draft: the title as root, themes under it, points under them', async () => {
+    const job = await claimedJob();
+
+    const row = await run(job);
+    expect(row.status).toBe('succeeded');
+
+    const item = (await items(job.recordingId)).find((one) => one.kind === 'mind_map');
+    expect(item?.status).toBe('draft');
+    const tree = (item?.fields as { mindMap: { label: string; anchorMs: number | null; children: { label: string; anchorMs: number | null; children: { label: string; anchorMs: number | null; children: unknown[] }[] }[] } }).mindMap;
+    expect(tree.label).toBe(`Teaching ${recordings}`);
+    expect(tree.anchorMs).toBeNull();
+    expect(tree.children.map((one) => [one.label, one.anchorMs])).toEqual([
+      ['Picking up the second chapter', 4000],
+      ['A closing charge', null],
+    ]);
+    // The blank point is gone; the nested point is kept as a leaf, its own child dropped.
+    expect(tree.children[0]?.children.map((one) => [one.label, one.anchorMs])).toEqual([
+      ['Where the letter left off', 0],
+      ['Slowed down phrase by phrase', null],
+    ]);
+    expect(tree.children[0]?.children.every((one) => one.children.length === 0)).toBe(true);
+
+    // What did not fit is a number on the run, beside the citations' numbers.
+    expect(row.providerMeta).toMatchObject({ mindMapNodesDropped: 2 });
+    expect(captured.filter((line) => line.message === 'generate_draft.mind_map_nodes_discarded')).toEqual(
+      [expect.objectContaining({ dropped: 2 })],
+    );
+  });
+
+  it('still writes a map for a script that says nothing about one, read off the transcript', async () => {
+    const { mindMap: _omitted, ...withoutMap } = DRAFT;
+    const job = await claimedJob({ segments: ['One.', 'Two.', 'Three.'] });
+
+    await run(job, fakeGenerator(withoutMap));
+
+    const item = (await items(job.recordingId)).find((one) => one.kind === 'mind_map');
+    const tree = (item?.fields as { mindMap: { children: { anchorMs: number | null }[] } }).mindMap;
+    expect(tree.children.length).toBeGreaterThan(0);
+    expect(tree.children[0]?.anchorMs).toBe(0);
+  });
+
+  it('fails the job and writes nothing when the tree comes back as prose', async () => {
+    const job = await claimedJob();
+    const prose: Generator = {
+      ...neverSegments,
+      name: 'prose',
+      generate: async () => ({
+        drafts: {
+          summary: DRAFT.summary,
+          recording_metadata: DRAFT.description,
+          scripture: [],
+          mind_map: 'Grace, then law, then hope.',
+        },
+        promptVersion: 'draft-2',
+        spend: {
+          model: 'prose',
+          modelVersion: 'prose-1',
+          inputTokens: 0,
+          outputTokens: 0,
+          costUsd: 0,
+          requestId: 'prose-2',
+        },
+      }),
+    };
+
+    const row = await run(job, prose);
+
+    expect(row.status).toBe('failed');
+    expect(row.error).toContain('tree of themes');
+    expect(await items(job.recordingId)).toHaveLength(0);
+  });
 });
 
 describe('one call, two drafts', () => {
