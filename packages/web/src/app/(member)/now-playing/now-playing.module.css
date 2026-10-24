@@ -91,8 +91,7 @@
 
 /* Above the art and the shade, so the close control takes the press rather than the picture. */
 .heroTop,
-.heroBody,
-.heroChapter {
+.heroBody {
   position: relative;
 }
 
@@ -153,16 +152,6 @@
 /* A pause in the voice: the last line stays, held rather than current. */
 .captionDim {
   opacity: 0.5;
-}
-
-/* The chapter playing, small at the foot of the hero, where a video player prints its title. */
-.heroChapter {
-  margin: 0;
-  padding: 0 var(--space-6) var(--space-5);
-  text-align: center;
-  color: var(--color-text-muted);
-  font-size: var(--fs-body);
-  font-weight: 500;
 }
 
 /* The one line this view says for itself, in the tone every other quiet line in the product takes. */
@@ -279,4 +268,73 @@
   font-size: var(--fs-body);
   white-space: pre-wrap;
   overflow-wrap: anywhere;
+}
+
+/* ---- the chapter playing ------------------------------------------------------------------- */
+
+/*
+ * The chapter playing now, as its own block under the hero rather than a line at the hero's foot:
+ * it is a destination as much as a label, and a destination is a card. The guide's standard card,
+ * with the whole of it the link to the chapter's page — the same shape as a note card beneath it,
+ * so the row of blocks reads as one list of things about this moment.
+ */
+.chapterBlock {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-3);
+}
+
+.chapterLink {
+  display: flex;
+  align-items: center;
+  gap: var(--space-4);
+  background: var(--color-surface);
+  border: 1px solid var(--color-primary-strong);
+  border-radius: var(--radius-md);
+  padding: var(--space-4) var(--space-5);
+  color: inherit;
+  text-decoration: none;
+}
+
+.chapterLink:hover {
+  background: var(--color-primary-soft);
+}
+
+.chapterLink:hover .chapterName {
+  text-decoration: underline;
+}
+
+.chapterText {
+  flex: 1;
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-1);
+}
+
+/* "Chapter 3 · Playing now" — the meta line, in the accent so it reads as the live one. */
+.chapterKicker {
+  color: var(--color-primary-strong);
+  font-size: var(--fs-meta);
+  font-weight: 500;
+}
+
+.chapterName {
+  color: var(--color-text);
+  font-size: var(--fs-card-title);
+  font-weight: 600;
+  overflow-wrap: anywhere;
+}
+
+.chapterSpan {
+  color: var(--color-text-muted);
+  font-size: var(--fs-meta);
+  font-variant-numeric: tabular-nums;
+}
+
+/* The chevron that says the card goes somewhere, as the library rows draw theirs. */
+.chapterChevron {
+  flex: none;
+  color: var(--color-text-muted);
+  font-size: var(--fs-card-title);
 }

@@ -921,3 +921,14 @@
   font-size: var(--fs-body);
   color: var(--color-text-muted);
 }
+
+/*
+ * The card the address names — a member arrived here from a link to this note, so it is marked the
+ * way the product marks *this one* everywhere else: the accent outline. Nothing else about the
+ * card changes, and the mark goes when the address does.
+ */
+.note:target,
+.reply:target {
+  border-color: var(--color-primary-strong);
+  box-shadow: 0 0 0 1px var(--color-primary-strong);
+}

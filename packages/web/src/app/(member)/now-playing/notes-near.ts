@@ -1,16 +1,15 @@
 import type { NoteView } from '@thp/shared';
 
 /**
- * How far ahead of the playhead a note is shown, and how long it stays once its moment has passed.
+ * How far either side of the playhead a timestamped item is shown on the now-playing view.
  *
- * The window **looks forward**: a note on the now-playing view is a heads-up about what is coming
- * rather than a record of what was said. Two minutes ahead is long enough to read it before the
- * voice reaches the moment; a quarter of a minute after is long enough to see that the moment has
- * arrived and no longer, so the row keeps turning over as the teaching plays rather than filling up
- * behind it.
+ * The window is **symmetrical**: two minutes ahead, so a note is read before the voice reaches its
+ * moment, and two minutes behind, so a member who looks down after hearing something said still
+ * finds what was written about it. A shorter tail turned the row over faster, and turned it over
+ * before anyone had finished reading.
  */
 export const NOTE_LOOKAHEAD_MS = 120_000;
-export const NOTE_LINGER_MS = 15_000;
+export const NOTE_LINGER_MS = 120_000;
 
 /**
  * The notes anchored near `nowMs`, soonest first.

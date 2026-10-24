@@ -208,9 +208,9 @@ describe('the Chapters tool in the transport menu', () => {
       expect(await sheet(page).count()).toBe(0);
       await openTools(page);
 
-      // Three tools now, where the strip held two: the list icon joins the speech bubble and CC.
-      // Chapters, the Highlights pin, the composer and CC.
-      expect(await toolbar(page).getByRole('button').count()).toBe(4);
+      // Three tools, where the strip held two: the list icon joins the speech bubble and CC.
+      // Chapters, the composer and CC — the Highlights pin has its own slot on the bar.
+      expect(await toolbar(page).getByRole('button').count()).toBe(3);
       const tool = toolbar(page).getByRole('button', { name: 'Chapters' });
       expect(await tool.count()).toBe(1);
       expect(await tool.getAttribute('aria-pressed')).toBe('false');
@@ -236,7 +236,7 @@ describe('the Chapters tool in the transport menu', () => {
 
       // At the start of the teaching the first chapter is the one playing, and it is the one marked.
       expect(
-        await sheet(page).getByRole('button', { name: /The vine/ }).getAttribute('aria-current'),
+        await sheet(page).getByRole('link', { name: /The vine/ }).getAttribute('aria-current'),
       ).toBe('true');
       expect(await sheet(page).locator('[aria-current="true"]').count()).toBe(1);
 
@@ -262,8 +262,8 @@ describe('the Chapters tool in the transport menu', () => {
     try {
       await openTools(page);
       // The two tools the strip held before, so this is the menu having decided rather than failed.
-      // The Highlights pin, the composer and CC — no Chapters.
-      expect(await toolbar(page).getByRole('button').count()).toBe(3);
+      // The composer and CC — no Chapters.
+      expect(await toolbar(page).getByRole('button').count()).toBe(2);
       expect(await toolbar(page).getByRole('button', { name: 'Chapters' }).count()).toBe(0);
       expect(await sheet(page).count()).toBe(0);
     } finally {
@@ -271,35 +271,29 @@ describe('the Chapters tool in the transport menu', () => {
     }
   }, 180_000);
 
-  it('seeks to the chapter’s start and plays from a row, then puts the sheet away', async () => {
+  it('opens the chapter’s page from a row and puts the sheet away, without starting playback', async () => {
     const page = await openTeaching(chapteredId);
     try {
       expect((await audioState(page)).paused).toBe(true);
       await openSheet(page);
 
-      await sheet(page).getByRole('button', { name: /The gardener/ }).click();
+      const row = sheet(page).getByRole('link', { name: /The gardener/ });
+      const href = (await row.getAttribute('href')) ?? '';
+      expect(href.startsWith(`${recordingPagePath(chapteredId)}/chapters/`)).toBe(true);
+      await row.click();
 
       // The sheet is gone — a member who chose a chapter has finished choosing.
       await expect.poll(() => sheet(page).count(), { timeout: 30_000 }).toBe(0);
 
-      // Playing, from the chapter rather than from the beginning (3.22.12).
+      // On the chapter's page (3.22.12), which names the chapter as its title.
+      await page.waitForURL(`${baseUrl}${href}`, { timeout: 30_000 });
       await expect
-        .poll(async () => (await audioState(page)).paused, { timeout: 30_000 })
-        .toBe(false);
-      await expect
-        .poll(async () => (await audioState(page)).currentTime, { timeout: 30_000 })
-        .toBeGreaterThan((2 * CHAPTER_MS) / 1000);
-
-      // And the bar's second line now names where it landed (3.22.16).
-      await expect
-        .poll(async () => (await bar(page).textContent()) ?? '', { timeout: 30_000 })
+        .poll(() => page.getByRole('heading', { level: 1 }).textContent(), { timeout: 30_000 })
         .toContain('The gardener');
 
-      // Still on the recording page, and its Chapters tab was never opened.
-      expect(page.url()).toBe(`${baseUrl}${recordingPagePath(chapteredId)}`);
-      expect(
-        await page.getByRole('tab', { name: 'Chapters' }).getAttribute('aria-selected'),
-      ).toBe('false');
+      // Not playing, and not moved: a member who tapped a chapter has not asked for sound.
+      expect((await audioState(page)).paused).toBe(true);
+      expect((await audioState(page)).currentTime).toBe(0);
     } finally {
       await page.context().close();
     }
@@ -317,10 +311,10 @@ describe('the Chapters tool in the transport menu', () => {
 
       await openSheet(page);
       expect(
-        await sheet(page).getByRole('button', { name: /The gardener/ }).getAttribute('aria-current'),
+        await sheet(page).getByRole('link', { name: /The gardener/ }).getAttribute('aria-current'),
       ).toBe('true');
       expect(
-        await sheet(page).getByRole('button', { name: /The vine/ }).getAttribute('aria-current'),
+        await sheet(page).getByRole('link', { name: /The vine/ }).getAttribute('aria-current'),
       ).toBeNull();
       expect(await sheet(page).locator('[aria-current="true"]').count()).toBe(1);
     } finally {
@@ -332,28 +326,25 @@ describe('the Chapters tool in the transport menu', () => {
    * The whole point of a quick action on a bar that travels (3.2.14): a chapter is reachable from a
    * screen that has no chapters on it, and reaching it does not take the member away.
    */
-  it('works from another screen, and stays there', async () => {
+  it('works from another screen, and takes the member to the chapter', async () => {
     const page = await openTeaching(chapteredId);
     try {
       await leaveForTheLibrary(page);
       expect(await page.getByRole('tab', { name: 'Chapters' }).count()).toBe(0);
 
       await openSheet(page);
-      await sheet(page).getByRole('button', { name: /The branches/ }).click();
+      const row = sheet(page).getByRole('link', { name: /The branches/ });
+      const href = (await row.getAttribute('href')) ?? '';
+      await row.click();
       await expect.poll(() => sheet(page).count(), { timeout: 30_000 }).toBe(0);
 
+      // On the chapter's page, with the same teaching still on the bar, still paused.
+      await page.waitForURL(`${baseUrl}${href}`, { timeout: 30_000 });
       await expect
-        .poll(async () => (await audioState(page)).paused, { timeout: 30_000 })
-        .toBe(false);
-      await expect
-        .poll(async () => (await audioState(page)).currentTime, { timeout: 30_000 })
-        .toBeGreaterThan(CHAPTER_MS / 1000);
-      await expect
-        .poll(async () => (await bar(page).textContent()) ?? '', { timeout: 30_000 })
+        .poll(() => page.getByRole('heading', { level: 1 }).textContent(), { timeout: 30_000 })
         .toContain('The branches');
-
-      // Still in the library — nothing navigated.
-      expect(page.url()).toBe(`${baseUrl}${MEMBER_LIBRARY_PAGE_PATH}`);
+      expect((await bar(page).textContent()) ?? '').toContain(CHAPTERED_TITLE);
+      expect((await audioState(page)).paused).toBe(true);
     } finally {
       await page.context().close();
     }

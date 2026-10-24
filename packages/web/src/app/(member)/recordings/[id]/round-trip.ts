@@ -160,3 +160,19 @@ export function arrivedFromList(recordingId: string, chapterId: string): boolean
   writeEntry({ [FROM_LIST_KEY]: true });
   return true;
 }
+
+/** The id a note's card carries wherever the notes panel draws it — the fragment that finds it. */
+export function noteCardId(noteId: string): string {
+  return `note-${noteId}`;
+}
+
+/**
+ * The address of one note: the teaching's page with its Notes tab open, scrolled to the card.
+ *
+ * The fragment is the card's own id, so the browser's jump lands on it when the list is already in
+ * the document, and the notes panel makes the same jump itself when the list arrives afterwards —
+ * which is the case for every arrival from another screen, since the list is fetched on mount.
+ */
+export function noteHref(recordingId: string, noteId: string): string {
+  return `${recordingTabHref(recordingId, 'notes')}#${noteCardId(noteId)}`;
+}

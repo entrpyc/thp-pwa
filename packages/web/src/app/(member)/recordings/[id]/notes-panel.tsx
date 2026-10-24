@@ -21,6 +21,7 @@ import {
 import { ApiClientError, apiFetch } from '@/client/api-client';
 import { track } from '@/client/observability/analytics';
 import { useRecordingContent } from './recording-content';
+import { noteCardId } from './round-trip';
 import { CharacterCount, NoteComposer } from './note-composer';
 import { ImageAttach, ImageAttachAdd, useImageAttachments } from './image-attach';
 import { NoteImages } from './note-images';
@@ -109,6 +110,26 @@ export function NotesPanel({
     releaseComposerAnchor();
     return () => releaseComposerAnchor();
   }, [releaseComposerAnchor]);
+
+  /**
+   * **A note named in the address is scrolled into view** once its card is in the document.
+   *
+   * The now-playing view links a note as `?tab=notes#note-{id}` (`round-trip.ts`). The browser's
+   * own jump to a fragment happens at navigation, when this list has not been fetched yet and the
+   * card does not exist — so the jump is made here, after the render that drew the card. Once per
+   * fragment: the list re-renders on every write, and a member who scrolled away must not be
+   * dragged back to the note on their next reply. A fragment naming a note that is not in this
+   * list — filtered out, scoped out of a chapter, or gone — scrolls nowhere.
+   */
+  const scrolledTo = useRef<string | null>(null);
+  useEffect(() => {
+    const fragment = window.location.hash.slice(1);
+    if (fragment === '' || scrolledTo.current === fragment) return;
+    const card = document.getElementById(fragment);
+    if (card === null || !card.closest(`.${styles.panel}`)) return;
+    scrolledTo.current = fragment;
+    card.scrollIntoView({ block: 'center' });
+  });
 
   /**
    * Whatever the content source is holding, rendered as-is.
@@ -219,11 +240,6 @@ export function NotesPanel({
   );
 }
 
-/** The card's own id, so a note is addressable in the document it is rendered into. */
-function cardId(noteId: string): string {
-  return `note-${noteId}`;
-}
-
 /**
  * Whether this note belongs in the current list.
  *
@@ -283,7 +299,7 @@ function NoteCard({ note, canModerate }: CardProps) {
    * admin-removed note sees exactly this, like everyone else.
    */
   return (
-    <li className={className} id={cardId(note.id)}>
+    <li className={className} id={noteCardId(note.id)}>
       {note.deleted ? (
         <>
           {note.timestampMs === null ? null : <TimeLink note={note} />}

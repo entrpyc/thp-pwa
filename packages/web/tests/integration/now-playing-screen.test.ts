@@ -7,6 +7,7 @@ import {
   NOW_PLAYING_PAGE_PATH,
   REVIEW_FIELD,
   ROLE,
+  chapterPagePath,
   formatCitation,
   recordingPagePath,
   recordingPlaybackPath,
@@ -18,6 +19,7 @@ import {
   insertNote,
   insertRecording,
   insertSeries,
+  replaceChapters,
   replaceOpenDrafts,
   replaceScriptureReferences,
   replaceTranscript,
@@ -70,6 +72,11 @@ const EARLY_NOTE_MS = 10_000;
 const LATE_NOTE_MS = 50_000;
 const EARLY_NOTE_TEXT = `Early note ${RUN}`;
 const LATE_NOTE_TEXT = `Late note ${RUN}`;
+/** The covered teaching's two chapters, halving the minute — so a seek can move between them. */
+const CHAPTER_MS = 30_000;
+const FIRST_CHAPTER_TITLE = `Opening chapter ${RUN}`;
+const SECOND_CHAPTER_TITLE = `Closing chapter ${RUN}`;
+const GENERATED = { model: 'fake', modelVersion: 'fake-1', promptVersion: 'chapters-1' };
 
 const COVERED_TITLE = `Now playing covered ${RUN}`;
 const LOOSE_TITLE = `Now playing loose ${RUN}`;
@@ -114,6 +121,7 @@ let handle: DatabaseHandle;
 let member: TestAccount;
 let coveredId: string;
 let looseId: string;
+let earlyNoteId: string;
 
 interface Snapshot {
   readonly currentTime: number;
@@ -254,11 +262,22 @@ beforeAll(async () => {
     [EARLY_NOTE_MS, EARLY_NOTE_TEXT],
     [LATE_NOTE_MS, LATE_NOTE_TEXT],
   ] as const) {
-    await insertNote(
+    const row = await insertNote(
       { recordingId: coveredId, authorId: member.id, visibility: 'public', text, timestampMs },
       handle,
     );
+    if (timestampMs === EARLY_NOTE_MS) earlyNoteId = row.id;
   }
+  // Two chapters, so the view has a chapter to name and a second one to move to.
+  await replaceChapters(
+    coveredId,
+    [
+      { startMs: 0, title: FIRST_CHAPTER_TITLE, summary: 'How it opens.' },
+      { startMs: CHAPTER_MS, title: SECOND_CHAPTER_TITLE, summary: 'How it closes.' },
+    ],
+    GENERATED,
+    handle,
+  );
   await replaceScriptureReferences(coveredId, APPROVED, handle);
   // Open, and left open: an approval is the only thing that puts a citation in front of a member.
   await replaceOpenDrafts(
@@ -616,6 +635,7 @@ describe('the words being spoken are written across the hero', () => {
 describe('the notes near this moment sit under the hero', () => {
   const notesRow = (page: Page): Locator =>
     page.getByRole('region', { name: 'Notes near this moment' });
+  const heroCaption = (page: Page): Locator => view(page).locator('[aria-live="polite"]');
 
   // Two minutes ahead is in the window; the whole minute-long teaching is, at the start.
   it('lists the notes within two minutes ahead of the playhead, soonest first', async () => {
@@ -636,8 +656,9 @@ describe('the notes near this moment sit under the hero', () => {
     }
   }, 180_000);
 
-  // A note stays a quarter of a minute past its moment, then leaves.
-  it('drops a note once the playhead is more than fifteen seconds past it', async () => {
+  // A note stays two minutes past its moment — longer than this whole teaching, so a note heard
+  // at its start is still on the view at its end. The far edge is pinned in `notes-near.test.ts`.
+  it('keeps a note on the view for two minutes after its moment', async () => {
     const { page } = await openTeaching(coveredId);
     try {
       await openTheView(page);
@@ -646,11 +667,15 @@ describe('the notes near this moment sit under the hero', () => {
         .poll(() => notesRow(page).getByRole('listitem').count(), { timeout: 30_000 })
         .toBe(2);
 
-      await seekTo(page, 30);
+      await seekTo(page, TEACHING_SECONDS - 1);
 
       await expect
-        .poll(() => notesRow(page).getByRole('listitem').allTextContents(), { timeout: 30_000 })
-        .toEqual([expect.stringContaining(LATE_NOTE_TEXT)]);
+        .poll(() => heroCaption(page).textContent(), { timeout: 30_000 })
+        .toContain(`Line ${TEACHING_SECONDS / (LINE_MS / 1000)} of ${COVERED_TITLE}.`);
+      expect(await notesRow(page).getByRole('listitem').allTextContents()).toEqual([
+        expect.stringContaining(EARLY_NOTE_TEXT),
+        expect.stringContaining(LATE_NOTE_TEXT),
+      ]);
     } finally {
       await page.context().close();
     }
@@ -672,22 +697,120 @@ describe('the notes near this moment sit under the hero', () => {
     }
   }, 180_000);
 
-  // Read here, acted on there: the card is the way to the Notes tab.
-  it('opens the teaching\u2019s Notes tab when a note is pressed', async () => {
+  // Read here, acted on there: the card is the way to that note on the Notes tab.
+  it('opens the teaching\u2019s Notes tab at the note that was pressed', async () => {
     const { page } = await openTeaching(coveredId);
     try {
       await openTheView(page);
+      await seekTo(page, 0);
       await expect.poll(() => notesRow(page).count(), { timeout: 30_000 }).toBe(1);
 
-      await notesRow(page).getByRole('link').first().click();
-      await page.waitForURL(`${baseUrl}${recordingPagePath(coveredId)}?tab=notes`, {
-        timeout: 30_000,
-      });
+      await notesRow(page).getByRole('link', { name: new RegExp(EARLY_NOTE_TEXT) }).click();
+      await page.waitForURL(
+        `${baseUrl}${recordingPagePath(coveredId)}?tab=notes#note-${earlyNoteId}`,
+        { timeout: 30_000 },
+      );
       await expect
         .poll(() => page.getByRole('tab', { name: 'Notes' }).getAttribute('aria-selected'), {
           timeout: 30_000,
         })
         .toBe('true');
+
+      // The card the address names is on screen \u2014 scrolled to once the list arrived, since the
+      // list is fetched after the navigation and the browser's own jump found nothing to land on.
+      const card = page.locator(`#note-${earlyNoteId}`);
+      await expect.poll(() => card.count(), { timeout: 30_000 }).toBe(1);
+      await expect
+        .poll(
+          () =>
+            card.evaluate((node) => {
+              const box = node.getBoundingClientRect();
+              return box.top >= 0 && box.bottom <= window.innerHeight;
+            }),
+          { timeout: 30_000 },
+        )
+        .toBe(true);
+      expect(await card.textContent()).toContain(EARLY_NOTE_TEXT);
+    } finally {
+      await page.context().close();
+    }
+  }, 180_000);
+});
+
+// =================================================================================================
+
+/**
+ * **The chapter playing, as a block of its own** ([3.22.19](docs/project/prd.md)) \u2014 named where a
+ * member can see it, following the playhead, and opening the chapter's page.
+ */
+describe('the chapter playing sits under the hero as its own block', () => {
+  const block = (page: Page): Locator => view(page).getByRole('region', { name: 'Chapter playing' });
+
+  it('names the chapter playing, and follows the playhead into the next', async () => {
+    const { page } = await openTeaching(coveredId);
+    try {
+      await openTheView(page);
+      await seekTo(page, 0);
+
+      await expect
+        .poll(async () => (await block(page).textContent()) ?? '', { timeout: 30_000 })
+        .toContain(FIRST_CHAPTER_TITLE);
+      expect(await block(page).textContent()).toContain('Chapter 1');
+      expect(await block(page).textContent()).not.toContain(SECOND_CHAPTER_TITLE);
+
+      await seekTo(page, CHAPTER_MS / 1000 + 5);
+
+      await expect
+        .poll(async () => (await block(page).textContent()) ?? '', { timeout: 30_000 })
+        .toContain(SECOND_CHAPTER_TITLE);
+      expect(await block(page).textContent()).toContain('Chapter 2');
+      expect(await block(page).textContent()).not.toContain(FIRST_CHAPTER_TITLE);
+    } finally {
+      await page.context().close();
+    }
+  }, 180_000);
+
+  it('opens the chapter\u2019s page when pressed, and leaves playback alone', async () => {
+    const { page } = await openTeaching(coveredId);
+    try {
+      await openTheView(page);
+      await seekTo(page, CHAPTER_MS / 1000 + 5);
+      await expect
+        .poll(async () => (await block(page).textContent()) ?? '', { timeout: 30_000 })
+        .toContain(SECOND_CHAPTER_TITLE);
+
+      const link = block(page).getByRole('link');
+      const href = (await link.getAttribute('href')) ?? '';
+      // The chapter's own page, under the teaching that holds it.
+      expect(href.startsWith(`${recordingPagePath(coveredId)}/chapters/`)).toBe(true);
+      const chapterId = href.slice(href.lastIndexOf('/') + 1);
+      expect(href).toBe(chapterPagePath(coveredId, chapterId));
+
+      const before = await audioState(page);
+      await link.click();
+      await page.waitForURL(`${baseUrl}${href}`, { timeout: 30_000 });
+      await expect
+        .poll(() => page.getByRole('heading', { level: 1 }).textContent(), { timeout: 30_000 })
+        .toContain(SECOND_CHAPTER_TITLE);
+
+      // Opening a page is not asking for sound: the element is the same, and as paused as it was.
+      const after = await audioState(page);
+      expect(after.probe).toBe(before.probe);
+      expect(after.paused).toBe(before.paused);
+    } finally {
+      await page.context().close();
+    }
+  }, 180_000);
+
+  it('draws no block for a teaching with no chapters', async () => {
+    const { page } = await openTeaching(looseId);
+    try {
+      await openTheView(page);
+      await expect
+        .poll(() => view(page).textContent(), { timeout: 30_000 })
+        .toContain('no scripture references');
+
+      expect(await block(page).count()).toBe(0);
     } finally {
       await page.context().close();
     }

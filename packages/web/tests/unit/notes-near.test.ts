@@ -9,9 +9,9 @@ import {
 /**
  * **The window the now-playing view reads notes through.**
  *
- * Pinned as arithmetic: it looks two minutes ahead and a quarter of a minute back, both edges
- * inclusive; it lists soonest first; and it leaves out what has no moment of its own (a reply) or
- * nothing to read (a tombstone).
+ * Pinned as arithmetic: it looks two minutes ahead and two minutes back, both edges inclusive; it
+ * lists soonest first; and it leaves out what has no moment of its own (a reply) or nothing to
+ * read (a tombstone).
  */
 function note(overrides: Partial<NoteView> & { id: string }): NoteView {
   return {
@@ -34,7 +34,7 @@ function note(overrides: Partial<NoteView> & { id: string }): NoteView {
 }
 
 describe('notesNear', () => {
-  it('looks two minutes ahead and fifteen seconds back, edges included', () => {
+  it('looks two minutes ahead and two minutes back, edges included', () => {
     const notes = [
       note({ id: 'just-ahead', timestampMs: 60_000 + NOTE_LOOKAHEAD_MS }),
       note({ id: 'too-far-ahead', timestampMs: 60_000 + NOTE_LOOKAHEAD_MS + 1 }),
@@ -65,6 +65,7 @@ describe('notesNear', () => {
 
   it('answers an empty list when nothing is near', () => {
     expect(notesNear([note({ id: 'late', timestampMs: 300_000 })], 0)).toEqual([]);
+    expect(notesNear([note({ id: 'long-gone', timestampMs: 0 })], 300_000)).toEqual([]);
     expect(notesNear([], 0)).toEqual([]);
   });
 });
