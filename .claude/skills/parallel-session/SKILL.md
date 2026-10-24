@@ -169,6 +169,11 @@ Also list the cleanup for later, so it ends up in the user's notes:
 ```
 git -C C:\Users\conta\Desktop\thp merge --ff-only <slug>   # after rebase + typecheck + test in the worktree
 npm run migrate                                            # on main, if the ticket added migrations
-git worktree remove ..\thp-<slug> && git branch -d <slug>
+# Stop the worktree's dev server and worker, and close its VS Code window first: an open file
+# handle makes the removal below fail halfway.
+git -C C:\Users\conta\Desktop\thp worktree remove --force ..\thp-<slug>
+Remove-Item -Recurse -Force C:\Users\conta\Desktop\thp-<slug>   # only if the folder is still there
+git -C C:\Users\conta\Desktop\thp worktree prune
+git -C C:\Users\conta\Desktop\thp branch -d <slug>
 docker exec thp-postgres dropdb -U thp <db>
 ```
