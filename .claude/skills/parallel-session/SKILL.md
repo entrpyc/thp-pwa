@@ -162,6 +162,9 @@ Rules for this session:
   replaces <db> with a fresh copy of main's `thp` database, migrates, runs `npm run seed:admin`,
   starts the dev server on port <port>, opens it in Chrome, and prints a manual validation
   checklist derived from the branch's diff. Do not hand over without it.
+- After reading this message, do nothing: no exploring, no planning, no edits, no commands. Reply
+  with one line confirming the worktree, branch, database and port, then wait for the operator's
+  instructions.
 ```
 
 Also list the cleanup for later, so it ends up in the user's notes:
