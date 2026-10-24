@@ -30,8 +30,8 @@ import { PinNoteControl } from '../../highlights/pin-note-control';
 import { noteFromAddress } from '../../highlights/open-at';
 import styles from './notes.module.css';
 
-/** How long the card a highlight landed on stays marked, in milliseconds — long enough to find it. */
-const LANDED_FOR_MS = 2_500;
+/** How long the card a highlight landed on blinks, in milliseconds — the length of its animation. */
+const LANDED_FOR_MS = 2_000;
 
 /**
  * **The `Notes` tab of `pages/recording.png`** — the composer, the filter, the pinned group and the

@@ -611,10 +611,28 @@
   border-color: var(--color-border-strong);
 }
 
-/* The card a highlight landed on, marked for a moment — the primary ring, then gone. */
+/*
+ * The card a highlight landed on: its background blinks slowly to orange twice over two seconds,
+ * then the class is taken off and the card is itself again. A blink rather than a held colour,
+ * because the eye is drawn by change; slow, because a fast flash reads as an alert.
+ */
 .landed {
-  outline: 2px solid var(--color-primary);
-  outline-offset: 2px;
+  animation: landedBlink 1s ease-in-out 2;
+}
+
+/* Only the peak is named, so the blink rises from whatever the card's own background is — the
+   plain surface or a pinned note's raised one — and settles back to it. */
+@keyframes landedBlink {
+  50% {
+    background: var(--color-sos-orange);
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .landed {
+    animation: none;
+    background: var(--color-sos-orange);
+  }
 }
 
 .pinnedPill {
