@@ -59,35 +59,86 @@
   cursor: pointer;
 }
 
-/* ---------------------------------------------------------------------------------- the filters */
+/* --------------------------------------------------------------------------------- the controls */
 
 /*
- * One row that wraps: five narrow controls and a switch. A `fieldset` because they are one
- * question — how far to narrow — and the browser's default frame is removed so they read as a
- * row of pills rather than a boxed form.
+ * One row that wraps: the content types, the words/meaning slider and the per-teaching select.
+ * Each is a navigation; none is a form to submit. On a phone the three stack.
  */
-.filters {
+.controls {
   display: flex;
   flex-wrap: wrap;
-  align-items: flex-end;
+  align-items: flex-start;
+  gap: var(--space-4) var(--space-5);
+  min-width: 0;
+}
+
+.controlLabel {
+  display: flex;
+  justify-content: space-between;
   gap: var(--space-3);
+  font-size: var(--fs-meta);
+  color: var(--color-text-muted);
+}
+
+/* The browser's fieldset frame removed, so the checkboxes read as a row of labels. */
+.kinds {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--space-2) var(--space-4);
   margin: 0;
   padding: 0;
   border: none;
   min-width: 0;
+  flex: 1 1 100%;
 }
 
-.filter {
+.kinds legend {
+  padding: 0;
+  margin-bottom: var(--space-1);
+  width: 100%;
+}
+
+.kind {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--space-2);
+  color: var(--color-text);
+  font-size: var(--fs-body);
+  cursor: pointer;
+}
+
+.slider {
   display: flex;
   flex-direction: column;
   gap: var(--space-1);
-  flex: 1 1 9rem;
+  flex: 1 1 16rem;
   min-width: 0;
 }
 
-.filterLabel {
+.slider input[type='range'] {
+  width: 100%;
+  accent-color: var(--color-primary);
+}
+
+.sliderValue {
+  color: var(--color-text);
+  font-weight: 600;
+}
+
+.sliderEnds {
+  display: flex;
+  justify-content: space-between;
   font-size: var(--fs-meta);
-  color: var(--color-text-muted);
+  color: var(--color-text-dim);
+}
+
+.perTeaching {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-1);
+  flex: 1 1 12rem;
+  min-width: 0;
 }
 
 .select {
@@ -105,16 +156,6 @@
 
 .select:hover {
   border-color: var(--color-border-strong);
-}
-
-.toggle {
-  display: inline-flex;
-  align-items: center;
-  gap: var(--space-2);
-  padding: var(--space-2) 0;
-  color: var(--color-text);
-  font-size: var(--fs-body);
-  cursor: pointer;
 }
 
 /* The words-only notice: a status, not a failure — the quiet voice on the raised surface. */
@@ -216,4 +257,82 @@
 
 .match {
   color: var(--color-text);
+}
+
+/* A matched term in a words hit: bold, in the same voice — the words are the passage's own. */
+.term {
+  font-weight: 700;
+  color: var(--color-text);
+}
+
+/* ------------------------------------------------------------------------------ how it matched */
+
+/* "Meaning: Strong match" and "Words: Matched" — small labels under the passage, one per arm. */
+.matchLabels {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--space-2);
+  margin-top: var(--space-2);
+}
+
+.matchLabel {
+  font-size: var(--fs-meta);
+  color: var(--color-text-muted);
+  background: var(--color-surface-raised);
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-sm);
+  padding: var(--space-1) var(--space-2);
+}
+
+/* The operator's numbers, folded under the row and never styled to draw the eye. */
+.scores {
+  padding: 0 var(--space-5) var(--space-3);
+  font-size: var(--fs-meta);
+  color: var(--color-text-dim);
+}
+
+.scoresSummary {
+  cursor: pointer;
+}
+
+.scoresList {
+  display: grid;
+  grid-template-columns: max-content 1fr;
+  gap: var(--space-1) var(--space-3);
+  margin: var(--space-2) 0 0;
+}
+
+.scoresList dd {
+  margin: 0;
+  font-variant-numeric: tabular-nums;
+  color: var(--color-text-muted);
+}
+
+/* ------------------------------------------------------------------------------------ paging */
+
+.more {
+  display: flex;
+  justify-content: center;
+  padding: var(--space-2) 0;
+}
+
+.showMore {
+  background: var(--color-surface-raised);
+  color: var(--color-text);
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-lg);
+  padding: var(--space-3) var(--space-5);
+  font-family: inherit;
+  font-size: var(--fs-body);
+  font-weight: 600;
+  cursor: pointer;
+}
+
+.showMore:hover {
+  border-color: var(--color-border-strong);
+}
+
+.showMore:disabled {
+  cursor: default;
+  color: var(--color-text-dim);
 }

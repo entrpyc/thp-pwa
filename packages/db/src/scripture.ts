@@ -195,25 +195,3 @@ export async function findScriptureReferences(
 
   return rows as ScriptureReferenceRow[];
 }
-
-/**
- * **Which books these teachings cite**, as distinct identities — the book filter's options for
- * search ([3.10.8](docs/project/prd.md)).
- *
- * Takes the recording ids the caller already holds rather than a publication predicate, for the
- * reason `listTagsForRecordings` does: which teachings a member may see is `visibility.ts`'s one
- * answer, and this read narrows to it rather than re-deciding it. Ordered by the table and sorted
- * by the canon by the caller with `compareCitations`'s key, for the reason the read above gives.
- */
-export async function listCitedBooks(
-  recordingIds: readonly string[],
-  executor: Executor = getDatabase(),
-): Promise<BookId[]> {
-  if (recordingIds.length === 0) return [];
-  const rows = await queryable(executor)
-    .selectDistinct({ book: scriptureReference.book })
-    .from(scriptureReference)
-    .where(inArray(scriptureReference.recordingId, [...recordingIds]))
-    .orderBy(asc(scriptureReference.book));
-  return rows.map((row) => row.book as BookId);
-}

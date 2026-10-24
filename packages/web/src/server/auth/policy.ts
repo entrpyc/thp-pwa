@@ -206,6 +206,12 @@ export const POLICY_ACTIONS = [
    */
   'search.query',
   /**
+   * **Seeing a search's raw scores** — ranks, similarity, fused score — in the disclosure under a
+   * result. An operator tuning the thresholds in `@thp/shared` reads them; a member never does,
+   * because a number beside a passage is a claim about the passage the product does not make.
+   */
+  'search.tune',
+  /**
    * **The six the rest of the scope needs** (active-scope architecture § 8), and the split is the
    * habit every group above follows rather than an exception to it.
    *
@@ -537,6 +543,8 @@ const RULES: PolicyRules = {
   'note.write': { roles: { admin: true, member: true } },
   // Every signed-in account may search; an admin searching sees what a member sees.
   'search.query': { roles: { admin: true, member: true } },
+  // The numbers behind a hit are for whoever tunes the thresholds, and that is an operator.
+  'search.tune': { roles: { admin: true, member: false } },
   // Both roles, and only over what they wrote. `requiresOwnership` is what refuses **an admin**
   // editing a member's note (3.5.6, 3.6.2) with no special case written anywhere: moderation is
   // deletion, never rewriting somebody's words.

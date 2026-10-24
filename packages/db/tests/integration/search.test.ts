@@ -1,7 +1,6 @@
 import { afterAll, beforeAll, describe, expect, it, inject } from 'vitest';
 import {
   createDatabase,
-  ensureTags,
   insertNote,
   insertRecording,
   insertSeries,
@@ -11,9 +10,6 @@ import {
   listChapters,
   publishSummary,
   replaceChapters,
-  replaceRecordingTags,
-  replaceScriptureReferences,
-  replaceSeriesTags,
   replaceTranscript,
   runMigrations,
   searchEmbeddings,
@@ -23,14 +19,17 @@ import {
   upsertEmbeddings,
   type DatabaseHandle,
   type NewEmbedding,
-  type SearchFilters,
   type SearchHitRow,
+  type SearchQuery,
   type SegmentRow,
 } from '@thp/db';
 import { fakeVector } from '@thp/embed';
 import {
   EMBEDDING_DIMENSIONS,
+  SEARCHABLE_KINDS,
   SEARCH_CANDIDATES_PER_ARM,
+  SEARCH_MARK_END,
+  SEARCH_MARK_START,
   buildPassageWindows,
   recordingMetadataText,
   type EmbeddingSourceKind,
@@ -56,13 +55,14 @@ let target: ThrowawayDatabase;
 let handle: DatabaseHandle;
 let made = 0;
 
-const NO_FILTERS: SearchFilters = {
-  seriesId: null,
-  recordedFrom: null,
-  recordedTo: null,
-  tagId: null,
-  book: null,
-  onlyMine: false,
+/** Every kind, balanced, every moment, the first twenty: what a test narrows from. */
+const DEFAULTS: Omit<SearchQuery, 'readerId' | 'queryText' | 'queryVector'> = {
+  kinds: SEARCHABLE_KINDS,
+  blend: 0.5,
+  perTeaching: null,
+  perArm: SEARCH_CANDIDATES_PER_ARM,
+  offset: 0,
+  limit: 20,
 };
 
 /**
@@ -148,16 +148,16 @@ async function transcriptOf(
 async function search(
   readerId: string,
   queryText: string,
-  options: { readonly vector?: readonly number[] | null; readonly filters?: Partial<SearchFilters> } = {},
+  options: { readonly vector?: readonly number[] | null } & Partial<typeof DEFAULTS> = {},
 ): Promise<SearchHitRow[]> {
+  const { vector, ...overrides } = options;
   return searchEmbeddings(
     {
       readerId,
       queryText,
-      queryVector: options.vector === undefined ? fakeVector(queryText) : options.vector,
-      filters: { ...NO_FILTERS, ...options.filters },
-      perArm: SEARCH_CANDIDATES_PER_ARM,
-      limit: 20,
+      queryVector: vector === undefined ? fakeVector(queryText) : vector,
+      ...DEFAULTS,
+      ...overrides,
     },
     handle,
   );
@@ -363,91 +363,105 @@ describe('the recording’s own row (3.10.4)', () => {
   });
 });
 
-describe('each filter narrows (3.10.8)', () => {
+describe('the controls', () => {
   let reader: string;
-  let inSeries: string;
-  let loose: string;
   let seriesId: string;
-  let tagId: string;
-  let seriesTagId: string;
-  const line = 'Consider the lilies of the field.';
+  let talkative: string;
+  let quiet: string;
+  const theme = 'Consider the lilies of the field, how they grow.';
 
   beforeAll(async () => {
     reader = await member('reader');
     seriesId = (await insertSeries({ title: 'Sermon on the Mount', description: null }, handle)).id;
-    inSeries = await recording('In the series', '2026-03-05');
-    loose = await recording('Outside the series', '2025-06-01');
-    await setRecordingSeries(inSeries, seriesId, handle);
-    await transcriptOf(inSeries, [line]);
-    await transcriptOf(loose, [line]);
-
-    const [lilies, mount] = await ensureTags(['lilies', 'mount'], handle);
-    tagId = lilies?.id ?? '';
-    seriesTagId = mount?.id ?? '';
-    await replaceRecordingTags(loose, [tagId], handle);
-    await replaceSeriesTags(seriesId, [seriesTagId], handle);
-
-    await replaceScriptureReferences(
-      inSeries,
-      [{ book: 'matthew', chapter: 6, verseStart: 28, verseEnd: 28, origin: 'machine', editedByAdmin: false, anchorMs: 0 }],
+    // A teaching that says the words in five passages, and one that says them once.
+    talkative = await recording('Lilies, at length', '2026-03-05');
+    quiet = await recording('Lilies, once', '2025-06-01');
+    await setRecordingSeries(talkative, seriesId, handle);
+    await transcriptOf(
+      talkative,
+      Array.from({ length: 5 }, (_unused, index) => `${theme} Part ${index + 1} of the lilies.`),
+    );
+    await transcriptOf(quiet, [theme]);
+    const note = await insertNote(
+      { recordingId: quiet, authorId: reader, visibility: 'public', timestampMs: 0, text: `A note on the lilies of the field.` },
       handle,
+    );
+    await upsertEmbeddings([embeddingOf('note', note.id, quiet, note.text ?? '')], handle);
+  });
+
+  it('narrows to the kinds asked for', async () => {
+    const notes = await search(reader, 'lilies of the field', { kinds: ['note'] });
+    expect(notes.length).toBeGreaterThan(0);
+    expect(notes.every((hit) => hit.sourceKind === 'note')).toBe(true);
+    const passages = await search(reader, 'lilies of the field', { kinds: ['segment'] });
+    expect(passages.every((hit) => hit.sourceKind === 'segment')).toBe(true);
+    expect(passages.some((hit) => hit.recordingId === quiet)).toBe(true);
+  });
+
+  it('at the words-only stop no row is placed by meaning; at meaning-only none by words', async () => {
+    // The service passes no vector at 0; the query runs the word arm alone whatever the vector.
+    const wordsOnly = await search(reader, 'lilies of the field', { blend: 0, vector: null });
+    expect(wordsOnly.length).toBeGreaterThan(0);
+    expect(wordsOnly.every((hit) => hit.vectorRank === null && hit.similarity === null)).toBe(true);
+    expect(wordsOnly.every((hit) => hit.textRank !== null)).toBe(true);
+    // Scores are the words arm's share alone: (1 - 0) / (60 + rank).
+    expect(wordsOnly[0]?.score).toBeCloseTo(1 / 61, 6);
+
+    const meaningOnly = await search(reader, theme, { blend: 1 });
+    expect(meaningOnly.length).toBeGreaterThan(0);
+    expect(meaningOnly.every((hit) => hit.textRank === null && hit.textMarked === hit.text)).toBe(true);
+    expect(meaningOnly.every((hit) => hit.vectorRank !== null)).toBe(true);
+    expect(meaningOnly[0]?.score).toBeCloseTo(1 / 61, 6);
+  });
+
+  it('weighs the arms by the blend', async () => {
+    // A row only the words arm can place: the vector is unrelated. Its score is (1 - s) / (K + rank).
+    const leanWords = await search(reader, 'lilies of the field', { blend: 0.25, vector: fakeVector('unrelated') });
+    const wordsRow = leanWords.find((hit) => hit.recordingId === quiet && hit.sourceKind === 'segment');
+    expect(wordsRow?.vectorRank === null || wordsRow?.textRank !== null).toBe(true);
+    if (wordsRow !== undefined && wordsRow.vectorRank === null) {
+      expect(wordsRow.score).toBeCloseTo(0.75 / (60 + (wordsRow.textRank ?? 0)), 6);
+    }
+  });
+
+  it('keeps one moment per teaching, or three, or every one', async () => {
+    const one = await search(reader, 'lilies of the field', { perTeaching: 1, vector: null });
+    const ids = one.map((hit) => hit.recordingId);
+    expect(new Set(ids).size).toBe(ids.length);
+    expect(ids).toContain(talkative);
+    expect(ids).toContain(quiet);
+
+    const three = await search(reader, 'lilies of the field', { perTeaching: 3, vector: null });
+    expect(three.filter((hit) => hit.recordingId === talkative)).toHaveLength(3);
+
+    const every = await search(reader, 'lilies of the field', { perTeaching: null, vector: null });
+    expect(every.filter((hit) => hit.recordingId === talkative)).toHaveLength(5);
+    // The strongest of a teaching is the one kept: the cap takes the top of the same order.
+    expect(one.find((hit) => hit.recordingId === talkative)?.embeddingId).toBe(
+      every.find((hit) => hit.recordingId === talkative)?.embeddingId,
     );
   });
 
-  it('by series', async () => {
-    const hits = await search(reader, line, { filters: { seriesId } });
-    expect(hits.map((hit) => hit.recordingId)).toEqual([inSeries]);
-    expect(hits[0]?.seriesTitle).toBe('Sermon on the Mount');
+  it('pages by offset in a stable order, with disjoint pages', async () => {
+    const all = await search(reader, 'lilies', { vector: null, limit: 20 });
+    expect(all.length).toBeGreaterThanOrEqual(6);
+    const first = await search(reader, 'lilies', { vector: null, limit: 3, offset: 0 });
+    const second = await search(reader, 'lilies', { vector: null, limit: 3, offset: 3 });
+    expect(first.map((hit) => hit.embeddingId)).toEqual(all.slice(0, 3).map((hit) => hit.embeddingId));
+    expect(second.map((hit) => hit.embeddingId)).toEqual(all.slice(3, 6).map((hit) => hit.embeddingId));
+    const firstIds = new Set(first.map((hit) => hit.embeddingId));
+    expect(second.some((hit) => firstIds.has(hit.embeddingId))).toBe(false);
   });
 
-  it('by date range, inclusive over the day recorded', async () => {
-    const before = await search(reader, line, { filters: { recordedTo: '2025-12-31' } });
-    expect(before.map((hit) => hit.recordingId)).toEqual([loose]);
-    const onTheDay = await search(reader, line, {
-      filters: { recordedFrom: '2026-03-05', recordedTo: '2026-03-05' },
-    });
-    expect(onTheDay.map((hit) => hit.recordingId)).toEqual([inSeries]);
-  });
-
-  it('by tag — on the recording, or on the series it is in', async () => {
-    const own = await search(reader, line, { filters: { tagId } });
-    expect(own.map((hit) => hit.recordingId)).toEqual([loose]);
-    const inherited = await search(reader, line, { filters: { tagId: seriesTagId } });
-    expect(inherited.map((hit) => hit.recordingId)).toEqual([inSeries]);
-  });
-
-  it('by scripture book', async () => {
-    const hits = await search(reader, line, { filters: { book: 'matthew' } });
-    expect(hits.map((hit) => hit.recordingId)).toEqual([inSeries]);
-    expect(await search(reader, line, { filters: { book: 'romans' } })).toEqual([]);
-  });
-
-  it('to the reader’s own notes, public and private alike (3.10.10)', async () => {
-    const other = await member('other');
-    const mine = await insertNote(
-      { recordingId: loose, authorId: reader, visibility: 'public', timestampMs: 0, text: `Lilies, I wrote publicly.` },
-      handle,
-    );
-    const minePrivate = await insertNote(
-      { recordingId: loose, authorId: reader, visibility: 'private', timestampMs: 0, text: `Lilies, I wrote privately.` },
-      handle,
-    );
-    const theirs = await insertNote(
-      { recordingId: loose, authorId: other, visibility: 'public', timestampMs: 0, text: `Lilies, somebody else wrote.` },
-      handle,
-    );
-    await upsertEmbeddings(
-      [
-        embeddingOf('note', mine.id, loose, mine.text ?? ''),
-        embeddingOf('note', minePrivate.id, loose, minePrivate.text ?? '', { ownerUserId: reader }),
-        embeddingOf('note', theirs.id, loose, theirs.text ?? ''),
-      ],
-      handle,
-    );
-
-    const hits = await search(reader, 'lilies', { filters: { onlyMine: true } });
-    expect(hits.map((hit) => hit.sourceId).sort()).toEqual([mine.id, minePrivate.id].sort());
-    expect(hits.every((hit) => hit.sourceKind === 'note')).toBe(true);
+  it('marks the matched terms in a words hit’s passage, and nowhere else', async () => {
+    const [hit] = await search(reader, 'lilies field', { kinds: ['segment'], vector: null, perTeaching: 1 });
+    expect(hit?.textMarked).toContain(`${SEARCH_MARK_START}lilies${SEARCH_MARK_END}`);
+    expect(hit?.textMarked).toContain(`${SEARCH_MARK_START}field${SEARCH_MARK_END}`);
+    expect(hit?.text).not.toContain(SEARCH_MARK_START);
+    expect(hit?.before ?? '').not.toContain(SEARCH_MARK_START);
+    expect(hit?.after ?? '').not.toContain(SEARCH_MARK_START);
+    // Stripped of its markers the marked passage is the passage.
+    expect(hit?.textMarked.replaceAll(SEARCH_MARK_START, '').replaceAll(SEARCH_MARK_END, '')).toBe(hit?.text);
   });
 });
 

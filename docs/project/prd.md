@@ -236,9 +236,9 @@ It is built as a Progressive Web App on a single codebase, reachable from any br
 - 📝 **3.10.5** Members can search by scripture citation and find every teaching covering that passage.
 - 📝 **3.10.6** Each result shows the matching passage in context, with its source recording, series and timestamp.
 - 📝 **3.10.7** Selecting a result opens the recording at the matched timestamp. A result that matched a chapter's title or summary opens that chapter's page instead (3.22.13).
-- 📝 **3.10.8** Results can be filtered by series, date range, tag and scripture book.
+- 📝 **3.10.8** Results can be filtered by series, date range, tag and scripture book. *Built and then withdrawn by the operator (2026-10-25): the filters and their route are removed; a search is steered by content type, a words/meaning balance and a per-teaching cap instead.*
 - 📝 **3.10.9** Search respects visibility: a member's results include all published content plus their own private notes (3.12.3) and personal mind maps (3.8.5), and never include another member's private content or any unpublished draft.
-- 📝 **3.10.10** Members can restrict a search to their own notes and mind maps, to find something they know they wrote.
+- 📝 **3.10.10** Members can restrict a search to their own notes and mind maps, to find something they know they wrote. *Built and then withdrawn by the operator (2026-10-25): the "only my notes" switch is removed; a member narrows to Notes with the content-type control instead.*
 - 📝 **3.10.11** Search returns a clear empty state that distinguishes "nothing in the library matches" from "search is unavailable".
 
 ### 📝 3.11 AI video generation

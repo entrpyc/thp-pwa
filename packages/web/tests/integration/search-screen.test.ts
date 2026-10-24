@@ -3,9 +3,11 @@ import { chromium, type Browser, type Page } from 'playwright';
 import {
   API_PREFIX,
   DASHBOARD_PAGE_PATH,
+  MEANING_LABELS,
   ROLE,
   SEARCH_PAGE_PATH,
   SEARCH_PATH,
+  WORDS_MATCH_LABEL,
   chapterPagePath,
   recordingPagePath,
 } from '@thp/shared';
@@ -189,7 +191,37 @@ describe('the results page (3.10.6, 3.10.7)', () => {
     await page.context().close();
   });
 
-  it('the "only my notes" switch narrows to notes and says so when there are none (3.10.10)', async () => {
+  it('says how a row matched: a words hit in bold terms, a meaning hit by its bucket label', async () => {
+    const page = await signedInPage();
+    // The line's own words: both arms place it first, so the row carries both explanations.
+    await page.goto(`${baseUrl}${SEARCH_PAGE_PATH}?q=${encodeURIComponent(LINES[1] ?? '')}`, {
+      waitUntil: 'domcontentloaded',
+    });
+    const results = page.getByRole('list', { name: 'Search results' });
+    await expect.poll(() => results.isVisible(), { timeout: 30_000 }).toBe(true);
+    const first = results.getByRole('listitem').first();
+    await expect.poll(() => first.textContent()).toContain(TITLE);
+
+    const labels = first.getByTestId('match-labels');
+    expect(await labels.textContent()).toContain(MEANING_LABELS.strong);
+    expect(await labels.textContent()).toContain(WORDS_MATCH_LABEL);
+    // Never the number.
+    expect(await first.textContent()).not.toMatch(/0\.\d{2,}/);
+
+    const bold = first.locator('strong');
+    expect(await bold.count()).toBeGreaterThan(0);
+    const boldWords = (await bold.allTextContents()).map((word) => word.toLowerCase());
+    expect(boldWords).toContain('sheep');
+    expect(boldWords).toContain('carried');
+    // The context line is not marked: nothing bold outside the matched passage.
+    expect(await first.locator(`text=${LINES[0]}`).locator('strong').count()).toBe(0);
+
+    // A member sees no scores disclosure; the numbers are the operator's.
+    expect(await first.getByTestId('scores').count()).toBe(0);
+    await page.context().close();
+  });
+
+  it('the content-type control narrows the search and writes the choice to the address', async () => {
     const page = await signedInPage();
     await page.goto(`${baseUrl}${SEARCH_PAGE_PATH}?q=${encodeURIComponent(LINES[1] ?? '')}`, {
       waitUntil: 'domcontentloaded',
@@ -197,13 +229,25 @@ describe('the results page (3.10.6, 3.10.7)', () => {
     await expect
       .poll(() => page.getByRole('list', { name: 'Search results' }).isVisible(), { timeout: 30_000 })
       .toBe(true);
-    // A click rather than `check()`: the switch reads its state off the address, so it changes
-    // only once the navigation it causes has landed — which is the next line's wait.
-    await page.getByLabel('Only my notes').click();
-    await page.waitForURL((url) => url.searchParams.get('mine') === '1', { timeout: 30_000 });
+    // Untick everything but Notes: the address names the one kind, and this teaching has no notes.
+    for (const label of ['Chapters', 'Transcript', 'Summaries', 'Teachings']) {
+      await page.getByLabel(label).click();
+      await page.waitForURL((url) => url.searchParams.get('q') !== null, { timeout: 30_000 });
+    }
+    await page.waitForURL((url) => url.searchParams.get('kinds') === 'note', { timeout: 30_000 });
+    // Either nothing — this teaching has no notes — or, with other suites' notes in the shared
+    // library, rows that are every one of them a Note. Never this teaching's transcript line.
     const empty = page.locator('[data-state="empty"]');
-    await expect.poll(() => empty.isVisible(), { timeout: 30_000 }).toBe(true);
-    expect(await empty.textContent()).toContain('among your notes');
+    const results = page.getByRole('list', { name: 'Search results' });
+    await expect
+      .poll(async () => (await empty.isVisible()) || (await results.isVisible()), { timeout: 30_000 })
+      .toBe(true);
+    if (await results.isVisible()) {
+      const kinds = await results.locator('[class*="hitKind"]').allTextContents();
+      expect(kinds.length).toBeGreaterThan(0);
+      expect(kinds.every((kind) => kind === 'Note')).toBe(true);
+      expect(await results.textContent()).not.toContain(LINES[1]);
+    }
     await page.context().close();
   });
 });
@@ -211,7 +255,9 @@ describe('the results page (3.10.6, 3.10.7)', () => {
 describe('the two empty states (3.10.11)', () => {
   it('nothing matching says so about the library', async () => {
     const page = await signedInPage();
-    await page.goto(`${baseUrl}${SEARCH_PAGE_PATH}?q=${encodeURIComponent(`zxqv-${RUN}-nothing`)}&book=obadiah`, {
+    // Words only: the meaning arm answers its nearest rows whatever their distance, so only a
+    // words-only search for a word nobody said is a search that finds nothing.
+    await page.goto(`${baseUrl}${SEARCH_PAGE_PATH}?q=${encodeURIComponent(`zxqv-${RUN}-nothing`)}&mix=0`, {
       waitUntil: 'domcontentloaded',
     });
     const empty = page.locator('[data-state="empty"]');
