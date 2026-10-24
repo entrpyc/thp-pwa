@@ -365,6 +365,16 @@ characters so a provider's response echoed into one cannot carry a transcript. T
 the production-only rule silence all three adapters through one reader
 (`readAnalyticsConfigNamed`, now in `@thp/shared`; `tests/guards/mock-switch.test.ts`).
 
+**Source maps.** A browser exception arrives as minified frames unless PostHog holds the maps.
+`productionBrowserSourceMaps` in `packages/web/next.config.ts` writes a `.map` beside every client
+chunk, and `scripts/upload-sourcemaps.sh`, run by `scripts/deploy.sh` after the build, has the
+PostHog CLI (`@posthog/cli`, a pinned dev dependency) stamp each chunk with a content id, upload
+chunk and map as a symbol set tied to the release tag, and delete the maps and their
+`sourceMappingURL` comments — so **the box never serves a map**, and the script deletes any
+straggler itself. It needs `POSTHOG_CLI_API_KEY` (a personal API key) and `POSTHOG_CLI_PROJECT_ID`
+in `.env` (section 6.7); without them it says so in one line and the deploy goes on with minified
+traces. Server and worker traces are Node's own and need no map.
+
 **The alert** is A8 in section 7: PostHog's *new issue* alert on the project, to the operator's
 e-mail. The other eight alerts cut in 2.5 stay cut; this one came back because it is the only one
 that fires on something new rather than on a threshold.
@@ -541,6 +551,7 @@ development machine leaves `THP_MOCK_EXTERNAL=true` and none of them is read.
 | `NEXT_PUBLIC_POSTHOG_HOST` | Client | `https://eu.i.posthog.com` — the upstream nginx forwards `/relay/` to. The browser itself sends to `/relay/` on the app's origin (section 5.5). |
 | `POSTHOG_KEY`, `POSTHOG_HOST` | API | The same key and host, for `posthog-node`. |
 | `HEALTHCHECK_WORKER_URL` | Worker | The worker heartbeat's ping URL. Absent means no ping, logged once at boot. |
+| `POSTHOG_CLI_API_KEY`, `POSTHOG_CLI_PROJECT_ID` | The deploy (PostHog CLI) | A personal API key and the project's numeric id, for the source-map upload in section 5.6. Absent means the upload is skipped and browser traces stay minified. Never read by the app. |
 
 Grafana Cloud's endpoint, instance id and token, and the monitoring role's connection string, live
 in `/etc/default/alloy` (root-owned, mode 600, from `deploy/observability/alloy.default`), which

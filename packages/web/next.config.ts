@@ -20,6 +20,13 @@ const config: NextConfig = {
   transpilePackages: ['@thp/shared', '@thp/db'],
   typedRoutes: false,
   serverExternalPackages: ['postgres', '@node-rs/argon2'],
+  // Source maps for the client chunks, so a browser exception in PostHog's error tracking shows
+  // the file and line it came from rather than a minified frame (observability.md § 5.6). The
+  // maps are written beside the chunks at build time and **removed after upload** by
+  // scripts/upload-sourcemaps.sh, which runs in the deploy between the build and the restart —
+  // so a deployed box never serves them. A build nobody uploads from (a machine without the CLI
+  // token) keeps its maps on disk, which is a local matter.
+  productionBrowserSourceMaps: true,
   env: {
     NEXT_PUBLIC_APP_VERSION: appVersion(),
     // The one switch (.env.example, THP_MOCK_EXTERNAL) mirrored to the client bundle, so a
