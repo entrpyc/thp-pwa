@@ -21,11 +21,18 @@ export function PinMomentControl({
   recordingId,
   positionMs,
   label,
+  className,
 }: {
   recordingId: string;
   positionMs: number;
   /** The noun: `this chapter`. Prefixed with *Highlight* or *Remove highlight from*. */
   label: string;
+  /**
+   * Where the pin sits. By default it is the detail header's — at the far end of the row. A
+   * caller placing it elsewhere (the chapter list puts it under each row's play control) names
+   * its own placement class instead.
+   */
+  className?: string | undefined;
 }) {
   const { highlights, busy, toggle } = useHighlights();
   const existing = highlights === null ? null : momentEntry(highlights, recordingId, positionMs);
@@ -33,7 +40,7 @@ export function PinMomentControl({
 
   return (
     <button
-      className={`${styles.pin} ${styles.headerPin}`}
+      className={`${styles.pin} ${className ?? styles.headerPin}`}
       type="button"
       aria-pressed={pinned}
       aria-label={`${pinned ? 'Remove highlight from' : 'Highlight'} ${label}`}

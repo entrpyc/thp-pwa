@@ -139,6 +139,13 @@ async function seekTo(page: Page, ms: number): Promise<void> {
 
 const strip = (page: Page): Locator => page.getByRole('region', { name: 'Related teachings' });
 
+/** Open the `Related` tab — drawn only for a teaching with a related moment somewhere in it. */
+async function openRelated(page: Page): Promise<void> {
+  await expect.poll(() => page.getByRole('tab', { name: 'Related' }).count(), { timeout: 30_000 }).toBe(1);
+  await page.getByRole('tab', { name: 'Related' }).click();
+  await expect.poll(() => strip(page).count(), { timeout: 30_000 }).toBe(1);
+}
+
 beforeAll(async () => {
   browser = await chromium.launch();
   handle = createDatabase({ url: databaseUrl, max: 6 });
@@ -175,18 +182,22 @@ afterAll(async () => {
 }, 60_000);
 
 describe('the related-teachings strip', () => {
-  it('draws nothing until the chapter playing has a link, then names the other teaching, its series and the moment, and goes quiet again', async () => {
+  it('offers nothing until the chapter playing has a link, then names the other teaching, its series and the moment, and goes quiet again', async () => {
     const page = await openTeaching(listeningId);
     try {
-      // The chapters are known — the tab is drawn off them — and the first chapter has no link.
+      // The chapters are known — the tab is drawn off them — and the first chapter has no link:
+      // the panel says so rather than drawing an empty list.
       await expect.poll(() => page.getByRole('tab', { name: 'Chapters' }).count(), { timeout: 30_000 }).toBe(1);
-      expect(await strip(page).count()).toBe(0);
+      await openRelated(page);
+      const link = strip(page).getByRole('link');
+      await expect
+        .poll(async () => (await strip(page).textContent()) ?? '', { timeout: 30_000 })
+        .toContain('Nothing in another teaching is related to this part.');
+      expect(await link.count()).toBe(0);
 
       // Into the second chapter, where the planted sentence is.
       await seekTo(page, CHAPTER_MS + 5_000);
-      await expect.poll(() => strip(page).count(), { timeout: 30_000 }).toBe(1);
 
-      const link = strip(page).getByRole('link');
       await expect.poll(() => link.count()).toBe(1);
       const text = (await link.textContent()) ?? '';
       expect(text).toContain(OTHER_TITLE);
@@ -195,9 +206,9 @@ describe('the related-teachings strip', () => {
       expect(text).toContain(`Line ${TARGET_LINE + 1} of ${OTHER_TITLE}`);
       expect(await link.getAttribute('href')).toBe(recordingPagePath(otherId));
 
-      // Out again, into the third chapter: nothing there, nothing drawn.
+      // Out again, into the third chapter: nothing there, and the panel says so again.
       await seekTo(page, 2 * CHAPTER_MS + 5_000);
-      await expect.poll(() => strip(page).count(), { timeout: 30_000 }).toBe(0);
+      await expect.poll(() => link.count(), { timeout: 30_000 }).toBe(0);
     } finally {
       await page.context().close();
     }
@@ -207,7 +218,8 @@ describe('the related-teachings strip', () => {
     const page = await openTeaching(listeningId);
     try {
       await seekTo(page, CHAPTER_MS + 5_000);
-      await expect.poll(() => strip(page).count(), { timeout: 30_000 }).toBe(1);
+      await openRelated(page);
+      await expect.poll(() => strip(page).getByRole('link').count(), { timeout: 30_000 }).toBe(1);
 
       await strip(page).getByRole('link').click();
       await page.waitForURL(`${baseUrl}${recordingPagePath(otherId)}`, { timeout: 30_000 });

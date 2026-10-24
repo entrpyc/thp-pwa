@@ -29,33 +29,6 @@
   font-size: var(--fs-body);
 }
 
-/* ------------------------------------------------------------------ the search over this teaching */
-
-.search {
-  display: flex;
-  flex-direction: column;
-  gap: var(--space-2);
-}
-
-.searchLabel {
-  color: var(--color-text-muted);
-  font-size: var(--fs-meta);
-}
-
-.searchField {
-  background: var(--color-surface);
-  border: 1px solid var(--color-border);
-  border-radius: var(--radius-md);
-  padding: var(--space-3) var(--space-4);
-  color: var(--color-text);
-  font-family: inherit;
-  font-size: var(--fs-body);
-}
-
-.searchField:focus-visible {
-  border-color: var(--color-primary-icon);
-}
-
 /* -------------------------------------------------------------------------------------- the list */
 
 .list {
@@ -169,6 +142,22 @@
 
 .play:hover {
   border-color: var(--color-primary-strong);
+}
+
+/* Play, and the highlighter under it — the two things a member does to a chapter from the list. */
+.rowControls {
+  flex: none;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: var(--space-2);
+}
+
+/* The pin at the play control's size, so the column reads as one pair of circles. */
+.rowPin {
+  width: var(--space-8);
+  height: var(--space-8);
+  padding: 0;
 }
 
 /* ---------------------------------------------------------------- the admin controls (3.22.7) */

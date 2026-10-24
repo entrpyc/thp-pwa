@@ -54,7 +54,7 @@ export type AnalyticsPropertyKind = 'id' | 'id?' | 'number' | 'boolean' | readon
 export const ANALYTICS_INSTALL_SOURCES = ['browser', 'pwa', 'ios_store', 'android_store'] as const;
 export type AnalyticsInstallSource = (typeof ANALYTICS_INSTALL_SOURCES)[number];
 
-const TABS = ['chapters', 'scripture', 'notes', 'transcript', 'mindmap'] as const;
+const TABS = ['about', 'chapters', 'scripture', 'notes', 'transcript', 'mindmap', 'related'] as const;
 const TAB_SURFACES = ['recording', 'chapter'] as const;
 const NOTIFICATION_CHANNELS = ['in_app', 'push'] as const;
 

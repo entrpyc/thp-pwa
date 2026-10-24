@@ -286,45 +286,6 @@ describe('the Chapters tab on the recording page (3.22.10)', () => {
   }, 180_000);
 });
 
-describe('the search over the list (3.22.11)', () => {
-  it('narrows the list as the member types, on the title and on the summary', async () => {
-    const page = await openTeaching(chapteredId);
-    try {
-      await openChapters(page);
-      const field = panel(page).getByLabel('Search these chapters');
-      const rows = panel(page).getByRole('listitem');
-
-      await field.fill('vine');
-      await expect.poll(() => rows.count(), { timeout: 30_000 }).toBe(1);
-      expect(await panel(page).textContent()).toContain('The vine');
-
-      // A word that appears in a *summary* and in no title — the filter reads both (3.22.11).
-      await field.fill('pruning');
-      await expect.poll(() => rows.count(), { timeout: 30_000 }).toBe(1);
-      expect(await panel(page).textContent()).toContain('The branches');
-
-      // Clearing the field is the way back rather than a control of its own.
-      await field.fill('');
-      await expect.poll(() => rows.count(), { timeout: 30_000 }).toBe(3);
-    } finally {
-      await page.context().close();
-    }
-  }, 180_000);
-
-  it('says so when nothing matches, rather than showing an empty box', async () => {
-    const page = await openTeaching(chapteredId);
-    try {
-      await openChapters(page);
-      await panel(page).getByLabel('Search these chapters').fill('ezekiel');
-      await expect
-        .poll(async () => (await panel(page).textContent()) ?? '', { timeout: 30_000 })
-        .toContain('No chapter of this teaching matches');
-    } finally {
-      await page.context().close();
-    }
-  }, 180_000);
-});
-
 describe('selecting a chapter, and playing one (3.22.12)', () => {
   /**
    * **A member who tapped a chapter has not asked for sound** — the rule opening a teaching (3.2.12)

@@ -24,14 +24,14 @@ import { MindMapPanel } from './mind-map-panel';
 import { NotesPanel } from './notes-panel';
 import { RecordingContentProvider, toLoaded, useRecordingContentFor } from './recording-content';
 import { listOffsetLeftHere, tabFromAddress, writeTabToAddress } from './round-trip';
-import { RelatedTeachings } from './related-teachings';
+import { RelatedTeachings, useRelatedGroups } from './related-teachings';
 import { ScripturePanel } from './scripture-panel';
 import { TranscriptPanel } from './transcript-panel';
 import { TagLabels } from '../../tag-labels';
 import styles from '../../screens.module.css';
 
 /** The strip's tabs, by the name each takes in the address (`?tab=chapters`). */
-const TABS = ['notes', 'chapters', 'scripture', 'transcript', 'mindmap'] as const;
+const TABS = ['notes', 'about', 'chapters', 'scripture', 'transcript', 'mindmap', 'related'] as const;
 
 /** The strip is single-select: opening one tab closes the others, and `null` is all closed. */
 type OpenTab = (typeof TABS)[number] | null;
@@ -45,13 +45,15 @@ type OpenTab = (typeof TABS)[number] | null;
  *   `pages/chapter.png` draws it, with the back control over it (scope prd 3.2.3, 3.2.7). The
  *   cover is the *series'* — a recording has none of its own — so every teaching in one study
  *   shows the same picture, and a teaching in no series keeps the flat band (scope prd 3.2.6).
- * - **A tab strip holding the reference's five tabs** — `Chapter`, `Scripture`, `Notes`,
- *   `Transcript`, `Mindmap` — each drawn when the teaching has something behind it: `Chapters`
- *   arrived with [3.22.10](docs/project/prd.md) and `Mindmap` with [3.8.3](docs/project/prd.md).
- *   Summary and description render directly in the page body, above the strip — description
+ * - **A tab strip holding the reference's five tabs and two more** — `Notes`, `About`, `Chapters`,
+ *   `Scripture`, `Transcript`, `Mindmap`, `Related` — each drawn when the teaching has something
+ *   behind it: `Chapters` arrived with [3.22.10](docs/project/prd.md) and `Mindmap` with
+ *   [3.8.3](docs/project/prd.md). `About` holds the description and the summary — description
  *   first, then summary, which is what a member reads in: the chosen line about the teaching, then
- *   what was said in it. The strip is **single-select**, the way the reference reads it: opening
- *   `Notes` closes `Scripture`.
+ *   what was said in it — and is drawn only when the teaching has either. `Related` holds the
+ *   moments in other teachings anchored to the part playing ([3.9.2](docs/project/prd.md)), and is
+ *   drawn only for a teaching that has a related moment somewhere in it. The strip is
+ *   **single-select**, the way the reference reads it: opening `Notes` closes `Scripture`.
  * - **`Transcript` is always drawn** (3.5.3, 3.5.4). `Scripture`, `Chapters` and `Mindmap` come
  *   and go with what a teaching has; the transcript is the one thing every published teaching
  *   has, so its tab is the one entry besides `Notes` that is always there.
@@ -267,6 +269,15 @@ export function RecordingScreen({
    */
   const content = useRecordingContentFor(recordingId, recording, startAtMs);
   const hasChapters = (content.chapters?.length ?? 0) > 0;
+  /** `About` is drawn only when there is something to read in it. */
+  const hasAbout = recording !== null && (recording.description !== null || recording.summary !== null);
+  /**
+   * `Related` is drawn only for a teaching with a related moment somewhere in it — the same line
+   * `Scripture` and `Chapters` draw. The groups are fetched here, once per teaching, so the strip
+   * can decide before the tab is pressed; the panel filters them to the part playing.
+   */
+  const relatedGroups = useRelatedGroups(recordingId);
+  const hasRelated = (relatedGroups?.length ?? 0) > 0;
 
   /**
    * **An address naming a tab the strip does not draw falls back to Notes.** `?tab=chapters` is the
@@ -280,13 +291,16 @@ export function RecordingScreen({
   useEffect(() => {
     if (recording === null) return;
     const undrawn =
+      (openTab === 'about' && !hasAbout) ||
       (openTab === 'chapters' && content.chapters !== null && !hasChapters) ||
       (openTab === 'scripture' && !recording.hasScripture) ||
-      (openTab === 'mindmap' && !recording.hasMindMap);
+      (openTab === 'mindmap' && !recording.hasMindMap) ||
+      // The related case waits for the list too: `null` is "not known yet", not "none".
+      (openTab === 'related' && relatedGroups !== null && !hasRelated);
     if (!undrawn) return;
     setOpenTab('notes');
     writeTabToAddress('notes', 'notes');
-  }, [content.chapters, hasChapters, openTab, recording]);
+  }, [content.chapters, hasAbout, hasChapters, hasRelated, openTab, recording, relatedGroups]);
 
   /**
    * **Put the list back where it was left**, on the way back from a chapter.
@@ -403,33 +417,16 @@ export function RecordingScreen({
           </header>
 
           {/*
-            **Description first, then summary.** The description is what an admin wrote *about* this
-            teaching — a line or two, chosen, and the same text the library row carries — so it is
-            the sentence a member arriving from that row is already half-reading. The summary is
-            generated from what was actually said, two paragraphs of it; it answers a
-            question the description has just raised rather than the other way round.
-
-            Both blocks clamp rather than run: between them they can push the tab strip off the
-            screen. Clamped, they cost six lines each and the strip stays where a member left it.
-          */}
-          {recording.description === null ? null : (
-            <CollapsibleProse label="Description" text={recording.description} />
-          )}
-
-          {recording.summary === null ? null : (
-            <CollapsibleProse label="Summary" text={recording.summary} />
-          )}
-
-          {/*
             `pages/recording.png`'s strip, same pill shape and same spacing. The order is `Notes`,
-            then `Chapters`, then `Scripture` — the reference draws `Scripture` first, but `Notes`
-            is the tab a member returns to and the one entry that is always there, so it takes the
-            first slot rather than moving whenever a teaching happens to cite nothing. When
-            `Mindmap` arrives it is an entry here, not a different control.
+            then `About`, then `Chapters`, then `Scripture` — the reference draws `Scripture` first,
+            but `Notes` is the tab a member returns to and the one entry that is always there, so it
+            takes the first slot rather than moving whenever a teaching happens to cite nothing.
+            `About` sits beside it because it is what a member reads before anything else here.
+            `Mindmap` and `Related` are entries here, not different controls.
 
-            `Notes` is the one place in the product entitled to the green (style-guide principle 5),
-            so its icon and its selected state take `--color-notes` where the others take the
-            purple every other selected thing takes.
+            Every tab takes the same selected state — the purple every other selected thing takes.
+            `Notes` used to carry a pencil and the notes green here; the operator took both out, so
+            the strip reads as one control with no entry claiming to be a different kind of thing.
           */}
           {/*
             **The strip and its panels do not wait for this teaching to hold the player.** A member
@@ -440,20 +437,35 @@ export function RecordingScreen({
             player over, and until it is pressed the other teaching keeps playing.
           */}
           <RecordingContentProvider value={content}>
-          <RelatedTeachings recordingId={recordingId} />
           <div className={styles.tabs} role="tablist" aria-label="Teaching contents">
             <button
-              className={`${styles.tab} ${styles.notesTab}`}
+              className={styles.tab}
               type="button"
               role="tab"
               aria-selected={openTab === 'notes'}
               onClick={() => chooseTab('notes')}
             >
-              <span className={styles.notesIcon} aria-hidden="true">
-                ✎
-              </span>
               Notes
             </button>
+            {/*
+              **Description first, then summary**, behind one tab. The description is what an admin
+              wrote *about* this teaching — a line or two, chosen, and the same text the library row
+              carries. The summary is generated from what was actually said, two paragraphs of it;
+              it answers a question the description has just raised rather than the other way
+              round. Absent entirely for a teaching that has neither — the line the strip draws for
+              every tab with nothing behind it.
+            */}
+            {hasAbout ? (
+              <button
+                className={styles.tab}
+                type="button"
+                role="tab"
+                aria-selected={openTab === 'about'}
+                onClick={() => chooseTab('about')}
+              >
+                About
+              </button>
+            ) : null}
             {/*
               Absent entirely rather than disabled for a teaching that cites nothing (3.4.4) — the
               same line the strip already draws for `Chapter` and `Mindmap`, decided off the payload
@@ -520,6 +532,24 @@ export function RecordingScreen({
                 Mindmap
               </button>
             ) : null}
+            {/*
+              `Related` — the moments in other teachings anchored to the part playing (3.9.2) —
+              last, and **drawn only for a teaching with a related moment somewhere in it**: the
+              strip decides off the groups fetched above, and the panel narrows them to the chapter
+              playing. It used to be a strip above the tabs that drew nothing until it had something
+              to say; as a tab, the empty part is stated inside the panel instead.
+            */}
+            {hasRelated ? (
+              <button
+                className={styles.tab}
+                type="button"
+                role="tab"
+                aria-selected={openTab === 'related'}
+                onClick={() => chooseTab('related')}
+              >
+                Related
+              </button>
+            ) : null}
           </div>
 
           {/*
@@ -537,6 +567,21 @@ export function RecordingScreen({
                 <NotesPanel recordingId={recordingId} canModerate={canModerate} />
               ) : null}
 
+              {/*
+                Both blocks clamp rather than run: between them they can push the strip off the
+                screen. Clamped, they cost six lines each and the strip stays where a member left it.
+              */}
+              {openTab === 'about' && hasAbout ? (
+                <div className={styles.aboutPanel}>
+                  {recording.description === null ? null : (
+                    <CollapsibleProse label="Description" text={recording.description} />
+                  )}
+                  {recording.summary === null ? null : (
+                    <CollapsibleProse label="Summary" text={recording.summary} />
+                  )}
+                </div>
+              ) : null}
+
               {/* Guarded as its tab is: the address can name this panel before the list has arrived. */}
               {openTab === 'chapters' && hasChapters ? (
                 <ChaptersPanel recordingId={recordingId} canEdit={canEditChapters} />
@@ -550,6 +595,10 @@ export function RecordingScreen({
 
               {openTab === 'mindmap' && recording.hasMindMap ? (
                 <MindMapPanel recordingId={recordingId} />
+              ) : null}
+
+              {openTab === 'related' && hasRelated && relatedGroups !== null ? (
+                <RelatedTeachings recordingId={recordingId} groups={relatedGroups} />
               ) : null}
             </div>
           )}

@@ -9,7 +9,6 @@ import {
   chapterPath,
   chapterQuestionPath,
   chapterSplitPath,
-  filterChapters,
   formatTimecode,
   type ChapterQuestionPayload,
   type ChapterView,
@@ -18,6 +17,7 @@ import {
 } from '@thp/shared';
 import { ApiClientError, apiFetch } from '@/client/api-client';
 import { track } from '@/client/observability/analytics';
+import { PinMomentControl } from '../../highlights/pin-moment-control';
 import { useRecordingContent } from './recording-content';
 import { isPlainPress, leaveForChapter } from './round-trip';
 import styles from './chapters.module.css';
@@ -26,8 +26,8 @@ import styles from './chapters.module.css';
  * **The `Chapters` tab of the recording page** ([3.22.10](docs/project/prd.md)–
  * [3.22.12](docs/project/prd.md)).
  *
- * Every chapter in order — its number, its title and the time it starts — with a search field over
- * the list and a play control on each row.
+ * Every chapter in order — its number, its title and the time it starts — with a play control and
+ * the highlighter on each row.
  *
  * Four decisions worth stating:
  *
@@ -43,11 +43,13 @@ import styles from './chapters.module.css';
  *   transcript line (3.5.4) already follow. The play control beside it is the one that asks for
  *   sound, and it seeks and plays in one press. Pressing the row also notes where the list is, so
  *   the way back from the chapter can put it there (`round-trip.ts`).
- * - **The search field searches this teaching and nothing else**
- *   ([3.22.11](docs/project/prd.md)). Title and summary, as the member types, over the chapters in
- *   front of them; searching the library is 3.10 and is not here. The matching rule is
- *   `filterChapters` in `@thp/shared`, so what a test asserts and what a member sees are the same
- *   function.
+ * - **The highlighter under the play control pins the chapter** ([3.15.2](docs/project/prd.md)) —
+ *   its opening moment, exactly as the chapter page's header control does, so a chapter pinned
+ *   from the list and the same chapter pinned from its page are one entry. The list is short
+ *   enough to carry a store subscription per row.
+ * - **No search field.** The list used to carry one over title and summary
+ *   ([3.22.11](docs/project/prd.md)); the operator took it out, since a teaching's dozen chapters
+ *   are read down faster than they are searched.
  * - **The editing affordances grant nothing** ([3.22.7](docs/project/prd.md),
  *   [3.19.14](docs/project/prd.md)). `canEdit` decides whether they are drawn; the API is what
  *   refuses a member, which is the standing constraint every admin control on the member surface
@@ -66,13 +68,11 @@ export function ChaptersPanel({
   canEdit: boolean;
 }) {
   const content = useRecordingContent();
-  const [query, setQuery] = useState('');
   const [editing, setEditing] = useState<string | null>(null);
   const [splitting, setSplitting] = useState<string | null>(null);
   const [failure, setFailure] = useState<string | null>(null);
 
   const chapters = content.chapters ?? [];
-  const shown = filterChapters(chapters, query);
 
   /**
    * Send a write and put the answer back in the content source's hands.
@@ -141,31 +141,11 @@ export function ChaptersPanel({
 
   return (
     <section className={styles.panel} aria-label="Chapters">
-      {/*
-        The filter, over the chapters of this teaching (3.22.11). A `search` input so a browser
-        offers its own clear control, and labelled rather than placeholder-only — a placeholder
-        disappears the moment somebody types, which is when they most need to know what they are
-        searching.
-      */}
-      <label className={styles.search}>
-        <span className={styles.searchLabel}>Search these chapters</span>
-        <input
-          className={styles.searchField}
-          type="search"
-          value={query}
-          onChange={(event) => setQuery(event.target.value)}
-        />
-      </label>
-
       {failure === null ? null : <p className={styles.failure}>{failure}</p>}
 
-      {shown.length === 0 ? (
-        // Only reachable through the search field, because a teaching with no chapters has no tab.
-        // It says which of the two it is rather than leaving an empty box.
-        <p className={styles.quiet}>No chapter of this teaching matches “{query.trim()}”.</p>
-      ) : (
-        <ol className={styles.list}>
-          {shown.map((chapter) => (
+      {/* No empty state: a teaching with no chapters has no tab (3.22.4, 3.22.10). */}
+      <ol className={styles.list}>
+          {chapters.map((chapter) => (
             <li key={chapter.id} className={styles.row}>
               <div className={styles.rowMain}>
                 {/*
@@ -195,26 +175,37 @@ export function ChaptersPanel({
                 </Link>
 
                 {/*
-                  The one control on the row that asks for sound (3.22.12). Outside the link rather
-                  than inside it, because a button inside a link is a press with two meanings. On a
-                  teaching the player does not hold, this is the press that takes the player over —
-                  from this chapter's start, playing — exactly as the page's own play control is.
+                  The two controls on the row, in a column beside the link — outside it rather than
+                  inside it, because a button inside a link is a press with two meanings.
+
+                  Play is the one control on the row that asks for sound (3.22.12). On a teaching
+                  the player does not hold, this is the press that takes the player over — from this
+                  chapter's start, playing — exactly as the page's own play control is. Under it,
+                  the highlighter pins the chapter's opening moment (3.15.2), as the chapter page's
+                  header control does.
                 */}
-                <button
-                  className={styles.play}
-                  type="button"
-                  aria-label={`Play from ${chapter.title}`}
-                  onClick={() => {
-                    // The index in the teaching's own order, not in the filtered list on screen.
-                    track('chapter_jumped', {
-                      recording_id: recordingId,
-                      chapter_index: chapters.indexOf(chapter),
-                    });
-                    content.playFromMs(chapter.startMs);
-                  }}
-                >
-                  <span aria-hidden="true">▶</span>
-                </button>
+                <div className={styles.rowControls}>
+                  <button
+                    className={styles.play}
+                    type="button"
+                    aria-label={`Play from ${chapter.title}`}
+                    onClick={() => {
+                      track('chapter_jumped', {
+                        recording_id: recordingId,
+                        chapter_index: chapters.indexOf(chapter),
+                      });
+                      content.playFromMs(chapter.startMs);
+                    }}
+                  >
+                    <span aria-hidden="true">▶</span>
+                  </button>
+                  <PinMomentControl
+                    recordingId={recordingId}
+                    positionMs={chapter.startMs}
+                    label={`the chapter “${chapter.title}”`}
+                    className={styles.rowPin}
+                  />
+                </div>
               </div>
 
               {canEdit ? (
@@ -283,8 +274,7 @@ export function ChaptersPanel({
               ) : null}
             </li>
           ))}
-        </ol>
-      )}
+      </ol>
     </section>
   );
 }

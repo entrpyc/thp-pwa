@@ -293,15 +293,12 @@ export function ChapterScreen({
           */}
           <div className={styles.tabs} role="tablist" aria-label="Chapter contents">
             <button
-              className={`${styles.tab} ${styles.notesTab}`}
+              className={styles.tab}
               type="button"
               role="tab"
               aria-selected={openTab === 'notes'}
               onClick={() => chooseTab('notes')}
             >
-              <span className={styles.notesIcon} aria-hidden="true">
-                ✎
-              </span>
               Notes
             </button>
             {/*

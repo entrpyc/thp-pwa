@@ -286,7 +286,7 @@ describe('the library at /recordings', () => {
 });
 
 describe('the recording page at /recordings/[id]', () => {
-  it('renders the title, the date, the summary and the description, and no tab strip', async () => {
+  it('renders the title and the date, and the summary and the description behind an About tab', async () => {
     const page = await signInAs(member);
     try {
       await page.goto(`${baseUrl}${recordingPagePath(publishedId)}`, {
@@ -298,9 +298,23 @@ describe('the recording page at /recordings/[id]', () => {
           timeout: 30_000,
         })
         .toBe(1);
-      expect(await page.getByText('The approved summary a member reads.').count()).toBe(1);
-      expect(await page.getByText('What this teaching is about.').count()).toBe(1);
       expect(await page.getByText('Recorded 14 Jul 2026').count()).toBe(1);
+
+      // The prose is behind `About`, not in the page body: nothing of it until the tab is pressed.
+      expect(await page.getByText('The approved summary a member reads.').count()).toBe(0);
+      expect(await page.getByText('What this teaching is about.').count()).toBe(0);
+      await page.getByRole('tab', { name: 'About' }).click();
+      await expect
+        .poll(() => page.getByText('The approved summary a member reads.').count(), { timeout: 30_000 })
+        .toBe(1);
+      expect(await page.getByText('What this teaching is about.').count()).toBe(1);
+      // Description first, then summary — the order a member reads in.
+      const order = await page.evaluate(() =>
+        [...document.querySelectorAll('section')]
+          .map((one) => one.getAttribute('aria-label'))
+          .filter((label) => label === 'Description' || label === 'Summary'),
+      );
+      expect(order).toEqual(['Description', 'Summary']);
 
       /*
        * One tab on this teaching. The strip arrived in Story 5 holding `Transcript` and gained
@@ -314,9 +328,11 @@ describe('the recording page at /recordings/[id]', () => {
        */
       const strip = page.getByRole('tablist', { name: 'Teaching contents' });
       expect(await strip.count()).toBe(1);
-      expect(await strip.getByRole('tab').count()).toBe(1);
+      // Two: `Notes`, and `About` for a teaching that has a description or a summary to show.
+      expect(await strip.getByRole('tab').count()).toBe(2);
       expect(await strip.getByRole('tab', { name: 'Notes' }).count()).toBe(1);
-      for (const absent of ['Chapter', 'Scripture', 'Transcript', 'Mindmap', 'Download']) {
+      expect(await strip.getByRole('tab', { name: 'About' }).count()).toBe(1);
+      for (const absent of ['Chapter', 'Scripture', 'Transcript', 'Mindmap', 'Related', 'Download']) {
         expect(await page.getByRole('tab', { name: absent }).count(), absent).toBe(0);
         expect(await page.getByRole('button', { name: absent }).count(), absent).toBe(0);
       }

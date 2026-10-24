@@ -1,5 +1,5 @@
 /*
- * The related-teachings strip of the recording page ([3.9.2](docs/project/prd.md)).
+ * The `Related` tab of the recording page ([3.9.2](docs/project/prd.md)).
  *
  * `pages/recording.png` draws nothing for it — the layer did not exist when the page was drawn —
  * so every rule is read off `style-guide.md`, and off the scripture panel beside it, which is
@@ -8,9 +8,8 @@
  * 1. `.card` is the guide's card recipe — `--color-surface`, one hairline, `--radius-md` — made a
  *    link, because the whole card is the press ([3.9.5](docs/project/prd.md)). No shadow, and no
  *    arrow glyph: the hover and focus borders say it is pressable.
- * 2. `.heading` is the guide's meta line, not a section title: this strip is an aside to the
- *    teaching, drawn only while the part playing has something to offer, and a heading as loud as
- *    the summary's would make it compete with what the member came to hear.
+ * 2. `.heading` is the guide's meta line, not a section title: the tab already names the panel,
+ *    and the line under it says which part of the teaching the cards are anchored to.
  * 3. `.excerpt` is the other teaching's sentence, in the body's muted colour and clamped to two
  *    lines, because a sentence is what the link *is* and a long one must not push the strip open.
  */
@@ -19,7 +18,12 @@
   display: flex;
   flex-direction: column;
   gap: var(--space-3);
-  margin: 0 0 var(--space-5);
+}
+
+.quiet {
+  margin: 0;
+  font-size: var(--fs-body);
+  color: var(--color-text-dim);
 }
 
 .heading {

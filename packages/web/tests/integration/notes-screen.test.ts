@@ -244,7 +244,7 @@ afterAll(async () => {
 // =================================================================================================
 
 describe('the recording page carries a Notes tab', () => {
-  it('leads the strip, in the notes green, and is open when the page is', async () => {
+  it('leads the strip, selected like any other tab, and is open when the page is', async () => {
     const page = await openTeaching(readingId);
     try {
       const strip = page.getByRole('tablist', { name: 'Teaching contents' });
@@ -265,23 +265,26 @@ describe('the recording page carries a Notes tab', () => {
         'true',
       );
 
-      // The green is the tab's, and it is the token rather than a colour typed here.
+      // Selected, it takes the purple every other selected tab takes — no icon, no green: the
+      // token rather than a colour typed here.
       const colours = await page
         .getByRole('tab', { name: 'Notes' })
         .evaluate((tab) => {
           const style = getComputedStyle(tab);
-          const icon = tab.querySelector('span');
           return {
             border: style.borderTopColor,
-            icon: icon === null ? '' : getComputedStyle(icon).color,
+            icons: tab.querySelectorAll('span').length,
+            primary: getComputedStyle(document.documentElement)
+              .getPropertyValue('--color-primary-strong')
+              .trim(),
             notes: getComputedStyle(document.documentElement)
               .getPropertyValue('--color-notes')
               .trim(),
           };
         });
-      const green = hexToRgb(colours.notes);
-      expect(colours.icon).toBe(green);
-      expect(colours.border).toBe(green);
+      expect(colours.icons).toBe(0);
+      expect(colours.border).toBe(hexToRgb(colours.primary));
+      expect(colours.border).not.toBe(hexToRgb(colours.notes));
     } finally {
       await page.context().close();
     }
