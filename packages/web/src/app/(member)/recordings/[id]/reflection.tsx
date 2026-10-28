@@ -9,13 +9,14 @@ import styles from '../../screens.module.css';
  * Every chapter carries one self-reflection question, written for the Flow Tracker
  * ([3.14.4](docs/project/prd.md)). The Flow Tracker asks them one at a time and waits for an
  * answer; this card shows them all at once and asks for nothing — a member who has just heard the
- * teaching reads down the list the way they read the summary beside it, which is why the card
- * takes the summary's shape rather than a form's.
+ * teaching reads down the list the way they read the summary, which is why the card takes the
+ * summary's shape rather than a form's. It is the whole of the `Reflection` tab on the recording
+ * page, with every chapter's question, and on a chapter page, with that chapter's alone.
  *
  * The questions come in **chapter order**, and a chapter whose question has not been written yet
  * is simply skipped: the list is what there is to reflect on, not a row per chapter with holes in
- * it. The card is not drawn at all when no chapter has a question yet — the caller decides that
- * off the same list, as it does for the summary and the description.
+ * it. The tab is not drawn at all when there is no question yet — the caller decides that off the
+ * same list, as it does for `Chapters`.
  */
 export function questionsOf(chapters: readonly ChapterView[] | null): readonly string[] {
   if (chapters === null) return [];

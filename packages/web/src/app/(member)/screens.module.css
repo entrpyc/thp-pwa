@@ -102,12 +102,35 @@
 
 /* ----------------------------------------------------------------------------------- the landing */
 
+/*
+ * **The whole resume card is the press, and it says so on hover** — the same raised surface the
+ * `Series` and `Highlights` tiles beside it take. The link is the row inside the card, but a card
+ * with a title, a row and dead space around them read as a card with a link *in* it; a member
+ * pressed the title and nothing happened. The link is stretched over the card instead
+ * (`.resume::after`): the card stays a region with a heading, which is what reads it aloud, and
+ * every pixel of it goes to the teaching.
+ */
+.resumeCard {
+  position: relative;
+}
+
+.resumeCard:hover {
+  background: var(--color-surface-raised);
+}
+
 .resume {
   display: flex;
   align-items: center;
   gap: var(--space-5);
   text-decoration: none;
   min-width: 0;
+}
+
+.resume::after {
+  content: '';
+  position: absolute;
+  inset: 0;
+  border-radius: inherit;
 }
 
 .resumePlay {
@@ -630,7 +653,7 @@
 }
 
 /*
- * The reflection questions (`reflection.tsx`), under the summary and in its card. A list rather
+ * The reflection questions (`reflection.tsx`), behind their own tab and in a card. A list rather
  * than a paragraph because each question stands alone — a member takes them one at a time — and
  * a bulleted list is how the eye finds the next one. The bullets sit inside the card's padding
  * rather than hanging out of it, on the edge the summary's lines start on.
