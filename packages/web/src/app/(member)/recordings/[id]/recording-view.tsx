@@ -2,7 +2,7 @@
 
 import Link from 'next/link';
 import { useSearchParams } from 'next/navigation';
-import { useEffect, useLayoutEffect, useRef, useState } from 'react';
+import { useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react';
 import {
   MEMBER_LIBRARY_PAGE_PATH,
   memberRecordingPath,
@@ -23,6 +23,7 @@ import { CollapsibleProse } from './collapsible-prose';
 import { MindMapPanel } from './mind-map-panel';
 import { NotesPanel } from './notes-panel';
 import { RecordingContentProvider, toLoaded, useRecordingContentFor } from './recording-content';
+import { ReflectionCard, questionsOf } from './reflection';
 import { listOffsetLeftHere, tabFromAddress, writeTabToAddress } from './round-trip';
 import { RelatedTeachings, useRelatedGroups } from './related-teachings';
 import { ScripturePanel } from './scripture-panel';
@@ -269,8 +270,16 @@ export function RecordingScreen({
    */
   const content = useRecordingContentFor(recordingId, recording, startAtMs);
   const hasChapters = (content.chapters?.length ?? 0) > 0;
+  /**
+   * The chapters' reflection questions, in chapter order, for the `Reflection` card under the
+   * summary. They ride the chapter list rather than the page's payload, so a teaching whose
+   * questions have not been generated yet simply has none here.
+   */
+  const questions = useMemo(() => questionsOf(content.chapters), [content.chapters]);
   /** `About` is drawn only when there is something to read in it. */
-  const hasAbout = recording !== null && (recording.description !== null || recording.summary !== null);
+  const hasAbout =
+    recording !== null &&
+    (recording.description !== null || recording.summary !== null || questions.length > 0);
   /**
    * `Related` is drawn only for a teaching with a related moment somewhere in it — the same line
    * `Scripture` and `Chapters` draw. The groups are fetched here, once per teaching, so the strip
@@ -448,12 +457,14 @@ export function RecordingScreen({
               Notes
             </button>
             {/*
-              **Description first, then summary**, behind one tab. The description is what an admin
-              wrote *about* this teaching — a line or two, chosen, and the same text the library row
-              carries. The summary is generated from what was actually said, two paragraphs of it;
-              it answers a question the description has just raised rather than the other way
-              round. Absent entirely for a teaching that has neither — the line the strip draws for
-              every tab with nothing behind it.
+              **Description first, then summary, then the reflection questions**, behind one tab.
+              The description is what an admin wrote *about* this teaching — a line or two, chosen,
+              and the same text the library row carries. The summary is generated from what was
+              actually said, two paragraphs of it; it answers a question the description has just
+              raised rather than the other way round. The reflection questions close the tab: one
+              per chapter, to read rather than to answer (`reflection.tsx`). Absent entirely for a
+              teaching that has none of the three — the line the strip draws for every tab with
+              nothing behind it.
             */}
             {hasAbout ? (
               <button
@@ -579,6 +590,7 @@ export function RecordingScreen({
                   {recording.summary === null ? null : (
                     <CollapsibleProse label="Summary" text={recording.summary} />
                   )}
+                  {questions.length === 0 ? null : <ReflectionCard questions={questions} />}
                 </div>
               ) : null}
 
