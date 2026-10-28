@@ -572,33 +572,29 @@ describe('its place in the chain', () => {
     // successor is asserted by running it below.
     expect(PIPELINE_STEPS.indexOf('embed')).toBe(PIPELINE_STEPS.indexOf('generate_questions') + 1);
     expect(PIPELINE_STEPS.indexOf('generate_questions')).toBe(
+      PIPELINE_STEPS.indexOf('generate_draft') + 1,
+    );
+    expect(PIPELINE_STEPS.indexOf('generate_draft')).toBe(
       PIPELINE_STEPS.indexOf('generate_chapters') + 1,
     );
 
     const seeded = await teaching();
-    const generated = await run(await claimed(seeded.recordingId, 'generate_chapters'));
-    expect(generated.status).toBe('succeeded');
+    const asked = await run(await claimed(seeded.recordingId, 'generate_questions'));
+    expect(asked.status).toBe('succeeded');
 
     const ledger = await sql<{ step: string; status: string }[]>`
       select step::text as step, status::text as status from job
       where recording_id = ${seeded.recordingId} order by enqueued_at, id
     `;
     expect(ledger.map((row) => [row.step, row.status])).toEqual([
-      ['generate_chapters', 'succeeded'],
-      ['generate_questions', 'pending'],
+      ['generate_questions', 'succeeded'],
+      ['embed', 'pending'],
     ]);
-
-    // Run the questions step it enqueued, which hands on to embedding.
-    const questions = await findUnfinishedJob(seeded.recordingId, 'generate_questions', handle);
-    expect(questions).not.toBeNull();
-    await sql`update job set status = 'running', started_at = now() where id = ${questions?.id as string}`;
-    const asked = await run({ ...(questions as JobRow), status: 'running', startedAt: new Date() });
-    expect(asked.status).toBe('succeeded');
 
     // Run what that enqueued, and it hands on to cross-referencing in turn.
     const pending = await findUnfinishedJob(seeded.recordingId, 'embed', handle);
     expect(pending).not.toBeNull();
-    expect(pending?.correlationId).toBe(generated.correlationId);
+    expect(pending?.correlationId).toBe(asked.correlationId);
     await sql`update job set status = 'running', started_at = now() where id = ${pending?.id as string}`;
     const row = await run({ ...(pending as JobRow), status: 'running', startedAt: new Date() });
     expect(row.status).toBe('succeeded');
@@ -607,7 +603,6 @@ describe('its place in the chain', () => {
       where recording_id = ${seeded.recordingId} order by enqueued_at, id
     `;
     expect(after.map((one) => [one.step, one.status])).toEqual([
-      ['generate_chapters', 'succeeded'],
       ['generate_questions', 'succeeded'],
       ['embed', 'succeeded'],
       ['cross_reference', 'pending'],
