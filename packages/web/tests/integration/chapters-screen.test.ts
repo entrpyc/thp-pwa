@@ -15,6 +15,7 @@ import {
   listChapters,
   replaceChapters,
   replaceTranscript,
+  setChapterQuestion,
   setRecordingPublication,
   setRecordingSeries,
   type DatabaseHandle,
@@ -328,6 +329,47 @@ describe('selecting a chapter, and playing one (3.22.12)', () => {
       await page.context().close();
     }
   }, 240_000);
+});
+
+describe('the Reflection card on the recording page', () => {
+  /**
+   * The chapters' questions, listed to read rather than asked one at a time, behind `About` and
+   * under the summary. The chaptered teaching has no description and no summary, so `About` here
+   * is drawn for the questions alone — which is the proof that the tab follows them too.
+   *
+   * Only two of the three chapters get a question: the middle one is left as the pipeline leaves a
+   * chapter it has not reached, and the list skips it rather than drawing a hole.
+   */
+  it('lists the chapters’ questions in chapter order, behind About', async () => {
+    await setChapterQuestion(chapterIds[0]!, 'Where are you abiding this week?', handle);
+    await setChapterQuestion(chapterIds[2]!, 'Who is tending your field?', handle);
+    const page = await openTeaching(chapteredId);
+    try {
+      const strip = page.getByRole('tablist', { name: 'Teaching contents' });
+      await expect
+        .poll(() => strip.getByRole('tab', { name: 'About' }).count(), { timeout: 30_000 })
+        .toBe(1);
+      // Nothing of the questions in the page body until the tab is pressed.
+      expect(await page.getByText('Where are you abiding this week?').count()).toBe(0);
+      await strip.getByRole('tab', { name: 'About' }).click();
+
+      const card = page.getByRole('region', { name: 'Reflection' });
+      await expect.poll(() => card.count(), { timeout: 30_000 }).toBe(1);
+      expect(await card.getByRole('heading', { name: 'Reflection' }).count()).toBe(1);
+      // A list of the questions, not a form: no field and no control to answer one with.
+      expect(await card.getByRole('listitem').allInnerTexts()).toEqual([
+        'Where are you abiding this week?',
+        'Who is tending your field?',
+      ]);
+      expect(await card.getByRole('textbox').count()).toBe(0);
+      expect(await card.getByRole('button').count()).toBe(0);
+      // This teaching has neither prose block, so the card is the whole of `About`.
+      expect(await page.getByRole('region', { name: 'Description' }).count()).toBe(0);
+      expect(await page.getByRole('region', { name: 'Summary' }).count()).toBe(0);
+    } finally {
+      await page.context().close();
+    }
+  }, 120_000);
 });
 
 describe('the chapter page (3.22.13, 3.22.14, 3.22.15)', () => {
