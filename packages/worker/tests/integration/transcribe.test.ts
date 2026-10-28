@@ -284,7 +284,7 @@ describe('a recording that transcribes', () => {
 
     expect((await ledger(job.recordingId)).map((row) => [row.step, row.status])).toEqual([
       ['transcribe', 'succeeded'],
-      ['generate_draft', 'pending'],
+      ['generate_chapters', 'pending'],
     ]);
   });
 });
@@ -496,7 +496,7 @@ describe('the confidence gate', () => {
     expect(row.status).toBe('succeeded');
     expect((await ledger(job.recordingId)).map((one) => one.step)).toEqual([
       'transcribe',
-      'generate_draft',
+      'generate_chapters',
     ]);
   });
 });

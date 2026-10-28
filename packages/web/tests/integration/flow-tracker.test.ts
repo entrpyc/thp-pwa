@@ -375,7 +375,7 @@ describe('answering, and the reading list (3.14.6, 3.14.7, 3.14.9)', () => {
     expect(latest.status).toBe('in_progress');
 
     await answer(alice, session.id, newerCh1!.id, 'experience_daily');
-    await answer(alice, session.id, olderCh2!.id, 'not_embodied');
+    await answer(alice, session.id, olderCh2!.id, 'remember_well');
     const last = await answer(alice, session.id, olderCh1!.id, 'recall_slightly');
     expect(last.status).toBe(200);
     latest = last.body.session;
@@ -388,9 +388,8 @@ describe('answering, and the reading list (3.14.6, 3.14.7, 3.14.9)', () => {
     expect(list.map((group) => group.recording?.title)).toEqual([`Earlier ${RUN} ${y}`, `Later ${RUN} ${y}`]);
     // Oldest teaching first, and within it the first chapter first — the reading order.
     expect(list[0]?.rows.map((row) => row.item.chapter?.title)).toEqual([`Earlier ${RUN} ${y} ch1`, `Earlier ${RUN} ${y} ch2`]);
-    expect(list[0]?.rows.map((row) => row.item.answer)).toEqual(['recall_slightly', 'not_embodied']);
-    // The one that is experienced daily is not on the list; the second press above turned the
-    // other from remembered well into not remembered, which is a gap.
+    expect(list[0]?.rows.map((row) => row.item.answer)).toEqual(['recall_slightly', 'remember_well']);
+    // The one seen in the member's life is not on the list.
     expect(list[1]?.rows.map((row) => row.item.chapter?.title)).toEqual([`Later ${RUN} ${y} ch2`]);
     // The related chapter of the other teaching sits beneath the row whose span the link left from.
     expect(list[0]?.rows[1]?.related).toEqual([
@@ -438,7 +437,7 @@ describe('snapshots (3.14.10)', () => {
     const one = await teaching(`Snapshot ${RUN} ${y}`, `${y}-01-01`, 3);
     const session = await started(alice, one.id);
     const [ch3, ch2, ch1] = session.items;
-    await answer(alice, session.id, ch3!.id, 'not_embodied');
+    await answer(alice, session.id, ch3!.id, 'remember_well');
 
     await deleteChapter(one.chapterIds[2]!, handle); // ch3, answered
     await deleteChapter(one.chapterIds[0]!, handle); // ch1, not answered
@@ -446,14 +445,14 @@ describe('snapshots (3.14.10)', () => {
     const read = await call<FlowSessionPayload>(flowSessionPath(session.id), { cookie: alice.cookie });
     expect(read.body.session.items.map((item) => item.id)).toEqual([ch3!.id, ch2!.id]);
     expect(read.body.session.items[0]).toMatchObject({
-      answer: 'not_embodied',
+      answer: 'remember_well',
       chapter: { id: null, title: `Snapshot ${RUN} ${y} ch3` },
       question: `Q about Snapshot ${RUN} ${y} ch3?`,
     });
     expect(read.body.session.questionCount).toBe(2);
 
     // Answering the one left completes it; the row with no chapter opens the teaching instead.
-    const done = await answer(alice, session.id, ch2!.id, 'remember_well');
+    const done = await answer(alice, session.id, ch2!.id, 'not_embodied');
     expect(done.body.session.status).toBe('complete');
     expect(done.body.session.readingList?.[0]?.rows[0]?.item.chapter?.id).toBeNull();
     expect(ch1).toBeDefined();

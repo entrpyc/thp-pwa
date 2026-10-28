@@ -10,28 +10,32 @@ import styles from './mind-map-canvas.module.css';
  * **The mind map, drawn** ([3.8.3](docs/project/prd.md), [3.8.4](docs/project/prd.md)) — and, for
  * an admin, edited in place ([3.8.2](docs/project/prd.md)).
  *
- * One component on two screens: the recording page's `Mindmap` tab reads it, and the review form
- * curates it with `editable` on. The same boxes, the same layout, the same expand and collapse —
- * so what an admin approves is what a member sees, which is the property a separate editor could
- * only promise.
+ * One component on three screens: the recording page's `Mindmap` tab reads the whole map, the
+ * chapter page's reads one chapter's branch with that chapter as root, and the review form curates
+ * it with `editable` on. The same boxes, the same layout, the same expand and collapse — so what an
+ * admin approves is what a member sees, which is the property a separate editor could only promise.
  *
  * - **HTML boxes over an SVG of edges**, not a graph library. The layout is `layout.ts`'s pure
- *   function; the boxes are real buttons, so the tree is walkable from a keyboard and the colours
+ *   function; the boxes are real elements, so the tree is walkable from a keyboard and the colours
  *   are the token layer's. The SVG draws nothing but curves.
- * - **The root and its themes open; the points are folded away** until a theme is pressed. A
- *   folded node wears a badge saying how many are under it. Pressing a label toggles it; nothing
- *   else does, so a member cannot collapse a branch by reaching for a timestamp.
- * - **A node that names a moment carries a chip** with its timecode. Pressing it is `onSeek` —
- *   which, on the recording page, goes to the moment **without starting sound**, as the
- *   transcript's lines do (3.5.4). Where nothing handles a seek, the chip is text.
+ * - **Everything opens at once.** The map is read whole and folded by hand: a box with children
+ *   carries a fold control on its right — a chevron behind a divider that runs the box's full
+ *   height — and pressing anywhere right of the divider folds or unfolds the branch. Nothing else
+ *   does, so a member cannot collapse a branch by reaching for a label or a timestamp. The root has
+ *   no control, because a map folded to its title is no map.
+ * - **A node that names a moment carries a chip** with its timecode and a small play control
+ *   before it. The time is `onSeek` — which, on the recording page, goes to the moment **without
+ *   starting sound**, as the transcript's lines do (3.5.4); the play control is `onPlay`, which
+ *   goes there and plays. Where nothing handles a seek, the chip is text, and where nothing
+ *   handles a play, there is no play control.
  * - **It pans.** The picture is wider than a phone, so the scroller scrolls both ways, by touch as
  *   any scroll region does and by dragging with a mouse. There is no zoom: the boxes are already
- *   sized to be read at one scale, and a smaller map is a collapsed one.
+ *   sized to be read at one scale, and a smaller map is a folded one.
  * - **Editing is per node and never modal.** Rename puts an input where the label was; Remove
- *   takes the node and its subtree; Add puts a new point under it; Move marks it and every node it
- *   may go under grows a *Put here*. The rules for what fits — three levels, eight themes, six
- *   points — are `tree-edit.ts`'s and the server's alike, so the form never builds a tree the
- *   approve press refuses.
+ *   takes the node and its subtree; Add puts a new node under it; Move marks it and every node it
+ *   may go under grows a *Put here*. The rules for what fits — four levels and the caps per level —
+ *   are `tree-edit.ts`'s and the server's alike, so the form never builds a tree the approve press
+ *   refuses.
  */
 
 export interface MindMapCanvasProps {
@@ -43,12 +47,25 @@ export interface MindMapCanvasProps {
   readonly editable?: boolean;
   /** Required when `editable`: every edit hands back a new root. */
   readonly onChange?: (root: MindMapNode) => void;
-  /** Go to a moment. When absent, timestamp chips are text rather than controls. */
+  /** Go to a moment without starting sound. When absent, timestamp chips are text, not controls. */
   readonly onSeek?: (ms: number) => void;
+  /** Go to a moment and play. When absent, chips carry no play control. */
+  readonly onPlay?: (ms: number) => void;
 }
 
 /** The height the editing controls add to every box, which the layout has to know about. */
 const TOOLS_HEIGHT = 34;
+
+/** Every node of the tree that has something under it — the opening state of the map. */
+function allBranches(root: MindMapNode): Set<string> {
+  const ids = new Set<string>();
+  const visit = (node: MindMapNode): void => {
+    if (node.children.length > 0) ids.add(node.id);
+    node.children.forEach(visit);
+  };
+  visit(root);
+  return ids;
+}
 
 export function MindMapCanvas({
   root,
@@ -57,15 +74,16 @@ export function MindMapCanvas({
   editable = false,
   onChange,
   onSeek,
+  onPlay,
 }: MindMapCanvasProps) {
-  /** Which nodes show their children. The root starts open, so the themes are on screen at once. */
-  const [expanded, setExpanded] = useState<ReadonlySet<string>>(() => new Set([root.id]));
+  /** Which nodes show their children. Everything starts open; a member folds what they are done with. */
+  const [expanded, setExpanded] = useState<ReadonlySet<string>>(() => allBranches(root));
   const [moving, setMoving] = useState<string | null>(null);
   const [renaming, setRenaming] = useState<{ id: string; draft: string } | null>(null);
 
-  // A different tree — a regenerated draft under the same form — starts folded again.
+  // A different tree — a regenerated draft under the same form — starts open again.
   useEffect(() => {
-    setExpanded(new Set([root.id]));
+    setExpanded(allBranches(root));
     setMoving(null);
     setRenaming(null);
   }, [root.id]);
@@ -150,6 +168,7 @@ export function MindMapCanvas({
             renaming={renaming?.id === placed.id ? renaming.draft : null}
             onToggle={toggle}
             {...(onSeek === undefined ? {} : { onSeek })}
+            {...(onPlay === undefined ? {} : { onPlay })}
             onStartRename={(id, draft) => setRenaming({ id, draft })}
             onRenameDraft={(draft) => setRenaming((current) => (current === null ? null : { ...current, draft }))}
             onCommitRename={() => {
@@ -187,6 +206,7 @@ function NodeBox({
   renaming,
   onToggle,
   onSeek,
+  onPlay,
   onStartRename,
   onRenameDraft,
   onCommitRename,
@@ -205,6 +225,7 @@ function NodeBox({
   renaming: string | null;
   onToggle: (id: string) => void;
   onSeek?: (ms: number) => void;
+  onPlay?: (ms: number) => void;
   onStartRename: (id: string, draft: string) => void;
   onRenameDraft: (draft: string) => void;
   onCommitRename: () => void;
@@ -216,9 +237,10 @@ function NodeBox({
   onPutHere: (targetId: string) => void;
 }) {
   const { node, depth } = placed;
-  const hasChildren = node.children.length > 0;
   const isRoot = depth === 1;
-  const tone = isRoot ? styles.root : depth === 2 ? styles.theme : styles.point;
+  const foldable = node.children.length > 0 && !isRoot;
+  const tone =
+    isRoot ? styles.root : depth === 2 ? styles.chapter : depth === 3 ? styles.theme : styles.point;
   const timecode = node.anchorMs === null ? null : formatTimecode(node.anchorMs);
   const isMoving = moving === node.id;
   const canReceive = moving !== null && !isMoving && canMoveUnder(root, moving, node.id);
@@ -230,118 +252,139 @@ function NodeBox({
       data-depth={depth}
       data-node-id={node.id}
     >
-      {renaming !== null ? (
-        <input
-          className={styles.rename}
-          aria-label={`Rename ${node.label}`}
-          value={renaming}
-          autoFocus
-          onChange={(event) => onRenameDraft(event.target.value)}
-          onKeyDown={(event) => {
-            if (event.key === 'Enter') onCommitRename();
-            if (event.key === 'Escape') onCancelRename();
-          }}
-        />
-      ) : hasChildren ? (
-        <button
-          className={styles.label}
-          type="button"
-          aria-expanded={placed.expanded}
-          onClick={() => onToggle(node.id)}
-        >
-          <span>{node.label}</span>
-          {placed.hidden > 0 ? (
-            <span className={styles.badge} aria-label={`${placed.hidden} more`}>
-              +{placed.hidden}
-            </span>
-          ) : null}
-        </button>
-      ) : (
-        <span className={styles.labelStatic}>{node.label}</span>
-      )}
+      <div className={styles.body}>
+        {renaming !== null ? (
+          <input
+            className={styles.rename}
+            aria-label={`Rename ${node.label}`}
+            value={renaming}
+            autoFocus
+            onChange={(event) => onRenameDraft(event.target.value)}
+            onKeyDown={(event) => {
+              if (event.key === 'Enter') onCommitRename();
+              if (event.key === 'Escape') onCancelRename();
+            }}
+          />
+        ) : (
+          <span className={styles.label}>{node.label}</span>
+        )}
 
-      {timecode === null ? null : onSeek === undefined ? (
-        <span className={styles.chip}>{timecode}</span>
-      ) : (
-        <button
-          className={`${styles.chip} ${styles.chipButton}`}
-          type="button"
-          aria-label={`Go to ${timecode}`}
-          onClick={() => onSeek(node.anchorMs ?? 0)}
-        >
-          {timecode}
-        </button>
-      )}
+        {timecode === null ? null : (
+          <span className={styles.chip}>
+            {onPlay === undefined ? null : (
+              <button
+                className={styles.play}
+                type="button"
+                aria-label={`Play from ${timecode}`}
+                onClick={() => onPlay(node.anchorMs ?? 0)}
+              >
+                <span aria-hidden="true">▶</span>
+              </button>
+            )}
+            {onSeek === undefined ? (
+              <span className={styles.time}>{timecode}</span>
+            ) : (
+              <button
+                className={`${styles.time} ${styles.timeButton}`}
+                type="button"
+                aria-label={`Go to ${timecode}`}
+                onClick={() => onSeek(node.anchorMs ?? 0)}
+              >
+                {timecode}
+              </button>
+            )}
+          </span>
+        )}
 
-      {editable ? (
-        <div className={styles.tools}>
-          {renaming !== null ? (
-            <>
-              <button className={styles.toolStrong} type="button" onClick={onCommitRename}>
-                Save
-              </button>
-              <button className={styles.tool} type="button" onClick={onCancelRename}>
-                Cancel
-              </button>
-            </>
-          ) : moving !== null ? (
-            isMoving ? (
-              <button className={styles.toolStrong} type="button" onClick={onCancelMove}>
-                Cancel move
-              </button>
-            ) : canReceive ? (
-              <button
-                className={styles.toolStrong}
-                type="button"
-                aria-label={`Put it under ${node.label}`}
-                onClick={() => onPutHere(node.id)}
-              >
-                Put here
-              </button>
-            ) : null
-          ) : (
-            <>
-              <button
-                className={styles.tool}
-                type="button"
-                aria-label={`Rename ${node.label}`}
-                onClick={() => onStartRename(node.id, node.label)}
-              >
-                Rename
-              </button>
-              {canAddUnder(root, node.id) ? (
+        {editable ? (
+          <div className={styles.tools}>
+            {renaming !== null ? (
+              <>
+                <button className={styles.toolStrong} type="button" onClick={onCommitRename}>
+                  Save
+                </button>
+                <button className={styles.tool} type="button" onClick={onCancelRename}>
+                  Cancel
+                </button>
+              </>
+            ) : moving !== null ? (
+              isMoving ? (
+                <button className={styles.toolStrong} type="button" onClick={onCancelMove}>
+                  Cancel move
+                </button>
+              ) : canReceive ? (
+                <button
+                  className={styles.toolStrong}
+                  type="button"
+                  aria-label={`Put it under ${node.label}`}
+                  onClick={() => onPutHere(node.id)}
+                >
+                  Put here
+                </button>
+              ) : null
+            ) : (
+              <>
                 <button
                   className={styles.tool}
                   type="button"
-                  aria-label={`Add a point under ${node.label}`}
-                  onClick={() => onAdd(node.id)}
+                  aria-label={`Rename ${node.label}`}
+                  onClick={() => onStartRename(node.id, node.label)}
                 >
-                  Add
+                  Rename
                 </button>
-              ) : null}
-              {isRoot ? null : (
-                <>
+                {canAddUnder(root, node.id) ? (
                   <button
                     className={styles.tool}
                     type="button"
-                    aria-label={`Move ${node.label}`}
-                    onClick={() => onStartMove(node.id)}
+                    aria-label={`Add a point under ${node.label}`}
+                    onClick={() => onAdd(node.id)}
                   >
-                    Move
+                    Add
                   </button>
-                  <button
-                    className={styles.tool}
-                    type="button"
-                    aria-label={`Remove ${node.label}`}
-                    onClick={() => onRemove(node.id)}
-                  >
-                    Remove
-                  </button>
-                </>
-              )}
-            </>
-          )}
-        </div>
+                ) : null}
+                {isRoot ? null : (
+                  <>
+                    <button
+                      className={styles.tool}
+                      type="button"
+                      aria-label={`Move ${node.label}`}
+                      onClick={() => onStartMove(node.id)}
+                    >
+                      Move
+                    </button>
+                    <button
+                      className={styles.tool}
+                      type="button"
+                      aria-label={`Remove ${node.label}`}
+                      onClick={() => onRemove(node.id)}
+                    >
+                      Remove
+                    </button>
+                  </>
+                )}
+              </>
+            )}
+          </div>
+        ) : null}
+      </div>
+
+      {/*
+        The fold control: the whole strip right of the divider, top to bottom, so there is no
+        part of it a press misses. The chevron points right when the branch is folded and down
+        when it is open, the way a disclosure does.
+      */}
+      {foldable ? (
+        <button
+          className={styles.toggle}
+          type="button"
+          aria-expanded={placed.expanded}
+          aria-label={`${placed.expanded ? 'Collapse' : 'Expand'} ${node.label}`}
+          onClick={() => onToggle(node.id)}
+        >
+          <span className={styles.chevron} aria-hidden="true">
+            ›
+          </span>
+        </button>
       ) : null}
     </div>
   );

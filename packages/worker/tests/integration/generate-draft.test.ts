@@ -8,6 +8,7 @@ import {
   insertRecording,
   insertUser,
   listPendingReviews,
+  replaceChapters,
   replaceTranscript,
   runMigrations,
   type DatabaseHandle,
@@ -236,6 +237,59 @@ describe('the mind map draft ([3.8.1](docs/project/prd.md))', () => {
     expect(captured.filter((line) => line.message === 'generate_draft.mind_map_nodes_discarded')).toEqual(
       [expect.objectContaining({ dropped: 2 })],
     );
+  });
+
+  it('maps a teaching with chapters chapter by chapter: one call per chapter over its own lines, the chapters as the first level', async () => {
+    const job = await claimedJob({
+      segments: ['Opening words.', 'More opening.', 'The turn.', 'Closing words.'],
+    });
+    await replaceChapters(
+      job.recordingId,
+      [
+        { startMs: 0, title: 'The opening', summary: 'How it starts.', editedByAdmin: false },
+        { startMs: 8000, title: 'The turn', summary: 'Where it goes.', editedByAdmin: false },
+      ],
+      { model: 'test', modelVersion: '1', promptVersion: 'test' },
+      handle,
+    );
+    const model = fakeGenerator(DRAFT);
+
+    const row = await run(job, model);
+    expect(row.status).toBe('succeeded');
+
+    // One call for the three whole-teaching kinds, then one per chapter for the map alone, each
+    // handed only that chapter's lines and told which chapter it is reading.
+    expect(model.requests.map((one) => [one.kinds, one.lines.map((line) => line.startMs), one.chapter])).toEqual([
+      [['summary', 'recording_metadata', 'scripture'], [0, 4000, 8000, 12000], undefined],
+      [['mind_map'], [0, 4000], { title: 'The opening', summary: 'How it starts.' }],
+      [['mind_map'], [8000, 12000], { title: 'The turn', summary: 'Where it goes.' }],
+    ]);
+    expect(row.providerMeta).toMatchObject({ generationCalls: 3 });
+
+    const item = (await items(job.recordingId)).find((one) => one.kind === 'mind_map');
+    const tree = (item?.fields as { mindMap: { label: string; children: { label: string; anchorMs: number | null; children: { label: string; children: { label: string; children: unknown[] }[] }[] }[] } }).mindMap;
+    expect(tree.label).toBe(`Teaching ${recordings}`);
+    // The chapters, anchored at their starts; the script's themes under each; its points under those.
+    expect(tree.children.map((one) => [one.label, one.anchorMs])).toEqual([
+      ['The opening', 0],
+      ['The turn', 8000],
+    ]);
+    for (const chapter of tree.children) {
+      expect(chapter.children.map((one) => one.label)).toEqual([
+        'Picking up the second chapter',
+        'A closing charge',
+      ]);
+      expect(chapter.children[0]?.children.map((one) => one.label)).toEqual([
+        'Where the letter left off',
+        'Slowed down phrase by phrase',
+      ]);
+      expect(chapter.children[0]?.children.every((one) => one.children.length === 0)).toBe(true);
+    }
+    // What did not fit, counted across both chapters' answers.
+    expect(row.providerMeta).toMatchObject({ mindMapNodesDropped: 4 });
+
+    // The other kinds are untouched by the split: one row each, as before.
+    expect((await items(job.recordingId)).map((one) => one.kind).sort()).toEqual([...REVIEW_KINDS].sort());
   });
 
   it('still writes a map for a script that says nothing about one, read off the transcript', async () => {

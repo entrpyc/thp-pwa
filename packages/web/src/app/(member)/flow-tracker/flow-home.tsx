@@ -75,8 +75,9 @@ export function FlowHome() {
       <header className={styles.pageHead}>
         <h1 className={styles.pageTitle}>Flow Tracker</h1>
         <p className={styles.pageLead}>
-          Lost the thread of the teaching? Pick where you fell behind, reflect on each part since,
-          and get a route back in. Only you can see this.
+          Examine yourself against the teaching. Pick a teaching, reflect on each part since, and
+          see how well you are living it out rather than keeping it as information. Only you can
+          see this.
         </p>
       </header>
 
@@ -143,11 +144,11 @@ export function FlowHome() {
 
         {sessions !== null && active === null ? (
           <>
-            <h2 className={styles.cardTitle}>Find your way back in</h2>
+            <h2 className={styles.cardTitle}>Examine yourself</h2>
             <p className={styles.pageLead}>
-              You will pick the teaching you fell behind at, then answer one short question about
-              each part of the teaching since — not whether you remember it, but how you have been
-              able to live it out. There is no score. What you get is a reading list.
+              You will pick a teaching to start from, then answer one short question about each
+              part of the teaching since — not whether you remember it, but how well you are living
+              it out. There is no score. What you get is a list of the parts to live out more fully.
             </p>
             <div className={styles.actions}>
               <Link className={styles.primary} href={FLOW_TRACKER_START_PAGE_PATH}>

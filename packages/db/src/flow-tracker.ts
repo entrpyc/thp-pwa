@@ -1,5 +1,5 @@
 import { and, asc, count, desc, eq, inArray, isNull, sql } from 'drizzle-orm';
-import type { FlowAnswer, FlowQuestionScope, FlowSessionStatus } from '@thp/shared';
+import { FLOW_ANSWERS, isGapAnswer, type FlowAnswer, type FlowQuestionScope, type FlowSessionStatus } from '@thp/shared';
 import { getDatabase, queryable, withTransaction, type Executor } from './client';
 import {
   chapter,
@@ -472,7 +472,11 @@ const liveItem = sql`(
   or ${flowSessionItem.kind} = 'recording'
 )`;
 
-const GAP_ANSWERS_SQL = sql`('dont_remember', 'recall_slightly', 'not_embodied')`;
+/** The answers that put a chapter on the reading list, as the shared rule says, never restated here. */
+const GAP_ANSWERS_SQL = sql`(${sql.join(
+  FLOW_ANSWERS.filter(isGapAnswer).map((one) => sql`${one}`),
+  sql`, `,
+)})`;
 
 const questionCount = sql<number>`(
   select count(*) from ${flowSessionItem}

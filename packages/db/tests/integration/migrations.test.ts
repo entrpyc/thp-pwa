@@ -13,6 +13,7 @@ import {
   JOB_STEPS,
   NOTIFICATION_KINDS,
   PIPELINE_STEPS,
+  STANDALONE_STEPS,
   PLAYBACK_SPEEDS,
   REPORT_OUTCOMES,
   REPORT_REASONS,
@@ -2156,15 +2157,17 @@ describe('the chapter table, and nothing beside it', () => {
     // in this file is — less `process_audio`, which `0021_process_audio` adds ahead of `transcribe`
     // two migrations later, less `embed`, which `0028_embeddings` adds after the chain, less
     // `cross_reference`, which `0038_cross_references` adds after that, and less
-    // `generate_questions`, which `0042_flow_tracker` slots in between chapters and embed; this
-    // database, migrated only as far as chapters, admits none of them yet.
+    // `generate_questions`, which `0042_flow_tracker` adds between them; this database, migrated
+    // only as far as chapters, admits none of them yet. `JOB_STEPS` is the enum's order, which is
+    // the order the values were added in and not the chain's.
     expect(steps.map((row) => row.enumlabel)).toEqual(
-      PIPELINE_STEPS.filter(
+      JOB_STEPS.filter(
         (step) =>
           step !== 'process_audio' &&
           step !== 'embed' &&
           step !== 'cross_reference' &&
-          step !== 'generate_questions',
+          step !== 'generate_questions' &&
+          !(STANDALONE_STEPS as readonly string[]).includes(step),
       ),
     );
     expect(steps.map((row) => row.enumlabel)).toContain('generate_chapters');
@@ -2609,10 +2612,14 @@ describe('the embedding table, and nothing beside it', () => {
     expect(steps.map((row) => row.enumlabel)).toEqual(
       JOB_STEPS.filter((step) => step !== 'cross_reference' && step !== 'generate_questions'),
     );
-    // Directly after chapters when this migration ran; the Flow Tracker's step sits between the
-    // two since `0042_flow_tracker`, so the declaration is read for the order it has now.
+    // Directly after chapters when this migration ran; the chain has since been reordered — the
+    // draft now follows the chapters it is built on ([3.8.1](docs/project/prd.md)) and the Flow
+    // Tracker's step follows the draft — so the declaration is read for the order it has now.
     expect(PIPELINE_STEPS.indexOf('embed')).toBe(PIPELINE_STEPS.indexOf('generate_questions') + 1);
     expect(PIPELINE_STEPS.indexOf('generate_questions')).toBe(
+      PIPELINE_STEPS.indexOf('generate_draft') + 1,
+    );
+    expect(PIPELINE_STEPS.indexOf('generate_draft')).toBe(
       PIPELINE_STEPS.indexOf('generate_chapters') + 1,
     );
 

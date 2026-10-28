@@ -14,8 +14,11 @@ import { RECORDINGS_PATH } from './recordings';
  * ([3.21.2.4](docs/project/prd.md)) and the unit a confirmation attaches to, so two facts that
  * differ per step have to sit on two steps.
  *
- * It runs **after** drafting rather than beside it because the chain is a list: the successor of a
- * step is read from this array and nowhere else, so ordering it here is the whole of ordering it.
+ * It runs **before** drafting, because the draft's mind map is built on the chapters
+ * ([3.8.1](docs/project/prd.md)): its first level is the chapter list, and each chapter's themes
+ * are read from that chapter's own stretch of transcript — so the list has to exist before the
+ * map is asked for. The chain is a list: the successor of a step is read from this array and
+ * nowhere else, so ordering it here is the whole of ordering it.
  *
  * `process_audio` is the step [§3.4](docs/project/prd.md) reserved a place for, arrived: it
  * transcodes the uploaded original into a **playback rendition** whose container carries an exact
@@ -61,8 +64,8 @@ import { RECORDINGS_PATH } from './recordings';
 export const PIPELINE_STEPS = [
   'process_audio',
   'transcribe',
-  'generate_draft',
   'generate_chapters',
+  'generate_draft',
   'generate_questions',
   'embed',
   'cross_reference',
@@ -99,8 +102,24 @@ export type StandaloneStep = (typeof STANDALONE_STEPS)[number];
 /**
  * Everything the `job.step` column can hold — the chain, then the standalone steps. The database
  * enum derives from this list; the chain rule reads `PIPELINE_STEPS` and never this.
+ *
+ * **Spelled out, in the order the enum was declared**, rather than derived from the chain: a
+ * Postgres enum keeps the order its values were added in, and the migrations that added them ran
+ * when `generate_draft` still came before `generate_chapters`. The chain has since been reordered
+ * ([3.8.1](docs/project/prd.md)) and the enum has not — reordering an enum is a rebuild of the
+ * column, for an order nothing reads. So the two lists hold the same names and differ in order,
+ * and this one is the enum's.
  */
-export const JOB_STEPS = [...PIPELINE_STEPS, ...STANDALONE_STEPS] as const;
+export const JOB_STEPS = [
+  'process_audio',
+  'transcribe',
+  'generate_draft',
+  'generate_chapters',
+  'generate_questions',
+  'embed',
+  'cross_reference',
+  ...STANDALONE_STEPS,
+] as const satisfies readonly (PipelineStep | StandaloneStep)[];
 
 export type JobStep = (typeof JOB_STEPS)[number];
 
@@ -137,8 +156,8 @@ export const FIRST_PIPELINE_STEP: PipelineStep = PIPELINE_STEPS[0];
  */
 export const SPENDING_STEPS: readonly PipelineStep[] = [
   'transcribe',
-  'generate_draft',
   'generate_chapters',
+  'generate_draft',
   'generate_questions',
   'embed',
 ];

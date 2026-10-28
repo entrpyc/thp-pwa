@@ -1,8 +1,10 @@
 import {
   findRecordingById,
   findTranscriptByRecording,
+  listChapters,
   listSegments,
   replaceOpenDrafts,
+  type ChapterRow,
   type Executor,
   type JobRow,
   type NewReviewItem,
@@ -23,8 +25,13 @@ import {
 import { resolvePassages, type BibleSource } from '@thp/bible';
 import { emitDomainEvent } from '@thp/shared/observability/events';
 import { logger } from '@thp/shared/observability/logger';
-import { generator as configuredGenerator, type Generator } from './generate';
-import { resolveProposedMindMap } from './mind-map-draft';
+import {
+  generator as configuredGenerator,
+  type GenerationResult,
+  type Generator,
+  type TranscriptLine,
+} from './generate';
+import { resolveChapteredMindMap, resolveProposedMindMap } from './mind-map-draft';
 import { readProposedCitations, resolveProposedCitations } from './scripture-draft';
 import { notifySummaryReady } from './summary-ready';
 import type { JobHandler } from './handlers';
@@ -131,24 +138,77 @@ export function createGenerateDraftHandler(deps: GenerateDraftDependencies = {})
      * ([3.7.10](docs/project/prd.md)). Joining them into one string is the prompt module's job;
      * doing it here would throw away the numbers before the prompt could show them.
      */
-    const lines = segments.map((one) => ({ startMs: one.startMs, text: one.text }));
+    const lines: TranscriptLine[] = segments.map((one) => ({ startMs: one.startMs, text: one.text }));
 
-    let result;
+    /*
+     * **The chapters, which the map is built on** ([3.8.1](docs/project/prd.md)). The chain cuts
+     * them before this step runs, so on a chained run the list is in hand; on a steered
+     * regeneration it is whatever list the teaching has, edited or not. A teaching with none —
+     * too short to divide ([3.22.4](docs/project/prd.md)) — is mapped in one piece.
+     */
+    const chapters = await listChapters(job.recordingId, deps.executor);
+    const mapByChapter = kinds.includes('mind_map') && chapters.length > 0;
+
+    /*
+     * **One call for everything but the map, and one call per chapter for the map.**
+     *
+     * The summary, the description and the citations are still one call over the whole transcript
+     * — the one-call decision the architecture took, for cost and for two answers that agree. The
+     * map is the exception, and deliberately: its first level is the chapter list, and each
+     * chapter's themes have to come from that chapter's own lines, so the model is handed one
+     * chapter at a time and can neither place a theme in the wrong chapter nor spend the whole
+     * transcript on each. Across the chapter calls the transcript is sent once in total.
+     */
+    const wholeKinds = mapByChapter ? kinds.filter((kind) => kind !== 'mind_map') : kinds;
+    let whole: GenerationResult | null = null;
+    const perChapter: { chapter: ChapterRow; result: GenerationResult }[] = [];
     try {
-      result = await model.generate({
-        title: recording.title,
-        lines,
-        kinds,
-        steeringPrompt: prompt,
-      });
+      if (wholeKinds.length > 0) {
+        whole = await model.generate({
+          title: recording.title,
+          lines,
+          kinds: wholeKinds,
+          steeringPrompt: prompt,
+        });
+      }
+      if (mapByChapter) {
+        for (const [index, chapter] of chapters.entries()) {
+          const result = await model.generate({
+            title: recording.title,
+            lines: chapterLines(lines, chapter, chapters[index + 1] ?? null),
+            kinds: ['mind_map'],
+            steeringPrompt: prompt,
+            chapter: { title: chapter.title, summary: chapter.summary },
+          });
+          perChapter.push({ chapter, result });
+        }
+      }
     } catch (cause) {
       throw fail(fields, cause instanceof Error ? cause.message : String(cause), cause);
     }
 
+    /*
+     * What the run cost, which is every call added up; which model and prompt produced it, which
+     * is the same for every call; and the provider's id for the request, which is the first call's
+     * — there is one column for it and one id is enough to find the rest beside it in the log.
+     */
+    const calls = [...(whole === null ? [] : [whole]), ...perChapter.map((one) => one.result)];
+    const first = calls[0];
+    if (first === undefined) throw fail(fields, 'nothing was asked for');
+    const spend = {
+      model: first.spend.model,
+      modelVersion: first.spend.modelVersion,
+      requestId: first.spend.requestId,
+      inputTokens: calls.reduce((total, one) => total + one.spend.inputTokens, 0),
+      outputTokens: calls.reduce((total, one) => total + one.spend.outputTokens, 0),
+      costUsd: calls.reduce((total, one) => total + one.spend.costUsd, 0),
+    };
+    const promptVersion = first.promptVersion;
+
     const provenance = (kind: ReviewKind): ReviewProvenance => ({
-      model: result.spend.model,
-      modelVersion: result.spend.modelVersion,
-      promptVersion: result.promptVersion,
+      model: spend.model,
+      modelVersion: spend.modelVersion,
+      promptVersion,
       steeringPrompt: prompt,
       // Everything this epic writes is AI-suggested and unedited at birth; the approve path is
       // what sets `editedByAdmin`. Built per field so a later kind with two fields is one loop.
@@ -160,29 +220,41 @@ export function createGenerateDraftHandler(deps: GenerateDraftDependencies = {})
     // number is read as "how much of this run's answer was not usable".
     let dropped = 0;
     let duplicates = 0;
-    // The same count for the tree: themes past the eighth, points past the sixth, anything under
-    // a point, and nodes with no words on them ([3.8.1](docs/project/prd.md)).
+    // The same count for the tree: themes past the eighth, concepts past the sixth, anything under
+    // a concept, and nodes with no words on them ([3.8.1](docs/project/prd.md)).
     let nodesDropped = 0;
+
+    /** The tree the model answered with, or a failure naming the shape it answered in instead. */
+    const treeOf = (value: unknown, name: string): object => {
+      // The same refusal as the list below: a tree that is not an object with themes in it is
+      // prose by another name, and nothing is written.
+      if (typeof value !== 'object' || value === null || Array.isArray(value)) {
+        throw fail(fields, `the ${name} came back as ${typeof value} rather than as a tree of themes`);
+      }
+      return value;
+    };
 
     const draftOf = (kind: ReviewKind): string | readonly DraftedCitation[] | MindMapNode => {
       const field = REVIEW_FIELD[kind];
-      const value = result.drafts[kind];
-
-      if (field.shape === 'text') return typeof value === 'string' ? value : '';
 
       if (field.shape === 'tree') {
-        // The same refusal as the list below: a tree that is not an object with themes in it is
-        // prose by another name, and nothing is written.
-        if (typeof value !== 'object' || value === null || Array.isArray(value)) {
-          throw fail(
-            fields,
-            `the ${field.name} came back as ${typeof value} rather than as a tree of themes`,
-          );
-        }
-        const resolved = resolveProposedMindMap(recording.title, value);
+        const resolved = mapByChapter
+          ? resolveChapteredMindMap(
+              recording.title,
+              perChapter.map(({ chapter, result }) => ({
+                label: chapter.title,
+                anchorMs: chapter.startMs,
+                proposed: treeOf(result.drafts[kind], field.name),
+              })),
+            )
+          : resolveProposedMindMap(recording.title, treeOf(whole?.drafts[kind], field.name));
         nodesDropped += resolved.dropped;
         return resolved.root;
       }
+
+      const value = whole?.drafts[kind];
+
+      if (field.shape === 'text') return typeof value === 'string' ? value : '';
 
       // **The structure was required, so prose is a failure** (scope prd 3.1.2).
       // Thrown before anything is written, so a run that answered in the wrong shape leaves no
@@ -216,13 +288,15 @@ export function createGenerateDraftHandler(deps: GenerateDraftDependencies = {})
 
     const providerMeta: ProviderMeta = {
       provider: model.name,
-      model: result.spend.model,
-      modelVersion: result.spend.modelVersion,
-      promptVersion: result.promptVersion,
-      inputTokens: result.spend.inputTokens,
-      outputTokens: result.spend.outputTokens,
-      costUsd: result.spend.costUsd,
-      requestId: result.spend.requestId,
+      model: spend.model,
+      modelVersion: spend.modelVersion,
+      promptVersion,
+      inputTokens: spend.inputTokens,
+      outputTokens: spend.outputTokens,
+      costUsd: spend.costUsd,
+      requestId: spend.requestId,
+      // How many calls the run took: one, plus one per chapter when a map was asked for.
+      generationCalls: calls.length,
       // scope prd 3.1.3: what the machine proposed and could not be stored is a
       // number on the run that proposed it, so a prompt going wrong is visible rather than quiet.
       citationsDropped: dropped,
@@ -263,6 +337,21 @@ export function createGenerateDraftHandler(deps: GenerateDraftDependencies = {})
 
     return providerMeta;
   };
+}
+
+/**
+ * **One chapter's stretch of the transcript**: every line from the chapter's start up to the next
+ * chapter's start, or to the end for the last one. Boundaries fall on segment starts
+ * ([3.22.5](docs/project/prd.md)), so the first line of a chapter is the line its boundary names.
+ */
+export function chapterLines(
+  lines: readonly TranscriptLine[],
+  chapter: Pick<ChapterRow, 'startMs'>,
+  next: Pick<ChapterRow, 'startMs'> | null,
+): TranscriptLine[] {
+  return lines.filter(
+    (line) => line.startMs >= chapter.startMs && (next === null || line.startMs < next.startMs),
+  );
 }
 
 /** What a freshly generated field's provenance says. */

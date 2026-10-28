@@ -630,6 +630,26 @@
 }
 
 /*
+ * The reflection questions (`reflection.tsx`), under the summary and in its card. A list rather
+ * than a paragraph because each question stands alone — a member takes them one at a time — and
+ * a bulleted list is how the eye finds the next one. The bullets sit inside the card's padding
+ * rather than hanging out of it, on the edge the summary's lines start on.
+ */
+.reflectionList {
+  margin: 0;
+  padding: 0 0 0 var(--space-5);
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-3);
+  font-size: var(--fs-body);
+  color: var(--color-text-muted);
+}
+
+.reflectionItem {
+  overflow-wrap: anywhere;
+}
+
+/*
  * A chapter's summary on its own page (3.22.3, 3.22.13).
  *
  * Open rather than clamped, unlike the teaching's summary above the strip: a chapter's is one short

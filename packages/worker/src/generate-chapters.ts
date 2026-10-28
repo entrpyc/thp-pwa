@@ -15,8 +15,10 @@ import { generator as configuredGenerator, type Generator, type TranscriptLine }
 import type { JobHandler } from './handlers';
 
 /**
- * **The `generate_chapters` step** ([3.22.1](docs/project/prd.md)) — the third and last step of the
- * chain, and the first one whose output a member reads without an admin approving it.
+ * **The `generate_chapters` step** ([3.22.1](docs/project/prd.md)) — the step after transcription
+ * and before drafting, because the draft's mind map is built on the chapter list
+ * ([3.8.1](docs/project/prd.md)), and the first step whose output a member reads without an admin
+ * approving it.
  *
  * Four properties, and every one of them is a requirement rather than a preference:
  *
