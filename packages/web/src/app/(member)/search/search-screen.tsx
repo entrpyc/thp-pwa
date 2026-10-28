@@ -4,7 +4,7 @@ import Link from 'next/link';
 import { useRouter, useSearchParams } from 'next/navigation';
 import { useEffect, useState, type FormEvent, type MouseEvent } from 'react';
 import {
-  DEFAULT_SEARCH_REQUEST,
+  DEFAULT_SEARCH_CONTROLS,
   MAX_SEARCH_QUERY_LENGTH,
   SEARCH_BLEND_LABELS,
   SEARCH_BLEND_STOPS,
@@ -16,18 +16,20 @@ import {
   chapterPagePath,
   formatTimecode,
   meaningLabel,
+  readSearchControls,
   readSearchRequest,
   recordingPagePath,
   searchPagePath,
   searchPath,
   splitMarkedPassage,
+  type SearchControls,
   type SearchHit,
   type SearchPayload,
   type SearchRequest,
   type SearchableKind,
 } from '@thp/shared';
 import { ApiClientError, apiFetch } from '@/client/api-client';
-import { useBreadcrumbTrail, usePlayer } from '../player-context';
+import { useBreadcrumbTrail, usePlayer, type LoadedRecording } from '../player-context';
 import screen from '../screens.module.css';
 import styles from './search.module.css';
 
@@ -35,13 +37,17 @@ import styles from './search.module.css';
  * **The results page** ([3.10](docs/project/prd.md)) — `/search?q=…`, with every control in the
  * address.
  *
- * **The address is the state.** The box at the top, the content types, the words/meaning slider
+ * **The address is the state.** The box at the top, the content types, the words/meaning choice
  * and the per-teaching select all write to the URL and the URL is what is searched: changing a
  * control is a navigation to the same page with one more parameter, which is what makes a search
  * shareable, reloadable and backable, and what keeps this component from holding two copies of
- * what the member asked. A control at its default is left out of the address. The one thing not in
- * the address is how many pages have been shown: "Show more" asks the route for the next ten by
- * offset and appends them, and a reload starts at the first page again.
+ * what the member asked. A control at its default is left out of the address. **The controls do
+ * not wait for words**: a member may narrow the content types or pick "Meaning only" before they
+ * have typed anything, and the address carries the controls alone until the search is submitted
+ * — the controls are read by `readSearchControls`, which needs no query, and the query by
+ * `readSearchRequest`, which needs the controls. The one thing not in the address is how many
+ * pages have been shown: "Show more" asks the route for the next ten by offset and appends them,
+ * and a reload starts at the first page again.
  *
  * **Rows per [3.10.6](docs/project/prd.md)**: what kind of thing matched, the teaching's title,
  * the moment, the series, the passage in its context, and **how it matched** — a meaning label
@@ -50,7 +56,10 @@ import styles from './search.module.css';
  * row goes** is [3.10.7](docs/project/prd.md): a chapter opens its page; everything else opens the
  * recording at the matched moment **without playing** ([3.2.12](docs/project/prd.md)) — the row
  * hands the teaching and the moment to the player, which loads and seeks and waits, and then
- * navigates. If the player already holds this teaching the row seeks instead.
+ * navigates. If the player already holds this teaching the row seeks instead. **The moment itself
+ * is a play control**: pressing the timecode on a row plays the teaching from there in the docked
+ * transport and stays on the results, so a member can listen to a hit, decide it is not the one,
+ * and press the next — the row's link is still the way to the page.
  *
  * **The two empty states are two states** ([3.10.11](docs/project/prd.md)). A search that ran
  * and found nothing says the library holds nothing for those words. A search that could not run
@@ -90,6 +99,18 @@ type Outcome =
   | { readonly status: 'refused'; readonly message: string }
   | { readonly status: 'unavailable' };
 
+/** The teaching a hit belongs to, as the player wants it handed over. */
+function loadedFrom(hit: SearchHit): LoadedRecording {
+  const { recording } = hit;
+  return {
+    id: recording.id,
+    title: recording.title,
+    artworkUrl: recording.series?.artworkUrl ?? null,
+    seriesTitle: recording.series?.title ?? null,
+    seriesId: recording.series?.id ?? null,
+  };
+}
+
 export function SearchScreen() {
   const params = useSearchParams();
   const router = useRouter();
@@ -97,23 +118,26 @@ export function SearchScreen() {
   useBreadcrumbTrail('Search');
 
   const address = params.toString();
+  const query = params.get('q') ?? '';
+  // The controls stand on their own, so an unreadable one is shown at its default rather than
+  // taking the others with it; the request is what the route is asked, and needs the words too.
+  const controlsCheck = readSearchControls(params);
+  const controls: SearchControls = controlsCheck.ok ? controlsCheck.controls : DEFAULT_SEARCH_CONTROLS;
   const check = readSearchRequest(params);
-  const request: SearchRequest = check.ok
-    ? check.request
-    : { ...DEFAULT_SEARCH_REQUEST, query: params.get('q') ?? '' };
+  const request: SearchRequest = { ...controls, query };
 
-  const [draft, setDraft] = useState(request.query);
+  const [draft, setDraft] = useState(query);
   const [outcome, setOutcome] = useState<Outcome>({ status: 'idle' });
 
   // The box follows the address, not the other way round: a back press lands on an older search
   // and the box has to say what that search was.
   useEffect(() => {
-    setDraft(request.query);
-    // eslint-disable-next-line react-hooks/exhaustive-deps -- `request` is derived from `address`
+    setDraft(query);
+    // eslint-disable-next-line react-hooks/exhaustive-deps -- `query` is derived from `address`
   }, [address]);
 
   useEffect(() => {
-    if (params.get('q') === null || params.get('q') === '') {
+    if (query === '') {
       setOutcome({ status: 'idle' });
       return;
     }
@@ -149,9 +173,12 @@ export function SearchScreen() {
     // eslint-disable-next-line react-hooks/exhaustive-deps -- `check` is derived from `address`
   }, [address]);
 
+  /**
+   * Write a change to the address. With words, that is the next search; without, it is the
+   * controls alone, kept for the search to come.
+   */
   function go(next: Partial<SearchRequest>) {
     const merged = { ...request, ...next, offset: 0 };
-    if (merged.query.trim() === '') return;
     router.push(searchPagePath({ ...merged, query: merged.query.trim() }));
   }
 
@@ -205,21 +232,23 @@ export function SearchScreen() {
     if (player.loaded?.id === recording.id) {
       if (startMs !== null) player.seekToMs(startMs);
     } else {
-      player.open(
-        {
-          id: recording.id,
-          title: recording.title,
-          artworkUrl: recording.series?.artworkUrl ?? null,
-          seriesTitle: recording.series?.title ?? null,
-          seriesId: recording.series?.id ?? null,
-        },
-        startMs,
-      );
+      player.open(loadedFrom(hit), startMs);
     }
     router.push(recordingPagePath(recording.id));
   }
 
-  const blendIndex = Math.max(0, SEARCH_BLEND_STOPS.indexOf(request.blend));
+  /**
+   * Play the teaching from the moment, here, in the docked transport. The page stays where it is:
+   * the member asked to hear the hit, not to leave the results.
+   */
+  function playFromMoment(hit: SearchHit, startMs: number) {
+    if (player.loaded?.id === hit.recording.id) {
+      player.playFromMs(startMs);
+    } else {
+      player.openAndPlay(loadedFrom(hit), startMs);
+    }
+  }
+
   const perTeachingParam =
     SEARCH_PER_TEACHING_OPTIONS.find((one) => one.value === request.perTeaching)?.param ?? '3';
 
@@ -251,52 +280,50 @@ export function SearchScreen() {
 
       {/*
         The controls, each a navigation: which kinds of thing are searched, how the two arms are
-        weighed, and how many moments of one teaching may fill the page. Native inputs — they are
-        the right size on a phone without any work, and a control is a thing a member sets once per
-        search rather than lives in.
+        weighed, and how many moments of one teaching may fill the page. The boxes and the radios
+        are the product's own — the native ones are a different size on every platform and never
+        the product's colour — drawn as chips a thumb can land on.
       */}
       <div className={styles.controls}>
-        <fieldset className={styles.kinds} aria-label="Content type">
+        <fieldset className={styles.choices} aria-label="Content type">
           <legend className={styles.controlLabel}>Content type</legend>
-          {SEARCH_KIND_ORDER.map((kind) => (
-            <label key={kind} className={styles.kind}>
-              <input
-                type="checkbox"
-                name="kinds"
-                value={kind}
-                checked={request.kinds.includes(kind)}
-                onChange={(event) => toggleKind(kind, event.target.checked)}
-              />
-              <span>{SEARCH_KIND_LABELS[kind]}</span>
-            </label>
-          ))}
+          <div className={styles.chips}>
+            {SEARCH_KIND_ORDER.map((kind) => (
+              <label key={kind} className={styles.chip}>
+                <input
+                  className={styles.box}
+                  type="checkbox"
+                  name="kinds"
+                  value={kind}
+                  checked={request.kinds.includes(kind)}
+                  onChange={(event) => toggleKind(kind, event.target.checked)}
+                />
+                <span>{SEARCH_KIND_LABELS[kind]}</span>
+              </label>
+            ))}
+          </div>
         </fieldset>
 
-        <label className={styles.slider}>
-          <span className={styles.controlLabel}>
-            Words / meaning
-            <span className={styles.sliderValue} aria-live="polite">
-              {SEARCH_BLEND_LABELS[request.blend]}
-            </span>
-          </span>
-          <input
-            type="range"
-            name="mix"
-            min={0}
-            max={SEARCH_BLEND_STOPS.length - 1}
-            step={1}
-            value={blendIndex}
-            aria-valuetext={SEARCH_BLEND_LABELS[request.blend]}
-            onChange={(event) => {
-              const stop = SEARCH_BLEND_STOPS[Number(event.target.value)];
-              if (stop !== undefined && stop !== request.blend) go({ blend: stop });
-            }}
-          />
-          <span className={styles.sliderEnds} aria-hidden="true">
-            <span>{SEARCH_BLEND_LABELS[0]}</span>
-            <span>{SEARCH_BLEND_LABELS[1]}</span>
-          </span>
-        </label>
+        <fieldset className={styles.choices} aria-label="Words / meaning">
+          <legend className={styles.controlLabel}>Words / meaning</legend>
+          <div className={styles.chips}>
+            {SEARCH_BLEND_STOPS.map((stop) => (
+              <label key={stop} className={styles.chip}>
+                <input
+                  className={`${styles.box} ${styles.radio}`}
+                  type="radio"
+                  name="mix"
+                  value={stop}
+                  checked={request.blend === stop}
+                  onChange={() => {
+                    if (stop !== request.blend) go({ blend: stop });
+                  }}
+                />
+                <span>{SEARCH_BLEND_LABELS[stop]}</span>
+              </label>
+            ))}
+          </div>
+        </fieldset>
 
         <label className={styles.perTeaching}>
           <span className={styles.controlLabel}>Per teaching</span>
@@ -366,6 +393,24 @@ export function SearchScreen() {
                     <HitBody hit={hit} />
                   </a>
                 )}
+                {/*
+                  The moment, as a control beside the link rather than inside it — a button inside
+                  an anchor is two controls in one press. It sits where the timecode has always
+                  been drawn, at the head's right edge, and the head leaves it the room.
+                */}
+                {hit.startMs === null ? null : (
+                  <button
+                    type="button"
+                    className={styles.hitTime}
+                    aria-label={`Play from ${formatTimecode(hit.startMs)}`}
+                    onClick={() => playFromMoment(hit, hit.startMs ?? 0)}
+                  >
+                    <span aria-hidden="true" className={styles.hitTimeGlyph}>
+                      ▶
+                    </span>
+                    {formatTimecode(hit.startMs)}
+                  </button>
+                )}
                 {outcome.payload.showScores ? <Scores hit={hit} /> : null}
               </li>
             ))}
@@ -399,11 +444,8 @@ function HitBody({ hit }: { hit: SearchHit }) {
   if (hit.matchedBy.includes('words')) labels.push(WORDS_MATCH_LABEL);
   return (
     <>
-      <span className={styles.hitHead}>
+      <span className={styles.hitHead} data-has-time={hit.startMs === null ? undefined : ''}>
         <span className={styles.hitKind}>{KIND_LABEL[hit.kind]}</span>
-        {hit.startMs === null ? null : (
-          <span className={styles.hitTime}>{formatTimecode(hit.startMs)}</span>
-        )}
       </span>
       <span className={styles.hitTitle}>{recording.title}</span>
       <span className={styles.hitMeta}>{meta}</span>
