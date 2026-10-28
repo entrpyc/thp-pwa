@@ -125,7 +125,7 @@ export const SEARCH_KIND_LABELS: Record<SearchableKind, string> = {
   segment: 'Transcript',
   note: 'Notes',
   summary: 'Summaries',
-  recording: 'Teachings',
+  recording: 'Recordings',
 };
 
 /** The order the content-type checkboxes are drawn in. */
@@ -138,11 +138,12 @@ export const SEARCH_KIND_ORDER: readonly SearchableKind[] = [
 ];
 
 /**
- * **The words/meaning slider's stops.** The fusion is
+ * **The words/meaning control's stops.** The fusion is
  * `s / (K + vector_rank) + (1 - s) / (K + text_rank)` with `s` the stop: at `0` the provider is not
- * called and the meaning arm does not run; at `1` the words arm does not run. Five snapped stops
+ * called and the meaning arm does not run; at `1` the words arm does not run. Five named stops
  * rather than a continuous value because a member cannot tell 0.6 from 0.7, and because five
- * labelled positions are five things a tester can name.
+ * labelled positions are five things a tester can name. The page draws them as a radio group —
+ * it was a slider once, and a slider with five labelled notches is a radio group drawn worse.
  */
 export const SEARCH_BLEND_STOPS = [0, 0.25, 0.5, 0.75, 1] as const;
 
@@ -241,9 +242,8 @@ export function splitMarkedPassage(marked: string): PassageRun[] {
   return runs;
 }
 
-/** What one search asks for, after the address has been read and refused or accepted whole. */
-export interface SearchRequest {
-  readonly query: string;
+/** The controls of a search — everything in the address but the words. */
+export interface SearchControls {
   /** Which kinds are searched. Never empty: an empty or absent choice is every kind. */
   readonly kinds: readonly SearchableKind[];
   readonly blend: SearchBlend;
@@ -252,36 +252,43 @@ export interface SearchRequest {
   readonly offset: number;
 }
 
+/** What one search asks for, after the address has been read and refused or accepted whole. */
+export interface SearchRequest extends SearchControls {
+  readonly query: string;
+}
+
+export type SearchControlsCheck =
+  | { readonly ok: true; readonly controls: SearchControls }
+  | { readonly ok: false; readonly problem: string };
+
 export type SearchRequestCheck =
   | { readonly ok: true; readonly request: SearchRequest }
   | { readonly ok: false; readonly problem: string };
 
-/** The request every address starts from: every kind, balanced, three per teaching, the first page. */
-export const DEFAULT_SEARCH_REQUEST: Omit<SearchRequest, 'query'> = {
+/** The controls every address starts from: every kind, balanced, three per teaching, the first page. */
+export const DEFAULT_SEARCH_CONTROLS: SearchControls = {
   kinds: SEARCHABLE_KINDS,
   blend: SEARCH_DEFAULT_BLEND,
   perTeaching: SEARCH_DEFAULT_PER_TEACHING,
   offset: 0,
 };
 
+/** The request every address starts from. */
+export const DEFAULT_SEARCH_REQUEST: Omit<SearchRequest, 'query'> = DEFAULT_SEARCH_CONTROLS;
+
 /**
- * Read a search out of its address.
+ * Read the controls out of an address, **with or without a query**.
+ *
+ * Separate from {@link readSearchRequest} because the page lets a member set the controls before
+ * they have typed anything: the content types, the blend and the per-teaching choice are written to
+ * the address on their own, and the search that follows reads them back. A reader that refused the
+ * controls for want of a query would reset them on every empty box.
  *
  * Refuses rather than ignores a control it cannot read: a mistyped kind that was silently dropped
  * would answer the whole library under a heading that said it was narrowed, and the member would
- * have no way to tell. The empty query is refused here too, before any call is spent on it — the
- * page shows its own prompt for an empty box and never asks. An absent control is its default.
+ * have no way to tell. An absent control is its default.
  */
-export function readSearchRequest(params: URLSearchParams): SearchRequestCheck {
-  const query = (params.get(SEARCH_PARAMS.query) ?? '').trim().replace(/\s+/g, ' ');
-  if (query === '') return { ok: false, problem: 'Type something to search for.' };
-  if (query.length > MAX_SEARCH_QUERY_LENGTH) {
-    return {
-      ok: false,
-      problem: `A search is at most ${MAX_SEARCH_QUERY_LENGTH} characters.`,
-    };
-  }
-
+export function readSearchControls(params: URLSearchParams): SearchControlsCheck {
   const kindsParam = optional(params, SEARCH_PARAMS.kinds);
   let kinds: readonly SearchableKind[] = SEARCHABLE_KINDS;
   if (kindsParam !== null) {
@@ -305,7 +312,7 @@ export function readSearchRequest(params: URLSearchParams): SearchRequestCheck {
   if (blendParam !== null) {
     const value = Number(blendParam);
     if (!isSearchBlend(value)) {
-      return { ok: false, problem: 'The words/meaning setting is not one of the slider’s stops.' };
+      return { ok: false, problem: 'The words/meaning setting is not one a search knows.' };
     }
     blend = value;
   }
@@ -335,7 +342,27 @@ export function readSearchRequest(params: URLSearchParams): SearchRequestCheck {
     offset = value;
   }
 
-  return { ok: true, request: { query, kinds, blend, perTeaching, offset } };
+  return { ok: true, controls: { kinds, blend, perTeaching, offset } };
+}
+
+/**
+ * Read a search out of its address: the words and the controls, refused or accepted whole.
+ *
+ * The empty query is refused here, before any call is spent on it — the page shows its own prompt
+ * for an empty box and never asks. The controls are {@link readSearchControls}.
+ */
+export function readSearchRequest(params: URLSearchParams): SearchRequestCheck {
+  const query = (params.get(SEARCH_PARAMS.query) ?? '').trim().replace(/\s+/g, ' ');
+  if (query === '') return { ok: false, problem: 'Type something to search for.' };
+  if (query.length > MAX_SEARCH_QUERY_LENGTH) {
+    return {
+      ok: false,
+      problem: `A search is at most ${MAX_SEARCH_QUERY_LENGTH} characters.`,
+    };
+  }
+  const controls = readSearchControls(params);
+  if (!controls.ok) return controls;
+  return { ok: true, request: { query, ...controls.controls } };
 }
 
 function optional(params: URLSearchParams, name: string): string | null {
@@ -345,11 +372,13 @@ function optional(params: URLSearchParams, name: string): string | null {
 
 /**
  * The results page for this search — the address the navigation's box goes to on Enter. A control
- * at its default is left out, so the address says only what the member changed.
+ * at its default is left out, so the address says only what the member changed. **An empty query
+ * is left out too**: the page with controls set and nothing typed is a real address — the member
+ * chose their filters first — and it carries the controls alone.
  */
 export function searchPagePath(request: Partial<SearchRequest> & { readonly query: string }): string {
   const params = new URLSearchParams();
-  params.set(SEARCH_PARAMS.query, request.query);
+  if (request.query !== '') params.set(SEARCH_PARAMS.query, request.query);
   const kinds = request.kinds ?? SEARCHABLE_KINDS;
   if (kinds.length > 0 && kinds.length < SEARCHABLE_KINDS.length) {
     params.set(SEARCH_PARAMS.kinds, SEARCHABLE_KINDS.filter((kind) => kinds.includes(kind)).join(','));
@@ -362,7 +391,8 @@ export function searchPagePath(request: Partial<SearchRequest> & { readonly quer
     if (option !== undefined) params.set(SEARCH_PARAMS.perTeaching, option.param);
   }
   if ((request.offset ?? 0) > 0) params.set(SEARCH_PARAMS.offset, String(request.offset));
-  return `${SEARCH_PAGE_PATH}?${params.toString()}`;
+  const tail = params.toString();
+  return tail === '' ? SEARCH_PAGE_PATH : `${SEARCH_PAGE_PATH}?${tail}`;
 }
 
 /** The API route for the same search; the same parameters, so one function writes both. */

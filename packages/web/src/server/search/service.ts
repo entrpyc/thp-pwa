@@ -5,14 +5,17 @@ import {
   SEARCH_PAGE_SIZE,
   SEARCH_RESULT_LIMIT,
   readSearchRequest,
+  searchPath,
   type SearchHit,
   type SearchPayload,
+  type SearchRequest,
 } from '@thp/shared';
 import { actorGuard } from '@/server/api/actor-limits';
 import { ApiError } from '@/server/api/errors';
 import { can, type Actor } from '@/server/auth/policy';
 import { logger } from '@/server/observability/logger';
 import { mintArtworkGrant } from '@/server/series/artwork-grant';
+import { searchCache as sharedSearchCache, searchCacheKey, type SearchCache } from './cache';
 
 /**
  * **One search, end to end** ([3.10](docs/project/prd.md)): the budget, the one provider call,
@@ -20,12 +23,19 @@ import { mintArtworkGrant } from '@/server/series/artwork-grant';
  *
  * **Costs one provider call per search**, and that is the whole running cost of the feature: the
  * query text is embedded once ([3.10.2](docs/project/prd.md)), the vector is handed to the
- * database and discarded. Nothing is cached — two members typing the same words is rare and the
- * call is a fraction of a cent (`@thp/embed`'s adapter names the price) — and the budget in
- * `actor-limits.ts` is spent *before* the call, because here the call is what the budget guards.
- * **At the "Words only" stop the call is not made at all**: the member asked for no meaning, so
- * no vector is bought and the query runs the word arm alone, exactly as the degraded search does.
- * A "Show more" page is a second request and a second call, under the same budget.
+ * database and discarded. The call is a fraction of a cent (`@thp/embed`'s adapter names the
+ * price), and the budget in `actor-limits.ts` is spent *before* the call, because here the call is
+ * what the budget guards. **At the "Words only" stop the call is not made at all**: the member
+ * asked for no meaning, so no vector is bought and the query runs the word arm alone, exactly as
+ * the degraded search does. A "Show more" page is a second request and a second call, under the
+ * same budget.
+ *
+ * **A search already answered this week is answered from the cache** (`cache.ts`): the same
+ * account asking the same address again gets the rows kept from the first time, re-signed, and
+ * spends neither a provider call nor its budget — the budget guards the call, and a cached answer
+ * makes none. The cache empties at the end of every Sunday, UTC, which is the operator's rule for
+ * how stale a search may be; a note written on Wednesday is found by a search first asked on
+ * Tuesday only once the week has turned, or once the words change.
  *
  * **The provider failing degrades the search; the database failing fails it**
  * ([3.10.11](docs/project/prd.md)). The operator chose words-only results over no results: an
@@ -50,6 +60,8 @@ import { mintArtworkGrant } from '@/server/series/artwork-grant';
 export interface SearchDependencies {
   /** The embedder to use; the process's configured one unless a test hands one in. */
   readonly embedder?: Embedder;
+  /** The cache to read and write; the process's one unless a test hands one in. */
+  readonly cache?: SearchCache;
 }
 
 export async function searchFor(
@@ -60,6 +72,26 @@ export async function searchFor(
   const check = readSearchRequest(params);
   if (!check.ok) throw ApiError.invalidInput(check.problem);
   const request = check.request;
+
+  // Asked before the budget is spent: a cached answer makes no call, and the call is the cost.
+  const cache = deps.cache ?? sharedSearchCache();
+  const cacheKey = searchCacheKey(actor.id, searchPath(request));
+  const kept = cache.get(cacheKey);
+  if (kept !== null) {
+    logger.info('search.performed', {
+      actorId: actor.id,
+      action: 'search.query',
+      target: 'library',
+      queryLength: request.query.length,
+      hits: Math.min(kept.rows.length, SEARCH_PAGE_SIZE),
+      offset: request.offset,
+      blend: request.blend,
+      perTeaching: request.perTeaching,
+      kinds: request.kinds,
+      cached: true,
+    });
+    return describePage(actor, request, kept.rows, true);
+  }
 
   // Spent on every accepted request, before the provider is asked: the call is the cost.
   actorGuard().spend('search', actor);
@@ -83,32 +115,48 @@ export async function searchFor(
     offset: request.offset,
     limit: SEARCH_PAGE_SIZE + 1,
   });
-  const page = rows.slice(0, SEARCH_PAGE_SIZE);
-  const hasMore =
-    rows.length > SEARCH_PAGE_SIZE && request.offset + SEARCH_PAGE_SIZE < SEARCH_RESULT_LIMIT;
+
+  // A words-only answer the member did not ask for is not kept: the next ask tries the provider.
+  if (embedded.available) cache.set(cacheKey, { rows });
 
   logger.info('search.performed', {
     actorId: actor.id,
     action: 'search.query',
     target: 'library',
     queryLength: request.query.length,
-    hits: page.length,
-    hasMore,
+    hits: Math.min(rows.length, SEARCH_PAGE_SIZE),
+    hasMore: hasAnotherPage(rows, request.offset),
     offset: request.offset,
     blend: request.blend,
     perTeaching: request.perTeaching,
     kinds: request.kinds,
     meaningAvailable: embedded.available,
+    cached: false,
     embedMs: Math.round(embeddedAt - startedAt),
     queryMs: Math.round(performance.now() - embeddedAt),
   });
 
+  return describePage(actor, request, rows, embedded.available);
+}
+
+function hasAnotherPage(rows: readonly SearchHitRow[], offset: number): boolean {
+  return rows.length > SEARCH_PAGE_SIZE && offset + SEARCH_PAGE_SIZE < SEARCH_RESULT_LIMIT;
+}
+
+/** The payload for one page of rows — the same whether the rows were just found or kept. */
+async function describePage(
+  actor: Actor,
+  request: SearchRequest,
+  rows: readonly SearchHitRow[],
+  meaningAvailable: boolean,
+): Promise<SearchPayload> {
+  const page = rows.slice(0, SEARCH_PAGE_SIZE);
   return {
     query: request.query,
     hits: await Promise.all(page.map(describeHit)),
     offset: request.offset,
-    hasMore,
-    meaningAvailable: embedded.available,
+    hasMore: hasAnotherPage(rows, request.offset),
+    meaningAvailable,
     showScores: can(actor, 'search.tune'),
   };
 }
