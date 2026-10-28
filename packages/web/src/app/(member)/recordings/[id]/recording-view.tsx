@@ -25,6 +25,16 @@ import { NotesPanel } from './notes-panel';
 import { RecordingContentProvider, toLoaded, useRecordingContentFor } from './recording-content';
 import { ReflectionCard, questionsOf } from './reflection';
 import { listOffsetLeftHere, tabFromAddress, writeTabToAddress } from './round-trip';
+import {
+  AboutIcon,
+  ChaptersIcon,
+  MindmapIcon,
+  ReflectionIcon,
+  RelatedIcon,
+  ScriptureIcon,
+  TranscriptIcon,
+} from './tab-icons';
+import { NotesIcon } from '../../notes/notes-icon';
 import { RelatedTeachings, useRelatedGroups } from './related-teachings';
 import { ScripturePanel } from './scripture-panel';
 import { TranscriptPanel } from './transcript-panel';
@@ -451,14 +461,17 @@ export function RecordingScreen({
             player over, and until it is pressed the other teaching keeps playing.
           */}
           <RecordingContentProvider value={content}>
-          <div className={styles.tabs} role="tablist" aria-label="Teaching contents">
+          <div className={styles.tabGrid} role="tablist" aria-label="Teaching contents">
             <button
-              className={styles.tab}
+              className={styles.tabTile}
               type="button"
               role="tab"
               aria-selected={openTab === 'notes'}
               onClick={() => chooseTab('notes')}
             >
+              <span className={styles.tabTileIcon}>
+                <NotesIcon size={22} />
+              </span>
               Notes
             </button>
             {/*
@@ -471,12 +484,15 @@ export function RecordingScreen({
             */}
             {hasAbout ? (
               <button
-                className={styles.tab}
+                className={styles.tabTile}
                 type="button"
                 role="tab"
                 aria-selected={openTab === 'about'}
                 onClick={() => chooseTab('about')}
               >
+                <span className={styles.tabTileIcon}>
+                  <AboutIcon size={22} />
+                </span>
                 About
               </button>
             ) : null}
@@ -490,12 +506,15 @@ export function RecordingScreen({
             */}
             {hasReflection ? (
               <button
-                className={styles.tab}
+                className={styles.tabTile}
                 type="button"
                 role="tab"
                 aria-selected={openTab === 'reflection'}
                 onClick={() => chooseTab('reflection')}
               >
+                <span className={styles.tabTileIcon}>
+                  <ReflectionIcon size={22} />
+                </span>
                 Reflection
               </button>
             ) : null}
@@ -512,23 +531,29 @@ export function RecordingScreen({
             */}
             {hasChapters ? (
               <button
-                className={styles.tab}
+                className={styles.tabTile}
                 type="button"
                 role="tab"
                 aria-selected={openTab === 'chapters'}
                 onClick={() => chooseTab('chapters')}
               >
+                <span className={styles.tabTileIcon}>
+                  <ChaptersIcon size={22} />
+                </span>
                 Chapters
               </button>
             ) : null}
             {recording.hasScripture ? (
               <button
-                className={styles.tab}
+                className={styles.tabTile}
                 type="button"
                 role="tab"
                 aria-selected={openTab === 'scripture'}
                 onClick={() => chooseTab('scripture')}
               >
+                <span className={styles.tabTileIcon}>
+                  <ScriptureIcon size={22} />
+                </span>
                 Scripture
               </button>
             ) : null}
@@ -541,12 +566,15 @@ export function RecordingScreen({
               skipped alongside — and bringing it back was this element and those two un-skips.
             */}
             <button
-              className={styles.tab}
+              className={styles.tabTile}
               type="button"
               role="tab"
               aria-selected={openTab === 'transcript'}
               onClick={() => chooseTab('transcript')}
             >
+              <span className={styles.tabTileIcon}>
+                <TranscriptIcon size={22} />
+              </span>
               Transcript
             </button>
             {/*
@@ -556,12 +584,15 @@ export function RecordingScreen({
             */}
             {recording.hasMindMap ? (
               <button
-                className={styles.tab}
+                className={styles.tabTile}
                 type="button"
                 role="tab"
                 aria-selected={openTab === 'mindmap'}
                 onClick={() => chooseTab('mindmap')}
               >
+                <span className={styles.tabTileIcon}>
+                  <MindmapIcon size={22} />
+                </span>
                 Mindmap
               </button>
             ) : null}
@@ -574,12 +605,15 @@ export function RecordingScreen({
             */}
             {hasRelated ? (
               <button
-                className={styles.tab}
+                className={styles.tabTile}
                 type="button"
                 role="tab"
                 aria-selected={openTab === 'related'}
                 onClick={() => chooseTab('related')}
               >
+                <span className={styles.tabTileIcon}>
+                  <RelatedIcon size={22} />
+                </span>
                 Related
               </button>
             ) : null}

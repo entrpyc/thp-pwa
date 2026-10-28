@@ -264,15 +264,17 @@ describe('the recording page carries a Notes tab', () => {
         'true',
       );
 
-      // Selected, it takes the purple every other selected tab takes — no icon, no green: the
-      // token rather than a colour typed here.
+      // Selected, it takes the purple every other selected tab takes, and its icon — the tiles'
+      // notes sheet, one per tab since the strip became tiles — takes the icon purple, not the
+      // notes green: the token rather than a colour typed here.
       const colours = await page
         .getByRole('tab', { name: 'Notes' })
         .evaluate((tab) => {
           const style = getComputedStyle(tab);
           return {
             border: style.borderTopColor,
-            icons: tab.querySelectorAll('span').length,
+            icons: tab.querySelectorAll('svg').length,
+            icon: getComputedStyle(tab.querySelector('svg') as SVGElement).color,
             primary: getComputedStyle(document.documentElement)
               .getPropertyValue('--color-primary-strong')
               .trim(),
@@ -281,9 +283,10 @@ describe('the recording page carries a Notes tab', () => {
               .trim(),
           };
         });
-      expect(colours.icons).toBe(0);
+      expect(colours.icons).toBe(1);
       expect(colours.border).toBe(hexToRgb(colours.primary));
       expect(colours.border).not.toBe(hexToRgb(colours.notes));
+      expect(colours.icon).not.toBe(hexToRgb(colours.notes));
     } finally {
       await page.context().close();
     }
