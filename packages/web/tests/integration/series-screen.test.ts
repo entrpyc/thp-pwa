@@ -764,15 +764,14 @@ describe('the ways in and the way through', () => {
     }
   }, 180_000);
 
-  it('offers a member All series between Dashboard and All recordings, ahead of the rest', async () => {
+  it('offers a member All series first, ahead of All recordings and the rest', async () => {
     const page = await signInAs(member);
     try {
+      // No *Dashboard* in the menu since the home icon on the bar took that over, and no
+      // *Highlights* or *Flow Tracker* since the dashboard's tiles did — the operator's decision.
       expect(await menuEntries(page)).toEqual([
-        'Dashboard',
         'All series',
         'All recordings',
-        'Highlights',
-        'Flow Tracker',
         'App tour',
         'Report a bug',
         'My profile',
