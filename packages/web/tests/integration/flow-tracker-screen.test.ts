@@ -145,9 +145,23 @@ describe('a whole session, in the browser', () => {
       await page.getByRole('button', { name: 'Start', exact: true }).click();
       await page.waitForURL(/\/flow-tracker\/sessions\//, { timeout: 30_000 });
 
-      // 3.14.5 — the first screen is the newest teaching's last chapter, with its summary and the five answers.
-      const question = page.getByRole('region', { name: /^Question 1$/ });
-      await expect.poll(() => question.count(), { timeout: 30_000 }).toBe(1);
+      // 3.14.5 — the screens run newest teaching first, last chapter first. The range reaches the
+      // latest teaching in the library, so when another suite's newer teachings are present their
+      // questions come first: answer those as not a gap until this suite's newest chapter is on.
+      const anyQuestion = page.getByRole('region', { name: /^Question \d+$/ });
+      let number = 0;
+      for (;;) {
+        await expect.poll(() => anyQuestion.count(), { timeout: 30_000 }).toBe(1);
+        const name = (await anyQuestion.getAttribute('aria-label')) ?? '';
+        const text = (await anyQuestion.textContent()) ?? '';
+        if (text.includes(`${newerTitle} part 2`)) {
+          number = Number(name.replace('Question ', ''));
+          break;
+        }
+        await anyQuestion.getByRole('button', { name: FLOW_ANSWER_LABEL.experience_daily }).click();
+        await expect.poll(() => page.getByRole('region', { name: name, exact: true }).count(), { timeout: 30_000 }).toBe(0);
+      }
+      const question = page.getByRole('region', { name: `Question ${number}`, exact: true });
       const firstText = (await question.textContent()) ?? '';
       expect(firstText).toContain('part 2');
       expect(firstText).toMatch(/What .* part 2 teaches\./);
@@ -155,18 +169,20 @@ describe('a whole session, in the browser', () => {
       for (const label of Object.values(FLOW_ANSWER_LABEL)) {
         expect(await question.getByRole('button', { name: label }).count()).toBe(1);
       }
-      expect(await page.getByRole('button', { name: '‹ Back' }).isDisabled()).toBe(true);
+      // Back is off on the very first question and nowhere else.
+      expect(await page.getByRole('button', { name: '‹ Back' }).isDisabled()).toBe(number === 1);
 
       // 3.14.6 — pressing an answer moves on; Back returns with the answer pressed.
+      const next = page.getByRole('region', { name: `Question ${number + 1}`, exact: true });
       await question.getByRole('button', { name: FLOW_ANSWER_LABEL.experience_daily }).click();
-      await expect.poll(() => page.getByRole('region', { name: /^Question 2$/ }).count(), { timeout: 30_000 }).toBe(1);
+      await expect.poll(() => next.count(), { timeout: 30_000 }).toBe(1);
       await page.getByRole('button', { name: '‹ Back' }).click();
-      await expect.poll(() => page.getByRole('region', { name: /^Question 1$/ }).count(), { timeout: 30_000 }).toBe(1);
+      await expect.poll(() => question.count(), { timeout: 30_000 }).toBe(1);
       expect(
-        await page.getByRole('region', { name: /^Question 1$/ }).getByRole('button', { name: FLOW_ANSWER_LABEL.experience_daily }).getAttribute('aria-pressed'),
+        await question.getByRole('button', { name: FLOW_ANSWER_LABEL.experience_daily }).getAttribute('aria-pressed'),
       ).toBe('true');
       // Change it, and carry on: every remaining question is a gap.
-      await page.getByRole('region', { name: /^Question 1$/ }).getByRole('button', { name: FLOW_ANSWER_LABEL.dont_remember }).click();
+      await question.getByRole('button', { name: FLOW_ANSWER_LABEL.dont_remember }).click();
 
       for (;;) {
         const heading = page.getByRole('heading', { name: 'What to live out' });
