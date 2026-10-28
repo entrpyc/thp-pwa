@@ -180,7 +180,11 @@ describe('the results page (3.10.6, 3.10.7)', () => {
 
   it('a chapter match opens the chapter’s page', async () => {
     const page = await signedInPage();
-    await page.goto(`${baseUrl}${SEARCH_PAGE_PATH}?q=${encodeURIComponent(CHAPTER_TITLE)}`, {
+    // Words only, as the empty-state test below is: the suite's fake embedder answers a
+    // pseudo-random vector per text, so the meaning arm's order is a function of this run's id,
+    // and rank fusion can put a random passage above the chapter on some runs. The claim is what
+    // a chapter *match* opens, and the words arm is where the title matches.
+    await page.goto(`${baseUrl}${SEARCH_PAGE_PATH}?q=${encodeURIComponent(CHAPTER_TITLE)}&mix=0`, {
       waitUntil: 'domcontentloaded',
     });
     const results = page.getByRole('list', { name: 'Search results' });
