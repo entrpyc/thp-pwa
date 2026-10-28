@@ -197,6 +197,11 @@ describe('a whole session, in the browser', () => {
       expect(
         await page.getByRole('region', { name: /^Question 1$/ }).getByRole('radio', { name: '4', exact: true }).isChecked(),
       ).toBe(true);
+      // Pressing the rung already chosen keeps it and moves on, as pressing another would.
+      await page.getByRole('region', { name: /^Question 1$/ }).getByRole('radio', { name: '4', exact: true }).click();
+      await expect.poll(() => page.getByRole('region', { name: /^Question 2$/ }).count(), { timeout: 30_000 }).toBe(1);
+      await page.getByRole('button', { name: '‹ Back' }).click();
+      await expect.poll(() => page.getByRole('region', { name: /^Question 1$/ }).count(), { timeout: 30_000 }).toBe(1);
       // Change it to the bottom of the scale, and carry on: every remaining question is a 3, a gap.
       await page.getByRole('region', { name: /^Question 1$/ }).getByRole('radio', { name: `1 — ${FLOW_RATING_ENDS.low}` }).click();
 
