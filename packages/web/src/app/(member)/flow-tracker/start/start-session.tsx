@@ -19,8 +19,8 @@ import styles from '../flow-tracker.module.css';
 
 /**
  * **The start screen** ([3.14.2](docs/project/prd.md)): every published teaching, newest first,
- * each a press that picks it as the point of divergence. Under the list, what the pick covers —
- * how many teachings from there to the latest, and how many questions — then *Start*.
+ * each a press that picks it as the point of divergence. Above the list, what the pick covers —
+ * how many teachings from there to the latest, and how many questions — and *Start*.
  *
  * **The count is computed here from what the API listed**, because it is a sum over a pick the
  * member has not made yet: the questions of every teaching at or above the picked one, plus one
@@ -93,10 +93,10 @@ export function StartSession() {
   return (
     <>
       <header className={styles.pageHead}>
-        <h1 className={styles.pageTitle}>Where did you lose the flow?</h1>
+        <h1 className={styles.pageTitle}>Where do you want to start from?</h1>
         <p className={styles.pageLead}>
-          Pick the teaching you fell behind at. You will be asked about every part of the teaching
-          from the latest one back to it.
+          Pick a teaching to examine yourself from. You will be asked about every part of the
+          teaching from the latest one back to it.
         </p>
       </header>
 
@@ -109,6 +109,24 @@ export function StartSession() {
 
         {payload !== null && payload.teachings.length === 0 ? (
           <p className={styles.quiet}>There are no teachings to start from yet.</p>
+        ) : null}
+
+        {payload !== null && payload.teachings.length > 0 ? (
+          <div className={styles.startFoot}>
+            <p className={styles.progress} role="status">
+              {covered === null
+                ? 'Pick a teaching to see what the session covers.'
+                : `${plural(covered.teachings, 'teaching')} · ${plural(covered.questions, 'question')}`}
+            </p>
+            <button
+              className={styles.primary}
+              type="button"
+              disabled={picked === null || busy}
+              onClick={() => void start()}
+            >
+              {busy ? 'Starting…' : 'Start'}
+            </button>
+          </div>
         ) : null}
 
         {payload !== null && payload.teachings.length > 0 ? (
@@ -136,24 +154,6 @@ export function StartSession() {
               </li>
             ))}
           </ol>
-        ) : null}
-
-        {payload !== null && payload.teachings.length > 0 ? (
-          <div className={styles.startFoot}>
-            <p className={styles.progress} role="status">
-              {covered === null
-                ? 'Pick a teaching to see what the session covers.'
-                : `${plural(covered.teachings, 'teaching')} · ${plural(covered.questions, 'question')}`}
-            </p>
-            <button
-              className={styles.primary}
-              type="button"
-              disabled={picked === null || busy}
-              onClick={() => void start()}
-            >
-              {busy ? 'Starting…' : 'Start'}
-            </button>
-          </div>
         ) : null}
 
         {inProgress ? (

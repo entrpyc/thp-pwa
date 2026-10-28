@@ -323,9 +323,9 @@ describe('sessions (3.14.8, 3.14.10)', () => {
     expect(items[0]).toMatchObject({ recordingTitle: `Teaching ${made}`, summary: 'About it.' });
 
     expect(await answerFlowSessionItem(session.id, items[0]!.id, 'dont_remember', handle)).toBe(true);
-    expect(await answerFlowSessionItem(session.id, items[1]!.id, 'remember_well', handle)).toBe(true);
-    // Changing an answer replaces it.
     expect(await answerFlowSessionItem(session.id, items[1]!.id, 'not_embodied', handle)).toBe(true);
+    // Changing an answer replaces it.
+    expect(await answerFlowSessionItem(session.id, items[1]!.id, 'remember_well', handle)).toBe(true);
     expect(await countUnansweredFlowItems(session.id, handle)).toBe(1);
     // Another session's item id writes nothing here.
     expect(await answerFlowSessionItem('00000000-0000-4000-8000-000000000000', items[2]!.id, 'remember_well', handle)).toBe(false);
