@@ -1,5 +1,11 @@
 import { and, asc, count, desc, eq, inArray, isNull, sql } from 'drizzle-orm';
-import { FLOW_ANSWERS, isGapAnswer, type FlowAnswer, type FlowQuestionScope, type FlowSessionStatus } from '@thp/shared';
+import {
+  FLOW_ANSWERS,
+  isGapAnswer,
+  type FlowAnswer,
+  type FlowQuestionScope,
+  type FlowSessionStatus,
+} from '@thp/shared';
 import { getDatabase, queryable, withTransaction, type Executor } from './client';
 import {
   chapter,
@@ -414,7 +420,9 @@ export interface NewFlowSessionItem {
 
 export interface NewFlowSession {
   readonly userId: string;
+  /** The newest of the picked teachings — the row's anchor; see the column's note in `schema.ts`. */
   readonly divergenceRecordingId: string;
+  /** How many teachings were picked. */
   readonly teachingCount: number;
   /** In the order they are asked; `position` is the index plus one. */
   readonly items: readonly NewFlowSessionItem[];
@@ -472,7 +480,7 @@ const liveItem = sql`(
   or ${flowSessionItem.kind} = 'recording'
 )`;
 
-/** The answers that put a chapter on the reading list, as the shared rule says, never restated here. */
+/** The stored tokens that indicate a gap — the shared rule, spelled once as SQL. */
 const GAP_ANSWERS_SQL = sql`(${sql.join(
   FLOW_ANSWERS.filter(isGapAnswer).map((one) => sql`${one}`),
   sql`, `,
@@ -624,6 +632,53 @@ export async function listFlowSessionItems(
     .where(and(eq(flowSessionItem.sessionId, sessionId), liveItem))
     .orderBy(asc(flowSessionItem.position));
   return rows as FlowSessionItemRow[];
+}
+
+/** A teaching a session asked about, as the page names the picked ones. */
+export interface FlowSessionTeachingRow {
+  readonly sessionId: string;
+  readonly recordingId: string;
+  readonly title: string;
+  /** `YYYY-MM-DD`. */
+  readonly recordedAt: string;
+  readonly seriesId: string | null;
+  readonly seriesTitle: string | null;
+  readonly seriesArtworkKey: string | null;
+}
+
+/**
+ * **The teachings each of these sessions asked about**, in asking order (newest first), keyed by
+ * session id — read off the items, which are the pick as it was made ([3.14.2](docs/project/prd.md)).
+ * A picked teaching that had nothing to ask contributes no item and so is absent here; the service
+ * falls back to the session's anchor for that case. One statement for the whole page.
+ */
+export async function listFlowSessionTeachings(
+  sessionIds: readonly string[],
+  executor: Executor = getDatabase(),
+): Promise<Map<string, FlowSessionTeachingRow[]>> {
+  const byId = new Map<string, FlowSessionTeachingRow[]>();
+  if (sessionIds.length === 0) return byId;
+  const first = sql<number>`min(${flowSessionItem.position})`;
+  const rows = await queryable(executor)
+    .select({
+      sessionId: flowSessionItem.sessionId,
+      recordingId: recording.id,
+      title: recording.title,
+      recordedAt: recording.recordedAt,
+      seriesId: series.id,
+      seriesTitle: series.title,
+      seriesArtworkKey: series.artworkKey,
+    })
+    .from(flowSessionItem)
+    .innerJoin(recording, eq(recording.id, flowSessionItem.recordingId))
+    .leftJoin(series, eq(series.id, recording.seriesId))
+    .where(inArray(flowSessionItem.sessionId, sessionIds))
+    .groupBy(flowSessionItem.sessionId, recording.id, series.id)
+    .orderBy(asc(flowSessionItem.sessionId), first);
+  for (const row of rows) {
+    byId.set(row.sessionId, [...(byId.get(row.sessionId) ?? []), row]);
+  }
+  return byId;
 }
 
 /**

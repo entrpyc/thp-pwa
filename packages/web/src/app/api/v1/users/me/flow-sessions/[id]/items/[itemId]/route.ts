@@ -9,8 +9,8 @@ export const dynamic = 'force-dynamic';
 
 /**
  * `PUT /api/v1/users/me/flow-sessions/{id}/items/{itemId}` — **answer one question**
- * ([3.14.6](docs/project/prd.md)). The answer is one of the five; answering again replaces it.
- * The answer that completes the session is answered with the reading list.
+ * ([3.14.6](docs/project/prd.md)). The answer is a rating from 1 to 5; answering again replaces
+ * it. The answer that completes the session is answered with the reading list.
  */
 export const PUT = apiRoute(permits('flow.answer'), async (request, context) => {
   const body: unknown = await request.json().catch(() => null);

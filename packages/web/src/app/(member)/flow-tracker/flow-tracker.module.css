@@ -129,6 +129,26 @@
   border-left-color: var(--color-primary-strong);
 }
 
+/* The tick box at the row's left: several teachings can be picked, and a box says so where a wash alone would not. */
+.pickMark {
+  flex: 0 0 auto;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 1.5rem;
+  height: 1.5rem;
+  border: 1px solid var(--color-border-strong);
+  border-radius: var(--radius-sm);
+  font-size: var(--fs-meta);
+  font-weight: 600;
+  color: var(--color-primary-strong);
+  background: transparent;
+}
+
+.pick[aria-pressed='true'] .pickMark {
+  border-color: var(--color-primary-strong);
+}
+
 /* The line under the list that says what a pick covers, and the press that confirms it. */
 .startFoot {
   display: flex;
@@ -211,43 +231,109 @@
   border-top: 1px solid var(--color-border);
 }
 
-/* The five answers, stacked, each the full width — one column reads as one scale. */
-.answers {
-  list-style: none;
+/*
+ * The scale: five radio buttons in one row, 1 to 5, with the two ends worded beneath. Each rung
+ * is a round outlined pill holding its number; the chosen one takes the soft primary fill, as a
+ * pressed pick does. The native radio is kept for the keyboard and the screen reader but drawn
+ * off-screen, because the number is the control.
+ */
+.scale {
   margin: 0;
   padding: 0;
+  border: none;
+  min-width: 0;
+}
+
+.scaleLegend {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  overflow: hidden;
+  clip: rect(0 0 0 0);
+  white-space: nowrap;
+}
+
+.scaleRow {
   display: flex;
-  flex-direction: column;
+  justify-content: space-between;
   gap: var(--space-2);
 }
 
-.answer {
-  width: 100%;
-  background: transparent;
-  border: 1px solid var(--color-border-strong);
-  border-radius: var(--radius-pill);
-  padding: var(--space-3) var(--space-5);
-  color: var(--color-text);
-  font-family: inherit;
-  font-size: var(--fs-body);
-  text-align: left;
+.scaleStep {
+  position: relative;
+  flex: 1 1 0;
+  display: flex;
+  justify-content: center;
   cursor: pointer;
 }
 
-.answer:hover:not(:disabled) {
+/* The radio itself covers its step, invisible: the press lands on the control, and the number beneath draws its state. */
+.scaleInput {
+  position: absolute;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+  margin: 0;
+  opacity: 0;
+  cursor: pointer;
+}
+
+.scaleNumber {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 2.75rem;
+  height: 2.75rem;
+  border: 1px solid var(--color-border-strong);
+  border-radius: var(--radius-pill);
+  font-size: var(--fs-body);
+  font-weight: 600;
+  color: var(--color-text);
+  font-variant-numeric: tabular-nums;
+}
+
+.scaleStep:hover .scaleNumber {
   border-color: var(--color-primary-strong);
   background: var(--color-surface-raised);
 }
 
-/* The answer already given, when the member steps back to a question they answered. */
-.answer[aria-pressed='true'] {
+/* The rating already given, when the member steps back to a question they answered. */
+.scaleInput:checked + .scaleNumber {
   border-color: var(--color-primary-strong);
   background: var(--color-primary-soft);
 }
 
-.answer:disabled {
+.scaleInput:focus-visible + .scaleNumber {
+  outline: 2px solid var(--color-primary-strong);
+  outline-offset: 2px;
+}
+
+.scale:disabled .scaleStep {
   cursor: progress;
+}
+
+.scale:disabled .scaleNumber {
   color: var(--color-text-muted);
+}
+
+/* The two ends of the scale, worded, under the rungs they belong to. */
+.scaleEnds {
+  display: flex;
+  justify-content: space-between;
+  gap: var(--space-3);
+  margin-top: var(--space-2);
+  font-size: var(--fs-meta);
+  font-weight: 400;
+  color: var(--color-text-dim);
+}
+
+.scaleEnd {
+  flex: 1 1 0;
+  max-width: 45%;
+}
+
+.scaleEnd:last-child {
+  text-align: right;
 }
 
 /* Back on the left, pause on the right: neither is the main press, so neither is filled. */
