@@ -1,6 +1,7 @@
 'use client';
 
 import Link from 'next/link';
+import { useRouter } from 'next/navigation';
 import { useEffect, useState } from 'react';
 import {
   FLOW_RATINGS,
@@ -8,6 +9,7 @@ import {
   FLOW_TRACKER_PAGE_PATH,
   FLOW_TRACKER_START_PAGE_PATH,
   chapterPagePath,
+  flowSessionAbandonPath,
   flowSessionItemDonePath,
   flowSessionItemPath,
   flowSessionPath,
@@ -56,6 +58,7 @@ const LOAD_FAILED = 'Could not load this session. Reload the page to try again.'
 const WRITE_FAILED = 'Could not save that. Nothing has changed — try again in a moment.';
 
 export function SessionView({ sessionId }: { sessionId: string }) {
+  const router = useRouter();
   const [session, setSession] = useState<Session | null>(null);
   const [missing, setMissing] = useState(false);
   const [failure, setFailure] = useState<string | null>(null);
@@ -101,6 +104,25 @@ export function SessionView({ sessionId }: { sessionId: string }) {
     } catch (caught) {
       setFailure(caught instanceof ApiClientError ? caught.message : WRITE_FAILED);
     } finally {
+      setBusy(false);
+    }
+  }
+
+  /**
+   * Give the session up from its first screen ([3.14.10](docs/project/prd.md)) — the one place
+   * *Back* has nowhere to go — and return to the Flow Tracker page, which offers a fresh start.
+   */
+  async function cancel(): Promise<void> {
+    setBusy(true);
+    setFailure(null);
+    try {
+      await apiFetch<FlowSessionPayload>(flowSessionAbandonPath(sessionId), {
+        method: 'POST',
+        credentials: 'include',
+      });
+      router.push(FLOW_TRACKER_PAGE_PATH);
+    } catch (caught) {
+      setFailure(caught instanceof ApiClientError ? caught.message : WRITE_FAILED);
       setBusy(false);
     }
   }
@@ -228,6 +250,7 @@ export function SessionView({ sessionId }: { sessionId: string }) {
             const previous = items[index - 1];
             if (previous !== undefined) setShowing(previous.id);
           }}
+          onCancel={() => void cancel()}
           onAnswer={(rating) => {
             const body: AnswerFlowItemRequest = { rating };
             setShowing(null);
@@ -277,15 +300,19 @@ function QuestionScreen({
   busy,
   canGoBack,
   onBack,
+  onCancel,
   onAnswer,
 }: {
   item: FlowSessionItemView;
   busy: boolean;
   canGoBack: boolean;
   onBack: () => void;
+  /** The first screen's way out: there is no question before it to go back to. */
+  onCancel: () => void;
   onAnswer: (rating: FlowRating) => void;
 }) {
   const kind = item.kind === 'chapter' ? 'Chapter' : item.kind === 'tag' ? 'Theme' : 'Teaching';
+  const [cancelling, setCancelling] = useState(false);
   return (
     <section className={styles.question} aria-label={`Question ${item.position}`}>
       {item.recording === null ? null : <Teaching teaching={item.recording} />}
@@ -346,13 +373,36 @@ function QuestionScreen({
       </fieldset>
 
       <div className={styles.questionFoot}>
-        <button className={styles.textLink} type="button" disabled={!canGoBack || busy} onClick={onBack}>
-          ‹ Back
-        </button>
+        {canGoBack ? (
+          <button className={styles.textLink} type="button" disabled={busy} onClick={onBack}>
+            ‹ Back
+          </button>
+        ) : (
+          <button className={styles.textLink} type="button" disabled={busy} onClick={() => setCancelling(true)}>
+            Cancel session
+          </button>
+        )}
         <Link className={styles.textLink} href={FLOW_TRACKER_PAGE_PATH}>
           Pause and come back later
         </Link>
       </div>
+
+      {cancelling ? (
+        <div className={styles.failure} role="alertdialog" aria-label="Cancel this session?">
+          <p className={styles.pageLead}>
+            Cancel this session? Anything you have answered is set aside and will not appear in your
+            past sessions.
+          </p>
+          <div className={styles.actions}>
+            <button className={styles.primary} type="button" disabled={busy} onClick={onCancel}>
+              {busy ? 'Cancelling…' : 'Yes, cancel it'}
+            </button>
+            <button className={styles.secondary} type="button" disabled={busy} onClick={() => setCancelling(false)}>
+              Keep going
+            </button>
+          </div>
+        </div>
+      ) : null}
     </section>
   );
 }

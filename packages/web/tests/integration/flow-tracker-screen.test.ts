@@ -186,12 +186,15 @@ describe('a whole session, in the browser', () => {
       expect(await question.getByRole('radio').count()).toBe(5);
       expect(await question.getByRole('radio', { name: `1 — ${FLOW_RATING_ENDS.low}` }).count()).toBe(1);
       expect(await question.getByRole('radio', { name: `5 — ${FLOW_RATING_ENDS.high}` }).count()).toBe(1);
-      expect(await page.getByRole('button', { name: '‹ Back' }).isDisabled()).toBe(true);
+      // The first screen has no question before it: its left control cancels rather than goes back.
+      expect(await page.getByRole('button', { name: '‹ Back' }).count()).toBe(0);
+      expect(await page.getByRole('button', { name: 'Cancel session' }).count()).toBe(1);
       expect(await bar(page).count()).toBe(0);
 
       // 3.14.6 — choosing a rung moves on; Back returns with the rung chosen.
       await question.getByRole('radio', { name: '4', exact: true }).click();
       await expect.poll(() => page.getByRole('region', { name: /^Question 2$/ }).count(), { timeout: 30_000 }).toBe(1);
+      expect(await page.getByRole('button', { name: 'Cancel session' }).count()).toBe(0);
       await page.getByRole('button', { name: '‹ Back' }).click();
       await expect.poll(() => page.getByRole('region', { name: /^Question 1$/ }).count(), { timeout: 30_000 }).toBe(1);
       expect(
@@ -252,6 +255,35 @@ describe('a whole session, in the browser', () => {
       await page.context().close();
     }
   }, 300_000);
+});
+
+describe('cancelling from the first screen (3.14.10)', () => {
+  it('abandons the session after a confirmation and lands on the Flow Tracker page', async () => {
+    const page = await signInAs(member);
+    try {
+      await page.goto(`${baseUrl}${FLOW_TRACKER_START_PAGE_PATH}`, { waitUntil: 'domcontentloaded' });
+      const list = page.getByRole('list', { name: 'Teachings, newest first' });
+      await expect.poll(() => list.getByRole('button').count(), { timeout: 30_000 }).toBeGreaterThan(0);
+      await list.getByRole('button', { name: new RegExp(olderTitle) }).click();
+      await page.getByRole('button', { name: 'Start', exact: true }).click();
+      await page.waitForURL(/\/flow-tracker\/sessions\//, { timeout: 30_000 });
+      await expect.poll(() => page.getByRole('region', { name: /^Question 1$/ }).count(), { timeout: 30_000 }).toBe(1);
+
+      await page.getByRole('button', { name: 'Cancel session' }).click();
+      // Keep going closes the question without abandoning anything.
+      await page.getByRole('button', { name: 'Keep going' }).click();
+      expect(await page.getByRole('button', { name: 'Yes, cancel it' }).count()).toBe(0);
+      await page.getByRole('button', { name: 'Cancel session' }).click();
+      await page.getByRole('button', { name: 'Yes, cancel it' }).click();
+      await page.waitForURL(`${baseUrl}${FLOW_TRACKER_PAGE_PATH}`, { timeout: 30_000 });
+      await expect.poll(() => page.getByRole('link', { name: 'Start' }).count(), { timeout: 30_000 }).toBe(1);
+
+      const sessions = await listFlowSessionsForMember(member.id, handle);
+      expect(sessions.map((one) => one.status)).toEqual(['abandoned', 'complete']);
+    } finally {
+      await page.context().close();
+    }
+  }, 180_000);
 });
 
 describe('an admin rewrites a chapter’s question (3.14.11)', () => {
