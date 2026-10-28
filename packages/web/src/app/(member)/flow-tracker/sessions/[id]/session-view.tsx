@@ -324,7 +324,13 @@ function QuestionScreen({
                   value={rating}
                   checked={item.rating === rating}
                   aria-label={ratingLabel(rating)}
-                  onChange={() => onAnswer(rating)}
+                  /*
+                   * Answered on the press, not on the change: a rung that is already chosen —
+                   * the member stepped back to it — raises no change event, and pressing it has
+                   * to count as "keep this" and move on, exactly as pressing another rung would.
+                   */
+                  onClick={() => onAnswer(rating)}
+                  onChange={() => undefined}
                 />
                 <span className={styles.scaleNumber} aria-hidden="true">
                   {rating}
