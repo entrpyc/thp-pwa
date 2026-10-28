@@ -114,6 +114,10 @@
  */
 .pick {
   composes: row from '../screens.module.css';
+  /* A column: the cover and the tick on one row at the top, the title and meta beneath. */
+  flex-direction: column;
+  align-items: stretch;
+  gap: var(--space-3);
   width: 100%;
   background: transparent;
   border: none;
@@ -129,7 +133,21 @@
   border-left-color: var(--color-primary-strong);
 }
 
-/* The tick box at the row's left: several teachings can be picked, and a box says so where a wash alone would not. */
+/* The card's top row: the cover at the left, the tick at the right. */
+.pickHead {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: var(--space-4);
+}
+
+/* Holds the cover's place on a teaching with none, so every card's tick sits at the same height. */
+.rowCoverBlank {
+  composes: rowCover from '../screens.module.css';
+  display: block;
+}
+
+/* The tick box at the row's right: several teachings can be picked, and a box says so where a wash alone would not. */
 .pickMark {
   flex: 0 0 auto;
   display: inline-flex;
