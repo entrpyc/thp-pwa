@@ -150,12 +150,17 @@ export function StartSession() {
                   aria-pressed={picked.has(teaching.id)}
                   onClick={() => toggle(teaching.id)}
                 >
-                  <span className={styles.pickMark} aria-hidden="true">
-                    {picked.has(teaching.id) ? '✓' : ''}
+                  {/* The top row: the cover at the left, the tick at the right; the words beneath. */}
+                  <span className={styles.pickHead}>
+                    {teaching.series?.artworkUrl == null ? (
+                      <span className={styles.rowCoverBlank} aria-hidden="true" />
+                    ) : (
+                      <img className={styles.rowCover} src={teaching.series.artworkUrl} alt="" />
+                    )}
+                    <span className={styles.pickMark} aria-hidden="true">
+                      {picked.has(teaching.id) ? '✓' : ''}
+                    </span>
                   </span>
-                  {teaching.series?.artworkUrl == null ? null : (
-                    <img className={styles.rowCover} src={teaching.series.artworkUrl} alt="" />
-                  )}
                   <span className={styles.rowText}>
                     <span className={styles.rowTitle}>{teaching.title}</span>
                     <span className={styles.rowMeta}>
