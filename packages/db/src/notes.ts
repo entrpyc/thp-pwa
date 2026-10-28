@@ -2,7 +2,8 @@ import { and, asc, desc, eq, exists, inArray, isNotNull, isNull, or, sql } from 
 import { alias } from 'drizzle-orm/pg-core';
 import { getDatabase, queryable, type Executor } from './client';
 import { noBlockBetween } from './member-blocks';
-import { note, noteImage, notePin, noteReaction, user } from './schema';
+import { note, noteImage, notePin, noteReaction, recording, series, user } from './schema';
+import { recordingIsPublished } from './visibility';
 import type { NoteVisibility } from '@thp/shared';
 
 /**
@@ -199,6 +200,99 @@ export async function listNotesForReader(
     .orderBy(asc(note.timestampMs), asc(note.createdAt));
 
   return rows as NoteWithAuthorRow[];
+}
+
+/**
+ * A note row with its author **and the teaching it sits on** — what the member's own notes page
+ * prints above each card. The series is left-joined for the reason the library's rows do it: a
+ * recording in no series is the ordinary case.
+ */
+export interface NoteOnRecordingRow extends NoteWithAuthorRow {
+  readonly recordingTitle: string;
+  readonly seriesId: string | null;
+  readonly seriesTitle: string | null;
+}
+
+const NOTE_ON_RECORDING_COLUMNS = {
+  ...NOTE_COLUMNS,
+  authorDisplayName: user.displayName,
+  authorAvatarKey: user.avatarKey,
+  recordingTitle: recording.title,
+  seriesId: series.id,
+  seriesTitle: series.title,
+} as const;
+
+/**
+ * **Everything one member wrote, across every teaching** — their top-level notes and their
+ * replies alike, newest first — for the *My notes* page.
+ *
+ * Here rather than beside the page's route because it is the author half of the privacy
+ * condition as a read: *this author's* rows, of both visibilities. Nobody else's note is in the
+ * answer, so the public half has nothing to exclude.
+ *
+ * **Only standing notes on published teachings.** A removed note is nobody's any more — its text
+ * is gone (scope prd 3.5.9) — and a teaching that was taken down takes its notes' read paths
+ * with it, which is the line `visibility.ts` draws and the Highlights list follows. The gate is
+ * spelled there and consumed here. Neither is deleted by this read: a republished teaching brings
+ * its notes back.
+ *
+ * The thread a reply belongs to is a second read — {@link listThreadRootsForReader} — because the
+ * parent is somebody else's note, and *that* read is where the full condition has to be stated.
+ */
+export async function listNotesByAuthor(
+  authorId: string,
+  executor: Executor = getDatabase(),
+): Promise<NoteOnRecordingRow[]> {
+  const rows = await queryable(executor)
+    .select(NOTE_ON_RECORDING_COLUMNS)
+    .from(note)
+    .innerJoin(user, eq(note.authorId, user.id))
+    .innerJoin(recording, eq(recording.id, note.recordingId))
+    .leftJoin(series, eq(series.id, recording.seriesId))
+    .where(and(eq(note.authorId, authorId), isNull(note.deletedAt), recordingIsPublished()))
+    .orderBy(desc(note.createdAt), desc(note.id));
+
+  return rows as NoteOnRecordingRow[];
+}
+
+/**
+ * **The top-level notes these ids name, as this reader may see them** — the threads a member's
+ * replies hang under, read for the *My notes* page.
+ *
+ * The same condition {@link listNotesForReader} states, applied to a set of ids rather than to a
+ * teaching: public, or the reader's own; no block either way; and a tombstone **is** returned,
+ * because a reply the member wrote under a since-removed note still has a thread to be shown in,
+ * and the tombstone is what holds it (scope prd 3.5.4). A parent by a member the reader has a
+ * block with is left out, and the reader's own reply under it goes with it — the recording page
+ * shows exactly the same, for the reason given there.
+ *
+ * Only published teachings, for the reason {@link listNotesByAuthor} gives.
+ */
+export async function listThreadRootsForReader(
+  noteIds: readonly string[],
+  readerId: string,
+  executor: Executor = getDatabase(),
+): Promise<NoteOnRecordingRow[]> {
+  if (noteIds.length === 0) return [];
+
+  const rows = await queryable(executor)
+    .select(NOTE_ON_RECORDING_COLUMNS)
+    .from(note)
+    .innerJoin(user, eq(note.authorId, user.id))
+    .innerJoin(recording, eq(recording.id, note.recordingId))
+    .leftJoin(series, eq(series.id, recording.seriesId))
+    .where(
+      and(
+        inArray(note.id, [...noteIds]),
+        isNull(note.parentId),
+        // The private-note condition, for a read keyed by id rather than by teaching.
+        or(eq(note.visibility, 'public'), eq(note.authorId, readerId)),
+        noBlockBetween(readerId, note.authorId),
+        recordingIsPublished(),
+      ),
+    );
+
+  return rows as NoteOnRecordingRow[];
 }
 
 /**
@@ -476,6 +570,19 @@ export async function pinNote(
  */
 export async function unpinNote(noteId: string, executor: Executor = getDatabase()): Promise<void> {
   await queryable(executor).delete(notePin).where(eq(notePin.noteId, noteId));
+}
+
+/** Which of these notes an admin has raised — the pin read for a list that spans teachings. */
+export async function listPinnedNoteIdsAmong(
+  noteIds: readonly string[],
+  executor: Executor = getDatabase(),
+): Promise<string[]> {
+  if (noteIds.length === 0) return [];
+  const rows = await queryable(executor)
+    .select({ noteId: notePin.noteId })
+    .from(notePin)
+    .where(inArray(notePin.noteId, [...noteIds]));
+  return rows.map((row) => row.noteId);
 }
 
 /** Which of this recording's notes an admin has raised. The `(recording_id)` index exactly. */

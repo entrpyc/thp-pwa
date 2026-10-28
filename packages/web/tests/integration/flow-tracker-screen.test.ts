@@ -124,12 +124,14 @@ afterAll(async () => {
 // =================================================================================================
 
 describe('a whole session, in the browser', () => {
-  it('starts from the menu, asks one question per screen, and ends on a reading list that keeps its ticks', async () => {
+  it('starts from the dashboard tile, asks one question per screen, and ends on a reading list that keeps its ticks', async () => {
     const page = await signInAs(member);
     try {
-      // 3.14.1 — the way in is the menu.
+      // 3.14.1 — the way in is the dashboard's tile; the menu no longer lists it.
       await page.getByRole('button', { name: 'Menu' }).click();
-      await page.getByRole('link', { name: 'Flow Tracker' }).click();
+      expect(await page.getByRole('link', { name: 'Flow Tracker', exact: true }).count()).toBe(0);
+      await page.keyboard.press('Escape');
+      await page.getByRole('link', { name: 'View Flow Tracker' }).click();
       await page.waitForURL(`${baseUrl}${FLOW_TRACKER_PAGE_PATH}`, { timeout: 30_000 });
       await page.getByRole('link', { name: 'Start' }).click();
       await page.waitForURL(`${baseUrl}${FLOW_TRACKER_START_PAGE_PATH}`, { timeout: 30_000 });

@@ -16,6 +16,7 @@
  * parses exactly what the API promises (active-scope architecture § 4.5).
  */
 
+import { USERS_PATH } from './accounts';
 import { RECORDINGS_PATH } from './recordings';
 
 /**
@@ -276,3 +277,53 @@ export const NOTE_REMOVED_WHILE_REPLYING_MESSAGE = 'This note was removed while 
 export const NOTE_REMOVED_MESSAGE = 'This note was removed.';
 
 export const NOTE_ALREADY_REMOVED_MESSAGE = 'This note has already been removed.';
+
+// =================================================================================================
+// The member's own notes, across every teaching
+// =================================================================================================
+
+/**
+ * The page listing every note the signed-in member wrote, across the whole library — reached
+ * from the dashboard's *Notes* tile.
+ */
+export const MY_NOTES_PAGE_PATH = '/notes';
+
+/**
+ * `GET` — every note the signed-in member wrote, each inside the thread it belongs to.
+ *
+ * Under `/users/me`, the shape the Highlights list takes: the only set of notes this route can
+ * name is the caller's own, so there is no ownership rule to get wrong. The same read the
+ * recording page makes, widened from one teaching to all of them — which of another member's
+ * notes and replies may be shown is still the query's answer.
+ */
+export const MY_NOTES_PATH = `${USERS_PATH}/me/notes`;
+
+/**
+ * One thread the member took part in — the top-level note with every reply under it, and the
+ * teaching it sits on.
+ *
+ * **A thread, not a note.** A reply the member wrote is shown inside the conversation it answered,
+ * so `note` is always the top-level note: the member's own when they wrote it, somebody else's
+ * public one (or its tombstone) when they only replied. Which cards are the member's is said by
+ * `mine` on each, exactly as on the recording page.
+ */
+export interface MyNoteEntry {
+  readonly recording: {
+    readonly id: string;
+    readonly title: string;
+    readonly series: { readonly id: string; readonly title: string } | null;
+  };
+  readonly note: NoteView;
+  /**
+   * The visibility of what the member wrote here: `private` only when the thread is their own
+   * private note. A reply is always public, so a thread they replied to is public.
+   */
+  readonly visibility: NoteVisibility;
+  /** ISO 8601 — when the member last wrote in this thread, which is the list's order, newest first. */
+  readonly writtenAt: string;
+}
+
+/** Payload of `GET /api/v1/users/me/notes`. */
+export interface MyNotesPayload {
+  readonly entries: readonly MyNoteEntry[];
+}

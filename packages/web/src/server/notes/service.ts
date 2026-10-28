@@ -14,10 +14,13 @@ import {
   insertNote,
   insertNoteReport,
   isBlockedEitherWay,
+  listNotesByAuthor,
   listNotesForReader,
   listPinnedNoteIds,
+  listPinnedNoteIdsAmong,
   listReactionsForNotes,
   listRepliesForNotes,
+  listThreadRootsForReader,
   pinNote,
   setNoteReaction,
   softDeleteNote,
@@ -45,6 +48,8 @@ import {
   termsAcceptanceIsCurrent,
   excerptForImages,
   type CreateNotePayload,
+  type MyNoteEntry,
+  type MyNotesPayload,
   type NoteImageView,
   type NotePayload,
   type NoteView,
@@ -660,6 +665,99 @@ export async function readNotesFor(
       ),
     })),
   };
+}
+
+/**
+ * **Everything this member wrote, across every teaching, each inside its thread** — the *My
+ * notes* page's one read.
+ *
+ * Two reads decide what is shown, and both are the store's: the member's own standing notes on
+ * published teachings, and — for each reply among them — the top-level note it answers, read
+ * **as this reader may see it** (public or their own, no block either way, a tombstone when the
+ * parent was removed). A reply whose parent is not in that answer is not shown, which is what the
+ * recording page does with the same reply, for the reason given on `listThreadRootsForReader`.
+ *
+ * Then the same four statements `readNotesFor` makes, over the roots that survived: the threads
+ * under them, the reactions on both, and the pins — so a thread reads here exactly as it reads on
+ * its teaching's page, replies by other members included. One thread is one entry however many
+ * of its notes the member wrote; what orders the list is the newest thing they wrote in it.
+ */
+export async function readOwnNotesFor(actor: Actor): Promise<MyNotesPayload> {
+  const own = await listNotesByAuthor(actor.id);
+
+  const ownRoots = own.filter((row) => row.parentId === null);
+  const ownRootIds = new Set(ownRoots.map((row) => row.id));
+  const parentIds = [
+    ...new Set(
+      own.flatMap((row) =>
+        row.parentId === null || ownRootIds.has(row.parentId) ? [] : [row.parentId],
+      ),
+    ),
+  ];
+  const parents = await listThreadRootsForReader(parentIds, actor.id);
+  const roots = [...ownRoots, ...parents];
+
+  const replies = await listRepliesForNotes(
+    roots.map((row) => row.id),
+    actor.id,
+  );
+  const reactions = await listReactionsForNotes(
+    [...roots, ...replies].map((row) => row.id),
+    actor.id,
+  );
+  const pinned = new Set(await listPinnedNoteIdsAmong(roots.map((row) => row.id)));
+
+  const byParent = new Map<string, NoteWithAuthorRow[]>();
+  for (const reply of replies) {
+    const parentId = reply.parentId ?? '';
+    const held = byParent.get(parentId);
+    if (held === undefined) byParent.set(parentId, [reply]);
+    else held.push(reply);
+  }
+  const byNote = groupReactions(reactions);
+  const [avatars, images] = await Promise.all([
+    signAvatars([...roots, ...replies]),
+    signNoteImages(await listImagesForNotes([...roots, ...replies].map((row) => row.id))),
+  ]);
+
+  const entries: MyNoteEntry[] = roots.map((root) => {
+    const thread = byParent.get(root.id) ?? [];
+    // When the member last wrote here: the root if it is theirs, else their newest reply in it.
+    const writtenAt = [root, ...thread]
+      .filter((row) => row.authorId === actor.id)
+      .reduce<Date | null>(
+        (latest, row) => (latest === null || row.createdAt > latest ? row.createdAt : latest),
+        null,
+      );
+    return {
+      recording: {
+        id: root.recordingId,
+        title: root.recordingTitle,
+        series:
+          root.seriesId === null || root.seriesTitle === null
+            ? null
+            : { id: root.seriesId, title: root.seriesTitle },
+      },
+      note: {
+        ...describe(root, actor, byNote, pinned.has(root.id), avatars, images),
+        replies: thread.map((reply) => describe(reply, actor, byNote, false, avatars, images)),
+      },
+      // A thread is private only when it is the member's own private note; a reply is always
+      // public, so a thread they merely replied to is public.
+      visibility: root.authorId === actor.id ? root.visibility : 'public',
+      writtenAt: (writtenAt ?? root.createdAt).toISOString(),
+    };
+  });
+  entries.sort((a, b) => b.writtenAt.localeCompare(a.writtenAt));
+
+  logger.info('note.read', {
+    actorId: actor.id,
+    action: 'note.read',
+    target: `user:${actor.id}`,
+    notes: own.length,
+  });
+
+  return { entries };
 }
 
 // =================================================================================================
