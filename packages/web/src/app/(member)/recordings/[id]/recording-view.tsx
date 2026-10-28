@@ -19,7 +19,6 @@ import { useBreadcrumbTrail, usePlayer } from '../../player-context';
 import { DownloadControl } from '../../downloads/download-control';
 import { openAtFromAddress } from '../../highlights/open-at';
 import { ChaptersPanel } from './chapters-panel';
-import { CollapsibleProse } from './collapsible-prose';
 import { MindMapPanel } from './mind-map-panel';
 import { NotesPanel } from './notes-panel';
 import { RecordingContentProvider, toLoaded, useRecordingContentFor } from './recording-content';
@@ -602,16 +601,23 @@ export function RecordingScreen({
               ) : null}
 
               {/*
-                Both blocks clamp rather than run: between them they can push the strip off the
-                screen. Clamped, they cost six lines each and the strip stays where a member left it.
+                Both blocks are shown whole, with nothing to open: a description is two or three
+                sentences and a summary two paragraphs by generation, so a clamp would hide a few
+                lines behind a control that costs a press to get them back.
               */}
               {openTab === 'about' && hasAbout ? (
                 <div className={styles.aboutPanel}>
                   {recording.description === null ? null : (
-                    <CollapsibleProse label="Description" text={recording.description} />
+                    <section className={styles.card} aria-label="Description">
+                      <h2 className={styles.cardTitle}>Description</h2>
+                      <p className={styles.prose}>{recording.description}</p>
+                    </section>
                   )}
                   {recording.summary === null ? null : (
-                    <CollapsibleProse label="Summary" text={recording.summary} />
+                    <section className={styles.card} aria-label="Summary">
+                      <h2 className={styles.cardTitle}>Summary</h2>
+                      <p className={styles.prose}>{recording.summary}</p>
+                    </section>
                   )}
                 </div>
               ) : null}

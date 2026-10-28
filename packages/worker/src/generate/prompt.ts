@@ -34,7 +34,7 @@ import type {
  * meaning of the instruction changes with the model behind it. The value is meaningless as anything
  * but a label an operator compares two drafts with, and deriving it would make it lie.
  */
-export const PROMPT_VERSION = 'draft-4';
+export const PROMPT_VERSION = 'draft-5';
 
 /** The tool the model is forced to call. The name is arbitrary and is part of the contract. */
 export const DRAFT_TOOL_NAME = 'record_draft';
@@ -48,14 +48,15 @@ export const DRAFT_TOOL_NAME = 'record_draft';
  */
 export const DRAFT_FIELD_INSTRUCTIONS: Record<ReviewKind, string> = {
   summary:
-    'A summary of the teaching in exactly two paragraphs of plain prose, separated by a blank ' +
-    'line. Say what was taught, in the order it was taught, in the speaker’s own terms. Do not ' +
-    'evaluate it, do not address the reader, and do not open with a phrase like "In this ' +
-    'teaching".',
+    'A summary of the teaching in exactly two paragraphs of plain prose — never one, never ' +
+    'three — separated by a single blank line, with no heading or label before either. Each ' +
+    'paragraph is three to five sentences. Say what was taught, in the order it was taught, in ' +
+    'the speaker’s own terms. Do not evaluate it, do not address the reader, and do not open ' +
+    'with a phrase like "In this teaching".',
   recording_metadata:
-    'A description of one or two sentences, of the kind that sits under a title in a list. It ' +
-    'should say what the teaching is about clearly enough that somebody scanning a list can tell ' +
-    'it apart from the one above it.',
+    'A description of two or three sentences — never one, never four — of the kind that sits ' +
+    'under a title in a list. It should say what the teaching is about clearly enough that ' +
+    'somebody scanning a list can tell it apart from the one above it.',
   scripture:
     'Every passage of the Bible the teaching is built on — one entry per passage, with the book ' +
     'spelled in full, the chapter, and the first and last verse of the range. A passage taught ' +
