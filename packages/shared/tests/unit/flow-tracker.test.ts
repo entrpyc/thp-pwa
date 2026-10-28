@@ -46,9 +46,9 @@ describe('the five answers (3.14.6)', () => {
     for (const answer of FLOW_ANSWERS) expect(FLOW_ANSWER_LABEL[answer].length).toBeGreaterThan(0);
   });
 
-  it('treats the bottom two and “not embodied” as gaps, and the other two as not', () => {
-    expect(FLOW_ANSWERS.filter(isGapAnswer)).toEqual(['dont_remember', 'recall_slightly', 'not_embodied']);
-    expect(isGapAnswer('remember_well')).toBe(false);
+  it('treats the bottom three as gaps, and the top two as not', () => {
+    expect(FLOW_ANSWERS.filter(isGapAnswer)).toEqual(['dont_remember', 'recall_slightly', 'remember_well']);
+    expect(isGapAnswer('not_embodied')).toBe(false);
     expect(isGapAnswer('experience_daily')).toBe(false);
   });
 
@@ -68,10 +68,10 @@ describe('what a session computes (3.14.5, 3.14.9)', () => {
 
   it('keeps only the gaps, in the order they were asked', () => {
     const items = [
-      item('1', 'remember_well'),
+      item('1', 'not_embodied'),
       item('2', 'dont_remember'),
       item('3', null),
-      item('4', 'not_embodied'),
+      item('4', 'remember_well'),
       item('5', 'experience_daily'),
     ];
     expect(gapItems(items).map((one) => one.id)).toEqual(['2', '4']);

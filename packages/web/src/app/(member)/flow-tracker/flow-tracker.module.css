@@ -204,14 +204,11 @@
   overflow-wrap: anywhere;
 }
 
-/* The question itself, at the title size: it is what the screen is for. */
-.prompt {
+/* The hairline between the chapter and the question asked about it. */
+.divider {
   margin: 0;
-  font-size: var(--fs-title);
-  font-weight: 600;
-  line-height: 1.3;
-  color: var(--color-text);
-  overflow-wrap: anywhere;
+  border: none;
+  border-top: 1px solid var(--color-border);
 }
 
 /* The five answers, stacked, each the full width — one column reads as one scale. */
@@ -299,6 +296,17 @@
   min-width: 0;
 }
 
+/* The same head as a link: the whole teaching opens its page, with no link dressing on the title. */
+.groupLink {
+  composes: groupHead;
+  color: inherit;
+  text-decoration: none;
+}
+
+.groupLink:hover .groupTitle {
+  text-decoration: underline;
+}
+
 .groupTitle {
   margin: 0;
   font-size: var(--fs-card-title);
@@ -367,6 +375,16 @@
   overflow-wrap: anywhere;
 }
 
+/* The title as the way to the chapter's page: the title's own look, underlined on hover. */
+.readingTitleLink {
+  composes: readingTitle;
+  text-decoration: none;
+}
+
+.readingTitleLink:hover {
+  text-decoration: underline;
+}
+
 /* The member's own answer, as a quiet label — their word, never a mark. */
 .readingAnswer {
   font-size: var(--fs-meta);
@@ -377,6 +395,10 @@
 .readingDone .readingTitle {
   color: var(--color-text-muted);
   text-decoration: line-through;
+}
+
+.readingDone .readingTitleLink:hover {
+  text-decoration: line-through underline;
 }
 
 .ways {
@@ -404,19 +426,6 @@
 
 .play:hover {
   border-color: var(--color-primary-strong);
-}
-
-/* Open the chapter's page: a link in the accent, the series link's own shape. */
-.openLink {
-  font-size: var(--fs-meta);
-  font-weight: 500;
-  color: var(--color-primary-strong);
-  text-decoration: none;
-  white-space: nowrap;
-}
-
-.openLink:hover {
-  text-decoration: underline;
 }
 
 /* The related chapters of other teachings, nested under the row at the meta size. */

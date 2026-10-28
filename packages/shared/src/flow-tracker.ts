@@ -35,11 +35,12 @@ import { TAGS_PATH } from './tags';
 
 /**
  * **The five answers**, in the order the screen offers them ([3.14.6](docs/project/prd.md)):
- * from not remembering the chapter at all, through recalling it, to living it daily.
+ * from not remembering the chapter at all, through having spent no time on it and some progress,
+ * to a number of experiences and seeing its result in one's life.
  *
- * The order is the scale and it is deliberately not a line from bad to good — *I remember it well*
- * sits between two answers that do indicate a gap, because remembering a teaching and embodying it
- * are different questions and the scale asks both.
+ * The order is the scale, from information that never landed to a teaching lived out. The keys are
+ * the database enum's values and predate the labels; they stay as they are so no answer already
+ * given has to be rewritten.
  */
 export const FLOW_ANSWERS = [
   'dont_remember',
@@ -57,22 +58,22 @@ export function isFlowAnswer(value: unknown): value is FlowAnswer {
 
 /** What each answer says on the button, worded close to the operator's own phrasing. */
 export const FLOW_ANSWER_LABEL: Record<FlowAnswer, string> = {
-  dont_remember: "I don't remember this",
-  recall_slightly: 'I can recall it slightly',
-  remember_well: 'I remember it well',
-  not_embodied: "I haven't fully embodied this yet",
-  experience_daily: 'I experience this daily',
+  dont_remember: "I don't remember anything about that",
+  recall_slightly: "I haven't spent time on that",
+  remember_well: 'I have some progress with it',
+  not_embodied: 'I have number of experiences with it',
+  experience_daily: 'I see the result of that in my life',
 };
 
 /**
  * **Which answers put the chapter on the reading list** ([3.14.6](docs/project/prd.md)).
  *
- * Not remembering, barely recalling, and not yet having embodied the teaching are gaps; remembering
- * it well and living it daily are not. The list is about living it out rather than only memory,
- * which is why the fourth answer counts and the third does not.
+ * Not remembering it, not having spent time on it, and having only some progress with it are gaps;
+ * a number of experiences and seeing its result in one's life are not. The list is about living the
+ * teaching out rather than holding it as information, which is why the first three count.
  */
 export function isGapAnswer(answer: FlowAnswer): boolean {
-  return answer === 'dont_remember' || answer === 'recall_slightly' || answer === 'not_embodied';
+  return answer === 'dont_remember' || answer === 'recall_slightly' || answer === 'remember_well';
 }
 
 /**

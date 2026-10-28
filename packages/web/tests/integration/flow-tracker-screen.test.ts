@@ -158,22 +158,22 @@ describe('a whole session, in the browser', () => {
       expect(await page.getByRole('button', { name: '‹ Back' }).isDisabled()).toBe(true);
 
       // 3.14.6 — pressing an answer moves on; Back returns with the answer pressed.
-      await question.getByRole('button', { name: FLOW_ANSWER_LABEL.remember_well }).click();
+      await question.getByRole('button', { name: FLOW_ANSWER_LABEL.experience_daily }).click();
       await expect.poll(() => page.getByRole('region', { name: /^Question 2$/ }).count(), { timeout: 30_000 }).toBe(1);
       await page.getByRole('button', { name: '‹ Back' }).click();
       await expect.poll(() => page.getByRole('region', { name: /^Question 1$/ }).count(), { timeout: 30_000 }).toBe(1);
       expect(
-        await page.getByRole('region', { name: /^Question 1$/ }).getByRole('button', { name: FLOW_ANSWER_LABEL.remember_well }).getAttribute('aria-pressed'),
+        await page.getByRole('region', { name: /^Question 1$/ }).getByRole('button', { name: FLOW_ANSWER_LABEL.experience_daily }).getAttribute('aria-pressed'),
       ).toBe('true');
       // Change it, and carry on: every remaining question is a gap.
       await page.getByRole('region', { name: /^Question 1$/ }).getByRole('button', { name: FLOW_ANSWER_LABEL.dont_remember }).click();
 
       for (;;) {
-        const heading = page.getByRole('heading', { name: 'Your route back in' });
+        const heading = page.getByRole('heading', { name: 'What to live out' });
         if ((await heading.count()) > 0) break;
         const current = page.getByRole('region', { name: /^Question \d+$/ });
         await expect.poll(() => current.count(), { timeout: 30_000 }).toBe(1);
-        await current.getByRole('button', { name: FLOW_ANSWER_LABEL.not_embodied }).click();
+        await current.getByRole('button', { name: FLOW_ANSWER_LABEL.recall_slightly }).click();
         await page.waitForTimeout(150);
       }
 
@@ -185,8 +185,10 @@ describe('a whole session, in the browser', () => {
       const firstGroup = page.getByRole('region', { name: olderTitle });
       const rows = await firstGroup.getByRole('listitem').allTextContents();
       expect(rows[0]).toContain(`${olderTitle} part 1`);
-      expect(rows[0]).toContain(`You said: ${FLOW_ANSWER_LABEL.not_embodied}`);
-      expect(await firstGroup.getByRole('link', { name: 'Open chapter' }).count()).toBe(2);
+      expect(rows[0]).toContain(`You said: ${FLOW_ANSWER_LABEL.recall_slightly}`);
+      // The chapter's title is the way to its page, and the group's head the way to the teaching's.
+      expect(await firstGroup.getByRole('link', { name: `${olderTitle} part 1`, exact: true }).count()).toBe(1);
+      expect(await firstGroup.locator('a').filter({ has: page.getByRole('heading', { name: olderTitle }) }).count()).toBe(1);
 
       // The tick is written, and is still there after a reload.
       const tick = firstGroup.getByRole('checkbox', { name: `Done: ${olderTitle} part 1` });
@@ -220,7 +222,7 @@ describe('an admin rewrites a chapter’s question (3.14.11)', () => {
       await page.getByRole('tab', { name: 'Chapters' }).click();
       const panel = page.getByRole('region', { name: 'Chapters' });
       await expect.poll(() => panel.count(), { timeout: 30_000 }).toBe(1);
-      await panel.getByRole('button', { name: 'Edit' }).first().click();
+      await panel.getByRole('button', { name: 'Edit', exact: true }).first().click();
 
       const field = panel.getByLabel(/Flow Tracker question/);
       expect(await field.inputValue()).toBe(`How has Editable ${RUN} part 1 shown up this week?`);
