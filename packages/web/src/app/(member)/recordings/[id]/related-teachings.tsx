@@ -30,13 +30,17 @@ import styles from './related.module.css';
  *
  * `null` until the answer lands, and `null` for good when the fetch failed: a member who was not
  * offered a related moment has lost an aside, not the teaching, so the failure state is silence.
+ * `null` too for no teaching at all — the now-playing view asks before anything has been opened.
  */
-export function useRelatedGroups(recordingId: string): readonly CrossReferenceGroupView[] | null {
+export function useRelatedGroups(
+  recordingId: string | null,
+): readonly CrossReferenceGroupView[] | null {
   const [groups, setGroups] = useState<readonly CrossReferenceGroupView[] | null>(null);
 
   useEffect(() => {
     let live = true;
     setGroups(null);
+    if (recordingId === null) return;
     void apiFetch<RecordingCrossReferencesPayload>(recordingCrossReferencesPath(recordingId), {
       credentials: 'include',
     })
@@ -52,6 +56,44 @@ export function useRelatedGroups(recordingId: string): readonly CrossReferenceGr
   }, [recordingId]);
 
   return groups;
+}
+
+/**
+ * **The press that opens a related moment** — shared by the recording page's `Related` tab and the
+ * now-playing view's row, so the two cannot disagree about what pressing a related moment does.
+ *
+ * The other teaching is handed to the player through `openIfIdle` — loaded *at* the moment,
+ * paused, when the transport is idle; left alone when a different teaching is audibly playing —
+ * and then the page navigates ([3.9.5](docs/project/prd.md), [3.2.12](docs/project/prd.md)). The
+ * hand-over is awaited before the navigation, because the destination page opens its own teaching
+ * on mount and re-opening what is already loaded is a no-op: the order is what makes the position
+ * the link's rather than the stored one. A modified press — new tab, middle button — is left to the
+ * browser, which opens the page at the stored position; only a plain press takes the route above.
+ */
+export function useOpenRelated(): (
+  event: MouseEvent<HTMLAnchorElement>,
+  link: RelatedSegmentView,
+) => void {
+  const { openIfIdle } = usePlayer();
+  const router = useRouter();
+
+  async function openAt(link: RelatedSegmentView): Promise<void> {
+    try {
+      const payload = await apiFetch<RecordingPayload>(memberRecordingPath(link.recordingId), {
+        credentials: 'include',
+      });
+      openIfIdle(toLoaded(payload.recording), link.startMs);
+    } catch {
+      // The page is still the right place to go; it opens at the stored position on its own.
+    }
+    router.push(recordingPagePath(link.recordingId));
+  }
+
+  return (event, link) => {
+    if (!isPlainPress(event)) return;
+    event.preventDefault();
+    void openAt(link);
+  };
 }
 
 /**
@@ -72,13 +114,9 @@ export function useRelatedGroups(recordingId: string): readonly CrossReferenceGr
  *   somewhere in it, so a part with none is a fact about *this* part, and the panel says so rather
  *   than drawing an empty list — which is what the tab being open at all has asked for.
  * - **Opening goes to the moment, without sound, and without stopping sound**
- *   ([3.2.12](docs/project/prd.md); the operator's call for this surface). The other teaching is
- *   handed to the player through `openIfIdle` — loaded *at* the moment, paused, when the transport
- *   is idle; left alone when a different teaching is audibly playing — and then the page navigates.
- *   The hand-over is awaited before the navigation, because the destination page opens its own
- *   teaching on mount and re-opening what is already loaded is a no-op: the order is what makes
- *   the position the link's rather than the stored one. A member who was hearing something else
- *   keeps hearing it and lands at their stored position, which is the quieter of the two wrongs.
+ *   ([3.2.12](docs/project/prd.md); the operator's call for this surface) — {@link useOpenRelated}.
+ *   A member who was hearing something else keeps hearing it and lands at their stored position,
+ *   which is the quieter of the two wrongs.
  * - **The card is a real link.** A modified press — new tab, middle button — is left to the
  *   browser, which opens the page at the stored position; only a plain press takes the route above.
  */
@@ -91,8 +129,7 @@ export function RelatedTeachings({
   groups: readonly CrossReferenceGroupView[];
 }) {
   const content = useRecordingContent();
-  const player = usePlayer();
-  const router = useRouter();
+  const press = useOpenRelated();
 
   // `undefined` while the chapters are not known yet; `null` is a teaching with no chapters, which
   // is one bucket.
@@ -107,26 +144,6 @@ export function RelatedTeachings({
         : groups.filter((group) => group.chapterId === currentChapterId),
     [currentChapterId, groups],
   );
-
-  const { openIfIdle } = player;
-
-  async function openAt(link: RelatedSegmentView): Promise<void> {
-    try {
-      const payload = await apiFetch<RecordingPayload>(memberRecordingPath(link.recordingId), {
-        credentials: 'include',
-      });
-      openIfIdle(toLoaded(payload.recording), link.startMs);
-    } catch {
-      // The page is still the right place to go; it opens at the stored position on its own.
-    }
-    router.push(recordingPagePath(link.recordingId));
-  }
-
-  function press(event: MouseEvent<HTMLAnchorElement>, link: RelatedSegmentView): void {
-    if (!isPlainPress(event)) return;
-    event.preventDefault();
-    void openAt(link);
-  }
 
   return (
     <section className={styles.panel} aria-label="Related teachings">

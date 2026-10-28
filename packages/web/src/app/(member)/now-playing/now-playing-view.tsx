@@ -7,15 +7,20 @@ import {
   chapterPagePath,
   formatTimecode,
   monogramFor,
+  recordingPagePath,
   type ChapterView,
+  type CrossReferenceGroupView,
   type NoteView,
 } from '@thp/shared';
 import { segmentAt } from '@/client/transcript/current-segment';
 import { NoteImages } from '../recordings/[id]/note-images';
+import { useOpenRelated, useRelatedGroups } from '../recordings/[id]/related-teachings';
+import relatedStyles from '../recordings/[id]/related.module.css';
 import { noteHref } from '../recordings/[id]/round-trip';
 import { ScripturePanel } from '../recordings/[id]/scripture-panel';
 import { useBreadcrumbTrail, usePlayer } from '../player-context';
 import { notesNear } from './notes-near';
+import { relatedNear } from './related-near';
 import styles from './now-playing.module.css';
 
 /**
@@ -24,9 +29,9 @@ import styles from './now-playing.module.css';
  * Everything on it answers one question: what is being said right now, and what has been written
  * about it? The cover is a backdrop rather than the subject — blurred, dimmed and filling the top of
  * the screen so that the line being spoken can be read large across it. Under the hero, the chapter
- * playing; under that, the notes anchored near the playhead; under those, the teaching's scripture.
- * (Mind maps and time-anchored scripture come later; for now the scripture panel is the recording
- * page's own, unfiltered.)
+ * playing; under that, the notes anchored near the playhead and the related moments of other
+ * teachings anchored there too; under those, the teaching's scripture. (Mind maps and time-anchored
+ * scripture come later; for now the scripture panel is the recording page's own, unfiltered.)
  *
  * **It owns no playback state and renders no transport control** (scope prd 3.3.4; scope tdd 1.7).
  * What is playing is read from the same player context the docked bar reads, and the docked bar is
@@ -49,6 +54,13 @@ import styles from './now-playing.module.css';
  * pictures; pressing it opens the teaching's Notes tab **at that note**, where the composer,
  * replies, reactions and the rest already live. The row is gone entirely when nothing is near — a
  * heading over an empty list would be a promise about a quiet stretch.
+ *
+ * **Related moments are read through the same window** ([3.9.2](docs/project/prd.md)). The
+ * teaching's cross-references are fetched once per teaching, as the recording page fetches them,
+ * and the row shows those whose triggering sentence falls within two minutes of the playhead —
+ * the notes row's window, so the two rows agree about how long "now" is. Pressing one opens the
+ * other teaching at its moment, paused, exactly as the recording page's `Related` tab does
+ * ([3.9.5](docs/project/prd.md)); the row is gone when nothing is near, for the notes row's reason.
  *
  * **Closing goes back rather than to a fixed screen** (scope prd 3.3.1). A member reaches this from
  * the transport, and the transport travels — so the only honest destination is wherever they were.
@@ -85,6 +97,9 @@ export function NowPlayingScreen() {
     loaded === null || player.notes === null || player.notes.recordingId !== loaded.id
       ? []
       : notesNear(player.notes.notes, player.currentMs);
+
+  const groups = useRelatedGroups(loaded?.id ?? null);
+  const related = groups === null ? [] : relatedNear(groups, player.currentMs);
 
   return (
     <section className={styles.view} aria-label="Now playing">
@@ -171,6 +186,8 @@ export function NowPlayingScreen() {
             </section>
           )}
 
+          {related.length === 0 ? null : <RelatedNear groups={related} />}
+
           {/*
             The recording page's own panel, mounted here unchanged (scope tdd 1.7). It reads the
             same route under the same rules, so a reference a member sees here and a reference they
@@ -208,6 +225,43 @@ function CurrentChapter({ chapter, recordingId }: { chapter: ChapterView; record
           ›
         </span>
       </Link>
+    </section>
+  );
+}
+
+/**
+ * The related moments of other teachings near the playhead ([3.9.2](docs/project/prd.md)).
+ *
+ * The cards are the recording page's `Related` tab's, drawn with that tab's stylesheet so a member
+ * recognises them, and the press is that tab's press ({@link useOpenRelated}). The one addition is
+ * the moment of *this* teaching each card hangs off, because here — unlike under a chapter — the
+ * sentence that triggered it is what put the card on the screen.
+ */
+function RelatedNear({ groups }: { groups: readonly CrossReferenceGroupView[] }) {
+  const press = useOpenRelated();
+  return (
+    <section className={styles.notesRow} aria-label="Related near this moment">
+      <h2 className={styles.rowTitle}>Related near this moment</h2>
+      <ul className={relatedStyles.list}>
+        {groups.flatMap((group) =>
+          group.links.map((link) => (
+            <li key={`${group.segmentId}:${link.segmentId}`}>
+              <a
+                className={relatedStyles.card}
+                href={recordingPagePath(link.recordingId)}
+                onClick={(event) => press(event, link)}
+              >
+                <span className={relatedStyles.title}>{link.title}</span>
+                <span className={relatedStyles.meta}>
+                  {link.series === null ? '' : `${link.series.title} · `}
+                  at {formatTimecode(link.startMs)} · from {formatTimecode(group.startMs)} here
+                </span>
+                <span className={relatedStyles.excerpt}>“{link.text}”</span>
+              </a>
+            </li>
+          )),
+        )}
+      </ul>
     </section>
   );
 }

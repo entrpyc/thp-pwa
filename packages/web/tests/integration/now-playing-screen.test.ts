@@ -9,6 +9,7 @@ import {
   ROLE,
   chapterPagePath,
   formatCitation,
+  formatTimecode,
   recordingPagePath,
   recordingPlaybackPath,
   recordingScripturePath,
@@ -19,7 +20,9 @@ import {
   insertNote,
   insertRecording,
   insertSeries,
+  listSegments,
   replaceChapters,
+  replaceCrossReferencesForRun,
   replaceOpenDrafts,
   replaceScriptureReferences,
   replaceTranscript,
@@ -80,6 +83,15 @@ const GENERATED = { model: 'fake', modelVersion: 'fake-1', promptVersion: 'chapt
 
 const COVERED_TITLE = `Now playing covered ${RUN}`;
 const LOOSE_TITLE = `Now playing loose ${RUN}`;
+/**
+ * A third teaching, in the series, that one sentence of the covered teaching is related to
+ * ([3.9.2](docs/project/prd.md)). The link hangs off the covered teaching's line at forty seconds
+ * and points at this one's line at fourteen — two moments that are nothing else's, so the row's
+ * "at" and "from" can each be read off.
+ */
+const RELATED_TITLE = `Now playing related ${RUN}`;
+const RELATED_SOURCE_LINE = 20;
+const RELATED_TARGET_LINE = 7;
 const SERIES_TITLE = `Now playing series ${RUN}`;
 const COVER_KEY = `artwork/${RUN}-now-playing.webp`;
 
@@ -120,6 +132,7 @@ let browser: Browser;
 let handle: DatabaseHandle;
 let member: TestAccount;
 let coveredId: string;
+let relatedId: string;
 let looseId: string;
 let earlyNoteId: string;
 
@@ -245,7 +258,7 @@ beforeAll(async () => {
 
   coveredId = await publishedRecording(COVERED_TITLE);
   await setRecordingSeries(coveredId, series.id, handle);
-  await replaceTranscript(
+  const coveredTranscript = await replaceTranscript(
     {
       recordingId: coveredId,
       language: 'en',
@@ -294,6 +307,40 @@ beforeAll(async () => {
 
   // In no series at all, and citing nothing — 3.2.4 and 3.3.3 in one teaching.
   looseId = await publishedRecording(LOOSE_TITLE);
+
+  relatedId = await publishedRecording(RELATED_TITLE);
+  await setRecordingSeries(relatedId, series.id, handle);
+  const relatedTranscript = await replaceTranscript(
+    {
+      recordingId: relatedId,
+      language: 'en',
+      confidence: 0.95,
+      segments: Array.from({ length: (TEACHING_SECONDS * 1000) / LINE_MS }, (_unused, index) => ({
+        startMs: index * LINE_MS,
+        endMs: (index + 1) * LINE_MS,
+        text: `Line ${index + 1} of ${RELATED_TITLE}.`,
+      })),
+    },
+    handle,
+  );
+  const [coveredSegments, relatedSegments] = await Promise.all([
+    listSegments(coveredTranscript.id, handle),
+    listSegments(relatedTranscript.id, handle),
+  ]);
+  await replaceCrossReferencesForRun(
+    coveredId,
+    [
+      {
+        sourceRecordingId: coveredId,
+        sourceSegmentId: coveredSegments[RELATED_SOURCE_LINE]?.id as string,
+        targetRecordingId: relatedId,
+        targetSegmentId: relatedSegments[RELATED_TARGET_LINE]?.id as string,
+        score: 0.9,
+        basis: 'semantic',
+      },
+    ],
+    handle,
+  );
 }, 300_000);
 
 afterAll(async () => {
@@ -692,6 +739,7 @@ describe('the notes near this moment sit under the hero', () => {
 
       expect(await notesRow(page).count()).toBe(0);
       expect(await view(page).getByText('Notes near this moment').count()).toBe(0);
+      expect(await view(page).getByText('Related near this moment').count()).toBe(0);
     } finally {
       await page.context().close();
     }
@@ -743,6 +791,66 @@ describe('the notes near this moment sit under the hero', () => {
  * **The chapter playing, as a block of its own** ([3.22.19](docs/project/prd.md)) \u2014 named where a
  * member can see it, following the playhead, and opening the chapter's page.
  */
+/**
+ * **Related moments near this moment** ([3.9.2](docs/project/prd.md), [3.9.5](docs/project/prd.md)).
+ *
+ * Read through the notes row's window — pinned in `related-near.test.ts`; this minute-long teaching
+ * is inside it from its start — and pressed the way the recording page's `Related` tab is pressed:
+ * the other teaching opens at the moment, paused.
+ */
+describe('the related moments near this moment sit under the notes', () => {
+  const relatedRow = (page: Page): Locator =>
+    page.getByRole('region', { name: 'Related near this moment' });
+
+  it('names the other teaching, its series, its moment and the moment here that it hangs off', async () => {
+    const { page } = await openTeaching(coveredId);
+    try {
+      await openTheView(page);
+      await seekTo(page, 0);
+
+      await expect.poll(() => relatedRow(page).count(), { timeout: 30_000 }).toBe(1);
+      const link = relatedRow(page).getByRole('link');
+      expect(await link.count()).toBe(1);
+      const text = (await link.textContent()) ?? '';
+      expect(text).toContain(RELATED_TITLE);
+      expect(text).toContain(SERIES_TITLE);
+      expect(text).toContain(`at ${formatTimecodeOf(RELATED_TARGET_LINE)}`);
+      expect(text).toContain(`from ${formatTimecodeOf(RELATED_SOURCE_LINE)} here`);
+      expect(text).toContain(`Line ${RELATED_TARGET_LINE + 1} of ${RELATED_TITLE}`);
+      expect(await link.getAttribute('href')).toBe(recordingPagePath(relatedId));
+    } finally {
+      await page.context().close();
+    }
+  }, 180_000);
+
+  it('opens the other teaching at the moment, paused (3.9.5, 3.2.12)', async () => {
+    const { page } = await openTeaching(coveredId);
+    try {
+      await openTheView(page);
+      await seekTo(page, 0);
+      await expect.poll(() => relatedRow(page).getByRole('link').count(), { timeout: 30_000 }).toBe(1);
+
+      await relatedRow(page).getByRole('link').click();
+      await page.waitForURL(`${baseUrl}${recordingPagePath(relatedId)}`, { timeout: 30_000 });
+
+      await expect
+        .poll(async () => Math.round((await audioState(page)).currentTime), { timeout: 60_000 })
+        .toBe((RELATED_TARGET_LINE * LINE_MS) / 1000);
+      expect((await audioState(page)).paused).toBe(true);
+      await expect
+        .poll(() => page.getByRole('heading', { level: 1 }).textContent(), { timeout: 30_000 })
+        .toBe(RELATED_TITLE);
+    } finally {
+      await page.context().close();
+    }
+  }, 180_000);
+});
+
+/** The transcript line's start as the view prints it — line N starts at N × the line length. */
+function formatTimecodeOf(line: number): string {
+  return formatTimecode(line * LINE_MS);
+}
+
 describe('the chapter playing sits under the hero as its own block', () => {
   const block = (page: Page): Locator => view(page).getByRole('region', { name: 'Chapter playing' });
 
