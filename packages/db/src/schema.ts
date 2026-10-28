@@ -2423,7 +2423,12 @@ export const flowSession = pgTable(
     userId: uuid('user_id')
       .notNull()
       .references(() => user.id, { onDelete: 'cascade' }),
-    /** The teaching the member fell behind at ([3.14.2](docs/project/prd.md)). */
+    /**
+     * The newest of the teachings the member picked ([3.14.2](docs/project/prd.md)) — the row's
+     * anchor, which it cascades with. The full pick is what the session's items name: a session
+     * was once a range "from this teaching to the latest", and the column keeps its name because
+     * renaming it is a migration for no gain.
+     */
     divergenceRecordingId: uuid('divergence_recording_id')
       .notNull()
       .references(() => recording.id, { onDelete: 'cascade' }),

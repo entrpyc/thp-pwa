@@ -15,7 +15,7 @@ import {
   tagQuestionsPath,
   type ChapterQuestionPayload,
   type ChaptersPayload,
-  type FlowAnswer,
+  type FlowRating,
   type FlowSessionPayload,
   type FlowSessionView,
   type FlowSessionsPayload,
@@ -49,15 +49,17 @@ import { closeTestDatabase, createAccount, signIn, type TestAccount } from '../s
  *
  * 1. **The start screen's list** is every published teaching, newest first, with how many
  *    questions each contributes and which tags it carries ([3.14.2](docs/project/prd.md)).
- * 2. **A session is assembled in the asking order** ([3.14.3](docs/project/prd.md),
- *    [3.14.5](docs/project/prd.md)): newest teaching first, last chapter first within it, a
- *    chapterless teaching once, and each tag's bank once at the end. One session in progress at a
- *    time ([3.14.10](docs/project/prd.md)).
- * 3. **Answering** takes one of the five, replaces on a second press, and the last answer
+ * 2. **A session is assembled over the picked teachings, in the asking order**
+ *    ([3.14.2](docs/project/prd.md), [3.14.3](docs/project/prd.md), [3.14.5](docs/project/prd.md)):
+ *    only what was picked, newest teaching first, last chapter first within it, a chapterless
+ *    teaching once, and each tag's bank once at the end. One session in progress at a time
+ *    ([3.14.10](docs/project/prd.md)).
+ * 3. **Answering** takes a rating from 1 to 5, replaces on a second press, and the last answer
  *    completes the session ([3.14.6](docs/project/prd.md)).
- * 4. **The reading list** holds the gaps only, grouped by teaching oldest first, each row with the
- *    chapter to open and the related chapters of other teachings beneath it; a row can be ticked
- *    ([3.14.6](docs/project/prd.md), [3.14.7](docs/project/prd.md), [3.14.9](docs/project/prd.md)).
+ * 4. **The reading list** holds the gaps only — 3 and below — grouped by teaching oldest first,
+ *    each row with the chapter to open and the related chapters of other teachings beneath it; a
+ *    row can be ticked ([3.14.6](docs/project/prd.md), [3.14.7](docs/project/prd.md),
+ *    [3.14.9](docs/project/prd.md)).
  * 5. **Snapshots hold** ([3.14.10](docs/project/prd.md)): a chapter deleted after asking keeps an
  *    answered item and drops an unanswered one.
  * 6. **It is the member's own** ([3.14.8](docs/project/prd.md)): another member finds nothing, no
@@ -130,7 +132,7 @@ interface Teaching {
 /**
  * A published teaching recorded on `recordedAt`, with a six-line transcript and `chapters`
  * chapters, each with a generated question. Dated in the 2090s so these are the newest teachings
- * in the shared suite database and a range from the oldest of them covers exactly them.
+ * in the shared suite database.
  */
 async function teaching(title: string, recordedAt: string, chapters = 3, published = true): Promise<Teaching> {
   const row = await insertRecording(
@@ -179,33 +181,22 @@ async function teaching(title: string, recordedAt: string, chapters = 3, publish
   };
 }
 
-async function start(who: Signed, divergenceRecordingId: unknown) {
-  return call<FlowSessionPayload>(FLOW_SESSIONS_PATH, { method: 'POST', cookie: who.cookie, body: { divergenceRecordingId } });
+async function start(who: Signed, recordingIds: unknown) {
+  return call<FlowSessionPayload>(FLOW_SESSIONS_PATH, { method: 'POST', cookie: who.cookie, body: { recordingIds } });
 }
 
-async function started(who: Signed, divergenceRecordingId: string): Promise<FlowSessionView> {
-  const answer = await start(who, divergenceRecordingId);
+async function started(who: Signed, recordingIds: readonly string[]): Promise<FlowSessionView> {
+  const answer = await start(who, recordingIds);
   if (answer.status !== 201) throw new Error(`start refused ${answer.status}: ${answer.message}`);
   return answer.body.session;
 }
 
-async function answer(who: Signed, session: string, item: string, value: FlowAnswer | string) {
-  return call<FlowSessionPayload>(flowSessionItemPath(session, item), { method: 'PUT', cookie: who.cookie, body: { answer: value } });
+async function answer(who: Signed, session: string, item: string, rating: FlowRating | unknown) {
+  return call<FlowSessionPayload>(flowSessionItemPath(session, item), { method: 'PUT', cookie: who.cookie, body: { rating } });
 }
 
 async function abandon(who: Signed, session: string) {
   return call<FlowSessionPayload>(flowSessionAbandonPath(session), { method: 'POST', cookie: who.cookie });
-}
-
-/** Answer every item of the session with `value`, and hand back the session as the last answer left it. */
-async function answerAll(who: Signed, session: FlowSessionView, value: FlowAnswer): Promise<FlowSessionView> {
-  let latest = session;
-  for (const item of session.items) {
-    const reply = await answer(who, session.id, item.id, value);
-    if (reply.status !== 200) throw new Error(`answer refused ${reply.status}: ${reply.message}`);
-    latest = reply.body.session;
-  }
-  return latest;
 }
 
 beforeAll(async () => {
@@ -220,7 +211,7 @@ afterAll(async () => {
   await closeTestDatabase();
 });
 
-/** Each test's teachings sit in their own year, so one test's range never reaches another's. */
+/** Each test's teachings sit in their own year, so one test's pick is never confused with another's. */
 let year = 2090;
 function nextYear(): number {
   year += 1;
@@ -256,22 +247,28 @@ describe('the start screen (3.14.2)', () => {
   });
 });
 
-describe('starting a session (3.14.3, 3.14.5, 3.14.10)', () => {
-  it('asks newest teaching first, last chapter first, a chapterless teaching once, and each tag once at the end', async () => {
+describe('starting a session (3.14.2, 3.14.3, 3.14.5, 3.14.10)', () => {
+  it('asks only the picked teachings, newest first, last chapter first, a chapterless teaching once, and each tag once at the end', async () => {
     const y = nextYear();
     const first = await teaching(`First ${RUN} ${y}`, `${y}-01-01`, 2);
     const second = await teaching(`Second ${RUN} ${y}`, `${y}-02-01`, 0);
     const third = await teaching(`Third ${RUN} ${y}`, `${y}-03-01`, 3);
+    const skipped = await teaching(`Skipped ${RUN} ${y}`, `${y}-02-15`, 2);
     const tag = await insertTag(`hope-${RUN}-${y}`, handle);
     await insertTagQuestion(tag.id, 'Where did hope hold?', handle);
     await insertTagQuestion(tag.id, 'Where did it not?', handle);
     await replaceRecordingTags(first.id, [tag.id], handle);
     await replaceRecordingTags(third.id, [tag.id], handle);
+    // A tag only the unpicked teaching carries contributes nothing.
+    const elsewhere = await insertTag(`elsewhere-${RUN}-${y}`, handle);
+    await insertTagQuestion(elsewhere.id, 'Never asked?', handle);
+    await replaceRecordingTags(skipped.id, [elsewhere.id], handle);
 
-    const session = await started(alice, first.id);
+    // Picked in no particular order, and one of them twice: the session is the set, in library order.
+    const session = await started(alice, [first.id, third.id, second.id, first.id]);
     try {
       expect(session.status).toBe('in_progress');
-      expect(session.divergence.id).toBe(first.id);
+      expect(session.teachings.map((one) => one.id)).toEqual([third.id, second.id, first.id]);
       expect(session.teachingCount).toBe(3);
       expect(session.questionCount).toBe(8);
       expect(session.readingList).toBeNull();
@@ -292,14 +289,16 @@ describe('starting a session (3.14.3, 3.14.5, 3.14.10)', () => {
       expect(session.items.map((one) => one.position)).toEqual([1, 2, 3, 4, 5, 6, 7, 8]);
       expect(session.items[0]?.chapter).toMatchObject({ id: third.chapterIds[2], summary: `Summary of Third ${RUN} ${y} ch3.`, startMs: 40 * MINUTE });
       expect(session.items[0]?.question).toBe(`Q about Third ${RUN} ${y} ch3?`);
+      expect(session.items.every((one) => one.rating === null)).toBe(true);
 
-      // The page lists it as the one in progress.
+      // The page lists it as the one in progress, naming what it covers.
       const mine = await call<FlowSessionsPayload>(FLOW_SESSIONS_PATH, { cookie: alice.cookie });
       expect(mine.body.active?.id).toBe(session.id);
+      expect(mine.body.active?.teachings.map((one) => one.title)).toEqual([`Third ${RUN} ${y}`, `Second ${RUN} ${y}`, `First ${RUN} ${y}`]);
       expect(mine.body.completed.some((one) => one.id === session.id)).toBe(false);
 
       // A second start is refused while this one runs, and says what to do.
-      const again = await start(alice, first.id);
+      const again = await start(alice, [first.id]);
       expect(again.status).toBe(409);
       expect(again.code).toBe('flow_session_in_progress');
     } finally {
@@ -307,20 +306,39 @@ describe('starting a session (3.14.3, 3.14.5, 3.14.10)', () => {
     }
   });
 
-  it('refuses a malformed body, an unpublished teaching, a made-up one, and no session', async () => {
+  it('asks about one teaching alone when one is picked', async () => {
+    const y = nextYear();
+    await teaching(`Newer alone ${RUN} ${y}`, `${y}-02-01`, 2);
+    const only = await teaching(`Only ${RUN} ${y}`, `${y}-01-01`, 2);
+    const session = await started(alice, [only.id]);
+    try {
+      expect(session.teachingCount).toBe(1);
+      expect(session.teachings.map((one) => one.id)).toEqual([only.id]);
+      expect(session.items.map((one) => one.recording?.id)).toEqual([only.id, only.id]);
+    } finally {
+      await abandon(alice, session.id);
+    }
+  });
+
+  it('refuses a malformed body, an empty pick, an unpublished teaching, a made-up one, and no session', async () => {
     const y = nextYear();
     const hidden = await teaching(`Unpublished ${RUN} ${y}`, `${y}-01-01`, 2, false);
+    const shown = await teaching(`Shown ${RUN} ${y}`, `${y}-02-01`, 2);
     expect((await start(alice, 'nope')).code).toBe('invalid_input');
-    expect((await start(alice, 42)).code).toBe('invalid_input');
-    expect((await start(alice, hidden.id)).code).toBe('not_found');
-    expect((await start(alice, MADE_UP_ID)).code).toBe('not_found');
-    expect((await call(FLOW_SESSIONS_PATH, { method: 'POST', body: { divergenceRecordingId: hidden.id } })).status).toBe(401);
+    expect((await start(alice, [])).code).toBe('invalid_input');
+    expect((await start(alice, [42])).code).toBe('invalid_input');
+    expect((await start(alice, [hidden.id])).code).toBe('not_found');
+    expect((await start(alice, [MADE_UP_ID])).code).toBe('not_found');
+    // One bad id refuses the whole pick: nothing is started.
+    expect((await start(alice, [shown.id, hidden.id])).code).toBe('not_found');
+    expect((await call<FlowSessionsPayload>(FLOW_SESSIONS_PATH, { cookie: alice.cookie })).body.active).toBeNull();
+    expect((await call(FLOW_SESSIONS_PATH, { method: 'POST', body: { recordingIds: [shown.id] } })).status).toBe(401);
   });
 
   it('abandons a session, after which another can start', async () => {
     const y = nextYear();
     const one = await teaching(`Abandoned ${RUN} ${y}`, `${y}-01-01`, 2);
-    const session = await started(alice, one.id);
+    const session = await started(alice, [one.id]);
     const gone = await abandon(alice, session.id);
     expect(gone.status).toBe(200);
     expect(gone.body.session.status).toBe('abandoned');
@@ -329,16 +347,16 @@ describe('starting a session (3.14.3, 3.14.5, 3.14.10)', () => {
     expect(mine.body.active).toBeNull();
     expect(mine.body.completed.some((entry) => entry.id === session.id)).toBe(false);
     // It no longer takes answers.
-    expect((await answer(alice, session.id, session.items[0]!.id, 'remember_well')).code).toBe('invalid_input');
+    expect((await answer(alice, session.id, session.items[0]!.id, 4)).code).toBe('invalid_input');
 
-    const next = await started(alice, one.id);
+    const next = await started(alice, [one.id]);
     expect(next.id).not.toBe(session.id);
     await abandon(alice, next.id);
   });
 });
 
 describe('answering, and the reading list (3.14.6, 3.14.7, 3.14.9)', () => {
-  it('takes one of the five, replaces on a second press, completes on the last, and lists the gaps oldest first', async () => {
+  it('takes a rating from 1 to 5, replaces on a second press, completes on the last, and lists 3 and below oldest first', async () => {
     const y = nextYear();
     const older = await teaching(`Earlier ${RUN} ${y}`, `${y}-01-01`, 2);
     const newer = await teaching(`Later ${RUN} ${y}`, `${y}-02-01`, 2);
@@ -358,25 +376,28 @@ describe('answering, and the reading list (3.14.6, 3.14.7, 3.14.9)', () => {
       handle,
     );
 
-    const session = await started(alice, older.id);
+    const session = await started(alice, [older.id, newer.id]);
     const [newerCh2, newerCh1, olderCh2, olderCh1] = session.items;
 
-    // Not one of the five.
+    // Not on the scale.
     expect((await answer(alice, session.id, newerCh2!.id, 'maybe')).code).toBe('invalid_input');
-    expect((await answer(alice, session.id, MADE_UP_ID, 'remember_well')).code).toBe('not_found');
+    expect((await answer(alice, session.id, newerCh2!.id, 0)).code).toBe('invalid_input');
+    expect((await answer(alice, session.id, newerCh2!.id, 6)).code).toBe('invalid_input');
+    expect((await answer(alice, session.id, newerCh2!.id, '3')).code).toBe('invalid_input');
+    expect((await answer(alice, session.id, MADE_UP_ID, 4)).code).toBe('not_found');
 
-    let latest = (await answer(alice, session.id, newerCh2!.id, 'remember_well')).body.session;
+    let latest = (await answer(alice, session.id, newerCh2!.id, 4)).body.session;
     expect(latest.answeredCount).toBe(1);
-    expect(latest.items[0]?.answer).toBe('remember_well');
+    expect(latest.items[0]?.rating).toBe(4);
     // Stepping back and changing the answer replaces it.
-    latest = (await answer(alice, session.id, newerCh2!.id, 'dont_remember')).body.session;
-    expect(latest.items[0]?.answer).toBe('dont_remember');
+    latest = (await answer(alice, session.id, newerCh2!.id, 1)).body.session;
+    expect(latest.items[0]?.rating).toBe(1);
     expect(latest.answeredCount).toBe(1);
     expect(latest.status).toBe('in_progress');
 
-    await answer(alice, session.id, newerCh1!.id, 'experience_daily');
-    await answer(alice, session.id, olderCh2!.id, 'not_embodied');
-    const last = await answer(alice, session.id, olderCh1!.id, 'recall_slightly');
+    await answer(alice, session.id, newerCh1!.id, 5);
+    await answer(alice, session.id, olderCh2!.id, 3);
+    const last = await answer(alice, session.id, olderCh1!.id, 2);
     expect(last.status).toBe(200);
     latest = last.body.session;
 
@@ -388,9 +409,9 @@ describe('answering, and the reading list (3.14.6, 3.14.7, 3.14.9)', () => {
     expect(list.map((group) => group.recording?.title)).toEqual([`Earlier ${RUN} ${y}`, `Later ${RUN} ${y}`]);
     // Oldest teaching first, and within it the first chapter first — the reading order.
     expect(list[0]?.rows.map((row) => row.item.chapter?.title)).toEqual([`Earlier ${RUN} ${y} ch1`, `Earlier ${RUN} ${y} ch2`]);
-    expect(list[0]?.rows.map((row) => row.item.answer)).toEqual(['recall_slightly', 'not_embodied']);
-    // The one that was remembered well is not on the list.
-    expect(list[1]?.rows.map((row) => row.item.chapter?.title)).toEqual([`Later ${RUN} ${y} ch1`]);
+    expect(list[0]?.rows.map((row) => row.item.rating)).toEqual([2, 3]);
+    // The one rated 5 is not on the list; the one rated 1 is.
+    expect(list[1]?.rows.map((row) => row.item.chapter?.title)).toEqual([`Later ${RUN} ${y} ch2`]);
     // The related chapter of the other teaching sits beneath the row whose span the link left from.
     expect(list[0]?.rows[1]?.related).toEqual([
       {
@@ -411,23 +432,26 @@ describe('answering, and the reading list (3.14.6, 3.14.7, 3.14.9)', () => {
     expect((await call(flowSessionItemDonePath(session.id, olderCh1!.id), { method: 'PUT', cookie: alice.cookie, body: { done: 'yes' } })).code).toBe('invalid_input');
 
     // A completed session no longer takes answers, and the page lists it as completed.
-    expect((await answer(alice, session.id, olderCh1!.id, 'remember_well')).code).toBe('invalid_input');
+    expect((await answer(alice, session.id, olderCh1!.id, 4)).code).toBe('invalid_input');
     const mine = await call<FlowSessionsPayload>(FLOW_SESSIONS_PATH, { cookie: alice.cookie });
     expect(mine.body.active).toBeNull();
     expect(mine.body.completed[0]).toMatchObject({ id: session.id, gapCount: 3, questionCount: 4, answeredCount: 4 });
+    expect(mine.body.completed[0]?.teachings.map((one) => one.id)).toEqual([newer.id, older.id]);
   });
 
-  it('completes at once, with an empty list, when the range has nothing to ask', async () => {
+  it('completes at once, with an empty list, when the pick has nothing to ask', async () => {
     const y = nextYear();
     const row = await insertRecording(
       { originalMediaKey: `originals/flow-empty-${RUN}.mp3`, title: `Empty ${RUN}`, recordedAt: `${y}-01-01` },
       handle,
     );
     await setRecordingPublication(row.id, new Date(), handle);
-    const session = await started(alice, row.id);
+    const session = await started(alice, [row.id]);
     expect(session.status).toBe('complete');
     expect(session.items).toEqual([]);
     expect(session.readingList).toEqual([]);
+    // With no items to read the pick off, the page still names the teaching.
+    expect(session.teachings.map((one) => one.id)).toEqual([row.id]);
   });
 });
 
@@ -435,9 +459,9 @@ describe('snapshots (3.14.10)', () => {
   it('keeps an answered item whose chapter has gone, and drops an unanswered one', async () => {
     const y = nextYear();
     const one = await teaching(`Snapshot ${RUN} ${y}`, `${y}-01-01`, 3);
-    const session = await started(alice, one.id);
+    const session = await started(alice, [one.id]);
     const [ch3, ch2, ch1] = session.items;
-    await answer(alice, session.id, ch3!.id, 'not_embodied');
+    await answer(alice, session.id, ch3!.id, 3);
 
     await deleteChapter(one.chapterIds[2]!, handle); // ch3, answered
     await deleteChapter(one.chapterIds[0]!, handle); // ch1, not answered
@@ -445,14 +469,14 @@ describe('snapshots (3.14.10)', () => {
     const read = await call<FlowSessionPayload>(flowSessionPath(session.id), { cookie: alice.cookie });
     expect(read.body.session.items.map((item) => item.id)).toEqual([ch3!.id, ch2!.id]);
     expect(read.body.session.items[0]).toMatchObject({
-      answer: 'not_embodied',
+      rating: 3,
       chapter: { id: null, title: `Snapshot ${RUN} ${y} ch3` },
       question: `Q about Snapshot ${RUN} ${y} ch3?`,
     });
     expect(read.body.session.questionCount).toBe(2);
 
     // Answering the one left completes it; the row with no chapter opens the teaching instead.
-    const done = await answer(alice, session.id, ch2!.id, 'remember_well');
+    const done = await answer(alice, session.id, ch2!.id, 4);
     expect(done.body.session.status).toBe('complete');
     expect(done.body.session.readingList?.[0]?.rows[0]?.item.chapter?.id).toBeNull();
     expect(ch1).toBeDefined();
@@ -463,10 +487,10 @@ describe('it is the member’s own (3.14.8)', () => {
   it('shows nobody else’s session, and lets nobody else answer, abandon or tick it', async () => {
     const y = nextYear();
     const one = await teaching(`Private ${RUN} ${y}`, `${y}-01-01`, 2);
-    const session = await started(alice, one.id);
+    const session = await started(alice, [one.id]);
     try {
       expect((await call(flowSessionPath(session.id), { cookie: bob.cookie })).code).toBe('not_found');
-      expect((await answer(bob, session.id, session.items[0]!.id, 'remember_well')).code).toBe('not_found');
+      expect((await answer(bob, session.id, session.items[0]!.id, 4)).code).toBe('not_found');
       expect((await abandon(bob, session.id)).code).toBe('not_found');
       expect((await call(flowSessionItemDonePath(session.id, session.items[0]!.id), { method: 'PUT', cookie: bob.cookie, body: { done: true } })).code).toBe('not_found');
       const bobs = await call<FlowSessionsPayload>(FLOW_SESSIONS_PATH, { cookie: bob.cookie });
@@ -500,7 +524,7 @@ describe('curating questions (3.14.11)', () => {
     expect(after.body.chapters[0]?.question).toBe('What did you do first?');
 
     // A session started now asks the rewritten question.
-    const session = await started(alice, one.id);
+    const session = await started(alice, [one.id]);
     expect(session.items.find((item) => item.chapter?.id === chapterId)?.question).toBe('What did you do first?');
     await abandon(alice, session.id);
 

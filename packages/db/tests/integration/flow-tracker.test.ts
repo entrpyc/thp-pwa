@@ -18,6 +18,7 @@ import {
   insertFlowSession,
   insertGeneratedQuestions,
   insertRecording,
+  listFlowSessionTeachings,
   insertTag,
   insertTagQuestion,
   insertUser,
@@ -322,10 +323,11 @@ describe('sessions (3.14.8, 3.14.10)', () => {
     expect(items.map((one) => one.position)).toEqual([1, 2, 3]);
     expect(items[0]).toMatchObject({ recordingTitle: `Teaching ${made}`, summary: 'About it.' });
 
+    // The tokens are the scale's rungs in order: the first three are gaps, the last two are not.
     expect(await answerFlowSessionItem(session.id, items[0]!.id, 'dont_remember', handle)).toBe(true);
-    expect(await answerFlowSessionItem(session.id, items[1]!.id, 'remember_well', handle)).toBe(true);
-    // Changing an answer replaces it.
     expect(await answerFlowSessionItem(session.id, items[1]!.id, 'not_embodied', handle)).toBe(true);
+    // Changing an answer replaces it.
+    expect(await answerFlowSessionItem(session.id, items[1]!.id, 'remember_well', handle)).toBe(true);
     expect(await countUnansweredFlowItems(session.id, handle)).toBe(1);
     // Another session's item id writes nothing here.
     expect(await answerFlowSessionItem('00000000-0000-4000-8000-000000000000', items[2]!.id, 'remember_well', handle)).toBe(false);
@@ -336,6 +338,10 @@ describe('sessions (3.14.8, 3.14.10)', () => {
 
     const summary = await findFlowSessionForMember(session.id, who, handle);
     expect(summary).toMatchObject({ status: 'complete', questionCount: 3, answeredCount: 3, gapCount: 2 });
+    // The teachings the session asked about, read off its items.
+    const asked = await listFlowSessionTeachings([session.id], handle);
+    expect(asked.get(session.id)?.map((one) => one.recordingId)).toEqual([id]);
+    expect((await listFlowSessionTeachings([], handle)).size).toBe(0);
     expect(summary?.completedAt).not.toBeNull();
 
     expect(await setFlowSessionItemDone(session.id, items[0]!.id, true, handle)).toBe(true);

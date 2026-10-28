@@ -4,20 +4,19 @@ import { TAGS_PATH } from './tags';
 
 /**
  * **The Flow Tracker on the wire** ([3.14](docs/project/prd.md); [4.12](docs/project/prd.md),
- * [4.13](docs/project/prd.md)) — a member's private route back into the teaching after they lost
- * the thread of it.
+ * [4.13](docs/project/prd.md)) — a member's private introspection against the teachings.
  *
  * A self-reflection tool, never a test. The question a chapter asks is not *do you remember this*
- * but *have you been able to live this out*, and the answer is one of five words about the member's
- * own week ([3.14.6](docs/project/prd.md)). Nothing here scores anything
- * ([3.14.9](docs/project/prd.md)): what a session produces is a reading list.
+ * but *how well are you living this out*, and the answer is one rung of a five-point scale about
+ * the member's own life ([3.14.6](docs/project/prd.md)). Nothing here scores anything
+ * ([3.14.9](docs/project/prd.md)): what a session produces is a list of the parts to focus on.
  *
  * Four things live here because the worker, the API, the member pages and the admin console each
  * have to agree about them:
  *
- * 1. **The vocabulary** — the five answers, which of them indicate a gap, the three states a
- *    session can be in, and what a question can be attached to. Each is derived into a database
- *    enum rather than restated (tools/domain-declarations.ts registers them).
+ * 1. **The vocabulary** — the five rungs of the scale and which of them indicate a gap, the three
+ *    states a session can be in, and what a question can be attached to. Each is derived into a
+ *    database enum rather than restated (tools/domain-declarations.ts registers them).
  * 2. **The routes.** The member's sessions live under `/users/me`, the shape Highlights and the
  *    blocked list take: the only session anybody may read or change is their own
  *    ([3.14.8](docs/project/prd.md)), and a path that could name somebody else's would need an
@@ -34,12 +33,14 @@ import { TAGS_PATH } from './tags';
 // =================================================================================================
 
 /**
- * **The five answers**, in the order the screen offers them ([3.14.6](docs/project/prd.md)):
- * from not remembering the chapter at all, through recalling it, to living it daily.
+ * **The five rungs of the scale, as the column stores them** ([3.14.6](docs/project/prd.md)).
  *
- * The order is the scale and it is deliberately not a line from bad to good — *I remember it well*
- * sits between two answers that do indicate a gap, because remembering a teaching and embodying it
- * are different questions and the scale asks both.
+ * The scale a member answers on is a rating from 1 to 5 ({@link FLOW_RATINGS}); this list is its
+ * storage encoding, one token per rung in rung order, and the position is the meaning. The token
+ * names are the enum's original five labels, kept because they are a database type: the scale
+ * was a line of five sentences before it became a line of five numbers, and renaming an enum's
+ * values is a migration for no gain. Nothing reads the words — {@link answerToRating} and
+ * {@link ratingToAnswer} are the only two things that look at this list.
  */
 export const FLOW_ANSWERS = [
   'dont_remember',
@@ -55,24 +56,50 @@ export function isFlowAnswer(value: unknown): value is FlowAnswer {
   return typeof value === 'string' && (FLOW_ANSWERS as readonly string[]).includes(value);
 }
 
-/** What each answer says on the button, worded close to the operator's own phrasing. */
-export const FLOW_ANSWER_LABEL: Record<FlowAnswer, string> = {
-  dont_remember: "I don't remember this",
-  recall_slightly: 'I can recall it slightly',
-  remember_well: 'I remember it well',
-  not_embodied: "I haven't fully embodied this yet",
-  experience_daily: 'I experience this daily',
-};
+/**
+ * **The scale a question is answered on** ([3.14.6](docs/project/prd.md)): 1 to 5, drawn as five
+ * radio buttons in a row. Only the ends are worded — 1 is *I have not engaged with that yet*, 5 is
+ * *I've experienced transformation* — and the rungs between are the member's own sense of how far
+ * along they are.
+ */
+export const FLOW_RATINGS = [1, 2, 3, 4, 5] as const;
+
+export type FlowRating = (typeof FLOW_RATINGS)[number];
+
+export function isFlowRating(value: unknown): value is FlowRating {
+  return typeof value === 'number' && (FLOW_RATINGS as readonly number[]).includes(value);
+}
+
+/** What the two ends of the scale say; the rungs between carry their number alone. */
+export const FLOW_RATING_ENDS = {
+  low: 'I have not engaged with that yet',
+  high: "I've experienced transformation",
+} as const;
+
+/** The highest rating that still puts the part on the list to focus on: 3 and below do. */
+export const GAP_RATING_MAX = 3;
 
 /**
- * **Which answers put the chapter on the reading list** ([3.14.6](docs/project/prd.md)).
- *
- * Not remembering, barely recalling, and not yet having embodied the teaching are gaps; remembering
- * it well and living it daily are not. The list is about living it out rather than only memory,
- * which is why the fourth answer counts and the third does not.
+ * **Which ratings put the part on the list** ([3.14.6](docs/project/prd.md)): everything at or
+ * below {@link GAP_RATING_MAX}. A part rated 4 or 5 is one the member is living out.
  */
+export function isGapRating(rating: FlowRating): boolean {
+  return rating <= GAP_RATING_MAX;
+}
+
+/** The stored token for a rating: the rung's position in {@link FLOW_ANSWERS}. */
+export function ratingToAnswer(rating: FlowRating): FlowAnswer {
+  return FLOW_ANSWERS[rating - 1] as FlowAnswer;
+}
+
+/** The rating a stored token stands for: one more than its position in {@link FLOW_ANSWERS}. */
+export function answerToRating(answer: FlowAnswer): FlowRating {
+  return (FLOW_ANSWERS.indexOf(answer) + 1) as FlowRating;
+}
+
+/** Whether a stored token indicates a gap — {@link isGapRating} over what it stands for. */
 export function isGapAnswer(answer: FlowAnswer): boolean {
-  return answer === 'dont_remember' || answer === 'recall_slightly' || answer === 'not_embodied';
+  return isGapRating(answerToRating(answer));
 }
 
 /**
@@ -91,7 +118,7 @@ export function isFlowSessionStatus(value: unknown): value is FlowSessionStatus 
 /**
  * **What a question is attached to** ([3.14.4](docs/project/prd.md), [3.14.11](docs/project/prd.md)):
  * a chapter (the ordinary case, generated), a chapterless recording (generated from its summary),
- * or a tag (written by an admin, asked once per session whose range carries the tag).
+ * or a tag (written by an admin, asked once per session whose teachings carry the tag).
  *
  * The same three words name the kind of a session item, because an item is a question as it was
  * asked — snapshotted with the scope it came from.
@@ -120,7 +147,7 @@ export const MAX_RELATED_CHAPTERS = 3;
 /** The Flow Tracker's own page on the web origin, reached from the menu ([3.14.1](docs/project/prd.md)). */
 export const FLOW_TRACKER_PAGE_PATH = '/flow-tracker';
 
-/** Where a session is started: the chronological list of teachings ([3.14.2](docs/project/prd.md)). */
+/** Where a session is started: the chronological list of teachings to pick from ([3.14.2](docs/project/prd.md)). */
 export const FLOW_TRACKER_START_PAGE_PATH = `${FLOW_TRACKER_PAGE_PATH}/start`;
 
 /** One session's page — the question screen while it runs, the reading list once it is complete. */
@@ -129,14 +156,14 @@ export function flowSessionPagePath(sessionId: string): string {
 }
 
 /**
- * The teachings a session can start from, relative to the `/api/v1` prefix: every published
+ * The teachings a session can be started on, relative to the `/api/v1` prefix: every published
  * teaching, newest first, with how many questions each would contribute.
  */
 export const FLOW_TEACHINGS_PATH = '/flow-tracker/teachings';
 
 /**
  * The signed-in account's sessions. `GET` answers the one in progress and the completed ones;
- * `POST` starts a new one from a divergence point.
+ * `POST` starts a new one over the teachings the member picked.
  */
 export const FLOW_SESSIONS_PATH = `${USERS_PATH}/me/flow-sessions`;
 
@@ -214,14 +241,18 @@ export interface FlowTeachingsPayload {
   readonly tagQuestionCounts: Readonly<Record<string, number>>;
 }
 
-/** Body of `POST /api/v1/users/me/flow-sessions`: the teaching the member fell behind at. */
+/**
+ * Body of `POST /api/v1/users/me/flow-sessions`: the teachings to introspect on
+ * ([3.14.2](docs/project/prd.md)) — one or several, in any order. The session asks about exactly
+ * these and nothing else.
+ */
 export interface StartFlowSessionRequest {
-  readonly divergenceRecordingId: string;
+  readonly recordingIds: readonly string[];
 }
 
-/** Body of `PUT …/items/{id}`. */
+/** Body of `PUT …/items/{id}`: where on the scale the member put themselves. */
 export interface AnswerFlowItemRequest {
-  readonly answer: FlowAnswer;
+  readonly rating: FlowRating;
 }
 
 /** Body of `PUT …/items/{id}/done`. */
@@ -260,7 +291,8 @@ export interface FlowSessionItemView {
   readonly chapter: FlowChapterRef | null;
   /** Present on a `tag` item. */
   readonly tag: { readonly id: string; readonly name: string } | null;
-  readonly answer: FlowAnswer | null;
+  /** The member's rating, or `null` while unanswered. */
+  readonly rating: FlowRating | null;
   /** ISO 8601, or `null` while unanswered. */
   readonly answeredAt: string | null;
   /** Whether the member ticked this row off the reading list ([3.14.9](docs/project/prd.md)). */
@@ -277,8 +309,8 @@ export interface FlowRelatedChapter {
 export interface FlowReadingRow {
   readonly item: FlowSessionItemView;
   /**
-   * The teachings in the session's range carrying this tag — only on a `tag` row, which is about
-   * several teachings rather than one and recommends them all.
+   * The teachings in the session carrying this tag — only on a `tag` row, which is about several
+   * teachings rather than one and recommends them all.
    */
   readonly taggedTeachings: readonly FlowTeachingRef[];
   readonly related: readonly FlowRelatedChapter[];
@@ -286,8 +318,8 @@ export interface FlowReadingRow {
 
 /**
  * The reading list grouped by teaching, **oldest first** ([3.14.9](docs/project/prd.md)) — the
- * member reads from where they lost the flow towards today. A group with no teaching holds the tag
- * rows, which span several.
+ * member reads the picked teachings in the order they were given. A group with no teaching holds
+ * the tag rows, which span several.
  */
 export interface FlowReadingGroup {
   readonly recording: FlowTeachingRef | null;
@@ -301,12 +333,16 @@ export interface FlowSessionSummary {
   /** ISO 8601. */
   readonly startedAt: string;
   readonly completedAt: string | null;
-  readonly divergence: FlowTeachingRef;
-  /** How many teachings the range covered, and how many questions. */
+  /**
+   * The teachings the member picked, newest first ([3.14.2](docs/project/prd.md)) — as the
+   * session's own items name them, so a teaching deleted since is gone from here too.
+   */
+  readonly teachings: readonly FlowTeachingRef[];
+  /** How many teachings were picked, and how many questions they gave. */
   readonly teachingCount: number;
   readonly questionCount: number;
   readonly answeredCount: number;
-  /** How many answers indicated a gap — the length of the reading list. */
+  /** How many ratings indicated a gap — the length of the reading list. */
   readonly gapCount: number;
 }
 
@@ -365,12 +401,12 @@ export interface ChapterQuestionPayload {
 
 /** The first unanswered item, or `null` when every one is answered. */
 export function nextUnanswered(items: readonly FlowSessionItemView[]): FlowSessionItemView | null {
-  return items.find((one) => one.answer === null) ?? null;
+  return items.find((one) => one.rating === null) ?? null;
 }
 
-/** The items whose answer indicates a gap, in the order they were asked. */
+/** The items whose rating indicates a gap, in the order they were asked. */
 export function gapItems(items: readonly FlowSessionItemView[]): FlowSessionItemView[] {
-  return items.filter((one) => one.answer !== null && isGapAnswer(one.answer));
+  return items.filter((one) => one.rating !== null && isGapRating(one.rating));
 }
 
 export const FLOW_SESSION_IN_PROGRESS_MESSAGE =

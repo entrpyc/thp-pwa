@@ -13,7 +13,7 @@ import {
 } from '@thp/shared';
 import { ApiClientError, apiFetch } from '@/client/api-client';
 import { useBreadcrumbTrail } from '../player-context';
-import { formatDay, plural } from './format';
+import { formatDay, listTitles, plural } from './format';
 import styles from './flow-tracker.module.css';
 
 /**
@@ -24,8 +24,9 @@ import styles from './flow-tracker.module.css';
  * row that opens its reading list. Starting another while one is in progress is offered here as
  * *Start over*, which asks before abandoning — the one press on this page that loses anything.
  *
- * **It reads what the API answers and decides nothing.** Which session is in progress, how many
- * questions it holds and how many gaps a completed one found are the server's counts.
+ * **It reads what the API answers and decides nothing.** Which session is in progress, which
+ * teachings it covers, how many questions it holds and how many gaps a completed one found are
+ * the server's words and counts.
  */
 
 const LOAD_FAILED = 'Could not load your Flow Tracker. Reload the page to try again.';
@@ -75,8 +76,8 @@ export function FlowHome() {
       <header className={styles.pageHead}>
         <h1 className={styles.pageTitle}>Flow Tracker</h1>
         <p className={styles.pageLead}>
-          Lost the thread of the teaching? Pick where you fell behind, reflect on each part since,
-          and get a route back in. Only you can see this.
+          Examine yourself against the teachings. Pick teachings, reflect on each part, and see how
+          well you are living it out rather than keeping it as information. Only you can see this.
         </p>
       </header>
 
@@ -91,8 +92,8 @@ export function FlowHome() {
           <>
             <h2 className={styles.cardTitle}>Session in progress</h2>
             <p className={styles.pageLead}>
-              From <strong>{active.divergence.title}</strong> ({formatDay(active.divergence.recordedAt)})
-              to the latest teaching — {plural(active.teachingCount, 'teaching')}.
+              {plural(active.teachingCount, 'teaching')}:{' '}
+              <strong>{listTitles(active.teachings.map((one) => one.title))}</strong>
             </p>
             <p className={styles.progress}>
               {active.answeredCount} of {plural(active.questionCount, 'question')} answered
@@ -143,11 +144,12 @@ export function FlowHome() {
 
         {sessions !== null && active === null ? (
           <>
-            <h2 className={styles.cardTitle}>Find your way back in</h2>
+            <h2 className={styles.cardTitle}>Introspection</h2>
             <p className={styles.pageLead}>
-              You will pick the teaching you fell behind at, then answer one short question about
-              each part of the teaching since — not whether you remember it, but how you have been
-              able to live it out. There is no score. What you get is a reading list.
+              You will pick the teachings to introspect on, then answer one short question about
+              each part of the teachings — not whether you remember it, but how well you are living
+              it out. There is no score. What you get is a list of the parts you might want to
+              focus on.
             </p>
             <div className={styles.actions}>
               <Link className={styles.primary} href={FLOW_TRACKER_START_PAGE_PATH}>
@@ -172,8 +174,9 @@ export function FlowHome() {
                       {one.completedAt === null ? 'Completed' : formatDay(one.completedAt)}
                     </span>
                     <span className={styles.rowMeta}>
-                      From {one.divergence.title} · {plural(one.teachingCount, 'teaching')} ·{' '}
-                      {plural(one.gapCount, 'chapter')} to revisit
+                      {listTitles(one.teachings.map((teaching) => teaching.title))} ·{' '}
+                      {plural(one.teachingCount, 'teaching')} · {plural(one.gapCount, 'part')} to focus
+                      on
                     </span>
                   </span>
                   <span className={styles.rowChevron} aria-hidden="true">

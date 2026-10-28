@@ -10,6 +10,7 @@ import {
   insertFlowSession,
   isUniqueViolation,
   listFlowSessionItems,
+  listFlowSessionTeachings,
   listFlowSessionsForMember,
   listQuestionsForRecordings,
   listRelatedChapters,
@@ -19,14 +20,17 @@ import {
   setFlowSessionItemDone,
   type FlowSessionItemRow,
   type FlowSessionListRow,
+  type FlowSessionTeachingRow,
   type NewFlowSessionItem,
   type VisibleRecordingRow,
 } from '@thp/db';
 import {
   FLOW_SESSION_IN_PROGRESS_MESSAGE,
   MAX_RELATED_CHAPTERS,
-  isFlowAnswer,
-  isGapAnswer,
+  answerToRating,
+  isFlowRating,
+  isGapRating,
+  ratingToAnswer,
   type FlowReadingGroup,
   type FlowReadingRow,
   type FlowSessionItemView,
@@ -109,20 +113,23 @@ export async function listFlowSessionsFor(actor: Actor): Promise<FlowSessionsPay
   const rows = await listFlowSessionsForMember(actor.id);
   const active = rows.find((row) => row.status === 'in_progress') ?? null;
   const completed = rows.filter((row) => row.status === 'complete');
+  const teachings = await listFlowSessionTeachings(rows.map((row) => row.id));
   return {
-    active: active === null ? null : await summarise(active),
-    completed: await Promise.all(completed.map(summarise)),
+    active: active === null ? null : await summarise(active, teachings.get(active.id) ?? []),
+    completed: await Promise.all(completed.map((row) => summarise(row, teachings.get(row.id) ?? []))),
   };
 }
 
 /**
- * **Start a session from the teaching the member fell behind at** ([3.14.2](docs/project/prd.md),
+ * **Start a session over the teachings the member picked** ([3.14.2](docs/project/prd.md),
  * [3.14.3](docs/project/prd.md), [3.14.5](docs/project/prd.md)).
  *
- * The range is every published teaching from the most recent back to the divergence point, in the
- * library's order. The questions are assembled in the order they are asked: newest teaching first,
- * and within a teaching the last chapter first — then the bank questions of every tag the range
- * carries, each once, which are about several teachings and so come after all of them.
+ * The pick is one or more published teachings, in any order; the session asks about exactly those,
+ * in the library's order. The questions are assembled in the order they are asked: newest teaching
+ * first, and within a teaching the last chapter first — then the bank questions of every tag the
+ * picked teachings carry, each once, which are about several teachings and so come after all of
+ * them. A pick naming a teaching that is not published, or does not exist, is refused whole: the
+ * screen listed only what may be picked, so such a body is not a member's press.
  *
  * Everything the session asks is **snapshotted** as it stands now ([3.14.10](docs/project/prd.md)):
  * the question's text, the chapter's title and start. What stays live is the chapter id.
@@ -131,16 +138,18 @@ export async function listFlowSessionsFor(actor: Actor): Promise<FlowSessionsPay
  * here as `flow_session_in_progress`.
  */
 export async function startFlowSessionFor(actor: Actor, body: unknown): Promise<FlowSessionPayload> {
-  const divergenceId = parseId(
-    (body as { divergenceRecordingId?: unknown } | null)?.divergenceRecordingId,
-    'divergenceRecordingId must be a recording id.',
-  );
+  const picked = (body as { recordingIds?: unknown } | null)?.recordingIds;
+  if (!Array.isArray(picked) || picked.length === 0) {
+    throw ApiError.invalidInput('recordingIds must name at least one teaching.');
+  }
+  const pickedIds = new Set(picked.map((one) => parseId(one, 'recordingIds must be recording ids.')));
 
   const visible = await listVisibleRecordings({ includeUnpublished: false });
-  const at = visible.findIndex((row) => row.id === divergenceId);
-  if (at < 0) throw ApiError.notFound(NO_SUCH_TEACHING);
-  const range = visible.slice(0, at + 1);
+  const range = visible.filter((row) => pickedIds.has(row.id));
+  if (range.length !== pickedIds.size) throw ApiError.notFound(NO_SUCH_TEACHING);
   const rangeIds = range.map((row) => row.id);
+  // The newest of the pick anchors the row — see the column's note in the schema.
+  const divergenceId = rangeIds[0] as string;
 
   const [sources, tagsByRecording] = await Promise.all([
     listQuestionsForRecordings(rangeIds),
@@ -213,7 +222,7 @@ export async function startFlowSessionFor(actor: Actor, body: unknown): Promise<
     actorId: actor.id,
     action: 'flow.start',
     target: `flow_session:${created.id}`,
-    divergenceRecordingId: divergenceId,
+    recordingIds: rangeIds,
     teachings: range.length,
     questions: items.length,
   });
@@ -233,10 +242,10 @@ export async function readFlowSessionFor(actor: Actor, sessionId: string): Promi
 }
 
 /**
- * **Answer one question** ([3.14.6](docs/project/prd.md)). Only while the session is in progress;
- * a session that has completed or been abandoned is not asking. When the answer was the last one
- * missing, the session completes in the same request, so the answer that completes it is answered
- * with the reading list.
+ * **Answer one question** ([3.14.6](docs/project/prd.md)): a rating from 1 to 5, stored as the
+ * scale's token for that rung. Only while the session is in progress; a session that has completed
+ * or been abandoned is not asking. When the answer was the last one missing, the session completes
+ * in the same request, so the answer that completes it is answered with the reading list.
  */
 export async function answerFlowItemFor(
   actor: Actor,
@@ -246,16 +255,16 @@ export async function answerFlowItemFor(
 ): Promise<FlowSessionPayload> {
   const id = parseId(sessionId, 'That is not a session id.');
   const item = parseId(itemId, 'That is not a question id.');
-  const answer = (body as { answer?: unknown } | null)?.answer;
-  if (!isFlowAnswer(answer)) {
-    throw ApiError.invalidInput('answer must be one of the five answers the scale offers.');
+  const rating = (body as { rating?: unknown } | null)?.rating;
+  if (!isFlowRating(rating)) {
+    throw ApiError.invalidInput('rating must be a whole number from 1 to 5.');
   }
 
   const session = await requireSession(actor, id);
   if (session.status !== 'in_progress') {
     throw ApiError.invalidInput('This session is no longer taking answers.');
   }
-  if (!(await answerFlowSessionItem(id, item, answer))) {
+  if (!(await answerFlowSessionItem(id, item, ratingToAnswer(rating)))) {
     throw ApiError.notFound('There is no such question in this session.');
   }
 
@@ -328,7 +337,7 @@ async function requireSession(actor: Actor, id: string): Promise<FlowSessionList
 async function readSession(actor: Actor, id: string): Promise<FlowSessionView> {
   const row = await requireSession(actor, id);
   const items = await Promise.all((await listFlowSessionItems(id)).map(describeItem));
-  const summary = await summarise(row);
+  const summary = await summarise(row, (await listFlowSessionTeachings([id])).get(id) ?? []);
   return {
     ...summary,
     items,
@@ -336,18 +345,37 @@ async function readSession(actor: Actor, id: string): Promise<FlowSessionView> {
   };
 }
 
-async function summarise(row: FlowSessionListRow): Promise<FlowSessionSummary> {
+/**
+ * The picked teachings are what the items name, newest first. A pick none of whose teachings had
+ * anything to ask left no items, so the session's anchor stands in — the newest teaching of the
+ * pick, which is at least one of them.
+ */
+async function summarise(
+  row: FlowSessionListRow,
+  asked: readonly FlowSessionTeachingRow[],
+): Promise<FlowSessionSummary> {
+  const teachings: FlowTeachingRef[] = await Promise.all(
+    asked.map(async (one) => ({
+      id: one.recordingId,
+      title: one.title,
+      recordedAt: one.recordedAt,
+      series: await seriesRef(one.seriesId, one.seriesTitle, one.seriesArtworkKey),
+    })),
+  );
+  if (teachings.length === 0) {
+    teachings.push({
+      id: row.divergenceRecordingId,
+      title: row.divergenceTitle,
+      recordedAt: row.divergenceRecordedAt,
+      series: await seriesRef(row.divergenceSeriesId, row.divergenceSeriesTitle, row.divergenceSeriesArtworkKey),
+    });
+  }
   return {
     id: row.id,
     status: row.status,
     startedAt: row.createdAt.toISOString(),
     completedAt: row.completedAt?.toISOString() ?? null,
-    divergence: {
-      id: row.divergenceRecordingId,
-      title: row.divergenceTitle,
-      recordedAt: row.divergenceRecordedAt,
-      series: await seriesRef(row.divergenceSeriesId, row.divergenceSeriesTitle, row.divergenceSeriesArtworkKey),
-    },
+    teachings,
     teachingCount: row.teachingCount,
     questionCount: row.questionCount,
     answeredCount: row.answeredCount,
@@ -375,7 +403,7 @@ async function describeItem(row: FlowSessionItemRow): Promise<FlowSessionItemVie
         ? { id: row.chapterId, title: row.title, summary: row.summary, startMs: row.startMs ?? 0 }
         : null,
     tag: row.kind === 'tag' && row.tagId !== null ? { id: row.tagId, name: row.tagName ?? row.title } : null,
-    answer: row.answer,
+    rating: row.answer === null ? null : answerToRating(row.answer),
     answeredAt: row.answeredAt?.toISOString() ?? null,
     done: row.doneAt !== null,
   };
@@ -383,14 +411,14 @@ async function describeItem(row: FlowSessionItemRow): Promise<FlowSessionItemVie
 
 /**
  * **The reading list** ([3.14.9](docs/project/prd.md), [3.14.6](docs/project/prd.md),
- * [3.14.7](docs/project/prd.md)): every item whose answer indicates a gap, grouped by teaching from
- * the oldest in range forward, and within a teaching from its first chapter on — the member reads
- * from where they lost the flow towards today. Beneath a chapter row, the related chapters of other
- * teachings, from the cross-reference layer; beneath a tag row, the teachings in range that carry
+ * [3.14.7](docs/project/prd.md)): every item whose rating indicates a gap, grouped by teaching from
+ * the oldest picked forward, and within a teaching from its first chapter on — the member reads the
+ * teachings in the order they were given. Beneath a chapter row, the related chapters of other
+ * teachings, from the cross-reference layer; beneath a tag row, the picked teachings that carry
  * the tag.
  */
 async function readingList(items: readonly FlowSessionItemView[]): Promise<FlowReadingGroup[]> {
-  const gaps = items.filter((one) => one.answer !== null && isGapAnswer(one.answer));
+  const gaps = items.filter((one) => one.rating !== null && isGapRating(one.rating));
   const byTeaching = new Map<string, { recording: FlowTeachingRef; rows: FlowReadingRow[] }>();
   const tagRows: FlowReadingRow[] = [];
 

@@ -298,7 +298,7 @@ Conceptual only — project prd 4 already defines the fields; this is how the en
   profile cannot retroactively alter anything.
 
 - **6.9 Flow Tracker assessment is the member's own word, never a judgment.** project prd 3.14.6
-  finds a gap from the answer the member chose on a five-point scale, and project prd 3.14.9 says no
+  finds a gap from the rating the member chose on a five-point scale (3 or below), and project prd 3.14.9 says no
   score, grade or pass mark exists. **Both hold, by evaluating nothing:** no model reads an answer —
   the model's only part is writing the question, once, at pipeline time (project prd 3.14.4) — and
   which answers count as a gap is a fixed rule in the shared vocabulary, not a verdict about the

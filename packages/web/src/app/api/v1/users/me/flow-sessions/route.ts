@@ -21,8 +21,8 @@ export const GET = apiRoute(permits('flow.read'), async (_request, context) => {
 });
 
 /**
- * `POST /api/v1/users/me/flow-sessions` — **start a session from the teaching the member fell
- * behind at** ([3.14.2](docs/project/prd.md)). `201` with the session in full. A session already
+ * `POST /api/v1/users/me/flow-sessions` — **start a session over the teachings the member
+ * picked** ([3.14.2](docs/project/prd.md)). `201` with the session in full. A session already
  * in progress is `flow_session_in_progress`.
  */
 export const POST = apiRoute(permits('flow.start'), async (request, context) => {
