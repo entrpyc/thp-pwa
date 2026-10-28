@@ -2,7 +2,6 @@ import { afterAll, beforeAll, describe, expect, it, inject } from 'vitest';
 import { chromium, type Browser, type BrowserContext, type Locator, type Page } from 'playwright';
 import {
   DASHBOARD_PAGE_PATH,
-  MEMBER_LIBRARY_PAGE_PATH,
   PROFILE_DOWNLOADS_PAGE_PATH,
   ROLE,
   describeBytes,
@@ -120,12 +119,6 @@ describe('downloading a teaching', () => {
     try {
       await downloadFromRecordingPage(page, recordingId);
 
-      await page.goto(`${baseUrl}${MEMBER_LIBRARY_PAGE_PATH}`, { waitUntil: 'domcontentloaded' });
-      const rows = page.getByRole('list', { name: 'Recordings' });
-      await countOf(rows.getByLabel('Downloaded'), 1);
-      await countOf(rows.getByRole('listitem').filter({ hasText: `Held teaching ${RUN}` }).getByLabel('Downloaded'), 1);
-      await countOf(rows.getByRole('listitem').filter({ hasText: `Streamed teaching ${RUN}` }).getByLabel('Downloaded'), 0);
-
       // The series page draws no mark on its rows, by the operator's decision.
       await page.goto(`${baseUrl}${seriesPagePath(seriesId)}`, { waitUntil: 'domcontentloaded' });
       await countOf(page.getByRole('list', { name: 'Recordings' }).getByRole('listitem'), 2);
@@ -185,19 +178,18 @@ describe('offline', () => {
     const { context, page } = await signedIn();
     try {
       // The worker has to be in control before the network goes: the download warms the pages
-      // through it, and the library below is answered by it.
-      await page.goto(`${baseUrl}${MEMBER_LIBRARY_PAGE_PATH}`, { waitUntil: 'domcontentloaded' });
+      // through it, and the series page below is answered by it.
+      await page.goto(`${baseUrl}${seriesPagePath(seriesId)}`, { waitUntil: 'domcontentloaded' });
       await expect.poll(() => page.evaluate(() => navigator.serviceWorker.controller !== null), { timeout: 30_000 }).toBe(true);
       await downloadFromRecordingPage(page, recordingId);
-      await page.goto(`${baseUrl}${MEMBER_LIBRARY_PAGE_PATH}`, { waitUntil: 'domcontentloaded' });
-      // The library holds every published teaching in the suite's shared database, so what is
-      // asserted online is that both of this test's are among them.
+      await page.goto(`${baseUrl}${seriesPagePath(seriesId)}`, { waitUntil: 'domcontentloaded' });
+      // Online, the series page lists both of this test's teachings.
       const library = page.getByRole('list', { name: 'Recordings' });
       await countOf(library.getByRole('listitem').filter({ hasText: `Held teaching ${RUN}` }), 1);
       await countOf(library.getByRole('listitem').filter({ hasText: `Streamed teaching ${RUN}` }), 1);
 
       await context.setOffline(true);
-      // The document comes from the worker's page cache; the library's rows from its IndexedDB
+      // The document comes from the worker's page cache; the series page's rows from its IndexedDB
       // answer. `navigator.onLine` stays true under Playwright's emulation, so what turns the
       // strip on here is the failed flush — the manager's second reading of "offline".
       await page.reload({ waitUntil: 'domcontentloaded' });
@@ -215,7 +207,7 @@ describe('offline', () => {
       await expect.poll(() => page.getByRole('heading').first().textContent()).toBe('This page is not accessible offline.');
 
       await context.setOffline(false);
-      await page.goto(`${baseUrl}${MEMBER_LIBRARY_PAGE_PATH}`, { waitUntil: 'domcontentloaded' });
+      await page.goto(`${baseUrl}${seriesPagePath(seriesId)}`, { waitUntil: 'domcontentloaded' });
       await countOf(page.getByRole('list', { name: 'Recordings' }).getByRole('listitem').filter({ hasText: `Streamed teaching ${RUN}` }), 1);
       await deleteEveryDownload(page);
     } finally {

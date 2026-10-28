@@ -12,6 +12,7 @@ import {
   sosClosePath,
   sosPath,
   sosPrayingPath,
+  type PrayingRequest,
   sosRepliesPath,
   sosReplyPath,
   type CloseSosRequest,
@@ -53,6 +54,8 @@ export function SignalView({ signalId, canModerate }: { signalId: string; canMod
   const [termsNeeded, setTermsNeeded] = useState(false);
   /** The top-level reply whose thread has the inline reply box open, if any. */
   const [answering, setAnswering] = useState<string | null>(null);
+  /** Whether the next press of Praying goes without the member's name. */
+  const [prayAnonymously, setPrayAnonymously] = useState(false);
 
   useBreadcrumbTrail(
     signal === null ? 'Prayer request' : `${SOS_URGENCY_LABEL[signal.urgency]} prayer request`,
@@ -195,10 +198,15 @@ export function SignalView({ signalId, canModerate }: { signalId: string; canMod
             aria-pressed={signal.praying}
             disabled={busy || !open}
             onClick={() =>
-              void write(sosPrayingPath(signalId), { method: signal.praying ? 'DELETE' : 'PUT' })
+              void write(
+                sosPrayingPath(signalId),
+                signal.praying
+                  ? { method: 'DELETE' }
+                  : { method: 'PUT', body: { anonymous: prayAnonymously } satisfies PrayingRequest },
+              )
             }
           >
-            🙏 {signal.praying ? 'Praying' : 'I am praying'}
+            🙏 {signal.praying ? (signal.prayingAnonymously ? 'Praying anonymously' : 'Praying') : 'I am praying'}
           </button>
           {signal.prayingCount === 0 ? null : (
             <span className={styles.prayingCount}>
@@ -206,9 +214,27 @@ export function SignalView({ signalId, canModerate }: { signalId: string; canMod
             </span>
           )}
         </div>
-        {signal.prayingNames.length === 0 ? null : (
+        {/* The choice is made before the press: once praying, the button takes it back instead. */}
+        {signal.praying || !open ? null : (
+          <label className={styles.checkRow}>
+            <input
+              className={styles.check}
+              type="checkbox"
+              checked={prayAnonymously}
+              disabled={busy}
+              onChange={(event) => setPrayAnonymously(event.target.checked)}
+            />
+            <span>Without my name</span>
+          </label>
+        )}
+        {signal.prayingNames.length === 0 && signal.prayingAnonymousCount === 0 ? null : (
           <p className={styles.names} aria-label="Who is praying">
-            {signal.prayingNames.join(', ')}
+            {[
+              ...signal.prayingNames,
+              ...(signal.prayingAnonymousCount === 0
+                ? []
+                : [signal.prayingAnonymousCount === 1 ? '1 praying anonymously' : `${signal.prayingAnonymousCount} praying anonymously`]),
+            ].join(', ')}
           </p>
         )}
       </section>

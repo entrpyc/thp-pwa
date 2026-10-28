@@ -4,7 +4,7 @@ import {
   API_PREFIX,
   DASHBOARD_PAGE_PATH,
   MAX_NOTE_LENGTH,
-  MEMBER_LIBRARY_PAGE_PATH,
+  MEMBER_SERIES_PAGE_PATH,
   REACTIONS,
   ROLE,
   recordingNotesPath,
@@ -15,9 +15,11 @@ import {
   createDatabase,
   insertNote,
   insertRecording,
+  insertSeries,
   pinNote,
   setNoteReaction,
   setRecordingPublication,
+  setRecordingSeries,
   softDeleteNote,
   upsertPlaybackProgress,
   type DatabaseHandle,
@@ -217,6 +219,10 @@ beforeAll(async () => {
     publishedRecording(`Notes others ${RUN}`),
     publishedRecording(`Notes resumed ${RUN}`),
   ]);
+  // The bare teaching sits in a study, so a test can walk to it client-side through the series
+  // pages — the library that used to list every teaching is gone.
+  const study = await insertSeries({ title: `Notes study ${RUN}`, description: null }, handle);
+  await setRecordingSeries(bareId, study.id, handle);
 
   // The reading fixture: interleaved kinds, out of position order in the table, and one note the
   // reading member must never see.
@@ -355,12 +361,13 @@ describe('the recording page carries a Notes tab', () => {
         .toBe(1);
 
       // Client-side navigation, so the provider stays mounted and the late answer has somewhere to
-      // land. A full page load would tear it down and prove nothing. Through the menu's own link:
-      // the back control steps back through history now, and this page was opened from the
-      // dashboard the sign-in landed on, so it would go there rather than to the library.
+      // land. A full page load would tear it down and prove nothing. Through the menu's own link
+      // and the series pages: the back control steps back through history now, and this page was
+      // opened from the dashboard the sign-in landed on, so it would go there instead.
       await page.getByRole('button', { name: 'Menu' }).click();
-      await page.getByRole('link', { name: 'All recordings' }).click();
-      await page.waitForURL(`${baseUrl}${MEMBER_LIBRARY_PAGE_PATH}`, { timeout: 30_000 });
+      await page.getByRole('link', { name: 'All series' }).click();
+      await page.waitForURL(`${baseUrl}${MEMBER_SERIES_PAGE_PATH}`, { timeout: 30_000 });
+      await page.getByRole('link', { name: new RegExp(`Notes study ${RUN}`) }).click();
       await page.getByRole('link', { name: new RegExp(`Notes bare ${RUN}`) }).click();
       await page.waitForURL(`${baseUrl}${recordingPagePath(bareId)}`, { timeout: 30_000 });
       await openNotes(page);

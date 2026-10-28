@@ -11,11 +11,13 @@ export const dynamic = 'force-dynamic';
  *
  * `PUT` because a member is praying for a signal or is not: the request states the whole of that,
  * and sending it twice leaves the same one row — the primary key `(signal_id, user_id)` showing
- * through to the verb, as the reaction route's does.
+ * through to the verb, as the reaction route's does. The body, optional, says whether the name is
+ * listed: `{ "anonymous": true }` is counted and not named.
  */
-export const PUT = apiRoute(SESSION, async (_request, context) =>
-  setPrayingFor(context.actor, await routeParam(context.params, 'id')),
-);
+export const PUT = apiRoute(SESSION, async (request, context) => {
+  const body: unknown = await request.json().catch(() => null);
+  return setPrayingFor(context.actor, await routeParam(context.params, 'id'), body);
+});
 
 /** `DELETE /api/v1/sos/:id/praying` — take it back. Clearing when nothing is set succeeds. */
 export const DELETE = apiRoute(SESSION, async (_request, context) =>

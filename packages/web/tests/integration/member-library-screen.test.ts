@@ -3,6 +3,7 @@ import { chromium, type Browser, type Page } from 'playwright';
 import {
   DASHBOARD_PAGE_PATH,
   MEMBER_LIBRARY_PAGE_PATH,
+  MEMBER_SERIES_PAGE_PATH,
   ROLE,
   recordingPagePath,
 } from '@thp/shared';
@@ -24,8 +25,9 @@ import { closeTestDatabase, createAccount, type TestAccount } from '../support/a
  *
  * Three claims, and the third is the one that is expensive to get wrong:
  *
- * 1. The landing, the library and the recording page exist at `/`, `/recordings` and
- *    `/recordings/{id}`, and the placeholder home screen is gone.
+ * 1. The landing and the recording page exist at `/` and `/recordings/{id}`, the placeholder
+ *    home screen is gone, and so is the library that used to be at `/recordings` — the operator
+ *    took it out, and the address now goes to the dashboard.
  * 2. The chrome is the references' chrome — a working breadcrumb and a menu with an exact entry set
  *    per role.
  * 3. **Nothing is rendered for a deferred destination.** No search control, no *All series*, no
@@ -144,7 +146,7 @@ describe('the placeholder home screen is gone', () => {
 
       // What replaced it: the landing's one way-in row. Story 4 shipped it pointing at the
       // library because series did not exist; Story 6 gives it the destination
-      // `pages/dashboard.png` actually draws, and *All recordings* moved into the menu.
+      // `pages/dashboard.png` actually draws, and *All recordings* is gone altogether.
       await expect
         .poll(() => page.getByRole('link', { name: 'View all series' }).count(), {
           timeout: 30_000,
@@ -157,128 +159,19 @@ describe('the placeholder home screen is gone', () => {
   }, 120_000);
 });
 
-describe('the library at /recordings', () => {
-  it('walks from the landing to the library to a teaching', async () => {
+describe('the library at /recordings is gone', () => {
+  it('sends the old address to the dashboard, and keeps the teaching pages beneath it', async () => {
     const page = await signInAs(member);
     try {
-      // Through the menu, which is where *All recordings* lives from Story 6.
-      await page.getByRole('button', { name: 'Menu' }).click();
-      await page
-        .getByRole('list', { name: 'Navigation' })
-        .getByRole('link', { name: 'All recordings' })
-        .click();
-      await page.waitForURL(`${baseUrl}${MEMBER_LIBRARY_PAGE_PATH}`, { timeout: 30_000 });
+      await page.goto(`${baseUrl}${MEMBER_LIBRARY_PAGE_PATH}`, { waitUntil: 'domcontentloaded' });
+      await page.waitForURL(`${baseUrl}${DASHBOARD_PAGE_PATH}`, { timeout: 30_000 });
+      expect(await page.getByRole('heading', { level: 1, name: 'Recordings' }).count()).toBe(0);
+      expect(await page.getByRole('link', { name: 'All recordings' }).count()).toBe(0);
+
+      await page.goto(`${baseUrl}${recordingPagePath(publishedId)}`, { waitUntil: 'domcontentloaded' });
       await expect
-        .poll(() => page.getByRole('heading', { level: 1, name: 'Recordings' }).count(), {
-          timeout: 30_000,
-        })
+        .poll(() => page.getByRole('heading', { level: 1, name: PUBLISHED_TITLE }).count(), { timeout: 30_000 })
         .toBe(1);
-
-      // Scoped to the library's own list: the breadcrumb is a list too, and its items are in the
-      // DOM before the recordings have loaded — so an unscoped locator would poll green on the
-      // wrong rows and then read nothing.
-      const rows = page.getByRole('list', { name: 'Recordings' }).getByRole('listitem');
-      await expect
-        .poll(() => rows.count(), { timeout: 30_000 })
-        .toBeGreaterThan(1);
-
-      // Newest date recorded first, and the unpublished teaching is not a row at all.
-      const titles = (await rows.allTextContents()).filter((text) => text.includes(RUN));
-      expect(titles.length).toBeGreaterThan(1);
-      expect(titles[0]).toContain(PUBLISHED_TITLE);
-      expect(titles.some((text) => text.includes(OLDER_TITLE))).toBe(true);
-      expect(titles.some((text) => text.includes(HIDDEN_TITLE))).toBe(false);
-
-      await page.getByRole('link', { name: new RegExp(PUBLISHED_TITLE) }).click();
-      await page.waitForURL(`${baseUrl}${recordingPagePath(publishedId)}`, { timeout: 30_000 });
-    } finally {
-      await page.context().close();
-    }
-  }, 180_000);
-
-  it('labels a row with its series, and leaves a row with none unchanged', async () => {
-    const page = await signInAs(member);
-    try {
-      await page.goto(`${baseUrl}${MEMBER_LIBRARY_PAGE_PATH}`, { waitUntil: 'domcontentloaded' });
-      const rows = page.getByRole('list', { name: 'Recordings' }).getByRole('listitem');
-      await expect.poll(() => rows.count(), { timeout: 30_000 }).toBeGreaterThan(1);
-
-      // The label is a link **beside** the row's own link rather than inside it — an anchor within
-      // an anchor is not valid markup, and the row is a whole-row link.
-      const labelled = rows.filter({ hasText: OLDER_TITLE }).first();
-      expect(await labelled.getByRole('link', { name: SERIES_TITLE }).count()).toBe(1);
-      expect(
-        await labelled.getByRole('link', { name: new RegExp(OLDER_TITLE) }).count(),
-      ).toBe(1);
-
-      // 3.3.9 — a recording in no series shows no label and is otherwise the same row.
-      const unlabelled = rows.filter({ hasText: PUBLISHED_TITLE }).first();
-      expect(await unlabelled.getByRole('link').count()).toBe(1);
-      expect((await unlabelled.textContent()) ?? '').not.toContain(SERIES_TITLE);
-    } finally {
-      await page.context().close();
-    }
-  }, 180_000);
-
-  /**
-   * **Each teaching is its own card, with a gap between them** — not one panel divided by hairlines,
-   * which is what the series listing draws and what this list used to.
-   *
-   * Asserted as real vertical space between consecutive rows rather than as a class name: a
-   * CSS-module class is a bundler hash, and asserting one would be asserting against the build. A
-   * measurable gap is the thing a member actually sees.
-   */
-  it('separates the rows with space rather than dividing one panel', async () => {
-    const page = await signInAs(member);
-    try {
-      await page.goto(`${baseUrl}${MEMBER_LIBRARY_PAGE_PATH}`, { waitUntil: 'domcontentloaded' });
-      const rows = page.getByRole('list', { name: 'Recordings' }).getByRole('listitem');
-      await expect.poll(() => rows.count(), { timeout: 30_000 }).toBeGreaterThan(1);
-
-      const boxes = await rows.evaluateAll((items) =>
-        items.map((item) => {
-          const box = item.getBoundingClientRect();
-          return { top: box.top, bottom: box.bottom };
-        }),
-      );
-
-      for (let index = 1; index < boxes.length; index += 1) {
-        const gap = boxes[index]!.top - boxes[index - 1]!.bottom;
-        // Strictly positive: touching rows would be the old single panel, and a negative would be
-        // an overlap. A hairline divider is zero, which is exactly what this rules out.
-        expect(gap, `gap above row ${index}`).toBeGreaterThan(0);
-      }
-
-      // And each row is a card in its own right rather than a band of a shared one.
-      const framed = await rows.first().evaluate((item) => {
-        const style = getComputedStyle(item);
-        return {
-          border: `${style.borderTopWidth} ${style.borderTopStyle}`,
-          radius: Number.parseFloat(style.borderTopLeftRadius),
-        };
-      });
-      expect(framed.border).toBe('1px solid');
-      expect(framed.radius).toBeGreaterThan(0);
-    } finally {
-      await page.context().close();
-    }
-  }, 180_000);
-
-  it('shows an admin browsing the library exactly what a member sees', async () => {
-    const page = await signInAs(admin);
-    try {
-      await page.goto(`${baseUrl}${MEMBER_LIBRARY_PAGE_PATH}`, { waitUntil: 'domcontentloaded' });
-      // Scoped and waited on the library's own rows, so the absence below is a statement about a
-      // list that has actually loaded rather than about one that has not arrived yet.
-      const rows = page.getByRole('list', { name: 'Recordings' }).getByRole('listitem');
-      await expect.poll(() => rows.count(), { timeout: 30_000 }).toBeGreaterThan(1);
-      expect((await rows.allTextContents()).some((text) => text.includes(PUBLISHED_TITLE))).toBe(
-        true,
-      );
-
-      // Unpublished rows stay in the console. The member surface is the member surface, whoever
-      // is looking at it.
-      expect(await page.getByText(HIDDEN_TITLE).count()).toBe(0);
     } finally {
       await page.context().close();
     }
@@ -350,33 +243,33 @@ describe('the recording page at /recordings/[id]', () => {
     }
   }, 120_000);
 
-  it('goes back through history from the back control, and to the library when there is none', async () => {
+  it('goes back through history from the back control, and to the dashboard when there is none', async () => {
     const page = await signInAs(member);
     try {
-      // Walked in from the library: back is the library's own entry, and the stack does not grow.
-      await page.goto(`${baseUrl}${MEMBER_LIBRARY_PAGE_PATH}`, { waitUntil: 'domcontentloaded' });
+      // Walked in from the series listing: back is that entry, and the stack does not grow.
+      await page.goto(`${baseUrl}${MEMBER_SERIES_PAGE_PATH}`, { waitUntil: 'domcontentloaded' });
       await page.goto(`${baseUrl}${recordingPagePath(publishedId)}`, {
         waitUntil: 'domcontentloaded',
       });
-      const back = page.getByRole('link', { name: 'Back to recordings' });
+      const back = page.getByRole('link', { name: 'Back to the dashboard' });
       await expect.poll(() => back.count(), { timeout: 30_000 }).toBe(1);
       const entries = await page.evaluate(() => window.history.length);
       await back.click();
-      await page.waitForURL(`${baseUrl}${MEMBER_LIBRARY_PAGE_PATH}`, { timeout: 30_000 });
+      await page.waitForURL(`${baseUrl}${MEMBER_SERIES_PAGE_PATH}`, { timeout: 30_000 });
       expect(await page.evaluate(() => window.history.length)).toBe(entries);
 
       // Opened in a fresh tab — a shared link — there is nothing of ours behind it, and the
-      // control navigates to the library instead.
+      // control navigates to the dashboard instead: a teaching in no series has no study to go to.
       const fresh = await page.context().newPage();
       await fresh.goto(`${baseUrl}${recordingPagePath(publishedId)}`, {
         waitUntil: 'domcontentloaded',
       });
-      const fallback = fresh.getByRole('link', { name: 'Back to recordings' });
+      const fallback = fresh.getByRole('link', { name: 'Back to the dashboard' });
       await expect.poll(() => fallback.count(), { timeout: 30_000 }).toBe(1);
       // A fresh Playwright tab starts on about:blank, so the signal is the Navigation API's own.
       expect(await fresh.evaluate(() => (window as { navigation?: { canGoBack: boolean } }).navigation?.canGoBack)).toBe(false);
       await fallback.click();
-      await fresh.waitForURL(`${baseUrl}${MEMBER_LIBRARY_PAGE_PATH}`, { timeout: 30_000 });
+      await fresh.waitForURL(`${baseUrl}${DASHBOARD_PAGE_PATH}`, { timeout: 30_000 });
     } finally {
       await page.context().close();
     }
@@ -401,7 +294,7 @@ describe('the recording page at /recordings/[id]', () => {
 });
 
 describe('the top navigation', () => {
-  it('carries the home icon alone on the landing, and home › All recordings on the library', async () => {
+  it('carries the home icon alone on the landing, and home › All series on the listing', async () => {
     const page = await signInAs(member);
     try {
       const crumbs = page.getByRole('navigation', { name: 'Breadcrumb' });
@@ -409,10 +302,10 @@ describe('the top navigation', () => {
       expect(await crumbs.getByRole('link', { name: 'Dashboard' }).count()).toBe(1);
       expect(await page.locator('[aria-current="page"]').count()).toBe(0);
 
-      await page.goto(`${baseUrl}${MEMBER_LIBRARY_PAGE_PATH}`, { waitUntil: 'domcontentloaded' });
+      await page.goto(`${baseUrl}${MEMBER_SERIES_PAGE_PATH}`, { waitUntil: 'domcontentloaded' });
       const current = crumbs.locator('[aria-current="page"]');
       await expect.poll(() => current.count(), { timeout: 30_000 }).toBe(1);
-      expect(await current.textContent()).toBe('All recordings');
+      expect(await current.textContent()).toBe('All series');
       expect(await crumbs.getByRole('listitem').count()).toBe(2);
     } finally {
       await page.context().close();
@@ -441,12 +334,13 @@ describe('the top navigation', () => {
   it('offers a member exactly the destinations, the tour, the bug report, the profile and the way out', async () => {
     const page = await signInAs(member);
     try {
-      // No *Dashboard*, *Highlights* or *Flow Tracker*, by the operator's decision: the home icon
-      // at the bar's left is the way to the dashboard, and the dashboard's tiles are the way to
-      // Highlights and the Flow Tracker. The menu keeps what the tiles do not draw.
+      // The member's own two places first, then the destinations. No *Dashboard* or *Flow
+      // Tracker*, by the operator's decision: the home icon at the bar's left is the way to the
+      // dashboard, and the dashboard's tile is the way to the Flow Tracker.
       expect(await menuEntries(page)).toEqual([
+        'My notes',
+        'My highlights',
         'All series',
-        'All recordings',
         // Below the destinations and above the way out: neither is a place in the product, and
         // both are offered to every role on the same terms. The tour replays the new-user
         // onboarding; the report is the one entry that is not a destination at all.
@@ -467,8 +361,9 @@ describe('the top navigation', () => {
       // The entry is rendered from the policy module's answer and grants nothing: `/admin` gates
       // itself server-side and every route behind it refuses independently.
       expect(await menuEntries(page)).toEqual([
+        'My notes',
+        'My highlights',
         'All series',
-        'All recordings',
         'Admin console',
         'App tour',
         'Report a bug',
@@ -534,7 +429,7 @@ describe('at every width', () => {
       try {
         for (const path of [
           DASHBOARD_PAGE_PATH,
-          MEMBER_LIBRARY_PAGE_PATH,
+          MEMBER_SERIES_PAGE_PATH,
           recordingPagePath(publishedId),
         ]) {
           await page.goto(`${baseUrl}${path}`, { waitUntil: 'domcontentloaded' });

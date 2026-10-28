@@ -102,7 +102,6 @@ describe('the names the worker shares', () => {
 
 describe('which reads are answerable', () => {
   it('recognises the member surface’s reads and nothing else', () => {
-    expect(apiRoute('/recordings?surface=library')).toEqual({ name: 'library' });
     expect(apiRoute('/recordings')).toBeNull();
     expect(apiRoute(memberSeriesPath('s1'))).toEqual({ name: 'series', id: 's1' });
     expect(apiRoute(memberRecordingPath('r1'))).toEqual({ name: 'recording', id: 'r1', chapter: null });
@@ -114,11 +113,6 @@ describe('which reads are answerable', () => {
 });
 
 describe('what is answered offline', () => {
-  it('lists only this member’s downloads, newest recorded first (3.18.13)', () => {
-    const answer = offlineAnswer({ name: 'library' }, snapshot);
-    expect((answer?.body as { recordings: { id: string }[] }).recordings.map((one) => one.id)).toEqual(['new', 'loose', 'old']);
-  });
-
   it('derives the series from what is held', () => {
     const list = offlineAnswer({ name: 'series-list' }, snapshot);
     expect((list?.body as { series: unknown[] }).series).toEqual([

@@ -389,7 +389,7 @@ It is built as a Progressive Web App on a single codebase, reachable from any br
 - ✅ **3.16.2** A signal carries a short free-text description of what prayer is needed.
 - ✅ **3.16.3** Raising a signal broadcasts it to the entire group through the notification system (3.17.2), at every urgency level.
 - ✅ **3.16.4** Signals appear in a dedicated SOS section listing all open signals, most urgent and most recent first. The way in is a card on the member landing — the open count at each colour, the three most urgent signals and a Raise control — rather than an entry in the main navigation.
-- ✅ **3.16.5** Members can acknowledge a signal with a single "praying" response, and the signal shows how many members have done so. The press is a toggle, and the signal's page names who is praying.
+- ✅ **3.16.5** Members can acknowledge a signal with a single "praying" response, and the signal shows how many members have done so. The press is a toggle, and the signal's page names who is praying. A member may press without their name: they are counted, and the page says how many are praying anonymously rather than who. (The anonymous option was added by the operator.)
 - ✅ **3.16.6** Members can reply to a signal with a short message of encouragement or scripture. A reply is not edited after posting; its author can delete it, and an admin can delete any.
 - ✅ **3.16.7** The member who raised a signal is notified when someone replies to it.
 - ✅ **3.16.8** The author can close their own signal when the situation is resolved, optionally adding a closing note.
@@ -397,7 +397,7 @@ It is built as a Progressive Web App on a single codebase, reachable from any br
 - ✅ **3.16.10** Closed signals move out of the open list into a resolved view, where they remain visible to the group rather than being deleted.
 - ✅ **3.16.11** An admin can remove a signal entirely if it is inappropriate or raised in error. Removal deletes the signal, its replies and its acknowledgements outright, and the notifications that pointed at it go with it.
 - ✅ **3.16.12** A member can have a limited number of open signals at once, so the channel keeps its urgency. The limit is ten; the eleventh is refused with a sentence saying to close one first.
-- ✅ **3.16.13** Signals and their replies are visible to all members. There is no private or anonymous SOS.
+- ✅ **3.16.13** Signals and their replies are visible to all members. There is no private SOS. A signal may be raised anonymously, by the operator's later decision: everybody but its author then reads "Anonymous" in place of the name and picture, on the board, on the signal's page and in the notice that announces it; the author still reads their own name, and admins can still close or remove it. Replies are never anonymous.
 
 ### 🔨 3.17 Notifications
 
@@ -419,7 +419,7 @@ It is built as a Progressive Web App on a single codebase, reachable from any br
 | 3.17.7  | SOS raised                | A member raises a signal (3.16.3)                       | All members                  |
 | 3.17.8  | SOS reply                 | A member replies to your signal (3.16.7)                | Signal author                |
 | 3.17.9  | Admin announcement        | An admin sends a manual broadcast                       | All members                  |
-| 3.17.10 | Summary ready for review  | An AI summary reaches draft state (3.6.3)               | Admins                       |
+| 3.17.10 | ~~Summary ready for review~~ | ~~An AI summary reaches draft state (3.6.3)~~ — removed by the operator: pipeline updates raise no notice; the review queue is where a draft is read | ~~Admins~~ |
 | 3.17.11 | Video generation complete | Generation finishes or fails (3.11.4.5)                 | The creator who triggered it |
 | 3.17.12 | Processing failure        | Audio processing or transcription fails (3.4.11, 3.5.8) | Admins                       |
 | 3.17.16 | Note reaction             | Another member reacts to your public note (3.12.21)     | Note author                  |
@@ -764,7 +764,7 @@ Mind maps carry no title: the source recording or video title labels them in the
 
 | Field                    | Set by              | Notes                                     |
 | :----------------------- | :------------------ | :---------------------------------------- |
-| Author                   | Auto-set            | Never anonymous (3.16.13)                 |
+| Author                   | Auto-set            | Shown as "Anonymous" when raised so (3.16.13) |
 | Urgency                  | User-set            | Red, orange, yellow or green (3.16.1)     |
 | Description              | User-set            | Short free text (3.16.2)                  |
 | Raised at                | Auto-set            | Sort key (3.16.4)                         |

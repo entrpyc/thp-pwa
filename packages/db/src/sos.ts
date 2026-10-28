@@ -35,6 +35,7 @@ export interface SosSignalRow {
   readonly authorId: string;
   readonly urgency: SosUrgency;
   readonly description: string;
+  readonly anonymous: boolean;
   readonly raisedAt: Date;
   readonly closedAt: Date | null;
   readonly closedBy: string | null;
@@ -51,12 +52,15 @@ export interface SosSignalListRow extends SosSignalRow {
   readonly prayingCount: number;
   readonly replyCount: number;
   readonly praying: boolean;
+  /** Whether the viewer's own Praying row, if any, is anonymous. */
+  readonly prayingAnonymously: boolean;
 }
 
 export interface NewSosSignal {
   readonly authorId: string;
   readonly urgency: SosUrgency;
   readonly description: string;
+  readonly anonymous: boolean;
 }
 
 /** One `sos_reply` row, with its author joined for the reason the signal's is. */
@@ -88,6 +92,7 @@ const SIGNAL_COLUMNS = {
   closedAt: sosSignal.closedAt,
   closedBy: sosSignal.closedBy,
   closingNote: sosSignal.closingNote,
+  anonymous: sosSignal.anonymous,
 } as const;
 
 const REPLY_COLUMNS = {
@@ -119,7 +124,12 @@ export async function insertSosSignal(
 ): Promise<SosSignalRow> {
   const rows = await queryable(executor)
     .insert(sosSignal)
-    .values({ authorId: input.authorId, urgency: input.urgency, description: input.description })
+    .values({
+      authorId: input.authorId,
+      urgency: input.urgency,
+      description: input.description,
+      anonymous: input.anonymous,
+    })
     .returning(SIGNAL_COLUMNS);
   const row = rows[0] as SosSignalRow | undefined;
   if (!row) throw new Error('insertSosSignal returned no row');
@@ -154,6 +164,7 @@ export async function listSosSignals(
       prayingCount: prayingCount(),
       replyCount: replyCount(input.viewerId),
       praying: viewerPraying(input.viewerId),
+      prayingAnonymously: viewerPrayingAnonymously(input.viewerId),
     })
     .from(sosSignal)
     .innerJoin(user, eq(sosSignal.authorId, user.id))
@@ -206,6 +217,7 @@ export async function findSosSignalForViewer(
       prayingCount: prayingCount(),
       replyCount: replyCount(viewerId),
       praying: viewerPraying(viewerId),
+      prayingAnonymously: viewerPrayingAnonymously(viewerId),
     })
     .from(sosSignal)
     .innerJoin(user, eq(sosSignal.authorId, user.id))
@@ -268,15 +280,22 @@ export async function deleteSosSignal(
 // Praying
 // =================================================================================================
 
-/** Say this member is praying, or leave them saying so: `on conflict do nothing`. */
+/**
+ * Say this member is praying, named or not. Pressing again keeps the one row and its place in the
+ * order, and takes the press's word on the name: a member who pressed with their name and presses
+ * again without it has changed their mind, not pressed twice.
+ */
 export async function setSosPraying(
-  input: { readonly signalId: string; readonly userId: string },
+  input: { readonly signalId: string; readonly userId: string; readonly anonymous: boolean },
   executor: Executor = getDatabase(),
 ): Promise<void> {
   await queryable(executor)
     .insert(sosPraying)
-    .values({ signalId: input.signalId, userId: input.userId })
-    .onConflictDoNothing();
+    .values({ signalId: input.signalId, userId: input.userId, anonymous: input.anonymous })
+    .onConflictDoUpdate({
+      target: [sosPraying.signalId, sosPraying.userId],
+      set: { anonymous: input.anonymous },
+    });
 }
 
 /** Take it back. Clearing when nothing is set succeeds: the member asked for a state and has it. */
@@ -289,22 +308,29 @@ export async function clearSosPraying(
     .where(and(eq(sosPraying.signalId, input.signalId), eq(sosPraying.userId, input.userId)));
 }
 
+/** One member praying, as the signal's page lists them: the name, and whether it may be printed. */
+export interface SosPrayingRow {
+  readonly userId: string;
+  readonly displayName: string;
+  readonly anonymous: boolean;
+}
+
 /**
- * The names of everybody praying for one signal, in the order they pressed, less those either
- * side of a block with the viewer — a name is member content; the count is not.
+ * Everybody praying for one signal, in the order they pressed, less those either side of a block
+ * with the viewer — a name is member content; the count is not. The caller prints the named ones
+ * and counts the rest.
  */
-export async function listSosPrayingNames(
+export async function listSosPraying(
   signalId: string,
   viewerId: string,
   executor: Executor = getDatabase(),
-): Promise<string[]> {
-  const rows = await queryable(executor)
-    .select({ displayName: user.displayName })
+): Promise<SosPrayingRow[]> {
+  return queryable(executor)
+    .select({ userId: sosPraying.userId, displayName: user.displayName, anonymous: sosPraying.anonymous })
     .from(sosPraying)
     .innerJoin(user, eq(sosPraying.userId, user.id))
     .where(and(eq(sosPraying.signalId, signalId), noBlockBetween(viewerId, sosPraying.userId)))
     .orderBy(asc(sosPraying.prayedAt));
-  return rows.map((row) => row.displayName);
 }
 
 // =================================================================================================
@@ -388,4 +414,9 @@ function replyCount(viewerId: string) {
 
 function viewerPraying(viewerId: string) {
   return sql<boolean>`exists (select 1 from ${sosPraying} where ${sosPraying.signalId} = ${sosSignal.id} and ${sosPraying.userId} = ${viewerId}::uuid)`;
+}
+
+/** Whether the viewer's own Praying row is anonymous — false when there is none. */
+function viewerPrayingAnonymously(viewerId: string) {
+  return sql<boolean>`coalesce((select ${sosPraying.anonymous} from ${sosPraying} where ${sosPraying.signalId} = ${sosSignal.id} and ${sosPraying.userId} = ${viewerId}::uuid), false)`;
 }

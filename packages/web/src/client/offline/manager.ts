@@ -1,7 +1,6 @@
 import {
   DASHBOARD_PAGE_PATH,
   MAX_SYNC_ENTRIES,
-  MEMBER_LIBRARY_PAGE_PATH,
   MEMBER_SERIES_PAGE_PATH,
   PROFILE_DOWNLOADS_PAGE_PATH,
   SYNC_PATH,
@@ -253,7 +252,6 @@ export function createOfflineManager(options: OfflineManagerOptions): OfflineMan
   function pagesFor(record: DownloadRecord): string[] {
     return [
       DASHBOARD_PAGE_PATH,
-      MEMBER_LIBRARY_PAGE_PATH,
       MEMBER_SERIES_PAGE_PATH,
       PROFILE_DOWNLOADS_PAGE_PATH,
       recordingPagePath(record.recordingId),
