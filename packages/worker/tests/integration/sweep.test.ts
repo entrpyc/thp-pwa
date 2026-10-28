@@ -248,7 +248,8 @@ describe('the startup sweep', () => {
     // And the re-run is a full run: it succeeded, so it chained forward exactly as a first run
     // would have. Nothing about a reclaimed job is second class. What then happens to that
     // successor is this loop's registry's business — it was given `transcribe` and nothing else —
-    // so only its existence is asserted here.
-    expect(rows.some((row) => row.step === 'generate_draft')).toBe(true);
+    // so only its existence is asserted here. The successor is `generate_chapters` since the draft
+    // moved behind the chapters it is built on ([3.8.1](docs/project/prd.md)).
+    expect(rows.some((row) => row.step === 'generate_chapters')).toBe(true);
   }, 60_000);
 });

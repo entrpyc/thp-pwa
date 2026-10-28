@@ -425,8 +425,8 @@ function ReviewRow({
               ) : (
                 <>
                   <p className={styles.treeHint}>
-                    Press a theme to open it. Rename, move or remove any node; add a point under a
-                    theme. Approving publishes the map as drawn.
+                    Press › to fold a branch. Rename, move or remove any node; add a node under
+                    a chapter or a theme. Approving publishes the map as drawn.
                   </p>
                   <MindMapCanvas
                     root={tree}

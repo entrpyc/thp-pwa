@@ -4,6 +4,7 @@ import type { HighlightKind } from '@thp/shared';
 import { getDatabase, queryable, type Executor } from './client';
 import { highlight, note, recording, segment, series, transcript } from './schema';
 import { noBlockBetween } from './member-blocks';
+import { noteReadableBy } from './notes';
 import { recordingIsPublished } from './visibility';
 
 /**
@@ -136,10 +137,12 @@ export async function listHighlightsForMember(
         eq(highlight.userId, userId),
         recordingIsPublished(),
         or(isNull(highlight.noteId), isNull(note.deletedAt)),
+        // A highlighted note travels with the entry only while its owner may still read it: the
+        // private-note condition, stated by notes.ts, and the block condition, stated by
+        // member-blocks.ts — a block with oneself cannot exist, so the member's own notes pass both.
         or(
           isNull(highlight.noteId),
-          eq(note.authorId, userId),
-          and(eq(note.visibility, 'public'), noBlockBetween(userId, note.authorId)),
+          and(noteReadableBy(userId), noBlockBetween(userId, note.authorId)),
         ),
       ),
     )

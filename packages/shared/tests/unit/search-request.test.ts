@@ -13,6 +13,7 @@ import {
   SIMILARITY_GOOD_MATCH,
   SIMILARITY_STRONG_MATCH,
   meaningLabel,
+  readSearchControls,
   readSearchRequest,
   searchPagePath,
   searchPath,
@@ -77,7 +78,23 @@ describe('content type', () => {
   });
 });
 
-describe('the words/meaning slider', () => {
+describe('the controls without words', () => {
+  it('are read on their own, so a member may set them before typing', () => {
+    const check = readSearchControls(new URLSearchParams('kinds=note&mix=1'));
+    expect(check).toMatchObject({ ok: true, controls: { kinds: ['note'], blend: 1 } });
+    expect(readSearchControls(new URLSearchParams(''))).toMatchObject({
+      ok: true,
+      controls: DEFAULT_SEARCH_REQUEST,
+    });
+  });
+
+  it('are still refused when one cannot be read', () => {
+    expect(readSearchControls(new URLSearchParams('kinds=sermon'))).toMatchObject({ ok: false });
+    expect(readSearchControls(new URLSearchParams('mix=0.6'))).toMatchObject({ ok: false });
+  });
+});
+
+describe('the words/meaning choice', () => {
   it('accepts each of the five stops', () => {
     for (const stop of SEARCH_BLEND_STOPS) {
       expect(accepted(`q=vine&mix=${stop}`).blend).toBe(stop);
@@ -126,6 +143,13 @@ describe('writing the address', () => {
     expect(searchPagePath({ query: 'the vine' })).toBe('/search?q=the+vine');
     expect(searchPagePath({ query: 'vine', ...DEFAULT_SEARCH_REQUEST })).toBe('/search?q=vine');
     expect(searchPath({ query: 'vine' })).toBe('/search?q=vine');
+  });
+
+  it('leaves an empty query out, so the controls alone are an address', () => {
+    expect(searchPagePath({ query: '' })).toBe('/search');
+    expect(searchPagePath({ query: '', kinds: ['note'], blend: 0 })).toBe('/search?kinds=note&mix=0');
+    const back = readSearchControls(new URLSearchParams('kinds=note&mix=0'));
+    expect(back).toMatchObject({ ok: true, controls: { kinds: ['note'], blend: 0 } });
   });
 
   it('writes a changed control in the spelling the reader accepts', () => {

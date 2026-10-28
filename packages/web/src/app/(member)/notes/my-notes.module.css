@@ -1,0 +1,86 @@
+/*
+ * My notes: the page's own classes compose from the shared screen recipe, as every member page's
+ * do. The cards themselves are the recording page's own note classes, imported directly, so a note
+ * reads here exactly as it reads under its teaching — this file holds only what is new: the
+ * teaching line above each card and the list that spaces the entries.
+ */
+
+.pageHead {
+  composes: pageHead from '../screens.module.css';
+}
+
+.pageTitle {
+  composes: pageTitle from '../screens.module.css';
+}
+
+.pageLead {
+  composes: pageLead from '../screens.module.css';
+}
+
+.quiet {
+  composes: quiet from '../screens.module.css';
+}
+
+.failure {
+  composes: failure from '../screens.module.css';
+}
+
+.failed {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: var(--space-3);
+}
+
+.entries {
+  list-style: none;
+  margin: var(--space-4) 0 0;
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-6);
+}
+
+.entry {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-2);
+  min-width: 0;
+}
+
+/* The teaching's title and its series, side by side above the card — the one line this page adds. */
+.teaching {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: baseline;
+  gap: var(--space-2) var(--space-3);
+  min-width: 0;
+}
+
+.teachingLink {
+  color: var(--color-text);
+  font-size: var(--fs-body);
+  font-weight: 600;
+  text-decoration: none;
+  overflow-wrap: anywhere;
+}
+
+.teachingLink:hover {
+  text-decoration: underline;
+}
+
+.seriesLink {
+  color: var(--color-primary-strong);
+  font-size: var(--fs-meta);
+  font-weight: 500;
+  text-decoration: none;
+}
+
+.seriesLink:hover {
+  text-decoration: underline;
+}
+
+/* A count rather than a control: the pill shape stays, the pointer does not. */
+.reactionStatic {
+  cursor: default;
+}

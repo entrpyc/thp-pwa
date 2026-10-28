@@ -328,14 +328,23 @@ describe('the recording page at /recordings/[id]', () => {
        */
       const strip = page.getByRole('tablist', { name: 'Teaching contents' });
       expect(await strip.count()).toBe(1);
-      // Two: `Notes`, and `About` for a teaching that has a description or a summary to show.
-      expect(await strip.getByRole('tab').count()).toBe(2);
+      // Three: `Notes`, `About` for a teaching that has a description or a summary to show, and
+      // `Transcript`, which is back in the strip for every teaching — it was hidden for a while,
+      // and the transcript screen's own suite covers what is behind it.
+      expect(await strip.getByRole('tab').count()).toBe(3);
       expect(await strip.getByRole('tab', { name: 'Notes' }).count()).toBe(1);
       expect(await strip.getByRole('tab', { name: 'About' }).count()).toBe(1);
-      for (const absent of ['Chapter', 'Scripture', 'Transcript', 'Mindmap', 'Related', 'Download']) {
-        expect(await page.getByRole('tab', { name: absent }).count(), absent).toBe(0);
-        expect(await page.getByRole('button', { name: absent }).count(), absent).toBe(0);
+      expect(await strip.getByRole('tab', { name: 'Transcript' }).count()).toBe(1);
+      for (const absent of ['Chapter', 'Scripture', 'Mindmap', 'Related', 'Download']) {
+        expect(await page.getByRole('tab', { name: absent, exact: true }).count(), absent).toBe(0);
       }
+      for (const absent of ['Chapter', 'Scripture', 'Mindmap', 'Related']) {
+        expect(await page.getByRole('button', { name: absent, exact: true }).count(), absent).toBe(0);
+      }
+      // `Download` is not a tab here either — but it is a control: the one button in the header
+      // that downloads this teaching for offline listening ([3.18](docs/project/prd.md)), which
+      // the offline suite drives. One, and in the header rather than in the strip.
+      expect(await page.getByRole('button', { name: 'Download', exact: true }).count()).toBe(1);
     } finally {
       await page.context().close();
     }
@@ -432,8 +441,10 @@ describe('the top navigation', () => {
   it('offers a member exactly the destinations, the tour, the bug report, the profile and the way out', async () => {
     const page = await signInAs(member);
     try {
+      // No *Dashboard*, *Highlights* or *Flow Tracker*, by the operator's decision: the home icon
+      // at the bar's left is the way to the dashboard, and the dashboard's tiles are the way to
+      // Highlights and the Flow Tracker. The menu keeps what the tiles do not draw.
       expect(await menuEntries(page)).toEqual([
-        'Dashboard',
         'All series',
         'All recordings',
         // Below the destinations and above the way out: neither is a place in the product, and
@@ -456,7 +467,6 @@ describe('the top navigation', () => {
       // The entry is rendered from the policy module's answer and grants nothing: `/admin` gates
       // itself server-side and every route behind it refuses independently.
       expect(await menuEntries(page)).toEqual([
-        'Dashboard',
         'All series',
         'All recordings',
         'Admin console',

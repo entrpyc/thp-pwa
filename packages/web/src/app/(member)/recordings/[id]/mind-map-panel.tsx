@@ -1,7 +1,12 @@
 'use client';
 
 import { useEffect, useState } from 'react';
-import { recordingMindMapPath, type MindMapView, type RecordingMindMapPayload } from '@thp/shared';
+import {
+  recordingMindMapPath,
+  type MindMapNode,
+  type MindMapView,
+  type RecordingMindMapPayload,
+} from '@thp/shared';
 import { ApiClientError, apiFetch } from '@/client/api-client';
 import { MindMapCanvas } from '@/client/mind-map/mind-map-canvas';
 import { useRecordingContent } from './recording-content';
@@ -9,7 +14,8 @@ import styles from './mind-map.module.css';
 
 /**
  * **The `Mindmap` tab of `pages/recording.png`** ([3.8.3](docs/project/prd.md),
- * [3.8.4](docs/project/prd.md)) — the teaching's concepts as a tree a member walks.
+ * [3.8.4](docs/project/prd.md)) — the teaching's concepts as a tree a member walks — and, with
+ * `chapter` set, the same tab on the chapter page, read through one chapter.
  *
  * The reference draws the tab and nothing draws the panel, so this is `style-guide.md` filling it
  * the way the scripture and transcript panels already do, around one canvas.
@@ -19,14 +25,27 @@ import styles from './mind-map.module.css';
  *   the notes and the transcript are unaffected by anything that happens here.
  * - **Read-only.** What the map says was decided in Pending Reviews ([3.8.2](docs/project/prd.md));
  *   nothing here edits and nothing here could.
+ * - **On the chapter page, the chapter is the root.** The map's first level is the chapter list
+ *   ([3.8.1](docs/project/prd.md)), so the chapter's own branch is found among the root's children
+ *   — by the moment it starts at, which is what a chapter node is anchored to, and by its title
+ *   when the moment has moved under an edit — and drawn with that node at the left. A chapter the
+ *   map has no branch for says so rather than showing an empty box.
  * - **A timestamp goes to the moment without sound** ([3.8.4](docs/project/prd.md)) — through
  *   `seekToMs` on the recording content, which is the same door a note's timestamp uses: a seek on
- *   the loaded teaching, a paused load of this one when the player holds another.
+ *   the loaded teaching, a paused load of this one when the player holds another. The play
+ *   control beside it is `playFromMs`, the same door the chapter page's play control uses.
  * - **Full screen is the same canvas, larger.** The inline panel is a fixed height a phone can
- *   scroll past; the control fixes the same element to the viewport, so what was expanded stays
- *   expanded and the scroll position survives. Escape or the close control brings it back.
+ *   scroll past; the control fixes the same element to the viewport, so what was folded stays
+ *   folded and the scroll position survives. Escape or the close control brings it back.
  */
-export function MindMapPanel({ recordingId }: { recordingId: string }) {
+export function MindMapPanel({
+  recordingId,
+  chapter,
+}: {
+  recordingId: string;
+  /** On the chapter page: which chapter's branch to draw, with that chapter as the root. */
+  chapter?: { readonly startMs: number; readonly title: string };
+}) {
   const content = useRecordingContent();
   const [map, setMap] = useState<MindMapView | null | undefined>(undefined);
   const [failure, setFailure] = useState<string | null>(null);
@@ -68,6 +87,9 @@ export function MindMapPanel({ recordingId }: { recordingId: string }) {
     return () => window.removeEventListener('keydown', onKey);
   }, [fullScreen]);
 
+  const root = map == null ? null : chapter === undefined ? map.root : chapterBranch(map.root, chapter);
+  const subject = chapter === undefined ? 'this teaching' : 'this chapter';
+
   return (
     <section className={styles.panel} aria-label="Mind map">
       {failure !== null ? (
@@ -79,6 +101,10 @@ export function MindMapPanel({ recordingId }: { recordingId: string }) {
         // fetch — a regenerated draft replacing it in the meantime. It says so rather than
         // showing an empty box.
         <p className={styles.quiet}>This teaching has no mind map yet.</p>
+      ) : root === null ? (
+        // The map predates this chapter — a list regenerated after the map was approved — and has
+        // no branch for it.
+        <p className={styles.quiet}>The mind map has no branch for this chapter yet.</p>
       ) : (
         <div
           className={fullScreen ? styles.fullScreen : styles.inline}
@@ -88,7 +114,7 @@ export function MindMapPanel({ recordingId }: { recordingId: string }) {
         >
           <div className={styles.bar}>
             <p className={styles.hint}>
-              Press a theme to open it. Press a time to go to that moment.
+              Press › to fold a branch. Press a time to go to that moment, or ▶ to play from it.
             </p>
             <button
               className={styles.control}
@@ -100,13 +126,30 @@ export function MindMapPanel({ recordingId }: { recordingId: string }) {
             </button>
           </div>
           <MindMapCanvas
-            root={map.root}
-            label="Mind map of this teaching"
+            root={root}
+            label={`Mind map of ${subject}`}
             className={fullScreen ? styles.fill : styles.fixed}
             onSeek={(ms) => content.seekToMs(ms)}
+            onPlay={(ms) => content.playFromMs(ms)}
           />
         </div>
       )}
     </section>
+  );
+}
+
+/**
+ * The chapter's node among the root's children: the one anchored at the chapter's start, else the
+ * one that carries its title. `null` when the map has neither — it was approved against a
+ * different chapter list.
+ */
+export function chapterBranch(
+  root: MindMapNode,
+  chapter: { readonly startMs: number; readonly title: string },
+): MindMapNode | null {
+  return (
+    root.children.find((one) => one.anchorMs === chapter.startMs) ??
+    root.children.find((one) => one.label === chapter.title) ??
+    null
   );
 }

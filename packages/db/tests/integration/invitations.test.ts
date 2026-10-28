@@ -93,13 +93,24 @@ describe('the invitation schema', () => {
       select typname from pg_type where typtype = 'e' order by typname
     `;
     expect(enums.map((row) => row.typname)).toEqual([
+      'cross_reference_basis',
+      'embedding_source',
+      'flow_answer',
+      'flow_question_scope',
+      'flow_session_status',
+      'highlight_kind',
       'job_status',
       'note_visibility',
+      'notification_category',
       'notification_kind',
       'pipeline_step',
+      'push_platform',
+      'report_outcome',
+      'report_reason',
       'review_kind',
       'review_status',
       'scripture_origin',
+      'sos_urgency',
       'user_role',
     ]);
     expect(enums.filter((row) => row.typname.includes('role'))).toHaveLength(1);

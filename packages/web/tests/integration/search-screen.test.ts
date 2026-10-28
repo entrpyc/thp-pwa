@@ -232,7 +232,7 @@ describe('the results page (3.10.6, 3.10.7)', () => {
       .poll(() => page.getByRole('list', { name: 'Search results' }).isVisible(), { timeout: 30_000 })
       .toBe(true);
     // Untick everything but Notes: the address names the one kind, and this teaching has no notes.
-    for (const label of ['Chapters', 'Transcript', 'Summaries', 'Teachings']) {
+    for (const label of ['Chapters', 'Transcript', 'Summaries', 'Recordings']) {
       await page.getByLabel(label).click();
       await page.waitForURL((url) => url.searchParams.get('q') !== null, { timeout: 30_000 });
     }
@@ -250,6 +250,89 @@ describe('the results page (3.10.6, 3.10.7)', () => {
       expect(kinds.every((kind) => kind === 'Note')).toBe(true);
       expect(await results.textContent()).not.toContain(LINES[1]);
     }
+    await page.context().close();
+  });
+});
+
+describe('the controls', () => {
+  it('can be set before anything is typed, and the search that follows reads them', async () => {
+    const page = await signedInPage();
+    let asked = 0;
+    await page.route(`**${API_PREFIX}${SEARCH_PATH}?*`, (route) => {
+      asked += 1;
+      return route.continue();
+    });
+    await page.goto(`${baseUrl}${SEARCH_PAGE_PATH}`, { waitUntil: 'domcontentloaded' });
+    const chapters = page.getByLabel('Chapters');
+    await expect.poll(() => chapters.isVisible(), { timeout: 30_000 }).toBe(true);
+    // Untick one kind and choose a stop with no words in the box: both land in the address.
+    await chapters.click();
+    await page.waitForURL((url) => url.searchParams.get('kinds') === 'segment,note,summary,recording', {
+      timeout: 30_000,
+    });
+    await page.getByLabel('Meaning only').click();
+    await page.waitForURL((url) => url.searchParams.get('mix') === '1', { timeout: 30_000 });
+    expect(new URL(page.url()).searchParams.get('q')).toBeNull();
+    expect(await chapters.isChecked()).toBe(false);
+    expect(await page.getByLabel('Meaning only').isChecked()).toBe(true);
+    // Nothing was asked of the route: there were no words to ask with.
+    expect(asked).toBe(0);
+
+    // The search that follows carries the controls the member set.
+    await page.getByRole('searchbox', { name: 'Search for' }).fill(LINES[1] ?? '');
+    await page.getByRole('searchbox', { name: 'Search for' }).press('Enter');
+    await page.waitForURL((url) => url.searchParams.get('q') === LINES[1], { timeout: 30_000 });
+    const address = new URL(page.url()).searchParams;
+    expect(address.get('kinds')).toBe('segment,note,summary,recording');
+    expect(address.get('mix')).toBe('1');
+    await expect
+      .poll(() => page.getByRole('list', { name: 'Search results' }).isVisible(), { timeout: 30_000 })
+      .toBe(true);
+    expect(asked).toBe(1);
+    await page.context().close();
+  });
+
+  it('the words/meaning choice is a radio group, and the teaching rows are filtered as "Recordings"', async () => {
+    const page = await signedInPage();
+    await page.goto(`${baseUrl}${SEARCH_PAGE_PATH}?q=${encodeURIComponent(LINES[1] ?? '')}`, {
+      waitUntil: 'domcontentloaded',
+    });
+    const group = page.getByRole('group', { name: 'Words / meaning' });
+    await expect.poll(() => group.isVisible(), { timeout: 30_000 }).toBe(true);
+    expect(await group.getByRole('radio').count()).toBe(5);
+    expect(await page.locator('input[type="range"]').count()).toBe(0);
+    expect(await group.getByRole('radio', { name: 'Balanced' }).isChecked()).toBe(true);
+    await group.getByRole('radio', { name: 'Words only' }).click();
+    await page.waitForURL((url) => url.searchParams.get('mix') === '0', { timeout: 30_000 });
+    expect(await group.getByRole('radio', { name: 'Words only' }).isChecked()).toBe(true);
+
+    const kinds = page.getByRole('group', { name: 'Content type' });
+    expect(await kinds.getByRole('checkbox', { name: 'Recordings' }).count()).toBe(1);
+    expect(await kinds.getByRole('checkbox', { name: 'Teachings' }).count()).toBe(0);
+    await page.context().close();
+  });
+});
+
+describe('playing a moment from the results', () => {
+  it('the timecode plays the teaching from there in the transport and stays on the results', async () => {
+    const page = await signedInPage();
+    await page.goto(`${baseUrl}${SEARCH_PAGE_PATH}?q=${encodeURIComponent(LINES[1] ?? '')}`, {
+      waitUntil: 'domcontentloaded',
+    });
+    const results = page.getByRole('list', { name: 'Search results' });
+    await expect.poll(() => results.isVisible(), { timeout: 30_000 }).toBe(true);
+    const first = results.getByRole('listitem').first();
+    await expect.poll(() => first.textContent()).toContain(TITLE);
+    const before = page.url();
+
+    await first.getByRole('button', { name: 'Play from 00:10' }).click();
+    await expect.poll(async () => (await audioState(page)).paused, { timeout: 60_000 }).toBe(false);
+    const state = await audioState(page);
+    expect(state.currentTime).toBeGreaterThanOrEqual(9.5);
+    expect(state.currentTime).toBeLessThan(14);
+    // No redirect: the results are where the member still is.
+    expect(page.url()).toBe(before);
+    expect(await results.isVisible()).toBe(true);
     await page.context().close();
   });
 });
