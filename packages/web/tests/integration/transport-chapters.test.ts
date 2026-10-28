@@ -2,7 +2,7 @@ import { afterAll, beforeAll, describe, expect, it, inject } from 'vitest';
 import { chromium, type Browser, type Locator, type Page } from 'playwright';
 import {
   DASHBOARD_PAGE_PATH,
-  MEMBER_LIBRARY_PAGE_PATH,
+  MEMBER_SERIES_PAGE_PATH,
   ROLE,
   recordingPagePath,
 } from '@thp/shared';
@@ -176,16 +176,16 @@ async function openSheet(page: Page): Promise<void> {
 }
 
 /**
- * Walk from the recording page back to the library **through the page's own control**, so the
+ * Walk from the recording page to the series listing **through the page's own control**, so the
  * member surface and the player it mounts survive the move — a fresh `goto` would remount both.
  *
  * The menu's link rather than the back control: that control steps back through history now, and
- * a page opened from the dashboard the sign-in landed on would go there rather than to the library.
+ * a page opened from the dashboard the sign-in landed on would go there rather than to the series listing — the library that used to be the destination is gone.
  */
-async function leaveForTheLibrary(page: Page): Promise<void> {
+async function leaveForTheListing(page: Page): Promise<void> {
   await page.getByRole('button', { name: 'Menu' }).click();
-  await page.getByRole('link', { name: 'All recordings' }).click();
-  await page.waitForURL(`${baseUrl}${MEMBER_LIBRARY_PAGE_PATH}`, { timeout: 30_000 });
+  await page.getByRole('link', { name: 'All series' }).click();
+  await page.waitForURL(`${baseUrl}${MEMBER_SERIES_PAGE_PATH}`, { timeout: 30_000 });
 }
 
 beforeAll(async () => {
@@ -333,7 +333,7 @@ describe('the Chapters tool in the transport menu', () => {
   it('works from another screen, and takes the member to the chapter', async () => {
     const page = await openTeaching(chapteredId);
     try {
-      await leaveForTheLibrary(page);
+      await leaveForTheListing(page);
       expect(await page.getByRole('tab', { name: 'Chapters' }).count()).toBe(0);
 
       await openSheet(page);

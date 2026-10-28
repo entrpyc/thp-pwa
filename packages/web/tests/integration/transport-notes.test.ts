@@ -3,7 +3,7 @@ import { chromium, type Browser, type Page } from 'playwright';
 import {
   API_PREFIX,
   DASHBOARD_PAGE_PATH,
-  MEMBER_LIBRARY_PAGE_PATH,
+  MEMBER_SERIES_PAGE_PATH,
   ROLE,
   recordingNotesPath,
   recordingPagePath,
@@ -168,7 +168,7 @@ async function tickSeconds(page: Page): Promise<number[]> {
 }
 
 /**
- * Walk from the recording page back to the library **through the page's own control**.
+ * Walk from the recording page to the series listing **through the page's own control**.
  *
  * A fresh `goto` would be a full document load, which remounts the whole member surface and takes
  * the player with it — so it would say nothing about whether the transport travels. The back
@@ -176,12 +176,12 @@ async function tickSeconds(page: Page): Promise<number[]> {
  * exactly the move 3.2.7 is about.
  *
  * The menu rather than the back control: that control steps back through history now, and a page
- * opened from the dashboard the sign-in landed on would go there rather than to the library.
+ * opened from the dashboard the sign-in landed on would go there rather than to the series listing — the library that used to be the destination is gone.
  */
-async function leaveForTheLibrary(page: Page): Promise<void> {
+async function leaveForTheListing(page: Page): Promise<void> {
   await page.getByRole('button', { name: 'Menu' }).click();
-  await page.getByRole('link', { name: 'All recordings' }).click();
-  await page.waitForURL(`${baseUrl}${MEMBER_LIBRARY_PAGE_PATH}`, { timeout: 30_000 });
+  await page.getByRole('link', { name: 'All series' }).click();
+  await page.waitForURL(`${baseUrl}${MEMBER_SERIES_PAGE_PATH}`, { timeout: 30_000 });
 }
 
 async function audioState(page: Page): Promise<{ currentTime: number; paused: boolean }> {
@@ -350,7 +350,7 @@ describe('the transport shows where the teaching has been annotated', () => {
       // The transport travels with the member (3.2.7), so the ticks do. Walked to through the
       // page's own control rather than by a fresh load, because a reload would remount the player
       // and this is about the bar *surviving* the move.
-      await leaveForTheLibrary(page);
+      await leaveForTheListing(page);
       await expect.poll(() => ticks(page).count()).toBe(2);
       expect(await page.getByRole('tab', { name: 'Notes' }).count()).toBe(0);
 
@@ -516,7 +516,7 @@ describe('a member writes a note from the transport, on any screen', () => {
 
       // Walk away from the recording page entirely. The transport, and the teaching it holds,
       // travel with the member.
-      await leaveForTheLibrary(page);
+      await leaveForTheListing(page);
       await page.getByRole('button', { name: 'More player controls' }).click();
       await page.getByRole('button', { name: 'Write a note' }).click();
       await expect.poll(() => page.getByRole('form', { name: 'Write a note' }).count()).toBe(1);

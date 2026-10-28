@@ -6,8 +6,9 @@ import {
   ADMIN_PAGE_PATH,
   DASHBOARD_PAGE_PATH,
   FEEDBACK_PAGE_PATH,
-  MEMBER_LIBRARY_PAGE_PATH,
+  HIGHLIGHTS_PAGE_PATH,
   MEMBER_SERIES_PAGE_PATH,
+  MY_NOTES_PAGE_PATH,
   NEW_USER_ONBOARDING_ID,
   NOTIFICATIONS_PAGE_PATH,
   PROFILE_PAGE_PATH,
@@ -34,10 +35,11 @@ import styles from './member.module.css';
  *   filters, nothing searched until Enter — and one more panel for the menu to fight with under
  *   the bar. A way to the search from every screen is [3.10.1](docs/project/prd.md)'s "from
  *   anywhere in the app", and a link is one that survives a reload and opens in a new tab.
- * - **No *All chapters*.** Chapters have no model in this epic at all. *All series* **arrived in
- *   Story 6** and sits where the reference puts it — between *Dashboard* and *All recordings* —
- *   which is what the dropped-not-disabled rule buys: a destination lands in a slot that already
- *   exists rather than needing one carved for it.
+ * - **No *All chapters*, and no *All recordings* any more.** Chapters have no model in this epic
+ *   at all, and the library page went by the operator's decision — the series pages are the way to
+ *   a teaching. *All series* **arrived in Story 6** and now leads the destinations — which is what
+ *   the dropped-not-disabled rule buys: a destination lands in a slot that already exists rather
+ *   than needing one carved for it.
  * - **Nothing disabled.** A greyed control is a thing the next epic has to find and un-disable, and
  *   in the meantime it tells a member the product is broken rather than unfinished. A deferred
  *   destination is **dropped**, and what survives is the layout, the tone and the token layer — so
@@ -279,11 +281,21 @@ export function TopNavigation({ canSeeConsole }: { canSeeConsole: boolean }) {
         <div className={styles.menuPanel}>
           <ul className={styles.menuList} aria-label="Navigation">
             {/*
-              No *Dashboard*, *Highlights* or *Flow Tracker* here, by the operator's decision: the
-              home icon at the bar's left is the way to the dashboard from every screen, and the
-              dashboard's tiles are the way to Notes, Highlights, Series and the Flow Tracker. The
-              menu keeps what the tiles do not draw.
+              The member's own two places first — notes, then highlights — by the operator's
+              decision, ahead of the destinations. No *Dashboard* or *Flow Tracker* here: the home
+              icon at the bar's left is the way to the dashboard from every screen, and the
+              dashboard's tile is the way to the Flow Tracker.
             */}
+            <li>
+              <Link className={styles.menuLink} href={MY_NOTES_PAGE_PATH} onClick={() => setOpen(false)}>
+                My notes
+              </Link>
+            </li>
+            <li>
+              <Link className={styles.menuLink} href={HIGHLIGHTS_PAGE_PATH} onClick={() => setOpen(false)}>
+                My highlights
+              </Link>
+            </li>
             <li>
               <Link
                 className={styles.menuLink}
@@ -291,15 +303,6 @@ export function TopNavigation({ canSeeConsole }: { canSeeConsole: boolean }) {
                 onClick={() => setOpen(false)}
               >
                 All series
-              </Link>
-            </li>
-            <li>
-              <Link
-                className={styles.menuLink}
-                href={MEMBER_LIBRARY_PAGE_PATH}
-                onClick={() => setOpen(false)}
-              >
-                All recordings
               </Link>
             </li>
             {canSeeConsole ? (

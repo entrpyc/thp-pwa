@@ -4,7 +4,7 @@ import Link from 'next/link';
 import { useSearchParams } from 'next/navigation';
 import { useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react';
 import {
-  MEMBER_LIBRARY_PAGE_PATH,
+  DASHBOARD_PAGE_PATH,
   memberRecordingPath,
   recordingProgressPath,
   seriesPagePath,
@@ -353,21 +353,22 @@ export function RecordingScreen({
 
   /**
    * **Where back lands when there is no history to step through**: the study this teaching is part
-   * of, and the library only for a teaching that is in none.
+   * of, and the dashboard only for a teaching that is in none.
    *
    * It is the same destination the breadcrumb's parent segment points at, read off the same field of
    * the same payload — so the two controls that mean "up from here" cannot disagree. The label names
    * that fallback, because it is the one destination the control is sure of before it is pressed.
    *
-   * A teaching in no series keeps the library, because there is no study page to return to; that is
-   * the ordinary case rather than a degraded one, exactly as the missing cover above is. The same
-   * fallback covers the moment before the payload lands, when the band is already drawn and there is
-   * nothing yet to know — the breadcrumb draws its two segments in that window for the same reason.
+   * A teaching in no series goes to the dashboard, because there is no study page to return to and
+   * the library that used to stand in is gone (the operator's decision); that is the ordinary case
+   * rather than a degraded one, exactly as the missing cover above is. The same fallback covers the
+   * moment before the payload lands, when the band is already drawn and there is nothing yet to
+   * know — the breadcrumb draws its two segments in that window for the same reason.
    */
   const series = recording?.series ?? null;
   const back =
     series === null
-      ? { href: MEMBER_LIBRARY_PAGE_PATH, label: 'Back to recordings' }
+      ? { href: DASHBOARD_PAGE_PATH, label: 'Back to the dashboard' }
       : { href: seriesPagePath(series.id), label: `Back to ${series.title}` };
 
   return (

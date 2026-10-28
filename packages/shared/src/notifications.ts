@@ -53,14 +53,14 @@ export const NOTIFICATION_KINDS = [
    */
   'report_resolved',
   /**
-   * An AI summary reached draft and is waiting on an admin ([3.17.10](docs/project/prd.md),
-   * [3.6.3](docs/project/prd.md)). Every active admin, once per run of `generate_draft` — a
-   * steered regeneration is a fresh draft waiting on a person just as the first one was. Raised by
-   * the worker, which is the one writer here that is not an API route.
+   * An AI summary reached draft and was waiting on an admin ([3.17.10](docs/project/prd.md),
+   * [3.6.3](docs/project/prd.md)). **Nothing raises it any more**: the operator took pipeline
+   * updates out of the bell, so the review queue and the pipeline view are where a waiting draft
+   * is read. The value stays because it is a database enum with rows already written under it —
+   * the centre still has to name those — and dropping it is a migration for another day.
    *
-   * [3.17.12](docs/project/prd.md)'s processing-failure notice is **deliberately not here**: the
-   * operator decided the pipeline view is where failures are read, and an enum value nothing
-   * raises would be a deferred destination drawn rather than dropped.
+   * [3.17.12](docs/project/prd.md)'s processing-failure notice was never here for the same
+   * reason: the pipeline view is where failures are read.
    */
   'summary_ready',
   /** A member raised an SOS signal ([3.17.7](docs/project/prd.md), [3.16.3](docs/project/prd.md)). Everybody but the member. */
@@ -296,10 +296,3 @@ export function noteReportedNotificationTitle(reporterDisplayName: string): stri
  */
 export const REPORT_REMOVED_TITLE = 'The note you reported was removed';
 export const REPORT_DISMISSED_TITLE = 'The note you reported was reviewed';
-
-/**
- * The sentence an admin reads when a draft is waiting ([3.17.10](docs/project/prd.md)). Names no
- * person — a machine wrote the draft — and the body carries the teaching's title, so the row reads
- * as "Summary ready for review / Romans 8, part two" the way a publish reads.
- */
-export const SUMMARY_READY_TITLE = 'Summary ready for review';

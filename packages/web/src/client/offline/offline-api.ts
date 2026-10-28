@@ -58,7 +58,6 @@ export interface Snapshot {
 }
 
 export type OfflineRoute =
-  | { readonly name: 'library' }
   | { readonly name: 'series-list' }
   | { readonly name: 'resume' }
   | { readonly name: 'session' }
@@ -79,7 +78,6 @@ export function apiRoute(path: string): OfflineRoute | null {
   const url = new URL(path.startsWith('/') ? path : `/${path}`, 'https://offline.invalid');
   const rest = url.pathname;
   const library = url.searchParams.get(RECORDING_SURFACE_PARAM) === LIBRARY_SURFACE;
-  if (rest === '/recordings' && library) return { name: 'library' };
   if (rest === '/series' && library) return { name: 'series-list' };
   if (rest === '/recordings/resume') return { name: 'resume' };
   if (rest === AUTH_SESSION_PATH) return { name: 'session' };
@@ -173,8 +171,6 @@ export function offlineAnswer(route: OfflineRoute, snapshot: Snapshot): Answer |
   const one = 'id' in route ? held.find((d) => d.recordingId === route.id) ?? null : null;
 
   switch (route.name) {
-    case 'library':
-      return { status: 200, body: { recordings: held.map((d) => d.recording) } };
     case 'resume':
       return { status: 200, body: { resume: null } };
     case 'session':

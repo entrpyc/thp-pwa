@@ -12,6 +12,8 @@ import {
   sosPagePath,
   sosPath,
   sosPrayingPath,
+  ANONYMOUS_DISPLAY_NAME,
+  SOMEONE,
   sosRaisedNotificationTitle,
   sosRepliesPath,
   sosReplyNotificationTitle,
@@ -216,9 +218,60 @@ describe('raising a signal', () => {
     expect(about(await inbox(admin), signal.id)).toHaveLength(1);
     expect(about(await inbox(ana), signal.id)).toHaveLength(0);
   });
+
+  it('can be raised anonymously: the group reads Anonymous, the author reads their own name, the notice names nobody', async () => {
+    const answer = await raise(ana, { urgency: 'red', description: `Unnamed ${RUN}`, anonymous: true });
+    expect(answer.status).toBe(201);
+    const own = answer.body.signal;
+    expect(own.anonymous).toBe(true);
+    expect(own.mine).toBe(true);
+    // The author still reads themselves.
+    expect(own.author).toMatchObject({ id: ana.id, displayName: ana.displayName });
+
+    const theirs = (await read(ben, own.id)).body.signal;
+    expect(theirs.anonymous).toBe(true);
+    expect(theirs.mine).toBe(false);
+    expect(theirs.author).toEqual({ id: null, displayName: ANONYMOUS_DISPLAY_NAME, avatarUrl: null });
+    expect((await board(cara)).signals.find((one) => one.id === own.id)?.author.displayName).toBe(ANONYMOUS_DISPLAY_NAME);
+    // Even an admin reads the stand-in; moderation needs no name.
+    expect((await read(admin, own.id)).body.signal.author.id).toBeNull();
+
+    const bens = about(await inbox(ben), own.id);
+    expect(bens[0]?.title).toBe(sosRaisedNotificationTitle(SOMEONE, 'red'));
+    expect(bens[0]?.title).not.toContain(ana.displayName);
+
+    expect((await raise(ana, { urgency: 'red', description: 'x', anonymous: 'yes' })).code).toBe('invalid_input');
+  });
 });
 
 describe('praying', () => {
+  it('can be pressed without a name: counted, not listed, and the member reads their own', async () => {
+    const signal = await raised(ana, 'green', `Quiet ${RUN}`);
+
+    const quiet = await call<SosSignalPayload>(sosPrayingPath(signal.id), { method: 'PUT', cookie: ben.cookie, body: { anonymous: true } });
+    expect(quiet.status).toBe(200);
+    expect(quiet.body.signal.praying).toBe(true);
+    expect(quiet.body.signal.prayingAnonymously).toBe(true);
+    expect(quiet.body.signal.prayingCount).toBe(1);
+    // Ben reads his own name; nobody else does.
+    expect(quiet.body.signal.prayingNames).toEqual([ben.displayName]);
+    expect(quiet.body.signal.prayingAnonymousCount).toBe(0);
+
+    await call(sosPrayingPath(signal.id), { method: 'PUT', cookie: cara.cookie });
+    const seen = (await read(ana, signal.id)).body.signal;
+    expect(seen.prayingCount).toBe(2);
+    expect(seen.prayingNames).toEqual([cara.displayName]);
+    expect(seen.prayingAnonymousCount).toBe(1);
+
+    // Pressing again with a name takes the press at its word.
+    await call(sosPrayingPath(signal.id), { method: 'PUT', cookie: ben.cookie, body: { anonymous: false } });
+    const named = (await read(ana, signal.id)).body.signal;
+    expect(named.prayingNames).toEqual([ben.displayName, cara.displayName]);
+    expect(named.prayingAnonymousCount).toBe(0);
+
+    expect((await call(sosPrayingPath(signal.id), { method: 'PUT', cookie: ben.cookie, body: { anonymous: 1 } })).code).toBe('invalid_input');
+  });
+
   it('is one row however often pressed, names the member, and is taken back', async () => {
     const signal = await raised(ana, 'yellow', `Pray ${RUN}`);
 

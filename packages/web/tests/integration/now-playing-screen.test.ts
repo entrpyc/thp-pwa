@@ -3,7 +3,7 @@ import { chromium, type Browser, type Locator, type Page, type Request } from 'p
 import {
   API_PREFIX,
   DASHBOARD_PAGE_PATH,
-  MEMBER_LIBRARY_PAGE_PATH,
+  MEMBER_SERIES_PAGE_PATH,
   NOW_PLAYING_PAGE_PATH,
   REVIEW_FIELD,
   ROLE,
@@ -344,19 +344,19 @@ describe('the transport opens the now-playing view, and it closes back', () => {
       await page.getByRole('button', { name: 'Close now playing' }).click();
       await page.waitForURL(`${baseUrl}${recordingPagePath(coveredId)}`, { timeout: 30_000 });
 
-      // Now from the library, reached by a client-side press rather than a fresh load. Through the
-      // menu rather than the back control: this teaching is in a series, so back goes to the study,
-      // and what this test needs is any client-side route to the library.
+      // Now from the series listing, reached by a client-side press rather than a fresh load.
+      // Through the menu rather than the back control: this teaching is in a series, so back goes
+      // to the study, and what this test needs is any client-side route to another screen.
       await page.getByRole('button', { name: 'Menu' }).click();
       await page
         .getByRole('list', { name: 'Navigation' })
-        .getByRole('link', { name: 'All recordings' })
+        .getByRole('link', { name: 'All series' })
         .click();
-      await page.waitForURL(`${baseUrl}${MEMBER_LIBRARY_PAGE_PATH}`, { timeout: 30_000 });
+      await page.waitForURL(`${baseUrl}${MEMBER_SERIES_PAGE_PATH}`, { timeout: 30_000 });
 
       await openTheView(page);
       await page.getByRole('button', { name: 'Close now playing' }).click();
-      await page.waitForURL(`${baseUrl}${MEMBER_LIBRARY_PAGE_PATH}`, { timeout: 30_000 });
+      await page.waitForURL(`${baseUrl}${MEMBER_SERIES_PAGE_PATH}`, { timeout: 30_000 });
     } finally {
       await page.context().close();
     }
