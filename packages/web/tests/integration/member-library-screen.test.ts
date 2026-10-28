@@ -441,14 +441,12 @@ describe('the top navigation', () => {
   it('offers a member exactly the destinations, the tour, the bug report, the profile and the way out', async () => {
     const page = await signInAs(member);
     try {
+      // No *Dashboard*, *Highlights* or *Flow Tracker*, by the operator's decision: the home icon
+      // at the bar's left is the way to the dashboard, and the dashboard's tiles are the way to
+      // Highlights and the Flow Tracker. The menu keeps what the tiles do not draw.
       expect(await menuEntries(page)).toEqual([
-        'Dashboard',
         'All series',
         'All recordings',
-        // The member's own two surfaces, after the shared ones: what they pinned
-        // ([3.15](docs/project/prd.md)) and the Flow Tracker ([3.14](docs/project/prd.md)).
-        'Highlights',
-        'Flow Tracker',
         // Below the destinations and above the way out: neither is a place in the product, and
         // both are offered to every role on the same terms. The tour replays the new-user
         // onboarding; the report is the one entry that is not a destination at all.
@@ -469,11 +467,8 @@ describe('the top navigation', () => {
       // The entry is rendered from the policy module's answer and grants nothing: `/admin` gates
       // itself server-side and every route behind it refuses independently.
       expect(await menuEntries(page)).toEqual([
-        'Dashboard',
         'All series',
         'All recordings',
-        'Highlights',
-        'Flow Tracker',
         'Admin console',
         'App tour',
         'Report a bug',
