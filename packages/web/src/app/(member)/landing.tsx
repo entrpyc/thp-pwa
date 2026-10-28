@@ -103,7 +103,7 @@ export function Landing() {
         there before this screen mounts.
       */}
       {card !== null && (loaded || playing !== null) ? (
-        <section className={styles.card} aria-label="Resume recording">
+        <section className={`${styles.card} ${styles.resumeCard}`} aria-label="Resume recording">
           <h2 className={styles.cardTitle}>Resume recording</h2>
           <Link className={styles.resume} href={recordingPagePath(card.recordingId)}>
             <span className={styles.resumePlay} aria-hidden="true">

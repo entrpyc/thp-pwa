@@ -331,27 +331,29 @@ describe('selecting a chapter, and playing one (3.22.12)', () => {
   }, 240_000);
 });
 
-describe('the Reflection card on the recording page', () => {
+describe('the Reflection tab', () => {
   /**
-   * The chapters' questions, listed to read rather than asked one at a time, behind `About` and
-   * under the summary. The chaptered teaching has no description and no summary, so `About` here
-   * is drawn for the questions alone — which is the proof that the tab follows them too.
+   * The chapters' questions, listed to read rather than asked one at a time, behind a tab of their
+   * own on the recording page. The chaptered teaching has no description and no summary, so there
+   * is no `About` here at all — the proof that the questions no longer ride that tab.
    *
    * Only two of the three chapters get a question: the middle one is left as the pipeline leaves a
    * chapter it has not reached, and the list skips it rather than drawing a hole.
    */
-  it('lists the chapters’ questions in chapter order, behind About', async () => {
+  it('lists the chapters’ questions in chapter order, behind its own tab on the recording page', async () => {
     await setChapterQuestion(chapterIds[0]!, 'Where are you abiding this week?', handle);
     await setChapterQuestion(chapterIds[2]!, 'Who is tending your field?', handle);
     const page = await openTeaching(chapteredId);
     try {
       const strip = page.getByRole('tablist', { name: 'Teaching contents' });
       await expect
-        .poll(() => strip.getByRole('tab', { name: 'About' }).count(), { timeout: 30_000 })
+        .poll(() => strip.getByRole('tab', { name: 'Reflection' }).count(), { timeout: 30_000 })
         .toBe(1);
+      // No prose, so no `About`: the questions are not what that tab is for.
+      expect(await strip.getByRole('tab', { name: 'About' }).count()).toBe(0);
       // Nothing of the questions in the page body until the tab is pressed.
       expect(await page.getByText('Where are you abiding this week?').count()).toBe(0);
-      await strip.getByRole('tab', { name: 'About' }).click();
+      await strip.getByRole('tab', { name: 'Reflection' }).click();
 
       const card = page.getByRole('region', { name: 'Reflection' });
       await expect.poll(() => card.count(), { timeout: 30_000 }).toBe(1);
@@ -363,9 +365,47 @@ describe('the Reflection card on the recording page', () => {
       ]);
       expect(await card.getByRole('textbox').count()).toBe(0);
       expect(await card.getByRole('button').count()).toBe(0);
-      // This teaching has neither prose block, so the card is the whole of `About`.
-      expect(await page.getByRole('region', { name: 'Description' }).count()).toBe(0);
-      expect(await page.getByRole('region', { name: 'Summary' }).count()).toBe(0);
+      // The tab is in the address, as every tab is, so a reload keeps it open.
+      expect(new URL(page.url()).searchParams.get('tab')).toBe('reflection');
+    } finally {
+      await page.context().close();
+    }
+  }, 120_000);
+
+  /**
+   * **A chapter page shows its own question and no other's.** The first chapter has one (planted
+   * above); the middle chapter has none, so its page draws no `Reflection` tab at all — and an
+   * address naming the tab for it falls back to `Notes`.
+   */
+  it('shows only the selected chapter’s question on its page, and no tab for a chapter without one', async () => {
+    const page = await openTeaching(chapteredId);
+    try {
+      await page.goto(`${baseUrl}${chapterPagePath(chapteredId, chapterIds[0]!)}`, {
+        waitUntil: 'domcontentloaded',
+      });
+      const tabs = page.getByRole('tablist', { name: 'Chapter contents' });
+      await expect
+        .poll(() => tabs.getByRole('tab', { name: 'Reflection' }).count(), { timeout: 30_000 })
+        .toBe(1);
+      await tabs.getByRole('tab', { name: 'Reflection' }).click();
+      const card = page.getByRole('region', { name: 'Reflection' });
+      await expect.poll(() => card.count(), { timeout: 30_000 }).toBe(1);
+      expect(await card.getByRole('listitem').allInnerTexts()).toEqual([
+        'Where are you abiding this week?',
+      ]);
+      expect(await page.getByText('Who is tending your field?').count()).toBe(0);
+
+      // The middle chapter has no question: no tab, and the address naming one falls back to Notes.
+      await page.goto(`${baseUrl}${chapterPagePath(chapteredId, chapterIds[1]!)}?tab=reflection`, {
+        waitUntil: 'domcontentloaded',
+      });
+      await expect.poll(() => tabs.getByRole('tab', { name: 'Notes' }).count(), { timeout: 30_000 }).toBe(1);
+      await expect
+        .poll(() => tabs.getByRole('tab', { name: 'Notes' }).getAttribute('aria-selected'), { timeout: 30_000 })
+        .toBe('true');
+      expect(await tabs.getByRole('tab', { name: 'Reflection' }).count()).toBe(0);
+      expect(await page.getByRole('region', { name: 'Reflection' }).count()).toBe(0);
+      expect(new URL(page.url()).searchParams.get('tab')).toBeNull();
     } finally {
       await page.context().close();
     }

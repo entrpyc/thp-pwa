@@ -24,13 +24,17 @@ import {
   toLoaded,
   useRecordingContentFor,
 } from '../../recording-content';
+import { ReflectionCard } from '../../reflection';
 import { recordingTabHref, tabFromAddress, writeTabToAddress } from '../../round-trip';
 import { ScripturePanel } from '../../scripture-panel';
 import { TranscriptPanel } from '../../transcript-panel';
 import styles from '../../../../screens.module.css';
 
-/** The strip's tabs, by the name each takes in the address — the recording page's, minus `Chapters`. */
-const TABS = ['notes', 'scripture', 'transcript', 'mindmap'] as const;
+/**
+ * The strip's tabs, by the name each takes in the address — the recording page's, minus `About`,
+ * `Chapters` and `Related`, which are the teaching's and not a chapter's.
+ */
+const TABS = ['notes', 'reflection', 'scripture', 'transcript', 'mindmap'] as const;
 
 /** The strip is single-select, as the recording page's is. `null` is all closed. */
 type OpenTab = (typeof TABS)[number] | null;
@@ -87,7 +91,8 @@ export function ChapterScreen({
   /**
    * Notes unless the address names another tab — read once at mount, written on every press, for
    * the reason the recording page gives: the entry a member comes back to names the tab they left
-   * open (`round-trip.ts`). Every tab here is always drawn, so there is no fallback to make.
+   * open (`round-trip.ts`). Every tab here but `Reflection` is always drawn; that one falls back
+   * to `Notes` below, once the chapter is known to have no question.
    */
   const params = useSearchParams();
   const [openTab, setOpenTab] = useState<OpenTab>(() => tabFromAddress(params, TABS) ?? 'notes');
@@ -119,6 +124,24 @@ export function ChapterScreen({
   const content = useRecordingContentFor(recordingId, recording, startAtMs);
   const chapters = content.chapters;
   const chapter = chapters?.find((one) => one.id === chapterId) ?? null;
+  /**
+   * **This chapter's own question, and no other's** — the recording page lists every chapter's;
+   * this page is one chapter read on its own, so its `Reflection` tab holds the one question
+   * written for it. A chapter the pipeline has not reached yet has none, and then no tab either.
+   */
+  const question = chapter?.question ?? null;
+  const hasReflection = question !== null;
+
+  /**
+   * An address naming `Reflection` for a chapter that has no question falls back to `Notes` — the
+   * recording page's rule for every tab it does not draw. It waits for the chapter: `null` is "not
+   * known yet", not "none".
+   */
+  useEffect(() => {
+    if (openTab !== 'reflection' || chapter === null || hasReflection) return;
+    setOpenTab('notes');
+    writeTabToAddress('notes', 'notes');
+  }, [chapter, hasReflection, openTab]);
 
   /**
    * `home › series › recording › chapter` — **the whole path down to here**.
@@ -303,6 +326,22 @@ export function ChapterScreen({
               Notes
             </button>
             {/*
+              **This chapter's reflection question**, where the recording page's strip lists every
+              chapter's. Drawn only when the chapter has one — decided off the chapter itself, which
+              is already in hand, so the tab never promises a question the panel cannot show.
+            */}
+            {hasReflection ? (
+              <button
+                className={styles.tab}
+                type="button"
+                role="tab"
+                aria-selected={openTab === 'reflection'}
+                onClick={() => chooseTab('reflection')}
+              >
+                Reflection
+              </button>
+            ) : null}
+            {/*
               Drawn whatever the teaching cites, unlike the recording page's. `hasScripture` says
               whether the *teaching* has references; whether this chapter has any is a question about
               anchors that the payload cannot answer without being fetched — so the tab is offered and
@@ -357,6 +396,10 @@ export function ChapterScreen({
               canModerate={canModerate}
               chapterId={chapterId}
             />
+          ) : null}
+
+          {openTab === 'reflection' && question !== null ? (
+            <ReflectionCard questions={[question]} />
           ) : null}
 
           {openTab === 'scripture' ? (
