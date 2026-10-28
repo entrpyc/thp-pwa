@@ -173,7 +173,7 @@ export function HighlightsPlaylist() {
                   </button>
                   <Link
                     className={styles.open}
-                    href={highlightHref(entry.recording.id, entry.positionMs)}
+                    href={highlightHref(entry.recording.id, entry.positionMs, entry.note?.id ?? null)}
                     aria-label={`Open ${title}${entry.positionMs === null ? '' : ` at ${formatTimecode(entry.positionMs)}`}`}
                   >
                     <span className={styles.kind}>{kindLabel(entry)}</span>

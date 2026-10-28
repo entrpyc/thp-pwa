@@ -128,7 +128,8 @@ export function NotesPanel({
     const card = document.getElementById(fragment);
     if (card === null || !card.closest(`.${styles.panel}`)) return;
     scrolledTo.current = fragment;
-    card.scrollIntoView({ block: 'center' });
+    // Smoothly, so the member sees the list travel to the note rather than the note appear from nowhere.
+    card.scrollIntoView({ block: 'center', behavior: 'smooth' });
   });
 
   /**
@@ -762,7 +763,7 @@ function EditForm({
   const [text, setText] = useState(note.text);
   const [saving, setSaving] = useState(false);
   const count = text.trim().length;
-  // The pictures the note has, to keep, reorder-by-removal or add to ([3.12.22](docs/project/prd.md)).
+  // The pictures the note has, to keep, reorder-by-removal or add to ([3.12.22](docs/project/prd.md)).
   const fieldId = useId();
   const attachments = useImageAttachments(note.images);
   const attached = attachments.images.filter((one) => one.status !== 'refused').length;
