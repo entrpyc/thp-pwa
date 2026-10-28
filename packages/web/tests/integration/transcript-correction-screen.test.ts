@@ -159,8 +159,14 @@ describe('an admin corrects a line and is offered a fresh summary', () => {
       await offer.getByRole('button', { name: 'Not now' }).click();
       await expect.poll(() => offer.count(), { timeout: 30_000 }).toBe(0);
 
-      // Declining does nothing at all — not merely nothing visible.
-      expect(await countRows('job', recordingId)).toBe(0);
+      // Declining does nothing at all — not merely nothing visible. The one job on the row is
+      // the `embed` the correction itself enqueued ([3.5.5](docs/project/prd.md)): the words
+      // changed, so their vector is stale, and that is re-indexing rather than regeneration — it
+      // is queued with the save, offer or no offer. The offer's own job is the one that must not be.
+      const jobs = await sql<{ step: string }[]>`
+        select step::text as step from job where recording_id = ${recordingId}
+      `;
+      expect(jobs.map((one) => one.step)).toEqual(['embed']);
       expect(await countRows('review_item', recordingId)).toBe(0);
     } finally {
       await page.context().close();
@@ -190,10 +196,13 @@ describe('an admin corrects a line and is offered a fresh summary', () => {
         )
         .toContain('Pending Reviews');
 
+      // Two rows: the `embed` the correction enqueued on save ([3.5.5](docs/project/prd.md)), and
+      // the one `generate_draft` the accepted offer adds. Sorted, because the two were enqueued in
+      // different transactions and the order they come back in is not the claim.
       const jobs = await sql<{ step: string }[]>`
-        select step::text as step from job where recording_id = ${recordingId}
+        select step::text as step from job where recording_id = ${recordingId} order by step
       `;
-      expect(jobs.map((one) => one.step)).toEqual(['generate_draft']);
+      expect(jobs.map((one) => one.step)).toEqual(['embed', 'generate_draft']);
     } finally {
       await page.context().close();
     }

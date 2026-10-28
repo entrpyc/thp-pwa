@@ -92,7 +92,10 @@ describe('the service worker, in a real browser', () => {
       .toBe(true);
     const worker = await installedWorker(page);
     expect(new URL(worker.scriptURL).pathname).toBe(SERVICE_WORKER_PATH);
-    expect(worker.cacheNames).toEqual([]);
+    // The offline module ([3.18](docs/project/prd.md)) keeps a member page and its static assets
+    // once a member page has been served through the worker — the dashboard this sign-in landed on
+    // is one. The sign-in screen above was not, which is why that page saw no cache at all.
+    expect([...worker.cacheNames].sort()).toEqual(['thp-pages-v1', 'thp-static-v1']);
 
     // A controlled page is still the server's page: reloading through the worker lands on the
     // dashboard with the member chrome, not on anything a cache remembered.

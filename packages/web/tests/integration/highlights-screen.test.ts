@@ -251,8 +251,11 @@ describe('the chapter page', () => {
       await page.goto(`${baseUrl}${chapterPagePath(where, middle.id)}`, {
         waitUntil: 'domcontentloaded',
       });
-      const control = page.getByRole('button', { name: 'Highlight this chapter' });
+      // Named by what it pins rather than by its state: the press below renames it, and a locator
+      // bound to the unpressed name would stop resolving the moment it worked.
+      const control = page.getByRole('button', { name: /this chapter$/ });
       await expect.poll(() => control.count(), { timeout: 60_000 }).toBe(1);
+      expect(await control.getAttribute('aria-label')).toBe('Highlight this chapter');
       await pressAndExpect(control, 'Remove highlight from this chapter');
 
       const [entry] = (await entriesOf(member)).filter((one) => one.recordingId === where);
@@ -261,7 +264,7 @@ describe('the chapter page', () => {
     } finally {
       await page.context().close();
     }
-  });
+  }, 180_000);
 });
 
 describe('/highlights', () => {

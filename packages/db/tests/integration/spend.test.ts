@@ -122,11 +122,16 @@ describe('the spend ledger', () => {
     const ledger = await readSpendLedger(2, handle);
 
     expect(ledger.todayUsd).toBe(0.48);
+    // Every step of the chain has a column, zero included: the split is the chain's shape, not the
+    // set of steps that happened to cost something today.
     expect(ledger.byStep).toEqual({
       process_audio: 0,
       transcribe: 0.39,
       generate_draft: 0.05,
       generate_chapters: 0.04,
+      generate_questions: 0,
+      embed: 0,
+      cross_reference: 0,
     });
     expect(spendCeilingReached(ledger)).toBe(false);
   });

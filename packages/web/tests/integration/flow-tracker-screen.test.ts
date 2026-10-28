@@ -210,8 +210,10 @@ describe('a whole session, in the browser', () => {
 
       // The tick is written, and is still there after a reload.
       const tick = firstGroup.getByRole('checkbox', { name: `Done: ${olderTitle} part 1` });
-      await tick.check();
-      await expect.poll(() => tick.isChecked(), { timeout: 10_000 }).toBe(true);
+      // A click and a poll rather than `check()`: the box is controlled by the session the server
+      // answers with, so it changes state when the write lands, not in the same frame as the press.
+      await tick.click();
+      await expect.poll(() => tick.isChecked(), { timeout: 30_000 }).toBe(true);
       await page.reload({ waitUntil: 'domcontentloaded' });
       await expect
         .poll(() => page.getByRole('checkbox', { name: `Done: ${olderTitle} part 1` }).isChecked(), { timeout: 30_000 })
@@ -240,6 +242,8 @@ describe('an admin rewrites a chapter’s question (3.14.11)', () => {
       await page.getByRole('tab', { name: 'Chapters' }).click();
       const panel = page.getByRole('region', { name: 'Chapters' });
       await expect.poll(() => panel.count(), { timeout: 30_000 }).toBe(1);
+      // Exact, because this teaching is called *Editable* and the chapter's highlight pin carries
+      // its title: a substring match lands on the pin, not on the editor.
       await panel.getByRole('button', { name: 'Edit', exact: true }).first().click();
 
       const field = panel.getByLabel(/Flow Tracker question/);

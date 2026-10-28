@@ -289,6 +289,10 @@ describe('what a member is answered', () => {
     // The **exact** key set, because a key added later is precisely what an absence check misses.
     expect(Object.keys(row).sort()).toEqual([
       'description',
+      // The Flow Tracker ([3.14](docs/project/prd.md)). Whether the teaching has an approved mind
+      // map — a boolean, on the same terms as `hasScripture` below: the tab is drawn or not without
+      // downloading a tree nobody asked for.
+      'hasMindMap',
       // Group 4. Whether the teaching has any approved scripture reference — a boolean, never the
       // references themselves, so the recording page can decide whether to draw the tab without
       // downloading a passage nobody asked for.
@@ -317,6 +321,7 @@ describe('what a member is answered', () => {
     expect(Object.keys(row ?? {}).sort()).toEqual([
       'createdAt',
       'description',
+      'hasMindMap',
       'hasScripture',
       'id',
       'originalMediaKey',
@@ -523,6 +528,8 @@ describe('the field names both writers agree on', () => {
       summary: { name: 'summary', shape: 'text' },
       recording_metadata: { name: 'description', shape: 'text' },
       scripture: { name: 'citations', shape: 'list' },
+      // The Flow Tracker's mind map ([3.14](docs/project/prd.md)): the third shape, a tree.
+      mind_map: { name: 'mindMap', shape: 'tree' },
     });
   });
 });
