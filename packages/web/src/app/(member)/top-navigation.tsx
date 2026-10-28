@@ -6,8 +6,6 @@ import {
   ADMIN_PAGE_PATH,
   DASHBOARD_PAGE_PATH,
   FEEDBACK_PAGE_PATH,
-  FLOW_TRACKER_PAGE_PATH,
-  HIGHLIGHTS_PAGE_PATH,
   MEMBER_LIBRARY_PAGE_PATH,
   MEMBER_SERIES_PAGE_PATH,
   NEW_USER_ONBOARDING_ID,
@@ -280,12 +278,12 @@ export function TopNavigation({ canSeeConsole }: { canSeeConsole: boolean }) {
       {open ? (
         <div className={styles.menuPanel}>
           <ul className={styles.menuList} aria-label="Navigation">
-            <li>
-              <Link className={styles.menuLink} href={DASHBOARD_PAGE_PATH} onClick={() => setOpen(false)}>
-                Dashboard
-              </Link>
-            </li>
-            {/* Between Dashboard and All recordings, exactly where `menu-opened.png` draws it. */}
+            {/*
+              No *Dashboard*, *Highlights* or *Flow Tracker* here, by the operator's decision: the
+              home icon at the bar's left is the way to the dashboard from every screen, and the
+              dashboard's tiles are the way to Notes, Highlights, Series and the Flow Tracker. The
+              menu keeps what the tiles do not draw.
+            */}
             <li>
               <Link
                 className={styles.menuLink}
@@ -302,18 +300,6 @@ export function TopNavigation({ canSeeConsole }: { canSeeConsole: boolean }) {
                 onClick={() => setOpen(false)}
               >
                 All recordings
-              </Link>
-            </li>
-            {/* The member's own playlist (3.15.5) — its own page since the operator moved it out of the profile. */}
-            <li>
-              <Link className={styles.menuLink} href={HIGHLIGHTS_PAGE_PATH} onClick={() => setOpen(false)}>
-                Highlights
-              </Link>
-            </li>
-            {/* The member's route back into the teaching (3.14.1) — its own page, reached from here and nowhere else. */}
-            <li>
-              <Link className={styles.menuLink} href={FLOW_TRACKER_PAGE_PATH} onClick={() => setOpen(false)}>
-                Flow Tracker
               </Link>
             </li>
             {canSeeConsole ? (
