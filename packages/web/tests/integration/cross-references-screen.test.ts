@@ -1,10 +1,11 @@
 import { afterAll, beforeAll, describe, expect, it, inject } from 'vitest';
 import { chromium, type Browser, type Locator, type Page } from 'playwright';
-import { DASHBOARD_PAGE_PATH, ROLE, recordingPagePath } from '@thp/shared';
+import { DASHBOARD_PAGE_PATH, ROLE, chapterPagePath, recordingPagePath } from '@thp/shared';
 import {
   createDatabase,
   insertRecording,
   insertSeries,
+  listChapters,
   listSegments,
   replaceChapters,
   replaceCrossReferencesForRun,
@@ -20,15 +21,15 @@ import { uploadTestAudio } from '../support/audio';
  * **The related-teachings strip on the recording page, driven in a real browser against real
  * audio** ([3.9.2](docs/project/prd.md), [3.9.5](docs/project/prd.md), [3.2.12](docs/project/prd.md)).
  *
- * Real for the reason every player suite is: "nothing is drawn until the part playing has a
- * link", "the strip follows the position", and "pressing a link lands on the other teaching at
- * the moment, paused" are claims about a rendered page over a live media element, and a component
- * test would answer them however the component was written.
+ * Real for the reason every player suite is: "the anchor seeks the teaching", "the chapter page
+ * shows its own chapter's links and no other's", and "pressing a link lands on the other teaching
+ * at the moment, paused" are claims about a rendered page over a live media element, and a
+ * component test would answer them however the component was written.
  *
  * **Two teachings of two minutes, forty-second chapters**, exactly as the transport suites seed
- * them, and one link planted between them directly through `@thp/db`: the worker's step is under
- * test in its own suite, and what this file is about is what a member sees of a link once it
- * exists.
+ * them, and two links planted between them directly through `@thp/db` — one in the second
+ * chapter, one in the third: the worker's step is under test in its own suite, and what this
+ * file is about is what a member sees of a link once it exists.
  */
 
 const baseUrl = inject('apiBaseUrl');
@@ -53,16 +54,21 @@ const THREE = [
   { startMs: 2 * CHAPTER_MS, title: 'The gardener', summary: 'Who tends the field.' },
 ];
 
-/** The line of the listening teaching that triggers the link: 50 s, inside the second chapter. */
+/** The line of the listening teaching that triggers the first link: 50 s, inside the second chapter. */
 const SOURCE_LINE = 5;
-/** The moment in the other teaching the link opens: 30 s. */
+/** The moment in the other teaching the first link opens: 30 s. */
 const TARGET_LINE = 3;
+/** A second link, anchored at 90 s — the third chapter — and opening the other teaching at 70 s. */
+const LATER_SOURCE_LINE = 9;
+const LATER_TARGET_LINE = 7;
 
 let browser: Browser;
 let handle: DatabaseHandle;
 let member: TestAccount;
 let listeningId: string;
 let otherId: string;
+/** The listening teaching's chapter ids, in order. */
+let chapterIds: string[] = [];
 
 interface Snapshot {
   readonly currentTime: number;
@@ -107,8 +113,8 @@ async function publishedTeaching(
   return { id: row.id, segmentIds: (await listSegments(transcript.id, handle)).map((one) => one.id) };
 }
 
-/** Sign in and open a teaching, waiting until the element has metadata, and rewind it. */
-async function openTeaching(id: string): Promise<Page> {
+/** Sign in and open a page of a teaching, waiting until the element has metadata, and rewind it. */
+async function openTeaching(id: string, path: string = recordingPagePath(id)): Promise<Page> {
   const context = await browser.newContext({ viewport: { width: 1280, height: 1200 } });
   const page = await context.newPage();
 
@@ -118,7 +124,7 @@ async function openTeaching(id: string): Promise<Page> {
   await page.getByRole('button', { name: 'Sign in' }).click();
   await page.waitForURL(`${baseUrl}${DASHBOARD_PAGE_PATH}`, { timeout: 30_000 });
 
-  await page.goto(`${baseUrl}${recordingPagePath(id)}`, { waitUntil: 'domcontentloaded' });
+  await page.goto(`${baseUrl}${path}`, { waitUntil: 'domcontentloaded' });
   await expect
     .poll(async () => (await audioState(page)).duration, { timeout: 60_000 })
     .toBeGreaterThan(0);
@@ -158,6 +164,7 @@ beforeAll(async () => {
   ]);
   listeningId = listening.id;
   otherId = other.id;
+  chapterIds = (await listChapters(listeningId, handle)).map((one) => one.id);
 
   await replaceCrossReferencesForRun(
     listeningId,
@@ -168,6 +175,14 @@ beforeAll(async () => {
         targetRecordingId: otherId,
         targetSegmentId: other.segmentIds[TARGET_LINE] as string,
         score: 0.9,
+        basis: 'semantic',
+      },
+      {
+        sourceRecordingId: listeningId,
+        sourceSegmentId: listening.segmentIds[LATER_SOURCE_LINE] as string,
+        targetRecordingId: otherId,
+        targetSegmentId: other.segmentIds[LATER_TARGET_LINE] as string,
+        score: 0.8,
         basis: 'semantic',
       },
     ],
@@ -182,33 +197,63 @@ afterAll(async () => {
 }, 60_000);
 
 describe('the related-teachings strip', () => {
-  it('offers nothing until the chapter playing has a link, then names the other teaching, its series and the moment, and goes quiet again', async () => {
+  it('lists every related moment of the teaching, in spoken order, each anchored to a timecode that seeks there', async () => {
     const page = await openTeaching(listeningId);
     try {
-      // The chapters are known — the tab is drawn off them — and the first chapter has no link:
-      // the panel says so rather than drawing an empty list.
-      await expect.poll(() => page.getByRole('tab', { name: 'Chapters' }).count(), { timeout: 30_000 }).toBe(1);
       await openRelated(page);
-      const link = strip(page).getByRole('link');
+      const links = strip(page).getByRole('link');
+
+      // Both planted links, whatever is playing — the playhead is at zero, in a chapter with none.
+      await expect.poll(() => links.count(), { timeout: 30_000 }).toBe(2);
+      const first = (await links.nth(0).textContent()) ?? '';
+      expect(first).toContain(OTHER_TITLE);
+      expect(first).toContain(SERIES_TITLE);
+      expect(first).toContain('at 00:30');
+      expect(first).toContain(`Line ${TARGET_LINE + 1} of ${OTHER_TITLE}`);
+      expect(await links.nth(0).getAttribute('href')).toBe(recordingPagePath(otherId));
+      const second = (await links.nth(1).textContent()) ?? '';
+      expect(second).toContain('at 01:10');
+      expect(second).toContain(`Line ${LATER_TARGET_LINE + 1} of ${OTHER_TITLE}`);
+
+      // Each group names the moment of *this* teaching it hangs off, with the sentence spoken there.
+      const anchors = strip(page).getByRole('button', { name: /^Go to / });
+      expect(await anchors.count()).toBe(2);
+      expect(await anchors.nth(0).textContent()).toContain('00:50');
+      expect(await anchors.nth(0).textContent()).toContain(`Line ${SOURCE_LINE + 1} of ${LISTENING_TITLE}`);
+      expect(await anchors.nth(1).textContent()).toContain('01:30');
+
+      // Pressing the anchor seeks this teaching there, without sound.
+      await anchors.nth(1).click();
       await expect
-        .poll(async () => (await strip(page).textContent()) ?? '', { timeout: 30_000 })
-        .toContain('Nothing in another teaching is related to this part.');
-      expect(await link.count()).toBe(0);
+        .poll(async () => Math.round((await audioState(page)).currentTime), { timeout: 30_000 })
+        .toBe(LATER_SOURCE_LINE * (LINE_MS / 1000));
+      expect((await audioState(page)).paused).toBe(true);
+    } finally {
+      await page.context().close();
+    }
+  }, 120_000);
 
-      // Into the second chapter, where the planted sentence is.
-      await seekTo(page, CHAPTER_MS + 5_000);
+  it('on a chapter page, shows only the links anchored in that chapter, and no tab for a chapter with none', async () => {
+    // The second chapter holds the first link and not the second.
+    const page = await openTeaching(listeningId, chapterPagePath(listeningId, chapterIds[1] as string));
+    try {
+      await openRelated(page);
+      const links = strip(page).getByRole('link');
+      await expect.poll(() => links.count(), { timeout: 30_000 }).toBe(1);
+      expect((await links.first().textContent()) ?? '').toContain('at 00:30');
+      expect(await strip(page).getByRole('button', { name: /^Go to / }).textContent()).toContain('00:50');
 
-      await expect.poll(() => link.count()).toBe(1);
-      const text = (await link.textContent()) ?? '';
-      expect(text).toContain(OTHER_TITLE);
-      expect(text).toContain(SERIES_TITLE);
-      expect(text).toContain('at 00:30');
-      expect(text).toContain(`Line ${TARGET_LINE + 1} of ${OTHER_TITLE}`);
-      expect(await link.getAttribute('href')).toBe(recordingPagePath(otherId));
-
-      // Out again, into the third chapter: nothing there, and the panel says so again.
-      await seekTo(page, 2 * CHAPTER_MS + 5_000);
-      await expect.poll(() => link.count(), { timeout: 30_000 }).toBe(0);
+      // The first chapter has none, so its page draws no `Related` tab at all; the address naming
+      // the tab falls back to notes.
+      await page.goto(
+        `${baseUrl}${chapterPagePath(listeningId, chapterIds[0] as string)}?tab=related`,
+        { waitUntil: 'domcontentloaded' },
+      );
+      await expect.poll(() => page.getByRole('tab', { name: 'Transcript' }).count(), { timeout: 30_000 }).toBe(1);
+      await expect
+        .poll(() => page.getByRole('tab', { name: 'Notes' }).getAttribute('aria-selected'), { timeout: 30_000 })
+        .toBe('true');
+      expect(await page.getByRole('tab', { name: 'Related' }).count()).toBe(0);
     } finally {
       await page.context().close();
     }
@@ -217,11 +262,10 @@ describe('the related-teachings strip', () => {
   it('opens the other teaching at the moment, paused (3.9.5, 3.2.12)', async () => {
     const page = await openTeaching(listeningId);
     try {
-      await seekTo(page, CHAPTER_MS + 5_000);
       await openRelated(page);
-      await expect.poll(() => strip(page).getByRole('link').count(), { timeout: 30_000 }).toBe(1);
+      await expect.poll(() => strip(page).getByRole('link').count(), { timeout: 30_000 }).toBe(2);
 
-      await strip(page).getByRole('link').click();
+      await strip(page).getByRole('link').first().click();
       await page.waitForURL(`${baseUrl}${recordingPagePath(otherId)}`, { timeout: 30_000 });
 
       // The transport holds the other teaching, at the link's moment, and nothing is playing: a

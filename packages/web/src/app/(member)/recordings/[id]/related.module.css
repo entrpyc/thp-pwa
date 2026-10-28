@@ -12,6 +12,9 @@
  *    and the line under it says which part of the teaching the cards are anchored to.
  * 3. `.excerpt` is the other teaching's sentence, in the body's muted colour and clamped to two
  *    lines, because a sentence is what the link *is* and a long one must not push the strip open.
+ * 4. `.anchor` is the moment of *this* teaching a group hangs off — the transcript's line recipe
+ *    (a timecode in tabular figures, the sentence beside it) made a button, because a press seeks
+ *    there. It sits above its cards with no card of its own: it is the heading of the group.
  */
 
 .panel {
@@ -33,6 +36,59 @@
   letter-spacing: 0.02em;
   text-transform: uppercase;
   color: var(--color-text-dim);
+}
+
+.groups {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-5);
+}
+
+.group {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-2);
+}
+
+.anchor {
+  display: flex;
+  align-items: flex-start;
+  gap: var(--space-3);
+  background: transparent;
+  border: none;
+  border-radius: var(--radius-md);
+  padding: var(--space-2) var(--space-3);
+  margin: 0 calc(-1 * var(--space-3));
+  text-align: left;
+  font-family: inherit;
+  color: inherit;
+  cursor: pointer;
+}
+
+.anchor:hover {
+  background: var(--color-surface-raised);
+}
+
+.anchorTime {
+  flex: none;
+  font-size: var(--fs-meta);
+  font-weight: 600;
+  font-variant-numeric: tabular-nums;
+  color: var(--color-primary);
+}
+
+.anchorText {
+  min-width: 0;
+  font-size: var(--fs-body);
+  color: var(--color-text-muted);
+  overflow-wrap: anywhere;
+  display: -webkit-box;
+  -webkit-box-orient: vertical;
+  -webkit-line-clamp: 2;
+  overflow: hidden;
 }
 
 .list {
