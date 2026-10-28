@@ -249,16 +249,15 @@ describe('the recording page carries a Notes tab', () => {
     try {
       const strip = page.getByRole('tablist', { name: 'Teaching contents' });
       /*
-       * One tab, and it is this one. The pair this asserted — `Notes` before `Transcript` — is a
-       * pair no longer: the transcript tab is hidden, and this teaching cites nothing and has no
-       * chapters, so `Notes` is the whole strip. That it still *leads* is the half of the claim
-       * that survives, and the single-select behaviour it used to prove against `Transcript` is
-       * proved against `Scripture` in `scripture-screen.test.ts`, on a teaching that has both.
+       * Two tabs, and this one leads. `Transcript` is back in the strip after a spell hidden; this
+       * teaching cites nothing and has no chapters, so the pair is the whole strip. That `Notes`
+       * *leads* is the claim, and the single-select behaviour is proved against `Scripture` in
+       * `scripture-screen.test.ts`, on a teaching that has both.
        */
-      expect(await strip.getByRole('tab').count()).toBe(1);
+      expect(await strip.getByRole('tab').count()).toBe(2);
       expect(
         (await strip.getByRole('tab').allInnerTexts()).map((text) => text.replace(/[^A-Za-z]/g, '')),
-      ).toEqual(['Notes']);
+      ).toEqual(['Notes', 'Transcript']);
 
       // Open with the page, rather than waiting to be pressed — the one tab that is.
       expect(await page.getByRole('tab', { name: 'Notes' }).getAttribute('aria-selected')).toBe(
@@ -356,8 +355,11 @@ describe('the recording page carries a Notes tab', () => {
         .toBe(1);
 
       // Client-side navigation, so the provider stays mounted and the late answer has somewhere to
-      // land. A full page load would tear it down and prove nothing.
-      await page.getByRole('link', { name: 'Back to recordings' }).click();
+      // land. A full page load would tear it down and prove nothing. Through the menu's own link:
+      // the back control steps back through history now, and this page was opened from the
+      // dashboard the sign-in landed on, so it would go there rather than to the library.
+      await page.getByRole('button', { name: 'Menu' }).click();
+      await page.getByRole('link', { name: 'All recordings' }).click();
       await page.waitForURL(`${baseUrl}${MEMBER_LIBRARY_PAGE_PATH}`, { timeout: 30_000 });
       await page.getByRole('link', { name: new RegExp(`Notes bare ${RUN}`) }).click();
       await page.waitForURL(`${baseUrl}${recordingPagePath(bareId)}`, { timeout: 30_000 });

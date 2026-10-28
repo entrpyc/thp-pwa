@@ -295,7 +295,11 @@ describe('when the model falls short', () => {
 
 describe('its place in the chain', () => {
   it('follows generate_chapters and hands on to embed', async () => {
-    const { recordingId } = await seeded();
+    const { recordingId, job } = await seeded();
+    // `seeded` claims a `generate_questions` job of its own, and the chain's enqueue is a no-op
+    // while one is pending or running (the partial unique index). Finish it first, so the row
+    // this test looks for is the one the chapters step queued and not the fixture's.
+    await sql`update job set status = 'succeeded', finished_at = now() where id = ${job.id}`;
     const chaptersJob = await enqueueJob(
       { recordingId, step: 'generate_chapters', correlationId: 'chain' },
       handle,

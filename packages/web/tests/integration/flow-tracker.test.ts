@@ -389,8 +389,9 @@ describe('answering, and the reading list (3.14.6, 3.14.7, 3.14.9)', () => {
     // Oldest teaching first, and within it the first chapter first — the reading order.
     expect(list[0]?.rows.map((row) => row.item.chapter?.title)).toEqual([`Earlier ${RUN} ${y} ch1`, `Earlier ${RUN} ${y} ch2`]);
     expect(list[0]?.rows.map((row) => row.item.answer)).toEqual(['recall_slightly', 'not_embodied']);
-    // The one that was remembered well is not on the list.
-    expect(list[1]?.rows.map((row) => row.item.chapter?.title)).toEqual([`Later ${RUN} ${y} ch1`]);
+    // The one that is experienced daily is not on the list; the second press above turned the
+    // other from remembered well into not remembered, which is a gap.
+    expect(list[1]?.rows.map((row) => row.item.chapter?.title)).toEqual([`Later ${RUN} ${y} ch2`]);
     // The related chapter of the other teaching sits beneath the row whose span the link left from.
     expect(list[0]?.rows[1]?.related).toEqual([
       {

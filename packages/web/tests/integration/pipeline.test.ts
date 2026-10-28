@@ -335,6 +335,9 @@ describe('what the read answers with', () => {
     expect(Object.keys(summary ?? {}).sort()).toEqual([
       'createdAt',
       'description',
+      // The Flow Tracker's, and still not a speaker: whether the teaching has an approved mind map,
+      // which is what decides whether the recording page draws that tab.
+      'hasMindMap',
       // Group 4's, and still not a speaker: whether the teaching has any approved scripture
       // reference, which is what decides whether the recording page draws the tab.
       'hasScripture',
@@ -351,8 +354,22 @@ describe('what the read answers with', () => {
       'title',
     ]);
 
+    // No *field* called `speaker` anywhere in the console's payload either. Keys rather than the
+    // serialised text: the whole suite shares this database, and the text carries other files'
+    // titles and the provider's own `speakers` count in a transcribe step's meta — neither is the
+    // column being read.
     const pipeline = await call<PipelineListPayload>(PIPELINE_URL, { cookie: adminCookie });
-    expect(JSON.stringify(pipeline.body)).not.toContain('speaker');
+    const keysOf = (value: unknown, found: Set<string> = new Set()): Set<string> => {
+      if (Array.isArray(value)) value.forEach((one) => keysOf(one, found));
+      else if (typeof value === 'object' && value !== null) {
+        for (const [key, inner] of Object.entries(value)) {
+          found.add(key);
+          keysOf(inner, found);
+        }
+      }
+      return found;
+    };
+    expect(keysOf(pipeline.body)).not.toContain('speaker');
   }, 120_000);
 
   it('logs the read with actor, action and target', async () => {

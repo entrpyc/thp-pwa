@@ -1611,7 +1611,11 @@ describe('scripture references, and nothing beside them', () => {
       join pg_type on pg_type.oid = pg_enum.enumtypid
       where pg_type.typname = 'review_kind' order by pg_enum.enumsortorder
     `;
-    expect(kinds.map((row) => row.enumlabel)).toEqual([...REVIEW_KINDS]);
+    // Less `mind_map`, which `0042_flow_tracker` adds later; this database, migrated only as far
+    // as scripture, does not admit it yet.
+    expect(kinds.map((row) => row.enumlabel)).toEqual(
+      REVIEW_KINDS.filter((kind) => kind !== 'mind_map'),
+    );
     expect(kinds.map((row) => row.enumlabel)).toContain('scripture');
 
     // The row written before the widening is still readable and still says what it said.
@@ -2150,12 +2154,17 @@ describe('the chapter table, and nothing beside it', () => {
     `;
     // Derived from the one declaration rather than restated beside it, exactly as every other enum
     // in this file is — less `process_audio`, which `0021_process_audio` adds ahead of `transcribe`
-    // two migrations later, less `embed`, which `0028_embeddings` adds after the chain, and less
-    // `cross_reference`, which `0038_cross_references` adds after that; this database, migrated
-    // only as far as chapters, admits none of them yet.
+    // two migrations later, less `embed`, which `0028_embeddings` adds after the chain, less
+    // `cross_reference`, which `0038_cross_references` adds after that, and less
+    // `generate_questions`, which `0042_flow_tracker` slots in between chapters and embed; this
+    // database, migrated only as far as chapters, admits none of them yet.
     expect(steps.map((row) => row.enumlabel)).toEqual(
       PIPELINE_STEPS.filter(
-        (step) => step !== 'process_audio' && step !== 'embed' && step !== 'cross_reference',
+        (step) =>
+          step !== 'process_audio' &&
+          step !== 'embed' &&
+          step !== 'cross_reference' &&
+          step !== 'generate_questions',
       ),
     );
     expect(steps.map((row) => row.enumlabel)).toContain('generate_chapters');
@@ -2329,11 +2338,13 @@ describe('the sound profile, and nothing beside it', () => {
       join pg_type on pg_type.oid = pg_enum.enumtypid
       where pg_type.typname = 'pipeline_step' order by pg_enum.enumsortorder
     `;
-    // Less `embed` and `cross_reference`, which `0028_embeddings` and `0038_cross_references`
-    // slot in ahead of the standalone pair later; this database, migrated only as far as the
-    // sound profile, does not admit either yet.
+    // Less `embed`, `cross_reference` and `generate_questions`, which `0028_embeddings`,
+    // `0038_cross_references` and `0042_flow_tracker` slot in ahead of the standalone pair later;
+    // this database, migrated only as far as the sound profile, does not admit any of them yet.
     expect(steps.map((row) => row.enumlabel)).toEqual(
-      JOB_STEPS.filter((step) => step !== 'embed' && step !== 'cross_reference'),
+      JOB_STEPS.filter(
+        (step) => step !== 'embed' && step !== 'cross_reference' && step !== 'generate_questions',
+      ),
     );
   });
 
@@ -2592,12 +2603,18 @@ describe('the embedding table, and nothing beside it', () => {
       where pg_type.typname = 'pipeline_step' order by pg_enum.enumsortorder
     `;
     // The whole declaration, in its order: the chain, then the standalone steps — less
-    // `cross_reference`, which `0038_cross_references` slots in after `embed` later; this
-    // database, migrated only as far as embeddings, does not admit it yet.
+    // `cross_reference`, which `0038_cross_references` slots in after `embed` later, and less
+    // `generate_questions`, which `0042_flow_tracker` slots in before it later still; this
+    // database, migrated only as far as embeddings, admits neither yet.
     expect(steps.map((row) => row.enumlabel)).toEqual(
-      JOB_STEPS.filter((step) => step !== 'cross_reference'),
+      JOB_STEPS.filter((step) => step !== 'cross_reference' && step !== 'generate_questions'),
     );
-    expect(PIPELINE_STEPS.indexOf('embed')).toBe(PIPELINE_STEPS.indexOf('generate_chapters') + 1);
+    // Directly after chapters when this migration ran; the Flow Tracker's step sits between the
+    // two since `0042_flow_tracker`, so the declaration is read for the order it has now.
+    expect(PIPELINE_STEPS.indexOf('embed')).toBe(PIPELINE_STEPS.indexOf('generate_questions') + 1);
+    expect(PIPELINE_STEPS.indexOf('generate_questions')).toBe(
+      PIPELINE_STEPS.indexOf('generate_chapters') + 1,
+    );
 
     // The job written before the widening is still readable and still says what it said.
     const rows = await sql<{ step: string }[]>`
@@ -2798,10 +2815,13 @@ describe('the note_report table and the terms columns, and nothing beside them',
       ).map((row) => row.value);
     expect(await enumValues('report_reason')).toEqual([...REPORT_REASONS]);
     expect(await enumValues('report_outcome')).toEqual([...REPORT_OUTCOMES]);
-    // Less `summary_ready`, which `0033_summary_ready` adds next; this database, migrated only as
-    // far as the UGC controls, does not admit it yet.
+    // Less `summary_ready`, which `0033_summary_ready` adds next, and less the two SOS kinds,
+    // which `0039_sos_signal` adds after that; this database, migrated only as far as the UGC
+    // controls, does not admit any of the three yet.
     expect(await enumValues('notification_kind')).toEqual(
-      NOTIFICATION_KINDS.filter((kind) => kind !== 'summary_ready'),
+      NOTIFICATION_KINDS.filter(
+        (kind) => kind !== 'summary_ready' && kind !== 'sos_raised' && kind !== 'sos_reply',
+      ),
     );
   });
 
@@ -2948,9 +2968,12 @@ describe('the cross_reference table, and nothing beside it', () => {
       join pg_type on pg_type.oid = pg_enum.enumtypid
       where pg_type.typname = 'pipeline_step' order by pg_enum.enumsortorder
     `;
-    // The whole declaration in its order: the chain, then the standalone steps. This is the newest
-    // migration, so the enum and the list agree exactly.
-    expect(steps.map((row) => row.enumlabel)).toEqual([...JOB_STEPS]);
+    // The whole declaration in its order: the chain, then the standalone steps — less
+    // `generate_questions`, which `0042_flow_tracker` slots in between chapters and embed later;
+    // this database, migrated only as far as cross references, does not admit it yet.
+    expect(steps.map((row) => row.enumlabel)).toEqual(
+      JOB_STEPS.filter((step) => step !== 'generate_questions'),
+    );
     expect(PIPELINE_STEPS[PIPELINE_STEPS.length - 1]).toBe('cross_reference');
     expect(PIPELINE_STEPS.indexOf('cross_reference')).toBe(PIPELINE_STEPS.indexOf('embed') + 1);
   });

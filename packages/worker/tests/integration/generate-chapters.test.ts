@@ -370,7 +370,7 @@ describe('what the run records', () => {
  * of the pipeline, so the step before it queues it on success without anything naming it.
  */
 describe('its place in the chain (3.21.1)', () => {
-  it('is queued by the step before it, and queues the embed step after', async () => {
+  it('is queued by the step before it, and queues the Flow Tracker questions after', async () => {
     const job = await claimedJob({ minutes: 90 });
     await run(job);
 
@@ -378,12 +378,13 @@ describe('its place in the chain (3.21.1)', () => {
       select step::text as step, status::text as status from job
       where recording_id = ${job.recordingId} order by enqueued_at, id
     `;
-    // No longer the last step of the chain: `embed` follows it (project tdd 4.4), so a chapter
-    // list that was just written is a chapter list about to be made findable — and nothing else
-    // is queued behind it.
+    // No longer the last step of the chain: `generate_questions` follows it
+    // ([3.14.4](docs/project/prd.md)) — one question per chapter, so a chapter list that was just
+    // written is a chapter list about to be asked about — and `embed` follows that (project tdd
+    // 4.4). Nothing else is queued behind it; the next link queues its own.
     expect(queued.map((row) => [row.step, row.status])).toEqual([
       ['generate_chapters', 'succeeded'],
-      ['embed', 'pending'],
+      ['generate_questions', 'pending'],
     ]);
   });
 });

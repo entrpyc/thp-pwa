@@ -178,9 +178,13 @@ async function openSheet(page: Page): Promise<void> {
 /**
  * Walk from the recording page back to the library **through the page's own control**, so the
  * member surface and the player it mounts survive the move — a fresh `goto` would remount both.
+ *
+ * The menu's link rather than the back control: that control steps back through history now, and
+ * a page opened from the dashboard the sign-in landed on would go there rather than to the library.
  */
 async function leaveForTheLibrary(page: Page): Promise<void> {
-  await page.getByRole('link', { name: 'Back to recordings' }).click();
+  await page.getByRole('button', { name: 'Menu' }).click();
+  await page.getByRole('link', { name: 'All recordings' }).click();
   await page.waitForURL(`${baseUrl}${MEMBER_LIBRARY_PAGE_PATH}`, { timeout: 30_000 });
 }
 

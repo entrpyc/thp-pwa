@@ -84,7 +84,11 @@ describe('from the home card to a resolved signal', () => {
       await expect.poll(() => praying.getAttribute('aria-pressed'), { timeout: 30_000 }).toBe('true');
       await expect.poll(() => theirs.getByText('1 member praying').count(), { timeout: 30_000 }).toBe(1);
 
-      await theirs.getByLabel('A word of encouragement or scripture').fill(`Standing with you ${RUN}`);
+      // The textbox by role: the reply form carries the same accessible name as its field, so a
+      // label lookup alone resolves to both.
+      await theirs
+        .getByRole('textbox', { name: 'A word of encouragement or scripture' })
+        .fill(`Standing with you ${RUN}`);
       await theirs.getByRole('button', { name: 'Reply', exact: true }).click();
       await expect
         .poll(() => theirs.getByText(`Standing with you ${RUN}`).count(), { timeout: 30_000 })

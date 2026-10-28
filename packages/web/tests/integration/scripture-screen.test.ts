@@ -191,9 +191,9 @@ describe('the Scripture tab on the recording page', () => {
   it('draws Scripture in its position in the strip', async () => {
     const { page } = await openTeaching(citingId);
     try {
-      // Two entries, not the three this was: `Transcript` is hidden. `Scripture` still sits after
-      // `Notes` for the reason above — what changed is what follows it, not where it is.
-      expect(await tabNames(page)).toEqual(['Notes', 'Scripture']);
+      // Three entries: `Transcript` is back in the strip, after `Scripture`. `Scripture` still sits
+      // after `Notes` for the reason above — what changed is what follows it, not where it is.
+      expect(await tabNames(page)).toEqual(['Notes', 'Scripture', 'Transcript']);
     } finally {
       await page.context().close();
     }
@@ -203,7 +203,7 @@ describe('the Scripture tab on the recording page', () => {
   it('leaves the tab out altogether for a teaching that cites nothing', async () => {
     const { page } = await openTeaching(bareId);
     try {
-      expect(await tabNames(page)).toEqual(['Notes']);
+      expect(await tabNames(page)).toEqual(['Notes', 'Transcript']);
       expect(await page.getByRole('tab', { name: 'Scripture' }).count()).toBe(0);
       // Not merely unselected: nothing on the page mentions it, and nothing was fetched for it.
       expect(await panelOf(page).count()).toBe(0);
@@ -332,9 +332,12 @@ describe('the Scripture tab on the recording page', () => {
 
       await page.getByRole('tab', { name: 'Scripture' }).click();
       const panel = panelOf(page);
+      // An aborted request is, to the client, a network that did not answer — which the offline
+      // layer ([3.18](docs/project/prd.md)) reads as being offline with nothing downloaded, and says
+      // so. Either wording is the one failure line the claim is about.
       await expect
         .poll(() => panel.textContent(), { timeout: 30_000 })
-        .toMatch(/could not|try again/i);
+        .toMatch(/could not|try again|offline/i);
 
       // The player is still there and still operable, and the other tab still opens. `Notes` rather
       // than `Transcript`, which is hidden — the claim is that one panel's failure is contained by

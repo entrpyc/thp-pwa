@@ -172,11 +172,15 @@ async function tickSeconds(page: Page): Promise<number[]> {
  *
  * A fresh `goto` would be a full document load, which remounts the whole member surface and takes
  * the player with it — so it would say nothing about whether the transport travels. The back
- * control is a client-side link, and the layout that owns the player survives it, which is exactly
- * the move 3.2.7 is about.
+ * menu's link is a client-side link, and the layout that owns the player survives it, which is
+ * exactly the move 3.2.7 is about.
+ *
+ * The menu rather than the back control: that control steps back through history now, and a page
+ * opened from the dashboard the sign-in landed on would go there rather than to the library.
  */
 async function leaveForTheLibrary(page: Page): Promise<void> {
-  await page.getByRole('link', { name: 'Back to recordings' }).click();
+  await page.getByRole('button', { name: 'Menu' }).click();
+  await page.getByRole('link', { name: 'All recordings' }).click();
   await page.waitForURL(`${baseUrl}${MEMBER_LIBRARY_PAGE_PATH}`, { timeout: 30_000 });
 }
 
@@ -247,17 +251,18 @@ afterAll(async () => {
 // =================================================================================================
 
 describe('the transport shows where the teaching has been annotated', () => {
-  it('draws a round dot per visible note in the notes green, on the line itself', async () => {
+  it('draws a square mark per visible note in the notes green, on the line itself', async () => {
     const page = await openTeaching(markedId);
     try {
-      // Three visible notes, two of them inside one collapse window — so two dots (3.2.6).
-      await expect.poll(() => ticks(page).count()).toBe(2);
+      // Three visible notes, two of them inside one collapse window — so two dots (3.2.6). The
+      // notes are fetched on open, after the audio this waited for, so the poll is given time.
+      await expect.poll(() => ticks(page).count(), { timeout: 30_000 }).toBe(2);
 
       const drawn = await ticks(page)
         .first()
         .evaluate((tick) => {
           // The dot is the tick's `::before`; the tick itself is the transparent box around it, so
-          // the green and the roundness are read off the mark rather than off the box.
+          // the green and the shape are read off the mark rather than off the box.
           const dot = getComputedStyle(tick, '::before');
           const layer = tick.parentElement as HTMLElement;
           const slider = layer.parentElement?.querySelector('input[type="range"]') as HTMLElement;
@@ -278,9 +283,11 @@ describe('the transport shows where the teaching has been annotated', () => {
         });
 
       expect(drawn.background).toBe(hexToRgb(drawn.notes));
-      // Round, not a rule: square, and at least half its own width in corner radius.
+      // A square mark the track's own height, sitting inside it rather than a dot standing proud
+      // of it — square-cornered, by the operator's decision — and not a rule across it.
       expect(drawn.width).toBe(drawn.height);
-      expect(drawn.radius).toBeGreaterThanOrEqual(drawn.width / 2);
+      expect(drawn.width).toBe(4);
+      expect(drawn.radius).toBe(0);
       expect(drawn.layerZ).toBeGreaterThan(drawn.sliderZ);
       expect(drawn.layerTakesPointer).toBe('none');
     } finally {
@@ -452,9 +459,9 @@ describe('a member writes a note from the transport, on any screen', () => {
       expect(await toolbar.count()).toBe(0);
 
       await page.getByRole('button', { name: 'More player controls' }).click();
-      // Two items now, where the strip shipped holding one.
-      // The Highlights pin, the composer and CC.
-      expect(await toolbar.getByRole('button').count()).toBe(3);
+      // Two items: the composer and CC. The Highlights pin sits beside the ··· on the bar itself
+      // rather than in here, and `Chapters` joins the strip only for a teaching that has some.
+      expect(await toolbar.getByRole('button').count()).toBe(2);
 
       await page.getByRole('button', { name: 'Write a note' }).click();
       await expect.poll(() => page.getByRole('form', { name: 'Write a note' }).count()).toBe(1);

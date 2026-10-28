@@ -491,8 +491,11 @@ describe('one series at /series/[id]', () => {
       // The reference's five-tab strip is dropped whole: a series page has one thing to show.
       expect(await page.getByRole('tablist').count()).toBe(0);
       expect(await page.getByRole('tab').count()).toBe(0);
+      // Exact names: the page does carry a *Download all* control since the offline scope
+      // ([3.18](docs/project/prd.md)), which is a different thing from the reference's per-teaching
+      // `Download` tab and is asserted in the offline suite.
       for (const absent of ['Scripture', 'Notes', 'Transcript', 'Mindmap', 'Download']) {
-        expect(await page.getByRole('button', { name: absent }).count(), absent).toBe(0);
+        expect(await page.getByRole('button', { name: absent, exact: true }).count(), absent).toBe(0);
       }
       expect(await page.getByRole('searchbox').count()).toBe(0);
       expect(await page.getByPlaceholder('Search recordings').count()).toBe(0);
@@ -768,6 +771,8 @@ describe('the ways in and the way through', () => {
         'Dashboard',
         'All series',
         'All recordings',
+        'Highlights',
+        'Flow Tracker',
         'App tour',
         'Report a bug',
         'My profile',

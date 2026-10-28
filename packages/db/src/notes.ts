@@ -140,6 +140,24 @@ export async function insertNote(
 }
 
 /**
+ * **The private-note condition, as a predicate**: a note is readable by `readerId` when it is
+ * public or their own. This is the one statement of it in the codebase — tools/note-privacy.ts
+ * fails the build on a comparison over `note.visibility` or `note.author_id` anywhere else — so a
+ * read that joins notes from outside this module (the highlights list, which carries a highlighted
+ * note's text) applies this rather than spelling the rule again.
+ *
+ * The block condition is deliberately not folded in: that rule is member-blocks.ts's to state, and
+ * each reader applies it beside this one in the direction its own list needs.
+ *
+ * The return type is left to inference: this is a store module, and tools/import-boundary.ts keeps
+ * a Drizzle type out of a store module's signatures. The only callers are the other store modules,
+ * which hand it straight back to `and()`.
+ */
+export function noteReadableBy(readerId: string) {
+  return or(eq(note.visibility, 'public'), eq(note.authorId, readerId));
+}
+
+/**
  * A recording's notes **as this reader may see them** — every public note on it, plus that reader's
  * own private ones, and no other member's private note in any position
  * (scope prd 3.1.9).
@@ -188,8 +206,8 @@ export async function listNotesForReader(
       and(
         eq(note.recordingId, recordingId),
         isNull(note.parentId),
-        // The private-note condition. This line, and no other line in this codebase.
-        or(eq(note.visibility, 'public'), eq(note.authorId, readerId)),
+        // The private-note condition — stated once, in `noteReadableBy`, and applied here.
+        noteReadableBy(readerId),
         // The block condition, in both directions, stated through the one module that owns it.
         noBlockBetween(readerId, note.authorId),
         // The tombstone rule: still standing only while it is holding a thread open.
