@@ -1,9 +1,4 @@
-import {
-  MIND_MAP_MAX_DEPTH,
-  MIND_MAP_MAX_POINTS,
-  MIND_MAP_MAX_THEMES,
-  type MindMapNode,
-} from '@thp/shared';
+import { MIND_MAP_MAX_DEPTH, mindMapChildCap, type MindMapNode } from '@thp/shared';
 
 /**
  * **The three edits a curated map has** ([3.8.2](docs/project/prd.md)) — rename a node, remove it,
@@ -14,9 +9,9 @@ import {
  * alone, which is what lets the review form hold the machine's proposal beside the admin's version
  * and say whether they differ. Nothing here knows about React.
  *
- * The caps are the same ones the server applies ({@link MIND_MAP_MAX_DEPTH} and the two breadths):
- * the form refuses a move or an add the server would refuse, so an admin never builds a tree the
- * approve press then rejects.
+ * The caps are the same ones the server applies ({@link MIND_MAP_MAX_DEPTH} and the breadth per
+ * level, read off `mindMapChildCap`): the form refuses a move or an add the server would refuse,
+ * so an admin never builds a tree the approve press then rejects.
  */
 
 export function findNode(root: MindMapNode, id: string): MindMapNode | null {
@@ -28,7 +23,7 @@ export function findNode(root: MindMapNode, id: string): MindMapNode | null {
   return null;
 }
 
-/** 1 for the root, 2 for a theme, 3 for a point; `null` for an id the tree does not hold. */
+/** 1 for the root, 2 for a chapter, 3 for a theme, 4 for a concept; `null` for an id the tree does not hold. */
 export function depthOf(root: MindMapNode, id: string, depth = 1): number | null {
   if (root.id === id) return depth;
   for (const child of root.children) {
@@ -73,10 +68,9 @@ export function removeNode(root: MindMapNode, id: string): MindMapNode {
   }));
 }
 
-/** How many children a node at this depth may hold. */
+/** How many children a node at this depth may hold — the server's table, read here. */
 export function childCap(depth: number): number {
-  if (depth >= MIND_MAP_MAX_DEPTH) return 0;
-  return depth === 1 ? MIND_MAP_MAX_THEMES : MIND_MAP_MAX_POINTS;
+  return mindMapChildCap(depth);
 }
 
 /** Whether a new child fits under this node. */
@@ -115,7 +109,7 @@ export function addChild(
 
 /**
  * Whether `id` may be moved under `targetId`: not onto itself or into its own subtree, not where it
- * already is, and only where the result still fits three levels and the target's cap.
+ * already is, and only where the result still fits the map's depth and the target's cap.
  */
 export function canMoveUnder(root: MindMapNode, id: string, targetId: string): boolean {
   if (id === targetId || id === root.id) return false;

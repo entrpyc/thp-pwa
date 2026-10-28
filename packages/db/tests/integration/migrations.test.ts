@@ -13,6 +13,7 @@ import {
   JOB_STEPS,
   NOTIFICATION_KINDS,
   PIPELINE_STEPS,
+  STANDALONE_STEPS,
   PLAYBACK_SPEEDS,
   REPORT_OUTCOMES,
   REPORT_REASONS,
@@ -2152,10 +2153,15 @@ describe('the chapter table, and nothing beside it', () => {
     // in this file is — less `process_audio`, which `0021_process_audio` adds ahead of `transcribe`
     // two migrations later, less `embed`, which `0028_embeddings` adds after the chain, and less
     // `cross_reference`, which `0038_cross_references` adds after that; this database, migrated
-    // only as far as chapters, admits none of them yet.
+    // only as far as chapters, admits none of them yet. `JOB_STEPS` is the enum's order, which is
+    // the order the values were added in and not the chain's.
     expect(steps.map((row) => row.enumlabel)).toEqual(
-      PIPELINE_STEPS.filter(
-        (step) => step !== 'process_audio' && step !== 'embed' && step !== 'cross_reference',
+      JOB_STEPS.filter(
+        (step) =>
+          step !== 'process_audio' &&
+          step !== 'embed' &&
+          step !== 'cross_reference' &&
+          !(STANDALONE_STEPS as readonly string[]).includes(step),
       ),
     );
     expect(steps.map((row) => row.enumlabel)).toContain('generate_chapters');

@@ -17,6 +17,7 @@ import { ApiClientError, apiFetch } from '@/client/api-client';
 import { BackRoute } from '../../../../../back-route';
 import { track } from '@/client/observability/analytics';
 import { useBreadcrumbTrail, usePlayer } from '../../../../player-context';
+import { MindMapPanel } from '../../mind-map-panel';
 import { NotesPanel } from '../../notes-panel';
 import {
   RecordingContentProvider,
@@ -28,8 +29,8 @@ import { ScripturePanel } from '../../scripture-panel';
 import { TranscriptPanel } from '../../transcript-panel';
 import styles from '../../../../screens.module.css';
 
-/** The strip's tabs, by the name each takes in the address — the recording page's, minus one. */
-const TABS = ['notes', 'scripture', 'transcript'] as const;
+/** The strip's tabs, by the name each takes in the address — the recording page's, minus `Chapters`. */
+const TABS = ['notes', 'scripture', 'transcript', 'mindmap'] as const;
 
 /** The strip is single-select, as the recording page's is. `null` is all closed. */
 type OpenTab = (typeof TABS)[number] | null;
@@ -331,6 +332,23 @@ export function ChapterScreen({
             >
               Transcript
             </button>
+            {/*
+              `Mindmap`, drawn on the same line the recording page draws it — a teaching whose map
+              an admin approved ([3.8.2](docs/project/prd.md)) — and read through this chapter: the
+              map's first level is the chapter list ([3.8.1](docs/project/prd.md)), so the panel
+              draws this chapter's branch with the chapter as its root.
+            */}
+            {recording?.hasMindMap ? (
+              <button
+                className={styles.tab}
+                type="button"
+                role="tab"
+                aria-selected={openTab === 'mindmap'}
+                onClick={() => chooseTab('mindmap')}
+              >
+                Mindmap
+              </button>
+            ) : null}
           </div>
 
           {openTab === 'notes' ? (
@@ -350,6 +368,13 @@ export function ChapterScreen({
               recordingId={recordingId}
               canCorrect={canCorrect}
               chapterId={chapterId}
+            />
+          ) : null}
+
+          {openTab === 'mindmap' && recording?.hasMindMap ? (
+            <MindMapPanel
+              recordingId={recordingId}
+              chapter={{ startMs: chapter.startMs, title: chapter.title }}
             />
           ) : null}
           </RecordingContentProvider>

@@ -15,8 +15,14 @@ import { countMindMapNodes, type MindMapNode } from '@thp/shared';
  * move every node each time one was renamed.
  */
 
-/** Pixel width of a node at each depth: root, theme, point. Deeper never happens. */
-export const COLUMN_WIDTHS = [200, 184, 224] as const;
+/** Pixel width of a node at each depth: root, chapter, theme, concept. Deeper never happens. */
+export const COLUMN_WIDTHS = [200, 200, 184, 224] as const;
+
+/**
+ * The fold control on the right of a box that has children: the chevron and the divider before
+ * it. The label wraps inside what is left, so the estimate below has to leave this out.
+ */
+export const TOGGLE_WIDTH = 32;
 
 /** Horizontal room between a node's right edge and its children's left edge. */
 export const COLUMN_GAP = 44;
@@ -35,8 +41,8 @@ const LINE_HEIGHT = 18;
 const BOX_PADDING = 24;
 /** The box's horizontal padding, both edges together (`--space-3` twice). */
 const BOX_INSET = 24;
-/** A timestamp chip under the label, with the gap above it. */
-const CHIP_HEIGHT = 26;
+/** A timestamp chip under the label, with the gap above it (`--space-2`). */
+const CHIP_HEIGHT = 32;
 
 export interface LayoutOptions {
   /** Extra height every box carries — the editing controls, when the canvas is editable. */
@@ -76,14 +82,18 @@ export function columnWidth(depth: number): number {
   return COLUMN_WIDTHS[Math.min(Math.max(depth, 1), COLUMN_WIDTHS.length) - 1] ?? COLUMN_WIDTHS[0];
 }
 
-/** A box's height, from the words in it and whether it carries a timestamp chip. */
+/**
+ * A box's height, from the words in it and whether it carries a timestamp chip. `reserved` is
+ * width the label cannot wrap into — the fold control, on a box that has one.
+ */
 export function estimateNodeHeight(
   label: string,
   width: number,
   hasAnchor: boolean,
   extra = 0,
+  reserved = 0,
 ): number {
-  const perLine = Math.max(8, Math.floor((width - BOX_INSET) / CHAR_WIDTH));
+  const perLine = Math.max(8, Math.floor((width - BOX_INSET - reserved) / CHAR_WIDTH));
   const lines = Math.max(1, Math.ceil(label.length / perLine));
   return BOX_PADDING + lines * LINE_HEIGHT + (hasAnchor ? CHIP_HEIGHT : 0) + extra;
 }
@@ -114,9 +124,17 @@ export function layoutMindMap(
 
   const place = (node: MindMapNode, depth: number, top: number): number => {
     const width = columnWidth(depth);
-    const height = estimateNodeHeight(node.label, width, node.anchorMs !== null, extra);
     const hasChildren = node.children.length > 0;
-    const open = !hasChildren || expanded.has(node.id);
+    // The root cannot be folded: it is what the map is of, and a map folded to its title is no map.
+    const foldable = hasChildren && depth > 1;
+    const height = estimateNodeHeight(
+      node.label,
+      width,
+      node.anchorMs !== null,
+      extra,
+      foldable ? TOGGLE_WIDTH : 0,
+    );
+    const open = !foldable || expanded.has(node.id);
     const entry = {
       id: node.id,
       node,

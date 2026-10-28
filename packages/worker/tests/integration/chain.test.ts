@@ -94,7 +94,7 @@ describe('a step that succeeds enqueues the next one', () => {
     const rows = await ledger(job.recordingId);
     expect(rows.map((row) => [row.step, row.status])).toEqual([
       ['transcribe', 'succeeded'],
-      ['generate_draft', 'pending'],
+      ['generate_chapters', 'pending'],
     ]);
     // The first run of the successor, under the id of the request that started the whole chain.
     expect(rows[1]?.attempt).toBe(1);
@@ -151,7 +151,7 @@ describe('a step that succeeds enqueues the next one', () => {
     const alreadyQueued = await enqueueJob(
       {
         recordingId: job.recordingId,
-        step: 'generate_draft',
+        step: 'generate_chapters',
         correlationId: 'an-earlier-request',
       },
       handle,
@@ -163,22 +163,22 @@ describe('a step that succeeds enqueues the next one', () => {
 
     const rows = await ledger(job.recordingId);
     expect(rows).toHaveLength(2);
-    const successor = rows.find((entry) => entry.step === 'generate_draft');
+    const successor = rows.find((entry) => entry.step === 'generate_chapters');
     expect(successor?.id).toBe(alreadyQueued.id);
     expect(successor?.correlation_id).toBe('an-earlier-request');
   });
 
   it('follows the order it was given, not a rule written into the handlers', async () => {
     const reversed = [...PIPELINE_STEPS].reverse();
-    const job = await claimedJob('generate_draft');
+    const job = await claimedJob('generate_chapters');
 
     await runJob(job, succeeds, { executor: handle, steps: reversed });
 
-    // In this order `transcribe` follows `generate_draft`, and it does — which is what makes
+    // In this order `transcribe` follows `generate_chapters`, and it does — which is what makes
     // inserting a step an edit to one array (docs/project/prd.md §3.4's `process_audio`).
     const rows = await ledger(job.recordingId);
     expect(rows.map((row) => [row.step, row.status])).toEqual([
-      ['generate_draft', 'succeeded'],
+      ['generate_chapters', 'succeeded'],
       ['transcribe', 'pending'],
     ]);
   });
