@@ -24,14 +24,14 @@
    * Both edges are now floating bars, so the page pads itself clear of each — the padding is what
    * the fixed chrome stands on, and without it the first card and the last are underneath one.
    *
-   * **Top:** the nav bar is 62px inside an 8px inset, so the page starts at 88px — the first
+   * **Top:** the nav bar is 62px flush with the top edge, so the page starts at 80px — the first
    * composition of the spacing scale past that, which leaves the same gap under the bar that the
    * flow used to draw. **Bottom:** 128px was leaving the recording page's tab strip under the
    * wrapped transport, which measures 166px; 200px is the clearance plus room to read the last row
    * rather than merely uncover it. Both add the phone's own inset — the notch above, the home
    * indicator below — which each bar pads itself with, so the clearance holds in the installed app.
    */
-  padding: calc(var(--space-8) * 2 + var(--space-6) + env(safe-area-inset-top)) var(--space-4)
+  padding: calc(var(--space-8) * 2 + var(--space-4) + env(safe-area-inset-top)) var(--space-4)
     calc(var(--space-8) * 6 + var(--space-2) + env(safe-area-inset-bottom));
 }
 
@@ -70,8 +70,9 @@
   left: 0;
   right: 0;
   z-index: 2;
-  padding: var(--space-2) var(--space-4) 0;
-  padding-top: calc(var(--space-2) + env(safe-area-inset-top));
+  /* Edge to edge: no inset around the bar, only the notch's own, by the operator's decision. */
+  padding: 0;
+  padding-top: env(safe-area-inset-top);
   pointer-events: none;
   display: flex;
   flex-direction: column;
@@ -95,27 +96,29 @@
   left: 0;
   right: 0;
   bottom: 0;
-  padding: var(--space-3) var(--space-4) calc(var(--space-2) + env(safe-area-inset-bottom));
+  /* Edge to edge, like the bar above: the dock meets the screen's sides and its bottom. */
+  padding: 0 0 env(safe-area-inset-bottom);
   pointer-events: none;
   display: flex;
   flex-direction: column;
   align-items: stretch;
-  gap: var(--space-3);
+  gap: 0;
 }
 
-/* One dark rounded bar, a step below the page, exactly as the reference draws it. */
+/*
+ * One dark bar, a step below the page, the full width of the screen and flush with its top edge —
+ * the reference drew it as a floating rounded panel; the operator asked for it to meet the edges,
+ * so the radius and the side and top borders are gone and only the hairline beneath it remains.
+ */
 .navBar {
   width: 100%;
-  max-width: 48rem;
-  margin: 0 auto;
   pointer-events: auto;
   display: flex;
   align-items: center;
   justify-content: space-between;
   gap: var(--space-3);
   background: var(--color-bg-deep);
-  border: 1px solid var(--color-border);
-  border-radius: var(--radius-lg);
+  border-bottom: 1px solid var(--color-border);
   padding: var(--space-2) var(--space-3);
   min-width: 0;
 }
@@ -306,14 +309,12 @@
 .menuPanel {
   position: absolute;
   top: 100%;
-  left: var(--space-4);
-  right: var(--space-4);
-  max-width: 48rem;
-  margin: var(--space-2) auto 0;
+  left: 0;
+  right: 0;
+  margin: 0;
   pointer-events: auto;
   background: var(--color-surface);
-  border: 1px solid var(--color-border);
-  border-radius: var(--radius-lg);
+  border-bottom: 1px solid var(--color-border);
   overflow: hidden;
 }
 

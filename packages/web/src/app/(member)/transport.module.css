@@ -78,8 +78,6 @@
 
 .bar {
   width: 100%;
-  max-width: 48rem;
-  margin: 0 auto;
   pointer-events: auto;
   display: flex;
   flex-wrap: wrap;
@@ -93,8 +91,8 @@
   column-gap: var(--space-3);
   row-gap: 0;
   background: var(--color-surface);
-  border: 1px solid var(--color-border);
-  border-radius: var(--radius-lg);
+  /* Edge to edge and flush with the bottom, like the bar at the top: only the hairline above it is drawn. */
+  border-top: 1px solid var(--color-border);
   padding: var(--space-3) var(--space-4);
 }
 
