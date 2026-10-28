@@ -244,16 +244,17 @@ describe('approving a mind map draft', () => {
     const recordingId = await newRecording(true);
     const item = await draft(recordingId);
 
-    const nineThemes = {
+    // Seventeen chapters under the root — one past what a map holds at its first level.
+    const tooWide = {
       ...PROPOSED,
-      children: Array.from({ length: 9 }, (_, index) => ({
-        id: `t${index}`,
-        label: `Theme ${index + 1}`,
+      children: Array.from({ length: 17 }, (_, index) => ({
+        id: `c${index}`,
+        label: `Chapter ${index + 1}`,
         anchorMs: null,
         children: [],
       })),
     };
-    const wide = await post(reviewPath(item.id), { action: 'approve', fields: { [FIELD]: nineThemes } });
+    const wide = await post(reviewPath(item.id), { action: 'approve', fields: { [FIELD]: tooWide } });
     expect(wide.status).toBe(400);
     expect(wide.code).toBe('invalid_input');
 
@@ -263,15 +264,23 @@ describe('approving a mind map draft', () => {
     };
     expect((await post(reviewPath(item.id), { action: 'approve', fields: { [FIELD]: blank } })).status).toBe(400);
 
+    // Five levels: chapter, theme, concept — and one more under the concept, which no map holds.
     const deep = {
       ...PROPOSED,
       children: [
         {
-          id: 't',
-          label: 'Theme',
+          id: 'c',
+          label: 'Chapter',
           anchorMs: null,
           children: [
-            { id: 'p', label: 'Point', anchorMs: null, children: [{ id: 'q', label: 'Too deep', anchorMs: null, children: [] }] },
+            {
+              id: 't',
+              label: 'Theme',
+              anchorMs: null,
+              children: [
+                { id: 'p', label: 'Point', anchorMs: null, children: [{ id: 'q', label: 'Too deep', anchorMs: null, children: [] }] },
+              ],
+            },
           ],
         },
       ],

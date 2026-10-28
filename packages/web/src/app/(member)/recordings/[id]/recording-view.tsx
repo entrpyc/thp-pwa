@@ -32,7 +32,7 @@ import { TagLabels } from '../../tag-labels';
 import styles from '../../screens.module.css';
 
 /** The strip's tabs, by the name each takes in the address (`?tab=chapters`). */
-const TABS = ['notes', 'about', 'chapters', 'scripture', 'transcript', 'mindmap', 'related'] as const;
+const TABS = ['notes', 'about', 'reflection', 'chapters', 'scripture', 'transcript', 'mindmap', 'related'] as const;
 
 /** The strip is single-select: opening one tab closes the others, and `null` is all closed. */
 type OpenTab = (typeof TABS)[number] | null;
@@ -46,12 +46,14 @@ type OpenTab = (typeof TABS)[number] | null;
  *   `pages/chapter.png` draws it, with the back control over it (scope prd 3.2.3, 3.2.7). The
  *   cover is the *series'* — a recording has none of its own — so every teaching in one study
  *   shows the same picture, and a teaching in no series keeps the flat band (scope prd 3.2.6).
- * - **A tab strip holding the reference's five tabs and two more** — `Notes`, `About`, `Chapters`,
- *   `Scripture`, `Transcript`, `Mindmap`, `Related` — each drawn when the teaching has something
- *   behind it: `Chapters` arrived with [3.22.10](docs/project/prd.md) and `Mindmap` with
- *   [3.8.3](docs/project/prd.md). `About` holds the description and the summary — description
- *   first, then summary, which is what a member reads in: the chosen line about the teaching, then
- *   what was said in it — and is drawn only when the teaching has either. `Related` holds the
+ * - **A tab strip holding the reference's five tabs and three more** — `Notes`, `About`,
+ *   `Reflection`, `Chapters`, `Scripture`, `Transcript`, `Mindmap`, `Related` — each drawn when the
+ *   teaching has something behind it: `Chapters` arrived with [3.22.10](docs/project/prd.md) and
+ *   `Mindmap` with [3.8.3](docs/project/prd.md). `About` holds the description and the summary —
+ *   description first, then summary, which is what a member reads in: the chosen line about the
+ *   teaching, then what was said in it — and is drawn only when the teaching has either.
+ *   `Reflection` lists the chapters' Flow Tracker questions (`reflection.tsx`), and is drawn only
+ *   once a chapter has one. `Related` holds the
  *   moments in other teachings anchored to the part playing ([3.9.2](docs/project/prd.md)), and is
  *   drawn only for a teaching that has a related moment somewhere in it. The strip is
  *   **single-select**, the way the reference reads it: opening `Notes` closes `Scripture`.
@@ -271,15 +273,16 @@ export function RecordingScreen({
   const content = useRecordingContentFor(recordingId, recording, startAtMs);
   const hasChapters = (content.chapters?.length ?? 0) > 0;
   /**
-   * The chapters' reflection questions, in chapter order, for the `Reflection` card under the
-   * summary. They ride the chapter list rather than the page's payload, so a teaching whose
-   * questions have not been generated yet simply has none here.
+   * The chapters' reflection questions, in chapter order, for the `Reflection` tab. They ride the
+   * chapter list rather than the page's payload, so a teaching whose questions have not been
+   * generated yet simply has none here — and no tab, the line the strip draws for every tab with
+   * nothing behind it.
    */
   const questions = useMemo(() => questionsOf(content.chapters), [content.chapters]);
+  const hasReflection = questions.length > 0;
   /** `About` is drawn only when there is something to read in it. */
   const hasAbout =
-    recording !== null &&
-    (recording.description !== null || recording.summary !== null || questions.length > 0);
+    recording !== null && (recording.description !== null || recording.summary !== null);
   /**
    * `Related` is drawn only for a teaching with a related moment somewhere in it — the same line
    * `Scripture` and `Chapters` draw. The groups are fetched here, once per teaching, so the strip
@@ -301,6 +304,8 @@ export function RecordingScreen({
     if (recording === null) return;
     const undrawn =
       (openTab === 'about' && !hasAbout) ||
+      // The reflection case waits for the chapter list too, as the chapters case does.
+      (openTab === 'reflection' && content.chapters !== null && !hasReflection) ||
       (openTab === 'chapters' && content.chapters !== null && !hasChapters) ||
       (openTab === 'scripture' && !recording.hasScripture) ||
       (openTab === 'mindmap' && !recording.hasMindMap) ||
@@ -309,7 +314,7 @@ export function RecordingScreen({
     if (!undrawn) return;
     setOpenTab('notes');
     writeTabToAddress('notes', 'notes');
-  }, [content.chapters, hasAbout, hasChapters, hasRelated, openTab, recording, relatedGroups]);
+  }, [content.chapters, hasAbout, hasChapters, hasReflection, hasRelated, openTab, recording, relatedGroups]);
 
   /**
    * **Put the list back where it was left**, on the way back from a chapter.
@@ -457,14 +462,12 @@ export function RecordingScreen({
               Notes
             </button>
             {/*
-              **Description first, then summary, then the reflection questions**, behind one tab.
-              The description is what an admin wrote *about* this teaching — a line or two, chosen,
-              and the same text the library row carries. The summary is generated from what was
-              actually said, two paragraphs of it; it answers a question the description has just
-              raised rather than the other way round. The reflection questions close the tab: one
-              per chapter, to read rather than to answer (`reflection.tsx`). Absent entirely for a
-              teaching that has none of the three — the line the strip draws for every tab with
-              nothing behind it.
+              **Description first, then summary**, behind one tab. The description is what an admin
+              wrote *about* this teaching — a line or two, chosen, and the same text the library row
+              carries. The summary is generated from what was actually said, two paragraphs of it;
+              it answers a question the description has just raised rather than the other way
+              round. Absent entirely for a teaching that has neither — the line the strip draws for
+              every tab with nothing behind it.
             */}
             {hasAbout ? (
               <button
@@ -475,6 +478,25 @@ export function RecordingScreen({
                 onClick={() => chooseTab('about')}
               >
                 About
+              </button>
+            ) : null}
+            {/*
+              **The reflection questions, a tab of their own** — one per chapter, in chapter order,
+              to read rather than to answer (`reflection.tsx`). They sat under the summary inside
+              `About` for a while; the operator moved them out, because a list of questions is not
+              prose about the teaching and a member looking for them should find them by name.
+              Absent for a teaching whose chapters have no questions yet, decided off the same list
+              `Chapters` is decided off.
+            */}
+            {hasReflection ? (
+              <button
+                className={styles.tab}
+                type="button"
+                role="tab"
+                aria-selected={openTab === 'reflection'}
+                onClick={() => chooseTab('reflection')}
+              >
+                Reflection
               </button>
             ) : null}
             {/*
@@ -590,8 +612,12 @@ export function RecordingScreen({
                   {recording.summary === null ? null : (
                     <CollapsibleProse label="Summary" text={recording.summary} />
                   )}
-                  {questions.length === 0 ? null : <ReflectionCard questions={questions} />}
                 </div>
+              ) : null}
+
+              {/* Guarded as its tab is: the address can name this panel before the list has arrived. */}
+              {openTab === 'reflection' && hasReflection ? (
+                <ReflectionCard questions={questions} />
               ) : null}
 
               {/* Guarded as its tab is: the address can name this panel before the list has arrived. */}

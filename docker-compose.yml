@@ -31,7 +31,17 @@ services:
   # `MINIO_API_CORS_ALLOW_ORIGIN` is the bucket's CORS rule for development. A deployment sets the
   # equivalent rule on the real bucket by hand — see README.md, "Media store".
   minio:
-    image: minio/minio:RELEASE.2025-04-22T22-12-26Z
+    # Chainguard's build of MinIO (RELEASE.2026-10-23), pinned by digest because the free tier
+    # publishes only a moving `latest`. `minio/minio` is gone: MinIO archived the community edition
+    # in April 2026 and its Docker Hub and Quay images stopped pulling anonymously in September
+    # 2026. Same binary, same flags, same env, and it ships `mc` for the healthcheck. The CI
+    # workflow runs the same digest — change both together (ci.yml says how).
+    image: cgr.dev/chainguard/minio@sha256:e70b2b1e74d79457f808710483bd726ff364529ca30736eaa15a6ab547d3a5a7
+    # The image defaults to a non-root user, which cannot open a `thp-minio-data` volume that the
+    # old `minio/minio` image (which ran as root) already wrote — MinIO exits with "write
+    # permissions for the backend". Root keeps every existing developer volume working without a
+    # `docker volume rm`; this is a development container, and the old image ran as root anyway.
+    user: '0:0'
     container_name: thp-minio
     restart: unless-stopped
     command: server /data --console-address ':9001'

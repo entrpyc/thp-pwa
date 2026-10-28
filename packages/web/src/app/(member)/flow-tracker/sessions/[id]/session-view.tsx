@@ -41,12 +41,15 @@ import styles from '../../flow-tracker.module.css';
  * is asking.
  *
  * Once complete: **the list of parts to focus on** ([3.14.9](docs/project/prd.md)), grouped by
- * teaching from the oldest picked forward. Each row names the chapter, shows the member's own
- * rating as a quiet label, offers play-from-here and the chapter's page ([3.14.7](docs/project/prd.md)),
- * nests the related chapters of other teachings beneath it, and can be ticked off.
+ * teaching from the oldest picked forward. Each group's head opens the teaching's page; each row
+ * names the chapter as a link to its page, shows the member's own rating as a quiet label, offers
+ * play-from-here ([3.14.7](docs/project/prd.md)), nests the related chapters of other teachings
+ * beneath it, and can be ticked off.
  *
- * **It reads what the API answers and decides nothing.** Every rating and every tick renders the
- * session the write answered rather than patching a row by hand.
+ * **It reads what the API answers and decides nothing** — with one exception for feel. A tick is
+ * shown as ticked the moment it is pressed, and only that row waits on the write; the session the
+ * write answers then replaces the whole, and a failed write puts the tick back. Without that, every
+ * checkbox went grey while the list reloaded, which read as the list emptying and refilling.
  */
 
 const LOAD_FAILED = 'Could not load this session. Reload the page to try again.';
@@ -57,11 +60,13 @@ export function SessionView({ sessionId }: { sessionId: string }) {
   const [missing, setMissing] = useState(false);
   const [failure, setFailure] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
+  /** Reading-list rows whose tick is on its way to the server. */
+  const [pending, setPending] = useState<ReadonlySet<string>>(() => new Set());
   /** The question on screen while running — `null` means "the next unanswered one". */
   const [showing, setShowing] = useState<string | null>(null);
 
   useBreadcrumbTrail(
-    session === null ? 'Session' : session.status === 'complete' ? 'Your route back in' : 'Session',
+    session === null ? 'Session' : session.status === 'complete' ? 'What to live out' : 'Session',
     [{ label: 'Flow Tracker', href: FLOW_TRACKER_PAGE_PATH }],
   );
   useTransportHidden(session !== null && session.status === 'in_progress');
@@ -97,6 +102,33 @@ export function SessionView({ sessionId }: { sessionId: string }) {
       setFailure(caught instanceof ApiClientError ? caught.message : WRITE_FAILED);
     } finally {
       setBusy(false);
+    }
+  }
+
+  /** Tick a row: shown at once, written behind, put back if the write fails. */
+  async function mark(item: FlowSessionItemView, done: boolean): Promise<void> {
+    if (pending.has(item.id)) return;
+    setPending((was) => new Set(was).add(item.id));
+    setFailure(null);
+    setSession((was) => (was === null ? was : withDone(was, item.id, done)));
+    const body: MarkFlowItemRequest = { done };
+    try {
+      const payload = await apiFetch<FlowSessionPayload>(flowSessionItemDonePath(sessionId, item.id), {
+        method: 'PUT',
+        credentials: 'include',
+        headers: { 'content-type': 'application/json' },
+        body: JSON.stringify(body),
+      });
+      setSession(payload.session);
+    } catch (caught) {
+      setSession((was) => (was === null ? was : withDone(was, item.id, !done)));
+      setFailure(caught instanceof ApiClientError ? caught.message : WRITE_FAILED);
+    } finally {
+      setPending((was) => {
+        const next = new Set(was);
+        next.delete(item.id);
+        return next;
+      });
     }
   }
 
@@ -141,12 +173,9 @@ export function SessionView({ sessionId }: { sessionId: string }) {
     return (
       <ReadingList
         session={session}
-        busy={busy}
+        pending={pending}
         failure={failure}
-        onMark={(item, done) => {
-          const body: MarkFlowItemRequest = { done };
-          void write(flowSessionItemDonePath(session.id, item.id), body);
-        }}
+        onMark={(item, done) => void mark(item, done)}
       />
     );
   }
@@ -216,6 +245,22 @@ export function SessionView({ sessionId }: { sessionId: string }) {
   );
 }
 
+/** The session with one item's tick changed, in both the items and the reading list it was built from. */
+function withDone(session: Session, itemId: string, done: boolean): Session {
+  const flip = (item: FlowSessionItemView): FlowSessionItemView => (item.id === itemId ? { ...item, done } : item);
+  return {
+    ...session,
+    items: session.items.map(flip),
+    readingList:
+      session.readingList === null
+        ? null
+        : session.readingList.map((group) => ({
+            ...group,
+            rows: group.rows.map((row) => ({ ...row, item: flip(row.item) })),
+          })),
+  };
+}
+
 // =================================================================================================
 // The question screen (3.14.5, 3.14.6)
 // =================================================================================================
@@ -257,7 +302,12 @@ function QuestionScreen({
         {item.chapter?.summary ? <p className={styles.subjectSummary}>{item.chapter.summary}</p> : null}
       </div>
 
-      <p className={styles.prompt}>{item.question}</p>
+      <hr className={styles.divider} />
+
+      <div className={styles.subject}>
+        <h2 className={styles.subjectTitle}>Question</h2>
+        <p className={styles.subjectSummary}>{item.question}</p>
+      </div>
 
       <fieldset className={styles.scale} disabled={busy}>
         <legend className={styles.scaleLegend}>Your answer, from 1 to 5</legend>
@@ -324,12 +374,12 @@ function Teaching({ teaching }: { teaching: FlowTeachingRef }) {
 
 function ReadingList({
   session,
-  busy,
+  pending,
   failure,
   onMark,
 }: {
   session: Session;
-  busy: boolean;
+  pending: ReadonlySet<string>;
   failure: string | null;
   onMark: (item: FlowSessionItemView, done: boolean) => void;
 }) {
@@ -339,7 +389,7 @@ function ReadingList({
   return (
     <>
       <header className={styles.pageHead}>
-        <h1 className={styles.pageTitle}>Your route back in</h1>
+        <h1 className={styles.pageTitle}>What to live out</h1>
         <p className={styles.pageLead}>
           {rows === 0
             ? 'Nothing to focus on — every part you reflected on is one you are living out. Well done.'
@@ -353,7 +403,7 @@ function ReadingList({
       </header>
 
       {groups.map((group, index) => (
-        <ReadingGroup key={group.recording?.id ?? `themes-${index}`} group={group} busy={busy} onMark={onMark} />
+        <ReadingGroup key={group.recording?.id ?? `themes-${index}`} group={group} pending={pending} onMark={onMark} />
       ))}
 
       {failure === null ? null : (
@@ -373,35 +423,51 @@ function ReadingList({
 
 function ReadingGroup({
   group,
-  busy,
+  pending,
   onMark,
 }: {
   group: FlowReadingGroup;
-  busy: boolean;
+  pending: ReadonlySet<string>;
   onMark: (item: FlowSessionItemView, done: boolean) => void;
 }) {
   const label = group.recording?.title ?? 'Across these teachings';
+  const head = (
+    <>
+      {group.recording?.series?.artworkUrl == null ? null : (
+        <img className={styles.rowCover} src={group.recording.series.artworkUrl} alt="" />
+      )}
+      <div className={styles.group}>
+        <h2 className={styles.groupTitle}>{label}</h2>
+        {group.recording === null ? (
+          <p className={styles.groupMeta}>Themes running through the teachings in this session</p>
+        ) : (
+          <p className={styles.groupMeta}>
+            {group.recording.series === null ? '' : `${group.recording.series.title} · `}
+            {formatDay(group.recording.recordedAt)}
+          </p>
+        )}
+      </div>
+    </>
+  );
   return (
     <section className={styles.card} aria-label={label}>
-      <div className={styles.groupHead}>
-        {group.recording?.series?.artworkUrl == null ? null : (
-          <img className={styles.rowCover} src={group.recording.series.artworkUrl} alt="" />
-        )}
-        <div className={styles.group}>
-          <h2 className={styles.groupTitle}>{label}</h2>
-          {group.recording === null ? (
-            <p className={styles.groupMeta}>Themes running through the teachings in this session</p>
-          ) : (
-            <p className={styles.groupMeta}>
-              {group.recording.series === null ? '' : `${group.recording.series.title} · `}
-              {formatDay(group.recording.recordedAt)}
-            </p>
-          )}
-        </div>
-      </div>
+      {/* The whole head opens the teaching's page; the themes group has no page to open. */}
+      {group.recording === null ? (
+        <div className={styles.groupHead}>{head}</div>
+      ) : (
+        <Link className={styles.groupLink} href={recordingPagePath(group.recording.id)}>
+          {head}
+        </Link>
+      )}
       <ol className={styles.readingRows}>
         {group.rows.map((row) => (
-          <ReadingRowView key={row.item.id} row={row} teaching={group.recording} busy={busy} onMark={onMark} />
+          <ReadingRowView
+            key={row.item.id}
+            row={row}
+            teaching={group.recording}
+            pending={pending.has(row.item.id)}
+            onMark={onMark}
+          />
         ))}
       </ol>
     </section>
@@ -411,18 +477,25 @@ function ReadingGroup({
 function ReadingRowView({
   row,
   teaching,
-  busy,
+  pending,
   onMark,
 }: {
   row: FlowReadingRow;
   teaching: FlowTeachingRef | null;
-  busy: boolean;
+  pending: boolean;
   onMark: (item: FlowSessionItemView, done: boolean) => void;
 }) {
   const player = usePlayer();
   const { item } = row;
   const title = item.chapter?.title ?? item.tag?.name ?? item.recording?.title ?? item.question;
   const tickId = `tick-${item.id}`;
+  /** Where the title opens: the chapter's page, or the teaching's for a chapterless one (3.14.7). */
+  const href =
+    teaching !== null && item.kind !== 'tag'
+      ? item.chapter?.id != null
+        ? chapterPagePath(teaching.id, item.chapter.id)
+        : recordingPagePath(teaching.id)
+      : null;
 
   /** The one press that asks for sound: load the teaching at the chapter's start and play (3.14.7). */
   function play(target: FlowTeachingRef, atMs: number | null): void {
@@ -450,16 +523,24 @@ function ReadingRowView({
         id={tickId}
         type="checkbox"
         checked={item.done}
-        disabled={busy}
+        disabled={pending}
         aria-label={`Done: ${title}`}
         onChange={(event) => onMark(item, event.target.checked)}
       />
-      <label className={styles.readingText} htmlFor={tickId}>
-        <span className={styles.readingTitle}>{title}</span>
+      <div className={styles.readingText}>
+        {href === null ? (
+          <label className={styles.readingTitle} htmlFor={tickId}>
+            {title}
+          </label>
+        ) : (
+          <Link className={styles.readingTitleLink} href={href}>
+            {title}
+          </Link>
+        )}
         {item.rating === null ? null : (
           <span className={styles.readingAnswer}>You rated this {item.rating} of 5</span>
         )}
-      </label>
+      </div>
 
       {teaching !== null && item.kind !== 'tag' ? (
         <div className={styles.ways}>
@@ -471,16 +552,6 @@ function ReadingRowView({
           >
             <span aria-hidden="true">▶</span>
           </button>
-          <Link
-            className={styles.openLink}
-            href={
-              item.chapter?.id != null
-                ? chapterPagePath(teaching.id, item.chapter.id)
-                : recordingPagePath(teaching.id)
-            }
-          >
-            {item.chapter?.id != null ? 'Open chapter' : 'Open teaching'}
-          </Link>
         </div>
       ) : null}
 

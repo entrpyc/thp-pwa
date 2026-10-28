@@ -67,11 +67,39 @@ describe('what is drawn', () => {
     expect(layout.edges.every((edge) => edge.d.startsWith('M '))).toBe(true);
   });
 
-  it('draws nothing but the root when the root is collapsed', () => {
+  it('never folds the root: its children are drawn whether or not it is in the expanded set', () => {
     const layout = layoutMindMap(TREE, new Set());
-    expect(layout.nodes.map((one) => one.id)).toEqual(['root']);
-    expect(layout.nodes[0]?.hidden).toBe(6);
-    expect(layout.edges).toEqual([]);
+    expect(layout.nodes.map((one) => one.id).sort()).toEqual(['root', 't1', 't2', 't3']);
+    expect(layout.nodes[0]?.expanded).toBe(true);
+    expect(layout.nodes[0]?.hidden).toBe(0);
+    expect(layout.edges).toHaveLength(3);
+  });
+
+  it('draws four levels — root, chapter, theme, concept — each in its own column', () => {
+    const four: MindMapNode = {
+      id: 'r',
+      label: 'The teaching',
+      anchorMs: null,
+      children: [
+        {
+          id: 'c',
+          label: 'A chapter',
+          anchorMs: 0,
+          children: [
+            { id: 't', label: 'A theme', anchorMs: null, children: [point('p', 'A concept')] },
+          ],
+        },
+      ],
+    };
+    const nodes = byId(layoutMindMap(four, new Set(['c', 't'])).nodes);
+    expect([...nodes.keys()].sort()).toEqual(['c', 'p', 'r', 't']);
+    expect(nodes.get('r')?.width).toBe(COLUMN_WIDTHS[0]);
+    expect(nodes.get('c')?.width).toBe(COLUMN_WIDTHS[1]);
+    expect(nodes.get('t')?.width).toBe(COLUMN_WIDTHS[2]);
+    expect(nodes.get('p')?.width).toBe(COLUMN_WIDTHS[3]);
+    expect(nodes.get('p')?.x).toBe(
+      nodes.get('t')!.x + nodes.get('t')!.width + COLUMN_GAP,
+    );
   });
 });
 

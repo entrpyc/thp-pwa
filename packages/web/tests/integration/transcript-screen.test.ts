@@ -308,15 +308,24 @@ describe('the transcript keeps the current line in view by itself', () => {
       await expect.poll(scrollTop, { timeout: 30_000 }).toBeGreaterThan(0);
       // And the auto-scroll did not count as a member scroll — the switch stays on.
       expect(await followingIs()).toBe('true');
-      // Centred: the current row's middle sits at the list's middle, give or take a pixel.
-      const offCentre = await list.evaluate((node) => {
-        const row = node.querySelector('[aria-current="true"]');
-        if (row === null) return Number.NaN;
-        const box = node.getBoundingClientRect();
-        const line = row.getBoundingClientRect();
-        return Math.abs(line.top + line.height / 2 - (box.top + box.height / 2));
-      });
-      expect(offCentre).toBeLessThanOrEqual(1);
+      // Centred: the current row's middle sits at the list's middle, give or take two pixels — a
+      // row's height and the list's are not both even, so the two middles can be half a pixel
+      // apart each way before the scroll position, an integer, has anything to answer for. Polled,
+      // because the scroll above is smooth: the first frame it has moved is not where it settles.
+      const offCentre = () =>
+        list.evaluate((node) => {
+          const row = node.querySelector('[aria-current="true"]');
+          if (row === null) return Number.NaN;
+          const box = node.getBoundingClientRect();
+          const line = row.getBoundingClientRect();
+          return Math.abs(line.top + line.height / 2 - (box.top + box.height / 2));
+        });
+      // Measured on a line in the middle of the teaching, not the one the seek above landed on:
+      // that one is three lines from the end, and a list that has run out of scroll cannot put it
+      // in the middle however hard it follows — how far it falls short is a function of the list's
+      // height, which is not the claim. The claim is where following puts a row it *can* centre.
+      await page.getByRole('slider', { name: 'Position' }).fill('60000');
+      await expect.poll(offCentre, { timeout: 30_000 }).toBeLessThanOrEqual(2);
 
       // A member scroll suspends it, and the switch says so.
       await list.evaluate((node) => {
@@ -385,9 +394,10 @@ describe('captions float above the transport on any member screen', () => {
       const toolbar = page.getByRole('navigation', { name: 'Player tools' });
       await expect.poll(() => toolbar.count(), { timeout: 30_000 }).toBe(1);
       // The reference draws seven icons; two have data — CC, and the notes scope's speech bubble
-      // (active-scope prd 3.1.2). The other five are dropped rather than rendered disabled.
-      // The Highlights pin, the composer and CC.
-      expect(await toolbar.getByRole('button').count()).toBe(3);
+      // (active-scope prd 3.1.2). The other five are dropped rather than rendered disabled. The
+      // Highlights pin sits beside the ··· on the bar itself rather than in here, and `Chapters`
+      // joins the strip only for a teaching that has some — this one has none.
+      expect(await toolbar.getByRole('button').count()).toBe(2);
       expect(await toolbar.getByRole('button', { name: 'Write a note' }).count()).toBe(1);
       await toolbar.getByRole('button', { name: 'Captions' }).click();
 
@@ -399,8 +409,10 @@ describe('captions float above the transport on any member screen', () => {
 
       await page.getByRole('button', { name: 'Play' }).first().click();
       // A client-side navigation away from the recording page: the pill is docked to the transport,
-      // which lives in the member layout, so it survives.
-      await page.getByRole('link', { name: 'Back to recordings' }).click();
+      // which lives in the member layout, so it survives. Through the menu's own link: the back
+      // control steps back through history now, and this page was opened from the dashboard.
+      await page.getByRole('button', { name: 'Menu' }).click();
+      await page.getByRole('link', { name: 'All recordings' }).click();
       await page.waitForURL(`${baseUrl}${MEMBER_LIBRARY_PAGE_PATH}`, { timeout: 30_000 });
 
       await expect
@@ -462,8 +474,10 @@ describe('the transcript is fetched once per loaded recording, and only when nee
         .toBe(1);
 
       // Away and back, client-side. The provider owns the transcript, so the page remounting does
-      // not re-fetch it.
-      await page.getByRole('link', { name: 'Back to recordings' }).click();
+      // not re-fetch it. Through the menu's own link: the back control steps back through history
+      // now, and this page was opened from the dashboard the sign-in landed on.
+      await page.getByRole('button', { name: 'Menu' }).click();
+      await page.getByRole('link', { name: 'All recordings' }).click();
       await page.waitForURL(`${baseUrl}${MEMBER_LIBRARY_PAGE_PATH}`, { timeout: 30_000 });
       await page.getByRole('link', { name: TITLE }).first().click();
       await page.waitForURL(`${baseUrl}${recordingPagePath(recordingId)}`, { timeout: 30_000 });

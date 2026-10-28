@@ -266,6 +266,16 @@ describe('the landing offers the teaching the member was part-way through', () =
       expect(text).toContain(`Resume at ${formatTimecode(83_000)}`);
       expect(text).not.toContain('/');
 
+      // The whole card is the press, not only the row inside it: a press on the heading goes
+      // there too. By the mouse at the heading's own pixels, because what takes the press there is
+      // the link stretched over the card — which is what the element-level click would refuse as
+      // "intercepted", and is the point.
+      const heading = await card.getByRole('heading', { name: 'Resume recording' }).boundingBox();
+      if (heading === null) throw new Error('the heading has no box');
+      await page.mouse.click(heading.x + heading.width / 2, heading.y + heading.height / 2);
+      await page.waitForURL(`${baseUrl}${recordingPagePath(resumableId)}`, { timeout: 30_000 });
+      await page.goBack({ waitUntil: 'domcontentloaded' });
+      await expect.poll(() => card.count(), { timeout: 30_000 }).toBe(1);
       await card.getByRole('link', { name: new RegExp(RESUMABLE_TITLE) }).click();
       await page.waitForURL(`${baseUrl}${recordingPagePath(resumableId)}`, { timeout: 30_000 });
     } finally {

@@ -214,6 +214,26 @@ describe('what comes back (3.10.3, 3.10.6, 3.10.7)', () => {
   });
 });
 
+describe('the cache', () => {
+  it('answers the same search again without spending the budget', async () => {
+    // A fresh account, so nothing above counts against it: the same address asked more times than
+    // the budget allows is answered every time, because only the first one made the call.
+    const fresh = await signedInAccount(baseUrl, databaseUrl, ROLE.member, 'search-cache');
+    const path = searchPath({ query: LINE });
+    const first = await get<SearchPayload>(path, fresh.cookie);
+    expect(first.status).toBe(200);
+    expect(first.body.hits.length).toBeGreaterThan(0);
+    for (let again = 0; again <= SEARCH_BUDGET_PER_HOUR; again += 1) {
+      const { status, body } = await get<SearchPayload>(path, fresh.cookie);
+      expect(status).toBe(200);
+      expect(body.hits.map((hit) => hit.id)).toEqual(first.body.hits.map((hit) => hit.id));
+    }
+    // A different address is a different entry, and is budgeted as the first one was.
+    const other = await get<SearchPayload>(searchPath({ query: LINE, blend: 1 }), fresh.cookie);
+    expect(other.status).toBe(200);
+  }, 120_000);
+});
+
 describe('the budget (3.1.22)', () => {
   it(`refuses the search after ${SEARCH_BUDGET_PER_HOUR} in an hour, with a wait`, async () => {
     // A fresh account, so the searches above do not count against it.

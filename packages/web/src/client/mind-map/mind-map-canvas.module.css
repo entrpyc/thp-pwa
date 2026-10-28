@@ -1,12 +1,13 @@
 /*
- * The mind map canvas (3.8.3), on the recording page and in the review form alike.
+ * The mind map canvas (3.8.3), on the recording page, the chapter page and in the review form
+ * alike.
  *
  * No design reference draws a map, so every rule here is read off `style-guide.md`: the boxes are
  * the guide's card — surface fill, hairline border, `--radius-md`, no shadow — and the one accent
  * does what it does everywhere else: the root wears the purple the selected tab wears, the
  * timestamp chips take the icon purple, and nothing else carries a hue. Depth reads by weight and
- * tone — root bold on the accent, themes bold, points muted — not by colour, which is principle 5
- * kept: green still means notes.
+ * tone — root bold on the accent, chapters and themes bold, concepts muted — not by colour, which
+ * is principle 5 kept: green still means notes.
  *
  * Widths and offsets are inline styles from the layout; the sheet holds only what a token covers.
  */
@@ -45,24 +46,42 @@
 
 /* ------------------------------------------------------------------------------------- the boxes */
 
+/*
+ * A box is a row: the words on the left, and — on a box with something under it — the fold
+ * control on the right, behind a divider that runs the full height. The row has no padding of its
+ * own; the body carries it, so the divider and the control reach the box's edges.
+ */
 .node {
   position: absolute;
   box-sizing: border-box;
   display: flex;
-  flex-direction: column;
-  gap: var(--space-1);
+  flex-direction: row;
+  align-items: stretch;
   background: var(--color-surface);
   border: 1px solid var(--color-border);
   border-radius: var(--radius-md);
-  padding: var(--space-3);
   color: var(--color-text);
   font-size: var(--fs-body);
   line-height: 1.3;
+  overflow: hidden;
+}
+
+.body {
+  flex: 1 1 auto;
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-1);
+  padding: var(--space-3);
 }
 
 .root {
   background: var(--color-primary-soft);
   border-color: var(--color-primary-strong);
+  font-weight: 600;
+}
+
+.chapter {
   font-weight: 600;
 }
 
@@ -80,65 +99,121 @@
   border-style: dashed;
 }
 
-/*
- * The label is a button when the node has children — pressing it folds and unfolds them — and
- * plain text when it has none, so a press has nothing to not do. The button is reset to read as
- * text: the box is the affordance, not a second pill inside it.
- */
 .label {
-  all: unset;
-  display: flex;
-  align-items: flex-start;
-  gap: var(--space-2);
-  cursor: pointer;
-  overflow-wrap: anywhere;
-}
-
-.label:focus-visible {
-  border-radius: var(--radius-sm);
-}
-
-.labelStatic {
   display: block;
   overflow-wrap: anywhere;
 }
 
-/* How many nodes are folded under a collapsed one. Meta-sized, in the icon purple. */
-.badge {
+/*
+ * The fold control (3.8.3): a strip the box's full height, right of a divider, with one chevron
+ * centred in it. Pressing anywhere in the strip folds or unfolds; the divider is top to bottom so
+ * there is nothing on its right that is not the control. Reset to read as part of the box rather
+ * than a second pill inside it.
+ */
+.toggle {
   flex: none;
-  margin-left: auto;
-  font-size: var(--fs-meta);
+  width: 32px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background: transparent;
+  border: none;
+  border-left: 1px solid var(--color-border);
+  padding: 0;
+  margin: 0;
+  color: var(--color-text-muted);
+  cursor: pointer;
+}
+
+.toggle:hover {
+  background: var(--color-bg-deep);
+  color: var(--color-text);
+}
+
+.toggle:focus-visible {
+  outline: 2px solid var(--color-primary-strong);
+  outline-offset: -2px;
+}
+
+.root .toggle {
+  border-left-color: var(--color-primary-strong);
+}
+
+/* Points right while the branch is folded; turns to point down once it is open. */
+.chevron {
+  display: inline-block;
+  font-size: 20px;
+  line-height: 1;
   font-weight: 400;
-  color: var(--color-primary-icon);
-  border: 1px solid var(--color-border-strong);
-  border-radius: var(--radius-pill);
-  padding: 0 var(--space-2);
-  line-height: 1.5;
+  transition: transform 120ms ease;
+}
+
+.toggle[aria-expanded='true'] .chevron {
+  transform: rotate(90deg);
 }
 
 /*
- * The moment a node names (3.8.4): a small pill with the timecode. A button where a seek handler
- * exists, text where none does, both dressed the same so the two surfaces agree on what it is.
+ * The moment a node names (3.8.4): a small pill under the words, set a step apart from them, with
+ * a play control before the timecode. The time is a seek where a seek handler exists and text
+ * where none does, both dressed the same so the two surfaces agree on what it is.
  */
 .chip {
   align-self: flex-start;
-  font-family: inherit;
+  display: inline-flex;
+  align-items: center;
+  gap: var(--space-1);
+  margin-top: var(--space-2);
   font-size: var(--fs-meta);
   font-weight: 400;
   line-height: 1.6;
   color: var(--color-primary-icon);
-  background: transparent;
   border: 1px solid var(--color-border);
   border-radius: var(--radius-pill);
-  padding: 0 var(--space-2);
+  padding: 0 var(--space-2) 0 var(--space-1);
 }
 
-.chipButton {
+.chip:hover {
+  border-color: var(--color-primary-strong);
+}
+
+/* The play control: as small as it can be and still be pressed — a glyph in a round hit area. */
+.play {
+  flex: none;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 16px;
+  height: 16px;
+  font-size: 8px;
+  line-height: 1;
+  color: var(--color-primary-icon);
+  background: var(--color-primary-soft);
+  border: none;
+  border-radius: var(--radius-pill);
+  padding: 0;
+  margin: 0;
   cursor: pointer;
 }
 
-.chipButton:hover {
-  border-color: var(--color-primary-strong);
+.play:hover {
+  background: var(--color-primary-strong);
+  color: var(--color-surface);
+}
+
+.time {
+  font-family: inherit;
+  font-size: inherit;
+  font-weight: inherit;
+  line-height: inherit;
+  color: inherit;
+  background: transparent;
+  border: none;
+  padding: 0;
+  margin: 0;
+}
+
+.timeButton {
+  cursor: pointer;
 }
 
 /* ------------------------------------------------------------------------------ editing (3.8.2) */

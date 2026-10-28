@@ -294,14 +294,19 @@ describe('when the model falls short', () => {
 });
 
 describe('its place in the chain', () => {
-  it('follows generate_chapters and hands on to embed', async () => {
-    const { recordingId } = await seeded();
-    const chaptersJob = await enqueueJob(
-      { recordingId, step: 'generate_chapters', correlationId: 'chain' },
+  it('follows generate_draft and hands on to embed', async () => {
+    // After the chapters, and after the draft built on them ([3.8.1](docs/project/prd.md)): the
+    // draft is the step before this one, so a drafting run is what enqueues it.
+    const { recordingId, job } = await seeded();
+    // The seed's own questions job is finished first: a successor already in flight is not
+    // enqueued twice, and this test is about the enqueue.
+    await sql`update job set status = 'succeeded', finished_at = now() where id = ${job.id}`;
+    const draftJob = await enqueueJob(
+      { recordingId, step: 'generate_draft', correlationId: 'chain' },
       handle,
     );
-    await sql`update job set status = 'running', started_at = now() where id = ${chaptersJob.id}`;
-    const generated = await run({ ...chaptersJob, status: 'running', startedAt: new Date() });
+    await sql`update job set status = 'running', started_at = now() where id = ${draftJob.id}`;
+    const generated = await run({ ...draftJob, status: 'running', startedAt: new Date() });
     expect(generated.status).toBe('succeeded');
 
     const pending = await sql<{ step: string; status: string; correlation_id: string }[]>`
@@ -311,7 +316,7 @@ describe('its place in the chain', () => {
     expect(pending.map((one) => [one.step, one.status])).toEqual([['generate_questions', 'pending']]);
     expect(pending[0]?.correlation_id).toBe('chain');
 
-    // The chapters were replaced, so every question is missing again; this run writes them all.
+    // The chapters the seed wrote are still there, with no question yet; this run writes them all.
     expect((await listChapters(recordingId, handle)).length).toBeGreaterThan(0);
   });
 });

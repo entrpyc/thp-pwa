@@ -33,6 +33,9 @@ describe('the accounts schema', () => {
     `;
 
     expect(columns.map((column) => column.column_name)).toEqual([
+      // The analytics opt-out: a member's own switch, on the row the sign-in reads, so no page
+      // needs a second read to know whether to send anything.
+      'analytics_opted_out',
       'avatar_key',
       'created_at',
       'deactivated_at',
@@ -43,6 +46,10 @@ describe('the accounts schema', () => {
       'password_hash',
       'preferred_playback_speed',
       'role',
+      // Terms acceptance, from the UGC controls (`0032_ugc_controls`): when, and which version —
+      // what lets a changed terms text ask again without asking everybody every time.
+      'terms_accepted_at',
+      'terms_accepted_version',
       'updated_at',
     ]);
     // `preferred_playback_speed` arrived with Story 4 Ticket 03, which is the ticket that ships the
@@ -54,15 +61,18 @@ describe('the accounts schema', () => {
       expect(columns.map((column) => column.column_name)).not.toContain(absent);
     }
 
-    // The three columns that may be absent from a row, and all three mean "the ordinary state": an
-    // account is active by omission, has no picture by omission, and is a real account rather than
-    // a removed-member placeholder by omission (packages/db/src/README.md), so no existing row had
-    // to be given a value when any of them arrived.
+    // The columns that may be absent from a row, and every one means "the ordinary state": an
+    // account is active by omission, has no picture by omission, is a real account rather than
+    // a removed-member placeholder by omission (packages/db/src/README.md), and has accepted no
+    // terms yet by omission — which is what makes an existing member get asked — so no existing
+    // row had to be given a value when any of them arrived.
     const nullable = columns.filter((column) => column.is_nullable === 'YES');
     expect(nullable.map((column) => column.column_name)).toEqual([
       'avatar_key',
       'deactivated_at',
       'deleted_at',
+      'terms_accepted_at',
+      'terms_accepted_version',
     ]);
   });
 

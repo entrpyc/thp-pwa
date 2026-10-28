@@ -57,6 +57,13 @@ export interface GenerationRequest {
    * ([3.6.9](docs/project/prd.md)). `null` on a first pass.
    */
   readonly steeringPrompt: string | null;
+  /**
+   * **When set, `lines` are one chapter of the teaching rather than the whole of it**, and the
+   * model is told so. The mind map is asked for this way — one call per chapter, each reading only
+   * that chapter's stretch of transcript ([3.8.1](docs/project/prd.md)) — so a theme can never be
+   * placed in a chapter it was not spoken in. Absent on every whole-teaching request.
+   */
+  readonly chapter?: { readonly title: string; readonly summary: string };
 }
 
 /**

@@ -544,7 +544,10 @@ describe('the transport is mounted app-wide', () => {
 
       // A client-side navigation, not a reload: the element lives in the member layout, which is
       // exactly what this is about.
-      await page.getByRole('link', { name: 'Back to recordings' }).click();
+      // Through the menu's own link: the back control steps back through history now, and this
+      // page was opened from the dashboard the sign-in landed on.
+      await page.getByRole('button', { name: 'Menu' }).click();
+      await page.getByRole('link', { name: 'All recordings' }).click();
       await page.waitForURL(`${baseUrl}${MEMBER_LIBRARY_PAGE_PATH}`, { timeout: 30_000 });
 
       const bar = page.getByRole('region', { name: 'Player' });
@@ -753,7 +756,10 @@ describe('the notes the player now holds cannot reach the audio', () => {
       const listening = await audioState(page);
 
       // Away and back by client-side navigation, which calls `open()` again with the same teaching.
-      await page.getByRole('link', { name: 'Back to recordings' }).click();
+      // Through the menu's own link: the back control steps back through history now, and this
+      // page was opened from the dashboard the sign-in landed on.
+      await page.getByRole('button', { name: 'Menu' }).click();
+      await page.getByRole('link', { name: 'All recordings' }).click();
       await page.waitForURL(`${baseUrl}${MEMBER_LIBRARY_PAGE_PATH}`, { timeout: 30_000 });
       await page.getByRole('link', { name: new RegExp(TITLE) }).click();
       await page.waitForURL(`${baseUrl}${recordingPagePath(recordingId)}`, { timeout: 30_000 });

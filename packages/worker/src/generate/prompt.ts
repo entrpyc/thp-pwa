@@ -34,7 +34,7 @@ import type {
  * meaning of the instruction changes with the model behind it. The value is meaningless as anything
  * but a label an operator compares two drafts with, and deriving it would make it lie.
  */
-export const PROMPT_VERSION = 'draft-3';
+export const PROMPT_VERSION = 'draft-4';
 
 /** The tool the model is forced to call. The name is arbitrary and is part of the contract. */
 export const DRAFT_TOOL_NAME = 'record_draft';
@@ -66,14 +66,15 @@ export const DRAFT_FIELD_INSTRUCTIONS: Record<ReviewKind, string> = {
     'anchorMs; leave anchorMs out where the passage is only mentioned in passing or where you ' +
     'cannot place it, and never guess at one.',
   mind_map:
-    'A mind map of the teaching: its main themes, and under each theme the points made about it. ' +
-    `Give between three and ${MIND_MAP_MAX_THEMES} themes, each a label of a few words, and under ` +
-    `each theme up to ${MIND_MAP_MAX_POINTS} points, each a short phrase — never a sentence of ` +
-    'commentary, never a quotation longer than a line. A theme may span several parts of the ' +
-    'teaching; it is a concept, not a chapter. Where a theme or a point is clearly spoken at one ' +
-    'place in the transcript, give the offset of that line as anchorMs, copied exactly from the ' +
-    'brackets; leave anchorMs out where you cannot place it, and never guess at one. Use only ' +
-    'what the transcript says.',
+    'A mind map of the transcript you are given: its main themes, and under each theme the ' +
+    'concepts taught about it. Give between two and ' +
+    `${MIND_MAP_MAX_THEMES} themes, each a label of a few words, and under each theme up to ` +
+    `${MIND_MAP_MAX_POINTS} concepts, each a short phrase — never a sentence of commentary, ` +
+    'never a quotation longer than a line. A theme is an idea the speaker develops, not a ' +
+    'stretch of time. Where a theme or a concept is clearly spoken at one place in the ' +
+    'transcript, give the offset of that line as anchorMs, copied exactly from the brackets; ' +
+    'leave anchorMs out where you cannot place it, and never guess at one. Use only what the ' +
+    'transcript says.',
 };
 
 /** The instruction the model is given about who it is writing for and what it is reading. */
@@ -91,6 +92,11 @@ export const SYSTEM_PROMPT =
  * The steering sentence goes **last and is labelled as the admin's**, so a regeneration reads as
  * "here is the standing instruction, and here is what the person reviewing it asked you to change"
  * rather than as two instructions of equal weight that may contradict each other.
+ *
+ * **A chapter request says so, by name.** The mind map is asked for one chapter at a time
+ * ([3.8.1](docs/project/prd.md)): the lines are that chapter's alone, and the model is told which
+ * chapter it is reading and what the chapter is about, so the themes it names are the chapter's
+ * and not a guess at the teaching around it.
  */
 export function buildUserPrompt(request: GenerationRequest): string {
   const wanted = request.kinds
@@ -103,8 +109,17 @@ export function buildUserPrompt(request: GenerationRequest): string {
       : `\n\nThe admin reviewing the previous draft asked for this specifically, and it takes ` +
         `precedence over the general instructions above:\n${request.steeringPrompt}`;
 
+  const scope =
+    request.chapter === undefined
+      ? ''
+      : `Chapter: ${request.chapter.title}\n` +
+        `About this chapter: ${request.chapter.summary}\n\n` +
+        `The transcript below is this one chapter of the teaching, not the whole of it. Write ` +
+        `only about what is said in these lines.\n\n`;
+
   return (
-    `Teaching title: ${request.title}\n\n` +
+    `Teaching title: ${request.title}\n` +
+    `${scope === '' ? '\n' : scope}` +
     `${OFFSET_NOTE}\n\n` +
     `Write the following:\n${wanted}${steering}\n\n` +
     `Transcript:\n${renderTranscript(request.lines)}`
@@ -154,11 +169,14 @@ const NODE_ANCHOR_SCHEMA = {
 /**
  * What the mind map looks like in the tool call ([3.8.1](docs/project/prd.md)).
  *
- * **Themes and points, two levels, spelled out rather than recursive.** The teaching itself is the
- * root and is not asked for; a recursive schema would invite a fourth level the product does not
- * draw, and a schema that says exactly what fits is one a model fills in correctly more often. The
- * caps themselves are not in the schema — a ninth theme is dropped and counted by the handler,
- * where every other "did not fit" is counted — but the instruction names them.
+ * **Themes and concepts, two levels, spelled out rather than recursive.** The teaching and its
+ * chapters are the levels above these, and neither is asked for: the teaching is the root and the
+ * chapters are the list the teaching already has, so one of these answers is asked for per
+ * chapter and the handler hangs it under the chapter's node. A recursive schema would invite a
+ * level the product does not draw, and a schema that says exactly what fits is one a model fills
+ * in correctly more often. The caps themselves are not in the schema — a ninth theme is dropped
+ * and counted by the handler, where every other "did not fit" is counted — but the instruction
+ * names them.
  */
 const MIND_MAP_SCHEMA = {
   type: 'object',
@@ -173,11 +191,11 @@ const MIND_MAP_SCHEMA = {
           anchorMs: NODE_ANCHOR_SCHEMA,
           points: {
             type: 'array',
-            description: 'The points made under this theme, each a short phrase.',
+            description: 'The concepts taught under this theme, each a short phrase.',
             items: {
               type: 'object',
               properties: {
-                label: { type: 'string', description: 'A short phrase stating the point.' },
+                label: { type: 'string', description: 'A short phrase stating the concept.' },
                 anchorMs: NODE_ANCHOR_SCHEMA,
               },
               required: ['label'],

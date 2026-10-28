@@ -81,11 +81,11 @@
   color: var(--color-text-muted);
 }
 
-/* The browser's fieldset frame removed, so the checkboxes read as a row of labels. */
-.kinds {
+/* The browser's fieldset frame removed, so each group reads as a label over a row of chips. */
+.choices {
   display: flex;
-  flex-wrap: wrap;
-  gap: var(--space-2) var(--space-4);
+  flex-direction: column;
+  gap: var(--space-2);
   margin: 0;
   padding: 0;
   border: none;
@@ -93,44 +93,111 @@
   flex: 1 1 100%;
 }
 
-.kinds legend {
+.choices legend {
   padding: 0;
   margin-bottom: var(--space-1);
   width: 100%;
 }
 
-.kind {
+.chips {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--space-2);
+}
+
+/*
+ * One choice, drawn as a chip: the surface, the border, the radius every card on the product has,
+ * and the product's own box or dot inside. The whole chip is the label, so the whole chip is the
+ * target — 44px tall, which is a thumb's — and a ticked chip is told apart from across the room by
+ * its accent border and tint rather than by the box alone.
+ */
+.chip {
   display: inline-flex;
   align-items: center;
-  gap: var(--space-2);
+  gap: var(--space-3);
+  min-height: 44px;
+  padding: var(--space-2) var(--space-4) var(--space-2) var(--space-3);
+  background: var(--color-surface);
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-lg);
   color: var(--color-text);
   font-size: var(--fs-body);
+  line-height: 1.2;
   cursor: pointer;
+  user-select: none;
+  transition: border-color 120ms ease, background-color 120ms ease;
 }
 
-.slider {
-  display: flex;
-  flex-direction: column;
-  gap: var(--space-1);
-  flex: 1 1 16rem;
-  min-width: 0;
+.chip:hover {
+  border-color: var(--color-border-strong);
+  background: var(--color-surface-raised);
 }
 
-.slider input[type='range'] {
-  width: 100%;
-  accent-color: var(--color-primary);
+.chip:has(.box:checked) {
+  border-color: var(--color-primary-icon);
+  background: color-mix(in srgb, var(--color-primary) 18%, var(--color-surface));
 }
 
-.sliderValue {
-  color: var(--color-text);
-  font-weight: 600;
+.chip:has(.box:focus-visible) {
+  outline: 2px solid var(--color-primary-icon);
+  outline-offset: 2px;
 }
 
-.sliderEnds {
-  display: flex;
-  justify-content: space-between;
-  font-size: var(--fs-meta);
-  color: var(--color-text-dim);
+/*
+ * The box itself. `appearance: none` takes the platform's drawing away, which is the only way to
+ * have a size and a colour of our own; what is drawn back is a 24px square on the deep background
+ * with the product's border, filled with the accent when ticked, with the mark drawn by a clip-path
+ * on a pseudo-element so there is no icon file and no second element in the markup.
+ */
+.box {
+  appearance: none;
+  -webkit-appearance: none;
+  flex: none;
+  width: 24px;
+  height: 24px;
+  margin: 0;
+  display: grid;
+  place-content: center;
+  background: var(--color-bg-deep);
+  border: 2px solid var(--color-border-strong);
+  border-radius: var(--radius-sm);
+  cursor: pointer;
+  transition: border-color 120ms ease, background-color 120ms ease;
+}
+
+.box::before {
+  content: '';
+  width: 13px;
+  height: 13px;
+  background: var(--color-text);
+  clip-path: polygon(14% 44%, 0 64%, 48% 100%, 100% 20%, 84% 4%, 46% 66%);
+  transform: scale(0);
+  transition: transform 120ms ease-out;
+}
+
+.box:checked {
+  background: var(--color-primary);
+  border-color: var(--color-primary);
+}
+
+.box:checked::before {
+  transform: scale(1);
+}
+
+.box:focus-visible {
+  outline: none;
+}
+
+/* The radio: the same box, round, with a dot for a mark. */
+.radio,
+.radio::before {
+  border-radius: var(--radius-pill);
+}
+
+.radio::before {
+  width: 10px;
+  height: 10px;
+  clip-path: none;
 }
 
 .perTeaching {
@@ -180,8 +247,12 @@
   gap: var(--space-3);
 }
 
-/* `search.png`'s card: the surface, with the accent rail down its left edge. */
+/*
+ * `search.png`'s card: the surface, with the accent rail down its left edge. Positioned so the
+ * moment's play control can sit at the head's right edge, outside the link it visually belongs to.
+ */
 .result {
+  position: relative;
   background: var(--color-surface);
   border: 1px solid var(--color-border);
   border-left: 3px solid var(--color-primary);
@@ -207,6 +278,12 @@
   align-items: baseline;
   justify-content: space-between;
   gap: var(--space-3);
+  min-height: 28px;
+}
+
+/* Room for the play control, which is drawn over this corner of the card. */
+.hitHead[data-has-time] {
+  padding-right: 6.5rem;
 }
 
 /* `RECORDING`, in the accent, small caps by letter-spacing rather than by a second font. */
@@ -218,10 +295,45 @@
   color: var(--color-primary);
 }
 
+/*
+ * The moment, as a play control ([3.10.7](docs/project/prd.md) extended): a pill at the head's
+ * right edge, in the raised surface so it reads as a control and not as the link's text, with the
+ * glyph the chapter rows use. Pressing it plays from here in the transport; the card under it is
+ * still the way to the page.
+ */
 .hitTime {
+  position: absolute;
+  top: var(--space-3);
+  right: var(--space-4);
+  display: inline-flex;
+  align-items: center;
+  gap: var(--space-2);
+  min-height: 32px;
+  padding: var(--space-1) var(--space-3);
+  background: var(--color-surface-raised);
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-lg);
+  color: var(--color-text);
+  font-family: inherit;
   font-size: var(--fs-body);
-  color: var(--color-text-muted);
   font-variant-numeric: tabular-nums;
+  cursor: pointer;
+  transition: border-color 120ms ease, background-color 120ms ease;
+}
+
+.hitTime:hover {
+  border-color: var(--color-primary-icon);
+  background: color-mix(in srgb, var(--color-primary) 18%, var(--color-surface-raised));
+}
+
+.hitTime:focus-visible {
+  outline: 2px solid var(--color-primary-icon);
+  outline-offset: 2px;
+}
+
+.hitTimeGlyph {
+  font-size: 0.7em;
+  color: var(--color-primary-icon);
 }
 
 .hitTitle {

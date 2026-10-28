@@ -19,8 +19,8 @@ import styles from '../flow-tracker.module.css';
 
 /**
  * **The start screen** ([3.14.2](docs/project/prd.md)): every published teaching, newest first,
- * each a press that picks it — or unpicks it — for the session. One or several. Under the list,
- * what the pick covers — how many teachings and how many questions — then *Start*.
+ * each a press that picks it — or unpicks it — for the session. One or several. Above the list,
+ * what the pick covers — how many teachings and how many questions — and *Start*.
  *
  * **The count is computed here from what the API listed**, because it is a sum over a pick the
  * member has not confirmed yet: the questions of every picked teaching, plus one per bank question
@@ -123,6 +123,24 @@ export function StartSession() {
         ) : null}
 
         {payload !== null && payload.teachings.length > 0 ? (
+          <div className={styles.startFoot}>
+            <p className={styles.progress} role="status">
+              {covered === null
+                ? 'Pick at least one teaching to see what the session covers.'
+                : `${plural(covered.teachings, 'teaching')} · ${plural(covered.questions, 'question')}`}
+            </p>
+            <button
+              className={styles.primary}
+              type="button"
+              disabled={picked.size === 0 || busy}
+              onClick={() => void start()}
+            >
+              {busy ? 'Starting…' : 'Start'}
+            </button>
+          </div>
+        ) : null}
+
+        {payload !== null && payload.teachings.length > 0 ? (
           <ol className={styles.rows} aria-label="Teachings, newest first">
             {payload.teachings.map((teaching) => (
               <li className={styles.rowGroup} key={teaching.id}>
@@ -152,23 +170,6 @@ export function StartSession() {
           </ol>
         ) : null}
 
-        {payload !== null && payload.teachings.length > 0 ? (
-          <div className={styles.startFoot}>
-            <p className={styles.progress} role="status">
-              {covered === null
-                ? 'Pick at least one teaching to see what the session covers.'
-                : `${plural(covered.teachings, 'teaching')} · ${plural(covered.questions, 'question')}`}
-            </p>
-            <button
-              className={styles.primary}
-              type="button"
-              disabled={picked.size === 0 || busy}
-              onClick={() => void start()}
-            >
-              {busy ? 'Starting…' : 'Start'}
-            </button>
-          </div>
-        ) : null}
 
         {inProgress ? (
           <p className={styles.failure} role="alert">

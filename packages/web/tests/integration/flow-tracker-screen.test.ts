@@ -26,7 +26,7 @@ import { uploadTestAudio } from '../support/audio';
  * **The Flow Tracker, driven in a real browser** ([3.14](docs/project/prd.md)). The API's half is
  * `flow-tracker.test.ts`; this file asks what a fetch cannot:
  *
- * - whether the menu carries the way in ([3.14.1](docs/project/prd.md)) and the page offers Start;
+ * - whether the dashboard tile carries the way in ([3.14.1](docs/project/prd.md)) and the page offers Start;
  * - whether the start screen lists the teachings, lets several be picked, says what the pick
  *   covers, and starts ([3.14.2](docs/project/prd.md));
  * - whether the transport is out of sight on the start screen and while the session asks, and back
@@ -129,7 +129,7 @@ afterAll(async () => {
 // =================================================================================================
 
 describe('a whole session, in the browser', () => {
-  it('starts from the menu, picks two teachings, asks one question per screen with the transport away, and ends on a reading list that keeps its ticks', async () => {
+  it('starts from the dashboard tile, picks two teachings, asks one question per screen with the transport away, and ends on a reading list that keeps its ticks', async () => {
     const page = await signInAs(member);
     try {
       // Load a teaching into the player first, so the transport has something to show — and
@@ -137,9 +137,10 @@ describe('a whole session, in the browser', () => {
       await page.goto(`${baseUrl}${recordingPagePath(editableId)}`, { waitUntil: 'domcontentloaded' });
       await expect.poll(() => bar(page).count(), { timeout: 60_000 }).toBe(1);
 
-      // 3.14.1 — the way in is the menu.
-      await page.getByRole('button', { name: 'Menu' }).click();
-      await page.getByRole('link', { name: 'Flow Tracker' }).click();
+      // 3.14.1 — the way in is the dashboard's tile; the menu no longer lists it.
+      // Client-side, through the top bar, so the loaded player survives the walk.
+      await page.getByRole('link', { name: 'Dashboard', exact: true }).first().click();
+      await page.getByRole('link', { name: 'View Flow Tracker' }).click();
       await page.waitForURL(`${baseUrl}${FLOW_TRACKER_PAGE_PATH}`, { timeout: 30_000 });
       expect(await page.textContent('body')).toContain('Examine yourself against the teachings.');
       await expect.poll(() => page.getByRole('heading', { name: 'Introspection' }).count(), { timeout: 30_000 }).toBe(1);
@@ -200,7 +201,7 @@ describe('a whole session, in the browser', () => {
       await page.getByRole('region', { name: /^Question 1$/ }).getByRole('radio', { name: `1 — ${FLOW_RATING_ENDS.low}` }).click();
 
       for (;;) {
-        const heading = page.getByRole('heading', { name: 'Your route back in' });
+        const heading = page.getByRole('heading', { name: 'What to live out' });
         if ((await heading.count()) > 0) break;
         const current = page.getByRole('region', { name: /^Question \d+$/ });
         await expect.poll(() => current.count(), { timeout: 30_000 }).toBe(1);
@@ -217,7 +218,9 @@ describe('a whole session, in the browser', () => {
       const rows = await firstGroup.getByRole('listitem').allTextContents();
       expect(rows[0]).toContain(`${olderTitle} part 1`);
       expect(rows[0]).toContain('You rated this 3 of 5');
-      expect(await firstGroup.getByRole('link', { name: 'Open chapter' }).count()).toBe(2);
+      // The chapter's title is the way to its page, and the group's head the way to the teaching's.
+      expect(await firstGroup.getByRole('link', { name: `${olderTitle} part 1`, exact: true }).count()).toBe(1);
+      expect(await firstGroup.locator('a').filter({ has: page.getByRole('heading', { name: olderTitle }) }).count()).toBe(1);
       // 3.14.5 — the transport is back, because this list offers playback.
       await expect.poll(() => bar(page).count(), { timeout: 10_000 }).toBe(1);
 

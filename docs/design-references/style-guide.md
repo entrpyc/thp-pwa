@@ -45,6 +45,15 @@ Backgrounds vary a little screen to screen (`#00162B`–`#040D1C`). Pick one can
 | `--color-notes` | `#22C55E` | Notes icon stroke |
 | `--color-notes-bg` | `#03352B` | Notes icon tile fill |
 
+### Highlights — orange (prd 3.15.2)
+
+The member's highlighted moments on a recording: the marker on the track, the marked icon, and the active state of a highlight row. The hue is the SOS orange, but it is its own token so the two surfaces can move apart without touching each other.
+
+| Token | Hex | Use |
+|---|---|---|
+| `--color-highlights` | `#F97316` | Highlight marker, marked icon, active-row outline |
+| `--color-highlights-soft` | `rgba(249,115,22,0.14)` | Active highlight row fill |
+
 ### SOS urgency (prd 3.16.1)
 
 The one place the product carries red, orange, yellow and a second green: the four urgency colours of an SOS signal. Each is drawn as a **dot beside the word for it** — "Red", "Orange" — never as a hue alone, so the urgency reads without the colour. Nothing else in the product uses these tokens; principle 5 (green means notes) still holds everywhere but the SOS surfaces.
@@ -235,6 +244,9 @@ Floating rounded-rectangle strip docked to the right edge, evenly spaced purple 
   /* category */
   --color-notes: #22C55E;
   --color-notes-bg: #03352B;
+  /* The member's highlighted moments on the track (prd 3.15.2). */
+  --color-highlights: #F97316;
+  --color-highlights-soft: rgba(249,115,22,0.14);
 
   /* SOS urgency (prd 3.16.1) */
   --color-sos-red: #EF4444;
