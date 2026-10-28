@@ -1,4 +1,5 @@
 import { HIGHLIGHT_AT_PARAM, recordingPagePath } from '@thp/shared';
+import { noteCardId, recordingTabHref } from '../recordings/[id]/round-trip';
 
 /**
  * **Opening a teaching at a highlight's moment** ([3.15.7](docs/project/prd.md)), without sound
@@ -12,8 +13,16 @@ import { HIGHLIGHT_AT_PARAM, recordingPagePath } from '@thp/shared';
  * address a bookmark holds keeps meaning the same moment.
  */
 
-/** The row's address: the teaching, at the entry's moment — or just the teaching, for a whole one. */
-export function highlightHref(recordingId: string, positionMs: number | null): string {
+/**
+ * The row's address: the teaching, at the entry's moment — or just the teaching, for a whole one.
+ * A note entry goes to the teaching's Notes tab with the note's card as the fragment, which the
+ * notes panel scrolls to once the list has arrived (`round-trip.ts`), at the note's moment too.
+ */
+export function highlightHref(recordingId: string, positionMs: number | null, noteId: string | null = null): string {
+  if (noteId !== null) {
+    const at = positionMs === null ? '' : `&${HIGHLIGHT_AT_PARAM}=${positionMs}`;
+    return `${recordingTabHref(recordingId, 'notes')}${at}#${noteCardId(noteId)}`;
+  }
   const path = recordingPagePath(recordingId);
   return positionMs === null ? path : `${path}?${HIGHLIGHT_AT_PARAM}=${positionMs}`;
 }
