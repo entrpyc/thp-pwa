@@ -59,6 +59,8 @@ export function SosBoard() {
         <h1 className={styles.pageTitle}>Prayer requests</h1>
         <p className={styles.pageLead}>
           A prayer emergency channel. Anyone can reach the whole group, and the group can respond.
+          If you are in immediate danger, call your local emergency services (112 in Europe) first;
+          this board reaches the group, not the emergency services.
         </p>
       </header>
 

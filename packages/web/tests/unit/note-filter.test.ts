@@ -52,6 +52,15 @@ describe('findBlockedWord', () => {
     expect(findBlockedWord('Scunthorpe United')).toBeNull();
   });
 
+  it('matches a Bulgarian entry as a whole Cyrillic word and leaves ordinary Bulgarian alone', () => {
+    const cyrillic = BLOCKED_WORDS.find((entry) => /^\p{Script=Cyrillic}+$/u.test(entry)) ?? '';
+    expect(cyrillic).not.toBe('');
+    expect(findBlockedWord(`Какъв ${cyrillic} ден.`)).toBe(cyrillic);
+    expect(findBlockedWord(`${cyrillic.toUpperCase()}!`)).toBe(cyrillic);
+    expect(findBlockedWord(`не${cyrillic}`)).toBeNull();
+    expect(findBlockedWord('Господ е пастир мой, от нищо не ще се нуждая.')).toBeNull();
+  });
+
   it('does not chase spelling variants or leetspeak', () => {
     expect(findBlockedWord(WORD.replace(/[aeiou]/, '*'))).toBeNull();
     expect(findBlockedWord(WORD.split('').join('.'))).toBeNull();
