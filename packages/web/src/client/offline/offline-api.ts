@@ -11,6 +11,7 @@ import {
   type SeriesRecordingView,
   type SeriesView,
   type SessionPayload,
+  type SessionUser,
 } from '@thp/shared';
 import type { OfflineHooks } from '@/client/api-client';
 import { idbAllBy, idbGet, idbPut, idbUpdate } from './idb';
@@ -48,11 +49,29 @@ import {
  * database; the hooks at the bottom are the thin wiring to IndexedDB.
  */
 
+/**
+ * The session payload as it is **kept on the device**: everything the surface needs offline — a
+ * name to draw a pending note under, a role to hide controls by, a speed, an avatar — and never
+ * the e-mail address. The address is identity the device has no use for while offline, and a
+ * copy held in IndexedDB is a copy the next person on a shared device can read (security audit of
+ * 28 October 2026, finding 11). What the server answers is narrowed by {@link storedSession}
+ * before it is written; what is answered offline carries an empty address in its place.
+ */
+export interface StoredSession {
+  readonly user: Omit<SessionUser, 'email'>;
+}
+
+/** The server's session answer, narrowed to what the device keeps. */
+export function storedSession(payload: SessionPayload): StoredSession {
+  const { email: _email, ...user } = payload.user;
+  return { user };
+}
+
 export interface Snapshot {
   readonly userId: string | null;
   readonly downloads: readonly DownloadRecord[];
   readonly outbox: readonly OutboxRecord[];
-  readonly session: SessionPayload | null;
+  readonly session: StoredSession | null;
   /** The pictures waiting on a connection, so a pending note can show its own. Empty when unread. */
   readonly pendingImages?: readonly PendingImageRecord[];
 }
@@ -104,7 +123,7 @@ export function positionFor(download: DownloadRecord, outbox: readonly OutboxRec
 /** A note that exists on this device only, drawn as the member's own until the flush replaces it. */
 export function pendingNote(
   entry: OutboxRecord,
-  session: SessionPayload | null,
+  session: StoredSession | null,
   pendingImages: readonly PendingImageRecord[] = [],
 ): NoteView {
   const body = entry.body as CreateNoteRequest;
@@ -173,8 +192,12 @@ export function offlineAnswer(route: OfflineRoute, snapshot: Snapshot): Answer |
   switch (route.name) {
     case 'resume':
       return { status: 200, body: { resume: null } };
-    case 'session':
-      return snapshot.session === null ? null : { status: 200, body: snapshot.session };
+    case 'session': {
+      if (snapshot.session === null) return null;
+      // The shape the client reads, with the one field the device does not hold left empty.
+      const body: SessionPayload = { user: { ...snapshot.session.user, email: '' } };
+      return { status: 200, body };
+    }
     case 'series-list':
       return { status: 200, body: { series: seriesViews(held) } };
     case 'series': {
@@ -334,7 +357,7 @@ async function snapshotFor(): Promise<Snapshot> {
   const [downloads, outbox, session, pendingImages] = await Promise.all([
     idbAllBy<DownloadRecord>(OFFLINE_STORES.downloads, BY_USER_INDEX, userId),
     idbAllBy<OutboxRecord>(OFFLINE_STORES.outbox, BY_USER_INDEX, userId),
-    idbGet<SessionPayload>(OFFLINE_STORES.meta, sessionMetaKey(userId)),
+    idbGet<StoredSession>(OFFLINE_STORES.meta, sessionMetaKey(userId)),
     idbAllBy<PendingImageRecord>(OFFLINE_STORES.noteImages, BY_USER_INDEX, userId).catch(() => []),
   ]);
   return { userId, downloads, outbox, session: session ?? null, pendingImages };
@@ -399,7 +422,10 @@ export function createOfflineHooks(events: {
         if (userId === null) return;
         if (route.name === 'session') {
           const payload = body as Partial<SessionPayload>;
-          if (payload.user?.id === userId) await idbPut(OFFLINE_STORES.meta, payload, sessionMetaKey(userId));
+          if (payload.user?.id === userId) {
+            // Narrowed before it is written: the address never reaches the device's store.
+            await idbPut(OFFLINE_STORES.meta, storedSession(payload as SessionPayload), sessionMetaKey(userId));
+          }
           return;
         }
         if (!('id' in route) || route.name === 'series') return;

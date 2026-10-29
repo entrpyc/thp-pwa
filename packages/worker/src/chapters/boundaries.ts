@@ -1,4 +1,9 @@
-import { MIN_CHAPTERS, MIN_CHAPTER_MS } from '@thp/shared';
+import {
+  MAX_CHAPTER_SUMMARY_LENGTH,
+  MAX_CHAPTER_TITLE_LENGTH,
+  MIN_CHAPTERS,
+  MIN_CHAPTER_MS,
+} from '@thp/shared';
 import type { ProposedChapter, TranscriptLine } from '../generate';
 
 /**
@@ -28,6 +33,12 @@ import type { ProposedChapter, TranscriptLine } from '../generate';
  *    nobody proposed.
  * 5. **Fewer than two is none** ([3.22.4](docs/project/prd.md)). A list of one row that is the whole
  *    teaching is what the requirement explicitly refuses, so it is emptied rather than shortened.
+ * 6. **Titles and summaries are cut to the admin edit path's ceilings**
+ *    ({@link MAX_CHAPTER_TITLE_LENGTH}, {@link MAX_CHAPTER_SUMMARY_LENGTH}). This step is the one
+ *    place model text reaches members without a review gate, so a transcript that steered the
+ *    model into a page of "summary" would otherwise ship it unbounded (security audit 2026-10-28,
+ *    finding 23). The limits are the ones an admin typing the same fields is held to, so nothing
+ *    generated can be longer than anything a person could have written.
  *
  * **Nothing here fails.** Every rule repairs or discards, and the worst answer is an empty list —
  * which is a real result rather than an error. What *does* fail the step is a model that answered
@@ -87,6 +98,16 @@ export function snapToLine(lines: readonly TranscriptLine[], offsetMs: number): 
   return found;
 }
 
+/** Rule 6, for a title: whitespace trimmed, then cut to what an admin may type. */
+export function clipTitle(title: string): string {
+  return title.trim().slice(0, MAX_CHAPTER_TITLE_LENGTH);
+}
+
+/** Rule 6, for a summary. */
+export function clipSummary(summary: string): string {
+  return summary.trim().slice(0, MAX_CHAPTER_SUMMARY_LENGTH);
+}
+
 /**
  * Apply every rule above, in order, and say what each one did.
  *
@@ -113,7 +134,7 @@ export function settleChapters(
     // regardless.
     const at = snapToLine(lines, one.startMs) ?? first.startMs;
     if (at !== one.startMs) snapped += 1;
-    placed.push({ startMs: at, title: one.title, summary: one.summary });
+    placed.push({ startMs: at, title: clipTitle(one.title), summary: clipSummary(one.summary) });
   }
 
   placed.sort((a, b) => a.startMs - b.startMs);

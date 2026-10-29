@@ -108,7 +108,6 @@ export async function resolveReview(
 
     logger.info('review.discard', {
       actorId: actor.id,
-      actorEmail: actor.email,
       action: 'review.resolve',
       target: `review_item:${id}`,
       recordingId: item.recordingId,
@@ -167,7 +166,6 @@ export async function resolveReview(
 
   logger.info('review.approve', {
     actorId: actor.id,
-    actorEmail: actor.email,
     action: 'review.resolve',
     target: `review_item:${id}`,
     recordingId: item.recordingId,
@@ -239,7 +237,6 @@ async function approveList(
 
   logger.info('review.approve', {
     actorId: actor.id,
-    actorEmail: actor.email,
     action: 'review.resolve',
     target: `review_item:${id}`,
     recordingId: item.recordingId,
@@ -308,7 +305,6 @@ async function approveTree(
 
   logger.info('review.approve', {
     actorId: actor.id,
-    actorEmail: actor.email,
     action: 'review.resolve',
     target: `review_item:${id}`,
     recordingId: item.recordingId,
@@ -471,7 +467,6 @@ export async function regenerateReview(
 
   logger.info('review.regenerate', {
     actorId: actor.id,
-    actorEmail: actor.email,
     action: 'review.regenerate',
     target: `review_item:${id}`,
     recordingId: item.recordingId,

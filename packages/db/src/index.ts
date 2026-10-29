@@ -6,6 +6,7 @@ export {
 export {
   deactivateUser,
   findUserByEmail,
+  findUserByAvatarKey,
   findUserById,
   insertUser,
   listActiveAdminIds,
@@ -116,6 +117,7 @@ export {
 } from './invitations';
 export {
   MAX_JOB_ERROR_LENGTH,
+  MAX_SWEEP_RECLAIMS,
   claimNextJob,
   completeJob,
   enqueueJob,
@@ -133,6 +135,7 @@ export {
   insertMemberBlock,
   isBlockedEitherWay,
   listBlockedMembers,
+  reassignBlocksAgainst,
   type BlockedMemberRow,
   type MemberBlockRow,
 } from './member-blocks';
@@ -305,6 +308,7 @@ export {
 export {
   deletePushSubscription,
   deletePushSubscriptionsById,
+  findPushSubscriptionOwner,
   listPushDeliveries,
   listPushPreferences,
   listPushSubscriptionsForUser,

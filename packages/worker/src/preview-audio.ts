@@ -10,6 +10,7 @@ import { logger } from '@thp/shared/observability/logger';
 import { audioProcessor as configuredProcessor } from './audio';
 import type { JobHandler } from './handlers';
 import { PROCESS_AUDIO_GRANT_SECONDS, extensionOf, type ProcessAudioDependencies } from './process-audio';
+import { checkSourceObject } from './source-object';
 
 /**
  * **The `preview_audio` step** ([3.4.6](docs/project/prd.md)) — thirty seconds of one teaching,
@@ -97,6 +98,7 @@ async function producePreview(
   const sourceKey = recording.originalMediaKey;
   const source = await media.head(sourceKey);
   if (source === null) throw new Error(`no object at key "${sourceKey}"`);
+  checkSourceObject(sourceKey, source);
 
   const rendition = processor.outputFor(extensionOf(sourceKey), source.contentType);
   const sourceUrl = await media.presignGet({

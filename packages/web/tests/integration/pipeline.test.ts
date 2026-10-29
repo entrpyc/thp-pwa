@@ -564,7 +564,7 @@ describe('running one step again', () => {
     );
     const line = lines.find((entry) => entry.message === 'pipeline.rerun');
     expect(line?.['actorId']).toBe(admin.id);
-    expect(line?.['actorEmail']).toBe(admin.email);
+    expect(line?.['actorEmail']).toBeUndefined();
     expect(line?.['action']).toBe('pipeline.rerun');
     expect(line?.['target']).toBe(`recording:${recording.id}`);
     expect(line?.['step']).toBe('transcribe');

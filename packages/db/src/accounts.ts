@@ -74,6 +74,18 @@ export async function findUserById(
   return (rows[0] as UserRow | undefined) ?? null;
 }
 
+/**
+ * The account whose avatar is this object, or `null`. The finalisation's readable refusal of a key
+ * another member already holds; the unique index on the column is what holds under a race.
+ */
+export async function findUserByAvatarKey(
+  avatarKey: string,
+  handle: DatabaseHandle = getDatabase(),
+): Promise<UserRow | null> {
+  const rows = await handle.db.select().from(user).where(eq(user.avatarKey, avatarKey)).limit(1);
+  return (rows[0] as UserRow | undefined) ?? null;
+}
+
 /** Insert an account. Throws on the unique index if the address is already taken in any casing. */
 export async function insertUser(
   input: NewUser,

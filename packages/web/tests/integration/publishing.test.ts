@@ -473,7 +473,7 @@ describe('what the log records', () => {
         (one) => one.message === message && one['target'] === `recording:${recordingId}`,
       );
       expect(line, message).toBeDefined();
-      expect(line).toMatchObject({ actorId: admin.id, actorEmail: admin.email, action: message });
+      expect(line).toMatchObject({ actorId: admin.id, action: message });
       expect(typeof line?.time).toBe('string');
       expect(typeof line?.correlationId).toBe('string');
     }
@@ -582,7 +582,7 @@ describe('the promoted audit helper logs exactly what the two original call site
     ] as const) {
       expect(line, what).toBeDefined();
       expect(line?.['actorId'], what).toBe(admin.id);
-      expect(line?.['actorEmail'], what).toBe(admin.email);
+      expect(line?.['actorEmail'], what).toBeUndefined();
       expect(line?.['action'], what).toBe(action);
       expect(typeof line?.['target'], what).toBe('string');
       expect(typeof line?.correlationId, what).toBe('string');

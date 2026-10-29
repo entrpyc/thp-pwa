@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
-import { MIN_CHAPTER_MS } from '@thp/shared';
-import { settleChapters, snapToLine } from '../../src/chapters/boundaries';
+import { MAX_CHAPTER_SUMMARY_LENGTH, MAX_CHAPTER_TITLE_LENGTH, MIN_CHAPTER_MS } from '@thp/shared';
+import { clipSummary, clipTitle, settleChapters, snapToLine } from '../../src/chapters/boundaries';
 import type { ProposedChapter, TranscriptLine } from '../../src/generate';
 
 /**
@@ -157,6 +157,28 @@ describe('settling a proposed list (3.22.2, 3.22.4, 3.22.5)', () => {
 
   it('answers nothing for a transcript with no lines in it', () => {
     expect(settleChapters([proposal(0), proposal(20 * MINUTE)], []).chapters).toEqual([]);
+  });
+
+  /**
+   * **Rule 6** (security audit 2026-10-28, finding 23). Chapter text is the one model output that
+   * reaches members without a review gate, so it is held to the same ceilings an admin typing the
+   * same fields is held to — a transcript that steered the model into a page of "summary" ships
+   * at most what a person could have written.
+   */
+  it('cuts titles and summaries to the ceilings the admin edit path enforces', () => {
+    const long = {
+      startMs: 0,
+      title: `  ${'T'.repeat(MAX_CHAPTER_TITLE_LENGTH + 50)}  `,
+      summary: `\n${'s'.repeat(MAX_CHAPTER_SUMMARY_LENGTH * 3)}`,
+    };
+    const settled = settleChapters([long, proposal(20 * MINUTE)], LINES);
+
+    expect(settled.chapters[0]?.title).toBe('T'.repeat(MAX_CHAPTER_TITLE_LENGTH));
+    expect(settled.chapters[0]?.summary).toBe('s'.repeat(MAX_CHAPTER_SUMMARY_LENGTH));
+    // Text within the ceilings is kept as it was, trimmed.
+    expect(settled.chapters[1]?.title).toBe('A part');
+    expect(clipTitle('  short  ')).toBe('short');
+    expect(clipSummary('fine.')).toBe('fine.');
   });
 
   /**

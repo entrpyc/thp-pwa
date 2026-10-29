@@ -516,7 +516,7 @@ describe('what the log records', () => {
     ] as const) {
       const line = lines.find((one) => one.message === message && one['target'] === `review_item:${id}`);
       expect(line, message).toBeDefined();
-      expect(line).toMatchObject({ actorId: admin.id, actorEmail: admin.email, action });
+      expect(line).toMatchObject({ actorId: admin.id, action });
       expect(typeof line?.time).toBe('string');
       expect(typeof line?.correlationId).toBe('string');
     }

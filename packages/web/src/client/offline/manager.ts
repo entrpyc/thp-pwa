@@ -26,9 +26,10 @@ import {
   type SyncRequest,
 } from '@thp/shared';
 import { ApiClientError, apiFetch, installOfflineHooks } from '@/client/api-client';
-import { readNoteDraft, writeNoteDraft } from '@/client/notes/draft';
+import { clearAllNoteDrafts, readNoteDraft, writeNoteDraft } from '@/client/notes/draft';
 import { shellPlatform } from '@/client/platform';
 import { createBrowserDownloadStore } from './browser-store';
+import { forgetActiveAccount } from './forget';
 import { idbPut } from './idb';
 import { createOfflineHooks } from './offline-api';
 import { forgetPendingImages, prepareOutboxImages } from './pending-images';
@@ -136,6 +137,8 @@ export interface OfflineManagerOptions {
     appendProgress(userId: string, recordingId: string, body: PlaybackProgressRequest): Promise<unknown>;
   };
   readonly rememberActiveUser?: (userId: string) => Promise<void>;
+  /** The inverse, for sign-out; the real one is {@link forgetActiveAccount}. */
+  readonly forgetActiveUser?: () => Promise<void>;
   readonly warm?: (urls: readonly string[]) => void;
   readonly isOnline?: () => boolean;
 }
@@ -145,6 +148,12 @@ export interface OfflineManager {
   getSnapshot(): OfflineSnapshot;
   /** Name the signed-in account. Loads its downloads, counts its outbox, and flushes if online. */
   activate(userId: string): Promise<void>;
+  /**
+   * The account is leaving this device: sign-out, or the account being deleted. Stops any
+   * transfer in flight, forgets who was signed in and drops every note draft on the device
+   * (`forget.ts` and `@/client/notes/draft` say what and why). Downloads stay, under the account.
+   */
+  deactivate(): Promise<void>;
   /** Queue one teaching. The title is for the queue row until the payload arrives. */
   download(recordingId: string, title: string): void;
   /** Size up a series without queueing anything: the sheet decides from the plan. */
@@ -177,6 +186,7 @@ export function createOfflineManager(options: OfflineManagerOptions): OfflineMan
     (async (userId: string) => {
       await idbPut(OFFLINE_STORES.meta, { userId }, ACTIVE_USER_KEY);
     });
+  const forgetActiveUser = options.forgetActiveUser ?? forgetActiveAccount;
   const warm =
     options.warm ??
     ((urls: readonly string[]) => {
@@ -352,8 +362,8 @@ export function createOfflineManager(options: OfflineManagerOptions): OfflineMan
             continue;
           }
           // Appended under an existing draft rather than over it: the member may be writing.
-          const held = readNoteDraft(refused.recordingId);
-          writeNoteDraft(refused.recordingId, {
+          const held = readNoteDraft(userId, refused.recordingId);
+          writeNoteDraft(userId, refused.recordingId, {
             text: held === null ? refused.text : `${held.text}\n\n${refused.text}`,
             visibility: refused.visibility,
             anchorMs: held?.anchorMs ?? refused.anchorMs,
@@ -410,6 +420,15 @@ export function createOfflineManager(options: OfflineManagerOptions): OfflineMan
       await rememberActiveUser(userId).catch(() => undefined);
       await reload();
       void flush();
+    },
+
+    async deactivate() {
+      // A transfer still running would write a download under an account that has just left;
+      // cancelling it is what `remove` does for one teaching, applied to all of them.
+      for (const controller of controllers.values()) controller.abort();
+      clearAllNoteDrafts();
+      await forgetActiveUser().catch(() => undefined);
+      set({ ...SERVER_SNAPSHOT, storeKind: store.kind, online: isOnline() });
     },
 
     download(recordingId, title) {

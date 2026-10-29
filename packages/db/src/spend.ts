@@ -1,4 +1,4 @@
-import { and, eq, sql } from 'drizzle-orm';
+import { and, inArray, eq, sql } from 'drizzle-orm';
 import { PIPELINE_STEPS, type PipelineStep } from '@thp/shared';
 import { getDatabase, queryable, type Executor } from './client';
 import { job, spendCeilingRaise } from './schema';
@@ -14,9 +14,13 @@ import { job, spendCeilingRaise } from './schema';
  * answer is computed from `now()` on the one clock they share, so a clock difference between two
  * processes cannot open a second budget or close one early.
  *
- * **Failed jobs count nothing.** A provider that failed billed nothing we can read, and guessing a
- * cost for a call that returned an error would be a number with no source. That is slightly
- * generous and deliberately so.
+ * **Failed jobs count what they recorded.** A provider that refused the call billed nothing, and
+ * such a failure writes no cost — but a step that *paid* and then failed (a transcript billed and
+ * refused by the confidence gate, a model answer billed and refused for its shape) writes what it
+ * paid onto the failed row (`failJob`'s meta), and that is money the day has spent. Summing only
+ * successes let an admin re-run a step that always fails after the provider call without the
+ * ceiling ever moving (security audit 2026-10-28, finding 8). Nothing is guessed: a failed row
+ * with no number in it still counts nothing.
  *
  * **The ceiling in force is the larger of two numbers**: the configured default, and today's raise
  * if an admin made one. Tomorrow has no raise row, so tomorrow starts back at the default with no
@@ -31,7 +35,7 @@ export interface SpendCeilingRaise {
 }
 
 export interface SpendLedger {
-  /** What succeeded paid work has cost since the UTC day began. */
+  /** What paid work — succeeded, or failed after paying — has cost since the UTC day began. */
   readonly todayUsd: number;
   /** The same, split by the step that spent it. Every step is present, most at zero. */
   readonly byStep: Readonly<Record<PipelineStep, number>>;
@@ -64,7 +68,7 @@ export async function readSpendLedger(
     .from(job)
     .where(
       and(
-        eq(job.status, 'succeeded'),
+        inArray(job.status, ['succeeded', 'failed']),
         sql`${job.finishedAt} >= ${UTC_DAY_START}`,
         // Only a real number counts. A row whose meta says nothing about cost — an older run, a
         // handler that returned no meta — is a row with no cost, not a row that breaks the sum.

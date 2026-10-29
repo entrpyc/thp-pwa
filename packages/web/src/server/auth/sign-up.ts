@@ -125,7 +125,6 @@ export async function signUp(body: unknown): Promise<SignUpResult> {
   const session = await issueSession(row.id);
   logger.info('signup.succeeded', {
     actorId: row.id,
-    actorEmail: row.email,
     action: 'signup',
     target: `account:${row.id}`,
     termsVersion,

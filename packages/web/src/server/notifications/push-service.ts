@@ -1,10 +1,11 @@
 import {
   deletePushSubscription,
+  findPushSubscriptionOwner,
   listPushPreferences,
   setPushPreference,
   upsertPushSubscription,
 } from '@thp/db';
-import { readVapidSettings } from '@thp/push';
+import { isAllowedWebPushEndpoint, readPushTransportName, readVapidSettings } from '@thp/push';
 import {
   MAX_PUSH_ENDPOINT_LENGTH,
   NOTIFICATION_CATEGORY_DESCRIPTION,
@@ -21,6 +22,7 @@ import {
 import { ApiError } from '@/server/api/errors';
 import { can, type Actor } from '@/server/auth/policy';
 import { logger } from '@/server/observability/logger';
+import { isStoreToken } from './push-endpoints';
 
 /**
  * **A member's push switches and devices** ([3.17.13](docs/project/prd.md),
@@ -71,13 +73,31 @@ export async function writePushPreferenceFor(
  * account on an earlier visit, or by another account on the same phone — is re-pointed, which is
  * the whole of "a device belongs to whoever signed in on it last". The keys are stored as sent;
  * the server never needs to read them, only to hand them to the push library.
+ *
+ * **Re-pointing stays allowed, and is logged** (security audit, finding 12). The audit read it as
+ * a takeover; it is also the only thing that keeps a shared phone right when the previous member's
+ * session expired without a sign-out, which is when `unregister` never ran — refusing would leave
+ * the new member silent and the old one's notifications arriving on a phone they no longer hold.
+ * The address itself is the secret: a push endpoint is an unguessable capability URL and a store
+ * token is issued per app install, so "whoever presents it" is the device. A change of owner is
+ * written at `warn`, so a pattern of them is something an operator can see.
  */
 export async function registerPushSubscriptionFor(
   actor: Actor,
   body: unknown,
 ): Promise<RegisterPushSubscriptionPayload> {
   const input = parseRegistration(body);
+  const previousOwner = await findPushSubscriptionOwner(input.endpoint);
   const row = await upsertPushSubscription({ userId: actor.id, ...input });
+  if (previousOwner !== null && previousOwner !== actor.id) {
+    logger.warn('account.push-subscription.repointed', {
+      actorId: actor.id,
+      action: 'account.push-subscription',
+      target: `push_subscription:${row.id}`,
+      previousOwnerId: previousOwner,
+      platform: row.platform,
+    });
+  }
   logger.info('account.push-subscription.registered', {
     actorId: actor.id,
     action: 'account.push-subscription',
@@ -187,14 +207,23 @@ function parseRegistration(body: unknown): {
     if (!isKey(p256dh) || !isKey(auth)) {
       throw ApiError.invalidInput('A web subscription needs its p256dh and auth keys.');
     }
-    if (!/^https:\/\//.test(address)) {
-      throw ApiError.invalidInput('A web push endpoint is an https URL.');
+    // The capture transport never contacts the address, and the integration suite registers
+    // endpoints on an invented host so that only the capture ever sees them; the allow-list is
+    // what the real transport is protected by (push-endpoints.ts says from what).
+    const anyHost = readPushTransportName() === 'capture';
+    if (!(anyHost ? /^https:\/\//.test(address) : isAllowedWebPushEndpoint(address))) {
+      throw ApiError.invalidInput(
+        'A web push endpoint is an https URL on one of the push services browsers use.',
+      );
     }
     return { platform, endpoint: address, p256dh, auth };
   }
 
   if (keys !== undefined && keys !== null) {
     throw ApiError.invalidInput('A store device carries a token and no keys.');
+  }
+  if (!isStoreToken(platform, address)) {
+    throw ApiError.invalidInput('A store device token is the string its push service issued.');
   }
   return { platform, endpoint: address, p256dh: null, auth: null };
 }

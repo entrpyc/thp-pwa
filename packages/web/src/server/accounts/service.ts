@@ -98,7 +98,6 @@ function settle(
   if (result.outcome === 'last-admin') {
     logger.warn('account.refused', {
       actorId: actor.id,
-      actorEmail: actor.email,
       action,
       target: `account:${targetId}`,
       reason: 'last-active-admin',
@@ -110,7 +109,6 @@ function settle(
   if (result.outcome === 'unchanged') {
     logger.warn('account.refused', {
       actorId: actor.id,
-      actorEmail: actor.email,
       action,
       target: `account:${targetId}`,
       reason: 'already-in-that-state',
@@ -121,7 +119,6 @@ function settle(
 
   logger.info(action, {
     actorId: actor.id,
-    actorEmail: actor.email,
     action,
     target: `account:${targetId}`,
   });
@@ -192,8 +189,9 @@ export async function updateAccount(
 ): Promise<AccountSummary> {
   const requested = parseUpdate(body);
 
-  let row: UserRow | null = null;
-
+  // **Both halves are authorised before either is written** (security audit, finding 16). A body
+  // carrying a display name and a role is one request, and a member sending it gets one answer:
+  // refused, with nothing changed — not a renamed account and a 403.
   if (requested.displayName !== undefined) {
     // The first owned resource in the product. `can` compares `ownerId` against the actor; nothing
     // in this function compares an id, and that is the whole point of doing it here.
@@ -202,7 +200,14 @@ export async function updateAccount(
       id,
       ownerId: id,
     });
+  }
+  if (requested.assignedRole !== undefined) {
+    authorise(actor, 'role.assign', `account:${id}`);
+  }
 
+  let row: UserRow | null = null;
+
+  if (requested.displayName !== undefined) {
     const weakness = checkDisplayName(requested.displayName);
     if (weakness !== null) throw ApiError.invalidInput(weakness);
 
@@ -210,15 +215,12 @@ export async function updateAccount(
     if (row === null) throw ApiError.notFound('No such account.');
     logger.info('profile.update', {
       actorId: actor.id,
-      actorEmail: actor.email,
       action: 'profile.update',
       target: `account:${id}`,
     });
   }
 
   if (requested.assignedRole !== undefined) {
-    authorise(actor, 'role.assign', `account:${id}`);
-
     const result = await setUserRole(id, requested.assignedRole);
     if (result.outcome === 'unchanged') {
       // Setting an account to the role it already holds reports the current state rather than an
@@ -228,7 +230,6 @@ export async function updateAccount(
       // is being told an action happened that did not.
       logger.info('role.assign', {
         actorId: actor.id,
-        actorEmail: actor.email,
         action: 'role.assign',
         target: `account:${id}`,
         changed: false,

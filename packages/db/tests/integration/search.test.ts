@@ -1,6 +1,8 @@
 import { afterAll, beforeAll, describe, expect, it, inject } from 'vitest';
 import {
   createDatabase,
+  deleteMemberBlock,
+  insertMemberBlock,
   insertNote,
   insertRecording,
   insertSeries,
@@ -214,6 +216,55 @@ describe('visibility holds inside the ranking (3.10.9)', () => {
     expect(sources).not.toContain(theirs.id);
     // The unpublished teaching's line says the same words and is not there.
     expect(hits.filter((hit) => hit.sourceKind === 'segment')).toHaveLength(1);
+  });
+
+  it('leaves out a public note whose author the reader has a block with, in both directions (finding 7)', async () => {
+    // The notes list applies the block; search reads the same `note` row for the author, because a
+    // public note's embedding carries none (docs/security-audit-2026-10-28.md, finding 7).
+    const blocker = await member('blocker');
+    const blocked = await member('blocked');
+    const bystander = await member('bystander');
+    const where = await recording('Blocked teaching', '2026-01-12');
+
+    const line = 'The sower went out to sow the seed.';
+    const blockersNote = await insertNote(
+      { recordingId: where, authorId: blocker, visibility: 'public', timestampMs: 0, text: `Blocker says: ${line}` },
+      handle,
+    );
+    const blockedsNote = await insertNote(
+      { recordingId: where, authorId: blocked, visibility: 'public', timestampMs: 0, text: `Blocked says: ${line}` },
+      handle,
+    );
+    const bystandersNote = await insertNote(
+      { recordingId: where, authorId: bystander, visibility: 'public', timestampMs: 0, text: `Bystander says: ${line}` },
+      handle,
+    );
+    await upsertEmbeddings(
+      [
+        embeddingOf('note', blockersNote.id, where, blockersNote.text ?? ''),
+        embeddingOf('note', blockedsNote.id, where, blockedsNote.text ?? ''),
+        embeddingOf('note', bystandersNote.id, where, bystandersNote.text ?? ''),
+      ],
+      handle,
+    );
+    await insertMemberBlock(blocker, blocked, handle);
+
+    const words = 'sower sow seed';
+    const forBlocked = (await search(blocked, words)).map((hit) => hit.sourceId);
+    expect(forBlocked).toContain(blockedsNote.id);
+    expect(forBlocked).toContain(bystandersNote.id);
+    expect(forBlocked).not.toContain(blockersNote.id);
+
+    const forBlocker = (await search(blocker, words)).map((hit) => hit.sourceId);
+    expect(forBlocker).toContain(blockersNote.id);
+    expect(forBlocker).toContain(bystandersNote.id);
+    expect(forBlocker).not.toContain(blockedsNote.id);
+
+    // Somebody with no block sees all three; and the block lifts cleanly.
+    const forBystander = (await search(bystander, words)).map((hit) => hit.sourceId);
+    expect(forBystander).toEqual(expect.arrayContaining([blockersNote.id, blockedsNote.id, bystandersNote.id]));
+    await deleteMemberBlock(blocker, blocked, handle);
+    expect((await search(blocked, words)).map((hit) => hit.sourceId)).toContain(blockersNote.id);
   });
 
   it('finds the published summary, and never a summary returned to draft', async () => {

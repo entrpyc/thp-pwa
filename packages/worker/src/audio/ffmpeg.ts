@@ -3,9 +3,10 @@ import { createWriteStream } from 'node:fs';
 import { mkdtemp, readFile, rm, stat } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
-import { Readable } from 'node:stream';
+import { Readable, Transform } from 'node:stream';
 import { pipeline } from 'node:stream/promises';
 import {
+  MAX_UPLOAD_BYTES,
   SOUND_PROFILE_LOUDNESS_RANGE_LU,
   SOUND_PROFILE_TRUE_PEAK_DBTP,
   type SoundProfileSettings,
@@ -313,13 +314,40 @@ export function parseLoudnormMeasurement(stderr: string): LoudnessMeasurement {
   };
 }
 
-/** Fetch the original onto disk. Streamed, so the process never holds the file twice. */
-async function download(url: string, toPath: string): Promise<void> {
+/**
+ * Fetch the original onto disk. Streamed, so the process never holds the file twice — and
+ * **bounded**, so an object replaced after finalise (security audit 2026-10-28, finding 9) cannot
+ * fill the worker's disk: the declared length is refused up front, and the stream is cut the
+ * moment it passes the upload ceiling whatever the header said.
+ */
+async function download(url: string, toPath: string, maxBytes = MAX_UPLOAD_BYTES): Promise<void> {
   const response = await fetch(url);
   if (!response.ok || response.body === null) {
     throw new AudioProcessingError(`the original could not be fetched (HTTP ${response.status})`);
   }
-  await pipeline(Readable.fromWeb(response.body as never), createWriteStream(toPath));
+  const declared = Number(response.headers.get('content-length') ?? '0');
+  if (Number.isFinite(declared) && declared > maxBytes) {
+    await response.body.cancel().catch(() => {});
+    throw new AudioProcessingError(
+      `the original is ${declared} bytes, over the ${maxBytes}-byte upload limit — it will not be read`,
+    );
+  }
+  let received = 0;
+  const bounded = new Transform({
+    transform(chunk: Buffer, _encoding, callback) {
+      received += chunk.length;
+      if (received > maxBytes) {
+        callback(
+          new AudioProcessingError(
+            `the original grew past the ${maxBytes}-byte upload limit while being read — it will not be read`,
+          ),
+        );
+        return;
+      }
+      callback(null, chunk);
+    },
+  });
+  await pipeline(Readable.fromWeb(response.body as never), bounded, createWriteStream(toPath));
 }
 
 /**

@@ -134,6 +134,7 @@ export async function eraseAccount(
     deletedPrivateNotes: deletion.deletedPrivateNotes,
     anonymisedNotifications: deletion.anonymisedNotifications,
     forgottenInvitations: deletion.forgottenInvitations,
+    retainedBlocks: deletion.retainedBlocks,
     avatarKey: current.avatarKey,
   });
 

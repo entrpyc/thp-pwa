@@ -474,6 +474,16 @@ describe('the confidence gate', () => {
     expect(row.status).toBe('failed');
     expect(row.error).toContain(String(doubted.confidence));
     expect(row.error).toContain(String(CONFIDENCE_THRESHOLD));
+
+    // **And still paid for** (security audit 2026-10-28, finding 8): the provider billed the
+    // minutes whatever the gate made of them, so the failed row carries the same meta a success
+    // would and the day's ledger counts it.
+    const meta = row.providerMeta as Record<string, unknown>;
+    expect(meta['provider']).toBe('fake');
+    expect(meta['durationSeconds']).toBe(doubted.durationSeconds);
+    expect(typeof meta['costUsd']).toBe('number');
+    const [persisted] = await ledger(job.recordingId);
+    expect(persisted?.provider_meta).toEqual(meta);
   });
 
   it('generates nothing from a transcript the machine itself doubted', async () => {

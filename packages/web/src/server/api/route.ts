@@ -99,6 +99,22 @@ export function apiRoute<TAccess extends RouteAccess>(
           );
         }
 
+        // A value Postgres could not read as the column's type — nearly always a path or body id
+        // that is not a uuid, which `eq(uuidColumn, id)` hands to the driver as-is. That is the
+        // caller's input being wrong, not the server failing, so it answers as `invalid_input`
+        // rather than as a 500 that an error tracker files (security audit, finding 14).
+        if (isInvalidTextRepresentation(caught)) {
+          const refusal = ApiError.invalidInput('An id in this request is not in the shape the route expects.');
+          logger.warn('request.failed', {
+            method: request.method,
+            path: url.pathname,
+            status: refusal.status,
+            code: refusal.code,
+            reason: caught instanceof Error ? caught.message : String(caught),
+          });
+          return errorResponse(refusal.code, refusal.message, refusal.status, correlationId);
+        }
+
         // Unhandled: the detail is logged server-side and never put on the wire. The same failure
         // is reported to the error tracker under the same correlation id, with the route pattern
         // rather than the path and nothing of the request's body (observability.md § 5.6).
@@ -162,11 +178,24 @@ function refuse(
 ): never {
   logger.warn('authorisation.refused', {
     actorId: actor?.id ?? null,
-    actorEmail: actor?.email ?? null,
     action,
     target,
     method: request.method,
     code: error.code,
   });
   throw error;
+}
+
+/**
+ * Whether a thrown error is Postgres refusing to read a value as its column's type (SQLSTATE
+ * `22P02`, "invalid text representation"). The driver's error is wrapped by Drizzle as a `cause`,
+ * so the walk is the same one `isUniqueViolation` in `@thp/db` does for `23505`.
+ */
+function isInvalidTextRepresentation(cause: unknown): boolean {
+  for (let current: unknown = cause, depth = 0; current != null && depth < 5; depth += 1) {
+    if (typeof current !== 'object') break;
+    if ((current as { code?: unknown }).code === '22P02') return true;
+    current = (current as { cause?: unknown }).cause;
+  }
+  return false;
 }

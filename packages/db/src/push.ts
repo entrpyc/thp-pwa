@@ -166,6 +166,22 @@ export async function upsertPushSubscription(
   return row;
 }
 
+
+/**
+ * Who holds this endpoint now, or `null` for one nobody registered. Read by the service before a
+ * registration so a change of owner can be logged; the upsert itself does not need it.
+ */
+export async function findPushSubscriptionOwner(
+  endpoint: string,
+  executor: Executor = getDatabase(),
+): Promise<string | null> {
+  const rows = await queryable(executor)
+    .select({ userId: pushSubscription.userId })
+    .from(pushSubscription)
+    .where(eq(pushSubscription.endpoint, endpoint))
+    .limit(1);
+  return rows[0]?.userId ?? null;
+}
 /**
  * Forget one of **this member's** devices by its address — sign-out's call. Another member's
  * endpoint finds nothing, and the service answers `removed: false` for it exactly as for an

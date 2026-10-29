@@ -83,7 +83,6 @@ export async function raiseSpendCeiling(actor: Actor, body: unknown): Promise<Sp
 
   logger.warn('spend.ceiling.raised', {
     actorId: actor.id,
-    actorEmail: actor.email,
     action: 'spend.raise',
     target: 'spend-ceiling:today',
     fromUsd: before.ceilingUsd,

@@ -5,6 +5,7 @@ import {
   createDatabase,
   enqueueJob,
   insertRecording,
+  readSpendLedger,
   runMigrations,
   type DatabaseHandle,
   type JobRow,
@@ -12,6 +13,7 @@ import {
 import { setLogSink, type LogLine } from '@thp/shared/observability/logger';
 import { JOB_STEPS, type PipelineStep } from '@thp/shared';
 import { createHandlers, type HandlerRegistry } from '../../src/handlers';
+import { PaidFailure } from '../../src/paid-failure';
 import { runJob } from '../../src/run-job';
 import { createThrowawayDatabase, type ThrowawayDatabase } from '../../../../tests/setup/throwaway-db';
 
@@ -118,6 +120,37 @@ describe('running a claimed job', () => {
     expect(row.status).toBe('failed');
     expect(row.error).toBe('the provider refused the audio');
     expect(row.finishedAt).toBeInstanceOf(Date);
+    // A failure that spent nothing records nothing — the row has no number for the ledger to read.
+    expect(row.providerMeta).toBeNull();
+  });
+
+  /**
+   * **A failure that paid** (security audit 2026-10-28, finding 8): what the handler had been
+   * billed before it threw is written on the failed row, in the shape a success records, so the
+   * day's ledger counts it. Without this, a step that always fails after the provider call could
+   * be re-run without the ceiling ever moving.
+   */
+  it('records what a handler had already paid when it threw, on the failed row', async () => {
+    const job = await claimedJob();
+    const handlers: HandlerRegistry = {
+      transcribe: () => {
+        throw new PaidFailure('the transcript was written, but doubted', {
+          provider: 'deepgram',
+          costUsd: 0.42,
+        });
+      },
+    };
+
+    const row = await runJob(job, handlers, { executor: handle });
+
+    expect(row.status).toBe('failed');
+    expect(row.error).toBe('the transcript was written, but doubted');
+    expect(row.providerMeta).toEqual({ provider: 'deepgram', costUsd: 0.42 });
+    // And the ledger reads it as spent.
+    expect((await readSpendLedger(10, handle)).byStep.transcribe).toBe(0.42);
+    // The log line says what it cost beside why it failed.
+    const line = captured.find((entry) => entry.message === 'job.failed');
+    expect(line).toMatchObject({ jobId: job.id, costUsd: 0.42 });
   });
 
   it('reports a handler’s throw to the exception reporter with the job’s ids, after the row is written', async () => {

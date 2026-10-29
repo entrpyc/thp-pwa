@@ -117,7 +117,6 @@ export async function grantUpload(actor: Actor, body: unknown): Promise<UploadGr
 
   logger.info('recording.upload.granted', {
     actorId: actor.id,
-    actorEmail: actor.email,
     action: 'recording.upload',
     target: `media:${key}`,
     // What the person chose it as, so an operator reading the log can tell which upload this was.
@@ -209,7 +208,6 @@ export async function finaliseUpload(actor: Actor, body: unknown): Promise<Recor
 
   logger.info('recording.create', {
     actorId: actor.id,
-    actorEmail: actor.email,
     action: 'recording.upload',
     target: `recording:${row.id}`,
     mediaKey: row.originalMediaKey,
@@ -467,7 +465,6 @@ async function describeForOperator(
 function refuse(actor: Actor, key: string, reason: string, message: string): ApiError {
   logger.warn('recording.refused', {
     actorId: actor.id,
-    actorEmail: actor.email,
     action: 'recording.upload',
     target: `media:${key}`,
     reason,

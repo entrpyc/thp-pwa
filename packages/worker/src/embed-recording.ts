@@ -25,6 +25,7 @@ import { emitDomainEvent } from '@thp/shared/observability/events';
 import { logger } from '@thp/shared/observability/logger';
 import { embedder as configuredEmbedder, type Embedder } from './embed';
 import type { JobHandler } from './handlers';
+import { withSpend } from './paid-failure';
 
 /**
  * **The `embed` step** — the one semantic search ([3.10](docs/project/prd.md)) and
@@ -197,7 +198,17 @@ export async function embedRecordingNow(
       if (passes === 1) totals.unchanged = sources.length - stale.length;
     }
   } catch (cause) {
-    throw fail(logFields, cause instanceof Error ? cause.message : String(cause), cause);
+    const failure = fail(logFields, cause instanceof Error ? cause.message : String(cause), cause);
+    // A batch refused after earlier batches were billed is a paid failure for those batches
+    // (paid-failure.ts); a run that never reached the provider spent nothing.
+    if (totals.requests === 0) throw failure;
+    throw withSpend(failure, {
+      provider: model.name,
+      model: model.model,
+      inputTokens: totals.inputTokens,
+      costUsd: totals.costUsd,
+      requests: totals.requests,
+    });
   }
 
   const providerMeta: ProviderMeta = {

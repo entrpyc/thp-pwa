@@ -34,6 +34,7 @@ import {
 import { resolveChapteredMindMap, resolveProposedMindMap } from './mind-map-draft';
 import { readProposedCitations, resolveProposedCitations } from './scripture-draft';
 import type { JobHandler } from './handlers';
+import { withSpend } from './paid-failure';
 
 /**
  * **The `generate_draft` step, doing the work the stub stood in for** — and it is the last stub in
@@ -183,7 +184,14 @@ export function createGenerateDraftHandler(deps: GenerateDraftDependencies = {})
         }
       }
     } catch (cause) {
-      throw fail(fields, cause instanceof Error ? cause.message : String(cause), cause);
+      // A chapter call that failed after earlier calls were billed is a paid failure for the
+      // calls that were (paid-failure.ts); a first call that was refused spent nothing.
+      const billed = spendOf(model.name, [
+        ...(whole === null ? [] : [whole]),
+        ...perChapter.map((one) => one.result),
+      ]);
+      const failure = fail(fields, cause instanceof Error ? cause.message : String(cause), cause);
+      throw billed === null ? failure : withSpend(failure, billed);
     }
 
     /*
@@ -203,6 +211,9 @@ export function createGenerateDraftHandler(deps: GenerateDraftDependencies = {})
       costUsd: calls.reduce((total, one) => total + one.spend.costUsd, 0),
     };
     const promptVersion = first.promptVersion;
+    // **From here on the calls have been paid for.** A refusal of the answer's shape or a write
+    // that fails carries this, so the failed row counts in the day's ledger.
+    const billed = spendOf(model.name, calls) as ProviderMeta;
 
     const provenance = (kind: ReviewKind): ReviewProvenance => ({
       model: spend.model,
@@ -272,18 +283,24 @@ export function createGenerateDraftHandler(deps: GenerateDraftDependencies = {})
       return resolved.citations;
     };
 
-    const items: NewReviewItem[] = kinds.map((kind) => ({
-      kind,
-      fields: { [REVIEW_FIELD[kind].name]: draftOf(kind) },
-      provenance: provenance(kind),
-    }));
+    let items: NewReviewItem[];
+    let verses: Awaited<ReturnType<typeof resolveVerses>>;
+    try {
+      items = kinds.map((kind) => ({
+        kind,
+        fields: { [REVIEW_FIELD[kind].name]: draftOf(kind) },
+        provenance: provenance(kind),
+      }));
 
-    // **The verses of what was just drafted, before the item is written**
-    // (scope plan 3.2.3). Before rather than after, so an admin
-    // opening the item the moment it appears reads the passages rather than watching them arrive.
-    const verses = await resolveVerses(citationsIn(items), deps, fields);
+      // **The verses of what was just drafted, before the item is written**
+      // (scope plan 3.2.3). Before rather than after, so an admin
+      // opening the item the moment it appears reads the passages rather than watching them arrive.
+      verses = await resolveVerses(citationsIn(items), deps, fields);
 
-    await replaceOpenDrafts(job.recordingId, items, deps.executor);
+      await replaceOpenDrafts(job.recordingId, items, deps.executor);
+    } catch (cause) {
+      throw withSpend(cause, billed);
+    }
 
     const providerMeta: ProviderMeta = {
       provider: model.name,
@@ -404,6 +421,26 @@ async function resolveVerses(
     });
     return { fetched: 0, held: 0, requestId: null };
   }
+}
+
+/**
+ * What a run has paid so far, in the shape the succeeded row records it — or `null` before the
+ * first call has answered, when nothing has been billed.
+ */
+function spendOf(provider: string, calls: readonly GenerationResult[]): ProviderMeta | null {
+  const first = calls[0];
+  if (first === undefined) return null;
+  return {
+    provider,
+    model: first.spend.model,
+    modelVersion: first.spend.modelVersion,
+    promptVersion: first.promptVersion,
+    inputTokens: calls.reduce((total, one) => total + one.spend.inputTokens, 0),
+    outputTokens: calls.reduce((total, one) => total + one.spend.outputTokens, 0),
+    costUsd: calls.reduce((total, one) => total + one.spend.costUsd, 0),
+    requestId: first.spend.requestId,
+    generationCalls: calls.length,
+  };
 }
 
 /** Log the failure with the whole of it, and hand back the sentence the job row will carry. */

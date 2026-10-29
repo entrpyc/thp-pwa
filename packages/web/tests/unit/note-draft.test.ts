@@ -1,5 +1,7 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import {
+  NOTE_DRAFT_KEY_PREFIX,
+  clearAllNoteDrafts,
   clearNoteDraft,
   noteDraftKey,
   readNoteDraft,
@@ -16,6 +18,7 @@ import {
  */
 
 const RECORDING = 'a3f1c2d4-0000-4000-8000-000000000001';
+const MEMBER = 'b7e2d1c0-0000-4000-8000-000000000001';
 
 function fakeStorage(): Storage & { readonly map: Map<string, string> } {
   const map = new Map<string, string>();
@@ -45,7 +48,7 @@ afterEach(() => {
 
 describe('a note in progress survives leaving the screen', () => {
   it('gives back the paragraph, the audience and the moment it was anchored to', () => {
-    writeNoteDraft(RECORDING, {
+    writeNoteDraft(MEMBER, RECORDING, {
       text: 'The bit about the fig tree.',
       visibility: 'public',
       anchorMs: 3_725_000,
@@ -53,7 +56,7 @@ describe('a note in progress survives leaving the screen', () => {
 
     // All three, because a note is a paragraph *and* the second it is about (3.1.1) *and* who will
     // read it (3.1.5) — restoring the words alone would hand back a different note.
-    expect(readNoteDraft(RECORDING)).toEqual({
+    expect(readNoteDraft(MEMBER, RECORDING)).toEqual({
       text: 'The bit about the fig tree.',
       visibility: 'public',
       anchorMs: 3_725_000,
@@ -62,31 +65,69 @@ describe('a note in progress survives leaving the screen', () => {
 
   it('keeps one draft per teaching, so two open composers are not two notes', () => {
     const other = 'a3f1c2d4-0000-4000-8000-000000000002';
-    writeNoteDraft(RECORDING, { text: 'About this one.', visibility: 'private', anchorMs: 10_000 });
-    writeNoteDraft(other, { text: 'About that one.', visibility: 'private', anchorMs: 20_000 });
+    writeNoteDraft(MEMBER, RECORDING, { text: 'About this one.', visibility: 'private', anchorMs: 10_000 });
+    writeNoteDraft(MEMBER, other, { text: 'About that one.', visibility: 'private', anchorMs: 20_000 });
 
-    expect(readNoteDraft(RECORDING)?.text).toBe('About this one.');
-    expect(readNoteDraft(other)?.text).toBe('About that one.');
+    expect(readNoteDraft(MEMBER, RECORDING)?.text).toBe('About this one.');
+    expect(readNoteDraft(MEMBER, other)?.text).toBe('About that one.');
     // Namespaced, so nothing else in the origin's local storage can collide with a draft.
-    expect(noteDraftKey(RECORDING).startsWith('thp:note-draft:')).toBe(true);
+    expect(noteDraftKey(MEMBER, RECORDING).startsWith(NOTE_DRAFT_KEY_PREFIX)).toBe(true);
+  });
+
+  it('is one member’s, never read back by another account on the same device', () => {
+    const other = 'b7e2d1c0-0000-4000-8000-000000000002';
+    writeNoteDraft(MEMBER, RECORDING, { text: 'A private thought.', visibility: 'private', anchorMs: 10_000 });
+
+    // The second account on a family device starts with an empty box, whatever the first typed —
+    // and a draft keyed by an older build, without an account, is read back by nobody.
+    expect(readNoteDraft(other, RECORDING)).toBeNull();
+    storage.map.set(`${NOTE_DRAFT_KEY_PREFIX}${RECORDING}`, JSON.stringify({ text: 'old', visibility: 'private', anchorMs: 1 }));
+    expect(readNoteDraft(MEMBER, RECORDING)?.text).toBe('A private thought.');
+    expect(readNoteDraft(other, RECORDING)).toBeNull();
   });
 
   it('is gone once the note it held has been saved', () => {
-    writeNoteDraft(RECORDING, { text: 'Saved in a moment.', visibility: 'private', anchorMs: 1 });
-    clearNoteDraft(RECORDING);
-    expect(readNoteDraft(RECORDING)).toBeNull();
+    writeNoteDraft(MEMBER, RECORDING, { text: 'Saved in a moment.', visibility: 'private', anchorMs: 1 });
+    clearNoteDraft(MEMBER, RECORDING);
+    expect(readNoteDraft(MEMBER, RECORDING)).toBeNull();
     expect(storage.map.size).toBe(0);
+  });
+});
+
+describe('signing out takes every draft with it', () => {
+  it('removes each draft on the device — this account’s, another’s, and an older build’s — and nothing else', () => {
+    const other = 'b7e2d1c0-0000-4000-8000-000000000002';
+    writeNoteDraft(MEMBER, RECORDING, { text: 'Mine.', visibility: 'private', anchorMs: 1 });
+    writeNoteDraft(other, RECORDING, { text: 'Theirs, left behind.', visibility: 'private', anchorMs: 1 });
+    storage.map.set(`${NOTE_DRAFT_KEY_PREFIX}${RECORDING}`, JSON.stringify({ text: 'old', visibility: 'private', anchorMs: 1 }));
+    storage.map.set('thp:something-else', 'kept');
+
+    clearAllNoteDrafts();
+
+    // Whoever signs in next finds an empty composer; what is not a draft is not touched.
+    expect([...storage.map.keys()]).toEqual(['thp:something-else']);
+  });
+
+  it('costs nothing when storage cannot be walked', () => {
+    vi.stubGlobal('window', {
+      localStorage: {
+        get length(): number {
+          throw new Error('site data is blocked');
+        },
+      },
+    });
+    expect(() => clearAllNoteDrafts()).not.toThrow();
   });
 });
 
 describe('an empty composer is not a draft', () => {
   it.each(['', '   ', '\n\t '])('stores nothing for %j, and clears what was there', (text) => {
-    writeNoteDraft(RECORDING, { text: 'Something real.', visibility: 'private', anchorMs: 5_000 });
-    writeNoteDraft(RECORDING, { text, visibility: 'private', anchorMs: 5_000 });
+    writeNoteDraft(MEMBER, RECORDING, { text: 'Something real.', visibility: 'private', anchorMs: 5_000 });
+    writeNoteDraft(MEMBER, RECORDING, { text, visibility: 'private', anchorMs: 5_000 });
 
     // A member who has cleared the box has no note in progress. A stored blank would reopen the
     // composer claiming to hold something and holding nothing.
-    expect(readNoteDraft(RECORDING)).toBeNull();
+    expect(readNoteDraft(MEMBER, RECORDING)).toBeNull();
     expect(storage.map.size).toBe(0);
   });
 });
@@ -104,19 +145,19 @@ describe('what comes back is checked rather than trusted', () => {
     ['an anchor before the start', JSON.stringify({ text: 'x', visibility: 'private', anchorMs: -1 })],
     ['an anchor that is not a number', JSON.stringify({ text: 'x', visibility: 'private', anchorMs: '1' })],
   ])('refuses %s', (_case, raw) => {
-    storage.map.set(noteDraftKey(RECORDING), raw);
+    storage.map.set(noteDraftKey(MEMBER, RECORDING), raw);
     // The string is one this origin wrote, but an older version of this code may have written it —
     // and a `visibility` outside the two would reach the API as a refusal nobody can explain.
-    expect(readNoteDraft(RECORDING)).toBeNull();
+    expect(readNoteDraft(MEMBER, RECORDING)).toBeNull();
   });
 });
 
 describe('storage that will not work costs the member nothing', () => {
   it('reads null and writes nothing when there is no window at all', () => {
     vi.stubGlobal('window', undefined);
-    expect(readNoteDraft(RECORDING)).toBeNull();
-    expect(() => writeNoteDraft(RECORDING, { text: 'x', visibility: 'private', anchorMs: 1 })).not.toThrow();
-    expect(() => clearNoteDraft(RECORDING)).not.toThrow();
+    expect(readNoteDraft(MEMBER, RECORDING)).toBeNull();
+    expect(() => writeNoteDraft(MEMBER, RECORDING, { text: 'x', visibility: 'private', anchorMs: 1 })).not.toThrow();
+    expect(() => clearNoteDraft(MEMBER, RECORDING)).not.toThrow();
   });
 
   it('survives a browser that throws on the accessor itself', () => {
@@ -125,8 +166,8 @@ describe('storage that will not work costs the member nothing', () => {
         throw new Error('site data is blocked');
       },
     });
-    expect(readNoteDraft(RECORDING)).toBeNull();
-    expect(() => writeNoteDraft(RECORDING, { text: 'x', visibility: 'private', anchorMs: 1 })).not.toThrow();
+    expect(readNoteDraft(MEMBER, RECORDING)).toBeNull();
+    expect(() => writeNoteDraft(MEMBER, RECORDING, { text: 'x', visibility: 'private', anchorMs: 1 })).not.toThrow();
   });
 
   it('survives a full quota — the composer still holds the text either way', () => {
@@ -139,7 +180,7 @@ describe('storage that will not work costs the member nothing', () => {
       },
     });
     expect(() =>
-      writeNoteDraft(RECORDING, { text: 'A long one.', visibility: 'private', anchorMs: 1 }),
+      writeNoteDraft(MEMBER, RECORDING, { text: 'A long one.', visibility: 'private', anchorMs: 1 }),
     ).not.toThrow();
   });
 });

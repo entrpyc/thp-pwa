@@ -148,6 +148,15 @@ const TIGHT_ACCOUNT_DELETION = {
 } as const;
 
 /**
+ * **The token-presentation budget, lifted for every server.** The suite is one caller presenting
+ * hundreds of reset, deletion and invitation links; the policy is proved in `token-limits.test.ts`.
+ */
+const UNLIMITED_TOKEN = {
+  TOKEN_RATE_LIMIT_WINDOW_SECONDS: '900',
+  TOKEN_RATE_LIMIT_PER_IP: '100000',
+} as const;
+
+/**
  * **A spend ceiling one job can reach, on the server that has one.**
  *
  * The ledger is the shared database, so a cost written by the spend-ceiling suite is read by
@@ -228,14 +237,14 @@ export default async function setup(project: TestProject): Promise<() => Promise
       // time ([3.10.2](docs/project/prd.md)): without it a machine with no `.env` would send every
       // search to a paid provider behind a key nobody set, and every search would fall back to
       // words alone for a reason that has nothing to do with the test.
-      env: { ...media, ...TEST_BIBLE, ...TEST_EMBEDDER, ...UNLIMITED_SIGN_UP, ...UNLIMITED_SIGN_IN, ...UNLIMITED_PASSWORD_RESET, ...UNLIMITED_ACCOUNT_DELETION, ...captureMail('primary'), ...capturePush('primary') },
+      env: { ...media, ...TEST_BIBLE, ...TEST_EMBEDDER, ...UNLIMITED_SIGN_UP, ...UNLIMITED_SIGN_IN, ...UNLIMITED_PASSWORD_RESET, ...UNLIMITED_ACCOUNT_DELETION, ...UNLIMITED_TOKEN, ...captureMail('primary'), ...capturePush('primary') },
     });
     servers.push(primary);
 
     const broken = await startNextServer({
       name: 'broken-db',
       databaseUrl: UNREACHABLE_DATABASE_URL,
-      env: { ...media, ...TEST_BIBLE, ...TEST_EMBEDDER, ...UNLIMITED_SIGN_UP, ...UNLIMITED_SIGN_IN, ...UNLIMITED_PASSWORD_RESET, ...UNLIMITED_ACCOUNT_DELETION, ...captureMail('broken-db'), ...capturePush('broken-db') },
+      env: { ...media, ...TEST_BIBLE, ...TEST_EMBEDDER, ...UNLIMITED_SIGN_UP, ...UNLIMITED_SIGN_IN, ...UNLIMITED_PASSWORD_RESET, ...UNLIMITED_ACCOUNT_DELETION, ...UNLIMITED_TOKEN, ...captureMail('broken-db'), ...capturePush('broken-db') },
     });
     servers.push(broken);
 
@@ -244,7 +253,7 @@ export default async function setup(project: TestProject): Promise<() => Promise
     const mailDown = await startNextServer({
       name: 'mail-down',
       databaseUrl: appDatabase.url,
-      env: { ...media, ...TEST_BIBLE, ...TEST_EMBEDDER, ...UNLIMITED_SIGN_UP, ...UNLIMITED_SIGN_IN, ...UNLIMITED_PASSWORD_RESET, ...UNLIMITED_ACCOUNT_DELETION, ...FAILING_MAIL, ...capturePush('mail-down') },
+      env: { ...media, ...TEST_BIBLE, ...TEST_EMBEDDER, ...UNLIMITED_SIGN_UP, ...UNLIMITED_SIGN_IN, ...UNLIMITED_PASSWORD_RESET, ...UNLIMITED_ACCOUNT_DELETION, ...UNLIMITED_TOKEN, ...FAILING_MAIL, ...capturePush('mail-down') },
     });
     servers.push(mailDown);
 
@@ -261,6 +270,7 @@ export default async function setup(project: TestProject): Promise<() => Promise
         ...TIGHT_SIGN_IN,
         ...TIGHT_PASSWORD_RESET,
         ...TIGHT_ACCOUNT_DELETION,
+        ...UNLIMITED_TOKEN,
         ...TIGHT_SPEND_CEILING,
         ...captureMail('rate-limited'),
         ...capturePush('rate-limited'),

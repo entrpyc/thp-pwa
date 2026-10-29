@@ -515,7 +515,7 @@ describe('every series write is logged', () => {
         (one) => one.message === message && one['target'] === `series:${created.id}`,
       );
       expect(line, message).toBeDefined();
-      expect(line).toMatchObject({ actorId: admin.id, actorEmail: admin.email, action: message });
+      expect(line).toMatchObject({ actorId: admin.id, action: message });
       expect(typeof line?.time).toBe('string');
       expect(typeof line?.correlationId).toBe('string');
     }

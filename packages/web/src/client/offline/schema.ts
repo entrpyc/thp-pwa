@@ -28,8 +28,16 @@ import type {
  * **Keys carry the account.** Downloads and outbox entries are keyed under the member who made
  * them (the operator's decision for this ticket: downloads survive sign-out, scoped to the
  * account), so a second account on the same device starts with nothing and the first finds theirs
- * on return. Nothing here is cleared on sign-out; the worker's page cache is, which is a different
- * store with a different reason.
+ * on return. Downloads, the outbox and the pictures waiting with it are **not** cleared on
+ * sign-out, for that reason.
+ *
+ * **What sign-out does clear** (the security audit of 28 October 2026, finding 11): the `meta`
+ * facts about *who* is signed in — the active-user marker and that account's kept session
+ * payload. Neither is a download; both would tell the next person on a shared device who was here
+ * before them. The kept session payload also never carries the e-mail address, whatever the
+ * server answered (`offline-api.ts`, `storedSession`): offline, the surface needs a name, a role,
+ * a speed and an avatar, and an address held on the device is an address a device can leak. The
+ * worker's page cache is cleared as well, which is a different store with a different reason.
  */
 
 export const OFFLINE_DB_NAME = 'thp-offline';

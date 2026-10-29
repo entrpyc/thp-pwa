@@ -159,15 +159,26 @@ export async function completeJob(
  * **Terminal.** There is no retry and no backoff: docs/project/prd.md 3.21.2.3 asks the pipeline to
  * halt and flag, and the row stays failed until a human re-enqueues the step. Truncation happens
  * here rather than at the call site so every writer of this column obeys the same cap.
+ *
+ * `providerMeta` is what the step had already paid for when it failed — a transcript billed and
+ * then refused by the confidence gate, a model answer billed and then refused for its shape. It is
+ * written so the spend ledger counts it (spend.ts): a failure that cost money is still money spent.
+ * Absent for a failure that spent nothing, which leaves the column as it was.
  */
 export async function failJob(
   id: string,
   reason: string,
   executor: Executor = getDatabase(),
+  providerMeta: ProviderMeta | null = null,
 ): Promise<JobRow> {
   const rows = await queryable(executor)
     .update(job)
-    .set({ status: 'failed', finishedAt: sql`now()`, error: reason.slice(0, MAX_JOB_ERROR_LENGTH) })
+    .set({
+      status: 'failed',
+      finishedAt: sql`now()`,
+      error: reason.slice(0, MAX_JOB_ERROR_LENGTH),
+      ...(providerMeta === null ? {} : { providerMeta }),
+    })
     .where(eq(job.id, id))
     .returning();
 
@@ -176,11 +187,31 @@ export async function failJob(
   return row;
 }
 
-/** A job the sweep took back: the row it failed, and the fresh attempt it queued in its place. */
+/**
+ * A job the sweep took back: the row it failed, and the fresh attempt it queued in its place —
+ * or `null` when it queued none, because the row was the {@link MAX_SWEEP_RECLAIMS}th crash in a
+ * row and the step is left failed for a person to look at.
+ */
 export interface ReclaimedJob {
   readonly failed: JobRow;
-  readonly requeued: JobRow;
+  readonly requeued: JobRow | null;
 }
+
+/**
+ * **How many times in a row the sweep will absorb a crash of the same step before it stops.**
+ *
+ * The sweep requeues a job because the worker went away under it — and a job that *kills* the
+ * worker (an original that exhausts memory, an uncaught rejection in a handler) goes away under
+ * it every time. With the supervisor restarting the process after each crash, an uncapped sweep
+ * is a crash loop that re-pays whatever provider call the handler made before dying, forever
+ * (security audit 2026-10-28, finding 10).
+ *
+ * Counted over the pair's most recent rows: a run that succeeded, failed on its own merits or
+ * that an admin re-ran in between starts the count again, so the cap only ever stops a step that
+ * has crashed this many times with nothing else happening to it. An admin's re-run from the
+ * pipeline view is an ordinary `enqueueJob` and is never refused by this.
+ */
+export const MAX_SWEEP_RECLAIMS = 3;
 
 /**
  * Fail every `running` job and queue a fresh attempt of each — **crash recovery, not retry.**
@@ -216,6 +247,19 @@ export async function sweepRunning(
 
     const reclaimed: ReclaimedJob[] = [];
     for (const row of abandoned) {
+      const crashes = (await consecutiveSweepFailures(row, reason, tx)) + 1;
+      if (crashes >= MAX_SWEEP_RECLAIMS) {
+        // The cap: this crash is the last one the sweep absorbs. The row says why it is not queued
+        // again, because the pipeline view reads this column and nothing else.
+        const failed = await failJob(
+          row.id,
+          `${reason}; that is ${crashes} times in a row, so it is not queued again — ` +
+            're-run the step from the pipeline view once the cause is understood',
+          tx,
+        );
+        reclaimed.push({ failed, requeued: null });
+        continue;
+      }
       const failed = await failJob(row.id, reason, tx);
       const requeued = await enqueueJob(
         { recordingId: row.recordingId, step: row.step, correlationId: row.correlationId },
@@ -225,6 +269,38 @@ export async function sweepRunning(
     }
     return reclaimed;
   }, executor);
+}
+
+/**
+ * How many of the pair's rows immediately before this one the sweep failed, counting back from
+ * the latest and stopping at the first row that was something else — a success, an ordinary
+ * failure, or an admin's re-run. The reason string is the sweep's signature: no other writer of
+ * `error` begins a row with it.
+ */
+async function consecutiveSweepFailures(
+  row: JobRow,
+  reason: string,
+  executor: Executor,
+): Promise<number> {
+  const earlier = (await queryable(executor)
+    .select({ status: job.status, error: job.error })
+    .from(job)
+    .where(
+      and(
+        eq(job.recordingId, row.recordingId),
+        eq(job.step, row.step),
+        sql`${job.attempt} < ${row.attempt}`,
+      ),
+    )
+    .orderBy(sql`${job.attempt} desc`)
+    .limit(MAX_SWEEP_RECLAIMS)) as { status: JobStatus; error: string | null }[];
+
+  let count = 0;
+  for (const one of earlier) {
+    if (one.status !== 'failed' || !(one.error ?? '').startsWith(reason)) break;
+    count += 1;
+  }
+  return count;
 }
 
 /**

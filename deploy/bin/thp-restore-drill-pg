@@ -1,0 +1,150 @@
+#!/usr/bin/env bash
+#
+# `thp-restore-drill-pg` — **everything scripts/restore-drill.sh needs to do as `postgres`, and
+# nothing else.**
+#
+# The drill used to escalate to bare `psql`, `pg_ctl`, `pgbackrest`, `tee` and `touch` as the
+# `postgres` user. Each of those with free arguments is a shell as `postgres` (`psql` has `\!`,
+# `tee` writes any file the cluster owns, `pg_ctl` starts any data directory), and the web and
+# worker processes run as the same service user the drill escalates from — so a code-execution
+# bug in either was a Postgres superuser. This script is the fix: sudoers lets the service user run
+# *this file*, and this file only knows how to do the drill's steps against the one scratch
+# directory and the one stanza named below. The arguments it takes are a port and a database name,
+# both validated before they reach anything.
+#
+# Installed once, root-owned so the service user cannot edit what it is allowed to escalate into:
+#
+#   sudo install -o root -g root -m 755 deploy/bin/thp-restore-drill-pg /usr/local/sbin/thp-restore-drill-pg
+#
+# The sudoers line that pairs with it is in deploy/sudoers/thp. Change the two together: a step
+# added to the drill is a subcommand added here, not a new command in sudoers.
+#
+# Never run against the live cluster: every path is under SCRATCH_DIR, and `restore` and `stop`
+# are the only steps that remove anything, which is always that directory.
+
+set -euo pipefail
+
+STANZA=thp
+SCRATCH_DIR=/var/lib/postgresql/restore-drill
+PG_BIN=/usr/lib/postgresql/17/bin
+
+usage() {
+  cat >&2 <<USAGE
+usage: thp-restore-drill-pg <step> [args]
+  live-port                 print the port the live cluster listens on
+  restore                   wipe $SCRATCH_DIR and restore the latest '$STANZA' backup into it
+  prepare <port>            write the minimal configuration the scratch cluster needs on <port>
+  start <port>              start the scratch cluster on <port>
+  in-recovery <port>        print t/f: is the scratch cluster still replaying WAL
+  counts <port> <database>  print the drill's row counts from <database> on the scratch cluster
+  stop                      stop the scratch cluster (if running) and remove $SCRATCH_DIR
+USAGE
+  exit 2
+}
+
+# A TCP port above the privileged range, never the live cluster's — the drill guards against the
+# latter too, but this file must not trust its caller.
+port_arg() {
+  local port="${1:-}"
+  if [[ ! "$port" =~ ^[0-9]{4,5}$ ]] || (( port < 1024 || port > 65535 )); then
+    echo "thp-restore-drill-pg: '$port' is not a usable port" >&2
+    exit 2
+  fi
+  if [[ "$port" == "$(psql -Atc 'show port')" ]]; then
+    echo "thp-restore-drill-pg: refusing port $port — it is the live cluster's" >&2
+    exit 2
+  fi
+  printf '%s' "$port"
+}
+
+# A plain identifier: no quotes, no spaces, nothing psql would read as an option.
+db_arg() {
+  local db="${1:-}"
+  if [[ ! "$db" =~ ^[A-Za-z0-9_-]{1,63}$ ]]; then
+    echo "thp-restore-drill-pg: '$db' is not a database name" >&2
+    exit 2
+  fi
+  printf '%s' "$db"
+}
+
+# `user` is a reserved word, hence the quoting — the table really is called that. The same query
+# scripts/restore-drill.sh runs against production, so the two outputs compare as strings.
+COUNTS_SQL="
+  select 'user=' || (select count(*) from \"user\")
+      || ' recording=' || (select count(*) from recording)
+      || ' transcript=' || (select count(*) from transcript)
+      || ' segment=' || (select count(*) from segment)
+      || ' migrations=' || (select count(*) from drizzle.__drizzle_migrations)"
+
+case "${1:-}" in
+  live-port)
+    [[ $# -eq 1 ]] || usage
+    psql -Atc 'show port'
+    ;;
+
+  restore)
+    [[ $# -eq 1 ]] || usage
+    rm -rf "$SCRATCH_DIR"
+    install -d -m 700 "$SCRATCH_DIR"
+    pgbackrest --stanza="$STANZA" --pg1-path="$SCRATCH_DIR" --type=default restore
+    ;;
+
+  prepare)
+    [[ $# -eq 2 ]] || usage
+    PORT=$(port_arg "$2")
+    # Ubuntu keeps postgresql.conf, pg_hba.conf and pg_ident.conf under /etc/postgresql rather than
+    # in the data directory, so the backup does not contain them and the restored directory has
+    # none. Postgres refuses to start without the first two. Minimal ones are written here — **not
+    # copied from /etc**, whose postgresql.conf pins `data_directory` to the live cluster and would
+    # start production instead of the scratch copy. On a layout that does keep them in the data
+    # directory, the restored files are left alone.
+    if [[ ! -f "$SCRATCH_DIR/postgresql.conf" ]]; then
+      cat > "$SCRATCH_DIR/postgresql.conf" <<CONF
+# Written by thp-restore-drill-pg for the scratch cluster. Everything else is the default.
+listen_addresses = ''
+CONF
+    fi
+    if [[ ! -f "$SCRATCH_DIR/pg_hba.conf" ]]; then
+      cat > "$SCRATCH_DIR/pg_hba.conf" <<CONF
+local all postgres peer
+CONF
+    fi
+    touch "$SCRATCH_DIR/pg_ident.conf"
+    # The scratch cluster must not archive its own WAL back into the repository, and must not take
+    # the live port. Both are set after the restore, because restore lays down the configuration
+    # files.
+    cat >> "$SCRATCH_DIR/postgresql.auto.conf" <<CONF
+port = $PORT
+archive_mode = off
+CONF
+    ;;
+
+  start)
+    [[ $# -eq 2 ]] || usage
+    PORT=$(port_arg "$2")
+    "$PG_BIN/pg_ctl" -D "$SCRATCH_DIR" -o "-p $PORT" -w -t 120 start
+    ;;
+
+  in-recovery)
+    [[ $# -eq 2 ]] || usage
+    PORT=$(port_arg "$2")
+    psql -p "$PORT" -Atc 'select pg_is_in_recovery()'
+    ;;
+
+  counts)
+    [[ $# -eq 3 ]] || usage
+    PORT=$(port_arg "$2")
+    DB=$(db_arg "$3")
+    psql -p "$PORT" -d "$DB" -At -c "$COUNTS_SQL"
+    ;;
+
+  stop)
+    [[ $# -eq 1 ]] || usage
+    "$PG_BIN/pg_ctl" -D "$SCRATCH_DIR" -m immediate stop > /dev/null 2>&1 || true
+    rm -rf "$SCRATCH_DIR"
+    ;;
+
+  *)
+    usage
+    ;;
+esac

@@ -370,3 +370,36 @@ What was verified as sound is listed at the end; it is a long list and the overa
 6. Spend-on-failure ledger, attempt cap, upload size pinning (findings 8, 9, 10).
 7. Sign-out hygiene in localStorage/IndexedDB/service worker (findings 11, 21).
 8. The remaining Lows as a hardening pass.
+
+---
+
+## Resolution (29 October 2026, branch `security`)
+
+| # | Status | What changed |
+|---|--------|--------------|
+| 1 | Fixed | `next` 16.3.1 → 16.4.3 (pulls `sharp` 0.35.5); `images.unoptimized` so `/_next/image` is not served. |
+| 2 | Elsewhere | Public registration is being removed in a separate branch; nothing here. |
+| 3 | Fixed | `deploy/sudoers/thp` pins every argument; the drill's postgres steps live in a root-installed `deploy/bin/thp-restore-drill-pg`; no bare `psql`/`pg_ctl`/`tee`/`touch` remain. |
+| 4 | Fixed | Avatar and artwork keys must carry their prefix; `setAvatar` refuses a key another account holds; unique indexes on `user.avatar_key` and `series.artwork_key` (migration to be generated before merge). |
+| 5 | Fixed | `nodemailer` 7.0.13 → 10.3.1. |
+| 6 | Fixed | Nonce CSP from `packages/web/src/proxy.ts`; nosniff, `X-Frame-Options`, Referrer-Policy and Permissions-Policy from `next.config.ts`; HSTS, `server_tokens off` and token-path log exclusion in nginx. |
+| 7 | Fixed | `embeddingVisibleTo` applies `noBlockBetween` through the note row for `note` embeddings. |
+| 8 | Fixed | Paid steps throw a failure carrying their spend; `failJob` persists it; the ceiling sums succeeded and failed rows. |
+| 9 | Partly | Worker re-checks the object's size against the upload ceiling before every download (the row stores no finalised size) and cuts a stream that overruns it. Signing `Content-Length` on the presigned PUT and pinning the ETag are not done: both change the upload client. |
+| 10 | Fixed | The boot sweep leaves a job `failed` after three attempts and logs at error; an admin re-run is a fresh enqueue. |
+| 11 | Fixed | Drafts keyed per account and cleared on sign-out; the IndexedDB session copy drops `email` and is deleted on sign-out; downloads stay. |
+| 12 | Fixed, one deviation | Web endpoints must be on a known push-service host; store tokens are shape-checked; the APNs path is encoded. Re-pointing an endpoint to the account that presents it **stays allowed** (a shared phone whose previous session expired needs it) and is now logged at `warn` with the previous owner. |
+| 13 | Fixed | A per-caller budget (`TOKEN_RATE_LIMIT_*`) in front of the reset, deletion and invitation previews and completions. |
+| 14 | Fixed | `22P02` answers `invalid_input`; sync entries require a uuid recording id. |
+| 15 | Fixed | Blocks held against a deleted member move to the placeholder. |
+| 16 | Fixed | Both halves of `PATCH /users/:id` are authorised before either write. |
+| 17 | Fixed | `statement_timeout` 30 s and `idle_in_transaction_session_timeout` 10 s on the pool (migrations unbounded); `ssl: 'require'` when the host is not loopback. |
+| 18 | Fixed | `requireTLS` on every non-465 port. |
+| 19 | Fixed | `actorEmail` removed from every log line; tests assert its absence. |
+| 20 | Open | Port 7856 left in the allow list until the operator says what listens there. |
+| 21 | Fixed | The page cache is also purged on a successful sign-in or sign-up. |
+| 22 | Fixed | Actions SHA-pinned; `upload-sourcemaps.sh` parses `.env` instead of sourcing it; nginx skips access logs for token URLs; README notes tag protection. `skip_ci_gate` stays, by design. |
+| 23 | Fixed | Chapter titles and summaries are clipped to the admin edit limits. |
+| 24 | Fixed | `vitest` 4.1.12, `@capacitor/cli` 8.6.0. `drizzle-kit` left: the only fix is a downgrade. |
+| 25–26, 28 | Noted | No code change. |
+| 27 | Fixed | Compose binds Postgres and MinIO to `127.0.0.1`. |
