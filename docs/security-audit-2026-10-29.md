@@ -431,3 +431,36 @@ Three independent channels, all confirmed in code.
 4. Findings 4, 8, 9 and 12: budgets, grant binding and spend bounds.
 5. Findings 10 and 11 before the next store submission.
 6. The Lows as a hardening pass; decide the Info items in the privacy notice.
+
+## Resolution (29 October 2026, branch `security-improvements`)
+
+| # | Status | What changed |
+|---|--------|--------------|
+| 1 | Fixed | Migration `0045_sos_report` (the table, its indexes and checks, `ALTER TYPE notification_kind ADD VALUE 'sos_reported'`, the two unique indexes) generated from the schema. CI runs `drizzle-kit generate` and fails on any file it writes. `verify:production`'s `migrations` check now compares the latest snapshot's tables and enum labels against `information_schema`/`pg_enum`. `skip_ci_gate` requires a written `skip_ci_gate_reason`, carried into the run summary and the release notes. Ship as a patch release: production is still at 0044. |
+| 2 | Fixed | `sos.ts` reads an anonymous signal, and its author's replies, under the author-side block only (`blockPlacedAgainstViewer`); the `sos_raised` audience insert does the same; `describeReply` and the praying list mask the anonymous author; the thread-reply title says "Someone" when the replier is the anonymous author. Integration test added. |
+| 3 | Fixed | `apiRoute` refuses non-GET requests whose `Sec-Fetch-Site` is cross-site, whose `Origin` is not this site's, or whose body is not `application/json`. The cookie is `__Host-thp_session` wherever it is `Secure` (plain name in development only). Integration test added. |
+| 4 | Fixed | Avatar, note-image and artwork grants sign `Content-Length` and last ten minutes (`IMAGE_UPLOAD_GRANT_SECONDS`). The recording grant is unchanged. Size and ETag are not stored at commit. |
+| 5 | Fixed | A caller holding `sos.moderate` reads past blocks placed against them (`visibleAcrossBlocks`); their own blocks still apply. Blocking an admin stays allowed, as the policy module decided. Notes moderation already reached a note by id. |
+| 6 | Fixed | Removing a signal is a mark (`removed_at`, `removed_by`; migration `0046`), filtered from every member read; its bell entries are deleted explicitly; the report, replies and praying rows survive. Resolve and remove run in one transaction. Account deletion re-points `sos_signal.author_id` and `sos_reply.author_id` at the placeholder and rewrites `sos_raised` titles. |
+| 7 | Fixed | `clearSearchCache()` on publish, unpublish, note edit, note delete/moderate and block creation. |
+| 8 | Fixed | Budgets `note-write` (120/h, shared with sync), `sos-write` (40/h), `report` (20/h), `block` (30/h), `self-delete` (10/h, spent before the hash check). Reply notifications are not collapsed per window. |
+| 9 | Fixed | Password-reset and deletion requests answer after parsing the address; the lookup, row and send run after the response. |
+| 10 | Fixed | `android:allowBackup="false"`. |
+| 11 | Fixed | `/profile` and `/notifications` are no longer cacheable (`/profile/downloads` is); a cached page is served only while `thp-offline.meta.activeUser` names an account; the RSC marker is a query parameter and the page cache is `thp-pages-v2`. |
+| 12 | Partly | A transcription is refused before the provider call when its size-estimated cost would pass the ceiling; a Deepgram timeout is ledgered at that estimate (`TranscriptionTimeoutError`). Running jobs are not counted: worker concurrency is pinned to 1. |
+| 13 | Partly | Sessions expire ninety days after sign-in whatever the rolling window (`SESSION_ABSOLUTE_LIFETIME_MS`). No change-password or sign-out-everywhere route yet. |
+| 14 | Fixed | Note-image keys are minted under `note-images/<member id>/`; a write accepts a new key only under the writer's own prefix. |
+| 15 | Decided | Deactivated accounts may complete self-deletion; documented in `account-deletion/service.ts`. |
+| 16 | Fixed | `recordingIds` capped at 500 before parsing; `positionMs`/`durationMs` capped at 24 h; `listened_ms` capped at twice the known duration (a day when unknown); SQLSTATE `22003` answers `invalid_input`. |
+| 17 | Fixed | Partial unique indexes on open reports per reporter (notes and SOS, migration `0046`), read as "already reported"; the SOS cap is counted and written under a per-author advisory lock. Outbox receipts unchanged: a second concurrent flush of one `clientId` can still create the note twice. |
+| 18 | Fixed | Flow-session items and teachings are gated on `recordingIsPublished()`. |
+| 19 | Fixed | The mailer logs a recipient digest and the subject length; provider error bodies lose URL query strings before they leave the worker (`@thp/shared/observability/redact`). |
+| 20 | Partly | `-nostdin -protocol_whitelist file` on every ffmpeg input; stderr bounded at 64 KB. Renditions are still read whole into memory and superseded keys are not deleted (the store has no delete outside the two image prefixes). |
+| 21 | Partly | 10 s timeouts on FCM (token and send) and Web Push. Delivery is still awaited inside the request. |
+| 22 | Partly | Push landing paths are resolved and origin-compared in the worker and the shell listener; foreign `session:*` meta is deleted on activate. Downloads still keep other members' public notes across sign-out. |
+| 23 | Fixed | `skip_ci_gate_reason` (see 1); `deploy-ssh-entry.sh` refuses a tag below the deployed one unless the request says `rollback`. The deploy key remains a repository-level secret. |
+| 24 | Noted | No change: uuids make enumeration impractical and the 403/404 split is a documented decision. |
+| 25 | Fixed | `next start -H 127.0.0.1` in `ecosystem.config.cjs`. |
+| 26 | Fixed | `/relay/` forwards only the PostHog client's paths; everything else is 404. No CSP reporting endpoint. |
+| 27–28 | Noted | No code change. |
+| 29 | Partly | `verify:production` now reports port 7856 as unexpected (delete the ufw rule on the box); the production IP is out of the README. `.well-known` placeholders and the pgBackRest cipher need material only the operator holds. |

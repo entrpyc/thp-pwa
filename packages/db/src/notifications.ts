@@ -1,12 +1,14 @@
 import { and, desc, eq, isNull, sql } from 'drizzle-orm';
 import { getDatabase, queryable, type Executor } from './client';
-import { noBlockBetween } from './member-blocks';
-import { announcement, notification, user } from './schema';
+import { blockPlacedByViewer, noBlockBetween } from './member-blocks';
+import { announcement, notification, sosSignal, user } from './schema';
 import {
   ROLE,
+  SOS_URGENCIES,
   noteReactionNotificationTitle,
   noteReplyNotificationTitle,
   noteReportedNotificationTitle,
+  sosRaisedNotificationTitle,
   sosReportedNotificationTitle,
   sosReplyNotificationTitle,
   type AnnouncementKind,
@@ -183,12 +185,21 @@ export async function insertNotificationForAllMembers(
  * nothing; the row is simply never written, and so never pushed. One `insert … select`, for the
  * reason the module header gives, and the signal's id on every row so an admin's removal takes
  * the notices with it.
+ *
+ * **An anonymous signal is withheld only from members the author blocked.** Withholding it from
+ * members who blocked the author would tell each of them, by the notice's absence, that the
+ * person they blocked is the one asking (docs/security-audit-2026-10-29.md, finding 2); the list
+ * read makes the same carve-out (`sos.ts`), so the notice and the board agree.
  */
 export async function insertNotificationForSosAudience(
   content: NotificationContent & { readonly sosSignalId: string },
-  authorId: string,
+  author: { readonly id: string; readonly anonymous: boolean },
   executor: Executor = getDatabase(),
 ): Promise<string[]> {
+  const authorId = author.id;
+  const audience = author.anonymous
+    ? sql`not ${blockPlacedByViewer(authorId, user.id)}`
+    : noBlockBetween(authorId, user.id);
   const written = await queryable(executor).execute(sql`
     insert into ${notification}
       (user_id, kind, title, body, href, actor_id, sos_signal_id)
@@ -203,7 +214,7 @@ export async function insertNotificationForSosAudience(
     from ${user}
     where ${user.deactivatedAt} is null
       and ${user.id} <> ${authorId}::uuid
-      and ${noBlockBetween(authorId, user.id)}
+      and ${audience}
     returning ${notification.id}
   `);
   return (written as unknown as { id: string }[]).map((row) => row.id);
@@ -311,9 +322,7 @@ export async function anonymiseNotificationsByActor(
     .set({ title: noteReportedNotificationTitle(placeholderName) })
     .where(and(eq(notification.actorId, actorId), eq(notification.kind, 'note_reported')))
     .returning({ id: notification.id });
-  // The fourth: the title an SOS author read when this member replied to their signal. A raised
-  // signal's own notices need no rewrite — the signal cascades with its author, and the notices
-  // cascade with the signal.
+  // The fourth: the title an SOS author read when this member replied to their signal.
   const sosReplies = await db
     .update(notification)
     .set({ title: sosReplyNotificationTitle(placeholderName) })
@@ -325,7 +334,28 @@ export async function anonymiseNotificationsByActor(
     .set({ title: sosReportedNotificationTitle(placeholderName) })
     .where(and(eq(notification.actorId, actorId), eq(notification.kind, 'sos_reported')))
     .returning({ id: notification.id });
-  return replies.length + reactions.length + reports.length + sosReplies.length + sosReports.length;
+  // The sixth: the whole group's notice that this member raised a prayer request. The signal now
+  // belongs to the placeholder (`reassignSosOfDeletedAuthor`), so the title follows the name. The
+  // title carries the urgency, so one update per urgency; an anonymous signal's title names
+  // nobody already and is left alone.
+  let sosRaised = 0;
+  for (const urgency of SOS_URGENCIES) {
+    const rows = await db
+      .update(notification)
+      .set({ title: sosRaisedNotificationTitle(placeholderName, urgency) })
+      .where(
+        and(
+          eq(notification.actorId, actorId),
+          eq(notification.kind, 'sos_raised'),
+          sql`${notification.sosSignalId} in (select ${sosSignal.id} from ${sosSignal} where ${sosSignal.urgency} = ${urgency}::sos_urgency and ${sosSignal.anonymous} = false)`,
+        ),
+      )
+      .returning({ id: notification.id });
+    sosRaised += rows.length;
+  }
+  return (
+    replies.length + reactions.length + reports.length + sosReplies.length + sosReports.length + sosRaised
+  );
 }
 
 // =================================================================================================

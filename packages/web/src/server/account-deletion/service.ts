@@ -107,10 +107,30 @@ export async function requestAccountDeletion(
     return REQUESTED;
   }
 
+  // Off the request path, for the reason the password-reset request gives: the uniform answer
+  // was not uniform in time (docs/security-audit-2026-10-29.md, finding 9).
+  void settleRequest(email).catch((cause: unknown) => {
+    logger.error('account-deletion.request.failed', {
+      errorMessage: cause instanceof Error ? cause.message : String(cause),
+    });
+  });
+  return REQUESTED;
+}
+
+/**
+ * What a request does once the caller has been answered.
+ *
+ * **A deactivated account may still be deleted**, by decision (docs/security-audit-2026-10-29.md,
+ * finding 15): deactivation ends access, and Apple 5.1.1(v) and Google Play's account-deletion
+ * policy are about the person's right to erase their data, which an admin's moderation does not
+ * take away. What a deactivated member cannot do is sign in, and this door never signs them in.
+ * Only a row already deleted — a placeholder — is nobody's to erase.
+ */
+async function settleRequest(email: string): Promise<void> {
   const row = await findUserByEmail(email);
   if (row === null || row.deletedAt !== null) {
     logger.warn('account-deletion.request.ignored', { reason: 'unknown-address' });
-    return REQUESTED;
+    return;
   }
 
   const outstanding = await findLiveAccountDeletionRequestForUser(row.id);
@@ -123,11 +143,10 @@ export async function requestAccountDeletion(
       reason: 'within-resend-interval',
       actorId: row.id,
     });
-    return REQUESTED;
+    return;
   }
 
   await issueAndSend(row);
-  return REQUESTED;
 }
 
 /** Write the row, then send; a failed send revokes the row so the next request is not made to wait. */

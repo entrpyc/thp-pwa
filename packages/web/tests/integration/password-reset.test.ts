@@ -261,6 +261,21 @@ describe('requesting a reset', () => {
     expect(refused.rawBody).toBe(working.rawBody);
     expect(refused.status).not.toBe(503);
 
+    // The row and the send happen after the answer (security audit 2026-10-29, finding 9), so wait
+    // for the failed send to have revoked its row before reading what was left behind.
+    await expect
+      .poll(
+        async () =>
+          (
+            await sql<{ count: string }[]>`
+              select count(*)::text as count from password_reset
+              where user_id = ${account.id} and revoked_at is not null
+            `
+          )[0]?.count,
+        { timeout: 15_000 },
+      )
+      .toBe('1');
+
     // Nothing usable was left behind: no live reset holds the account's one slot, so a later
     // request is not made to wait out the re-send interval for a token nobody received.
     const live = await sql<{ count: string }[]>`

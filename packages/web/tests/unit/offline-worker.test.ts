@@ -77,17 +77,30 @@ describe('what the worker decides', () => {
     });
     expect(offline.decide({ url: 'https://hub.test/recordings/r1?_rsc=abc', rsc: true })).toEqual({
       kind: 'page',
-      key: 'https://hub.test/recordings/r1#rsc',
+      key: 'https://hub.test/recordings/r1?__thp_rsc=1',
     });
     expect(offline.decide({ url: 'https://hub.test/recordings/r1', rsc: true, prefetch: true }).kind).toBe('pass');
     expect(offline.isMemberPage('/profile/downloads')).toBe(true);
     expect(offline.isMemberPage('/reset-password')).toBe(false);
   });
 
+  it('never keeps the pages that say who the device belonged to: the profile and the inbox (finding 11)', () => {
+    expect(offline.isMemberPage('/profile')).toBe(false);
+    expect(offline.isMemberPage('/notifications')).toBe(false);
+    expect(offline.isMemberPage('/profile/settings')).toBe(false);
+    expect(offline.decide({ url: 'https://hub.test/profile', mode: 'navigate' }).kind).toBe('fallback');
+    expect(offline.decide({ url: 'https://hub.test/notifications', mode: 'navigate' }).kind).toBe('fallback');
+  });
+
   it('keys a page without the per-request token Next appends, so a cold start finds the copy', () => {
     expect(offline.pageKey(new URL('https://hub.test/series/s1?_rsc=zzz'), false)).toBe('https://hub.test/series/s1');
+    // The RSC marker is a query parameter: the Cache API ignores fragments, so a fragment marker
+    // made the document and the RSC payload one entry that overwrote each other (finding 11).
     expect(offline.pageKey(new URL('https://hub.test/recordings/r1?tab=chapters&_rsc=zzz'), true)).toBe(
-      'https://hub.test/recordings/r1?tab=chapters#rsc',
+      'https://hub.test/recordings/r1?tab=chapters&__thp_rsc=1',
+    );
+    expect(offline.pageKey(new URL('https://hub.test/recordings/r1'), true)).not.toBe(
+      offline.pageKey(new URL('https://hub.test/recordings/r1'), false),
     );
   });
 });

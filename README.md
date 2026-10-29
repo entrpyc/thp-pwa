@@ -543,7 +543,7 @@ whatever the switches say (3.17.13), and an admin announcement can be muted like
 ## Deployment
 
 The one deployment: **`https://thp.indepthwebsolutions.com`**, on a Contabo Ubuntu VPS at
-`167.86.71.60` — 4 vCPU, 8 GB RAM, 100 GB SSD, running the app, the worker and Postgres together.
+`<production-ip>` — 4 vCPU, 8 GB RAM, 100 GB SSD, running the app, the worker and Postgres together.
 Co-location is a deployment fact, not a structural one; the three stay separate processes.
 
 Two commands matter after the first setup:
@@ -593,9 +593,9 @@ The workflow needs, in the repository's **Settings**:
 | :------------------------- | :--------------------- | :--------------------------------------------------------------------------- |
 | Environments → production  | Required reviewers     | Whoever may approve a deploy.                                                |
 | Secrets → Actions          | `DEPLOY_SSH_KEY`       | The private half of the deploy key, generated in **First setup — 8**.        |
-| Variables → Actions        | `DEPLOY_HOST`          | `167.86.71.60`                                                               |
+| Variables → Actions        | `DEPLOY_HOST`          | `<production-ip>`                                                               |
 | Variables → Actions        | `DEPLOY_USER`          | `thp`                                                                        |
-| Variables → Actions        | `DEPLOY_KNOWN_HOSTS`   | The output of `ssh-keyscan -t ed25519 167.86.71.60`, so the runner pins the host. |
+| Variables → Actions        | `DEPLOY_KNOWN_HOSTS`   | The output of `ssh-keyscan -t ed25519 <production-ip>`, so the runner pins the host. |
 | Rules → Rulesets           | Tag protection on `v*`  | Only the workflow (and admins) may create or delete release tags. The box deploys whatever `vX.Y.Z` it is handed, so a tag anyone with push access could cut is a deploy anyone with push access could make. |
 
 The actions the workflows use are pinned to commit SHAs rather than moving tags
@@ -737,7 +737,7 @@ one script it may run:
 
 ```bash
 ssh-keygen -t ed25519 -N '' -C 'thp deploy' -f /tmp/thp-deploy      # on your machine
-ssh-keyscan -t ed25519 167.86.71.60                                   # → DEPLOY_KNOWN_HOSTS
+ssh-keyscan -t ed25519 <production-ip>                                   # → DEPLOY_KNOWN_HOSTS
 ```
 
 Then, as `thp` on the box, one line in `~/.ssh/authorized_keys` — the public key prefixed with the
@@ -748,7 +748,7 @@ command="/home/thp/app/scripts/deploy-ssh-entry.sh",no-port-forwarding,no-agent-
 ```
 
 Put the private key in the `DEPLOY_SSH_KEY` secret, delete it locally, and check the binding holds:
-`ssh -i /tmp/thp-deploy thp@167.86.71.60 whoami` must print `refused: expected a release tag`,
+`ssh -i /tmp/thp-deploy thp@<production-ip> whoami` must print `refused: expected a release tag`,
 not `thp`.
 
 ### Backups

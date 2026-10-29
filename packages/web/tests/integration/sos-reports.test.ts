@@ -26,7 +26,13 @@ import {
   type SosSignalDetailView,
   type SosSignalPayload,
 } from '@thp/shared';
-import { createDatabase, findSosReportById, insertMemberBlock, type DatabaseHandle } from '@thp/db';
+import {
+  createDatabase,
+  findSosReportById,
+  findSosSignalById,
+  insertMemberBlock,
+  type DatabaseHandle,
+} from '@thp/db';
 import { closeTestDatabase, createAccount, signIn, type TestAccount } from '../support/accounts';
 import { readWholeInbox } from '../support/inbox';
 
@@ -404,7 +410,15 @@ describe('reporting a prayer request and a reply on it', () => {
     expect(sosRows(removed.body, signal.id)).toHaveLength(0);
 
     expect((await read(ana, signal.id)).code).toBe('not_found');
-    expect(await findSosReportById(open[0]?.id ?? '', handle)).toBeNull();
+    // The request is a mark, not a delete (security audit 2026-10-29, finding 6): the report that
+    // asked for the removal survives as the moderation record, resolved, and the row it is about
+    // says who removed it and when.
+    const kept = await findSosReportById(open[0]?.id ?? '', handle);
+    expect(kept?.outcome).toBe('removed');
+    expect(kept?.resolvedBy).toBe(admin.id);
+    const marked = await findSosSignalById(signal.id, handle);
+    expect(marked?.removedAt).not.toBeNull();
+    expect(marked?.removedBy).toBe(admin.id);
 
     // The answer survived the cascade, and lands on the board rather than on a page that is gone.
     // The earlier answers about this request's replies named the request, so they went with it —
@@ -415,6 +429,11 @@ describe('reporting a prayer request and a reply on it', () => {
     expect(anaNow.some((one) => one.href === sosPagePath(signal.id))).toBe(false);
     expect((await notices(cara, 'report_resolved')).some((one) => one.href === SOS_PAGE_PATH)).toBe(true);
 
-    expect((await resolve(open[0]?.id ?? '', admin, 'dismissed')).code).toBe('not_found');
+    // The report row survives the removal, resolved, so a second decision on it is read as the one
+    // already taken rather than as a report that is gone.
+    const again = await resolve(open[0]?.id ?? '', admin, 'dismissed');
+    expect(again.status).toBe(200);
+    expect(again.body.outcome).toBe('removed');
+    expect(again.body.closed).toBe(0);
   });
 });

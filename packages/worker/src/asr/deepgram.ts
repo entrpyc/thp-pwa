@@ -1,6 +1,8 @@
+import { redactProviderText } from '@thp/shared/observability/redact';
 import { readAsrApiKey, type EnvSource } from './env';
 import {
   TranscriptionError,
+  TranscriptionTimeoutError,
   type TranscribedSegment,
   type Transcriber,
   type TranscriptionRequest,
@@ -83,6 +85,8 @@ export function deepgramTranscriber(options: DeepgramOptions = {}): Transcriber 
   return {
     name: 'deepgram',
 
+    estimateCostUsd: costOf,
+
     async transcribe(request: TranscriptionRequest): Promise<TranscriptionResult> {
       const url = requestUrl(request);
       const controller = new AbortController();
@@ -104,7 +108,7 @@ export function deepgramTranscriber(options: DeepgramOptions = {}): Transcriber 
         if (!response.ok) {
           // The status, and the provider's own words, truncated — a refusal names the file it
           // refused and an operator reads this off the failed job row.
-          const detail = (await response.text().catch(() => '')).slice(0, 400);
+          const detail = redactProviderText(await response.text().catch(() => ''));
           throw new TranscriptionError(
             `Deepgram refused the audio with HTTP ${response.status}${detail ? `: ${detail}` : ''}`,
           );
@@ -114,7 +118,10 @@ export function deepgramTranscriber(options: DeepgramOptions = {}): Transcriber 
         clearTimeout(timer);
         if (cause instanceof TranscriptionError) throw cause;
         if (controller.signal.aborted) {
-          throw new TranscriptionError(
+          // Named as a timeout rather than a plain refusal: the provider has the file and bills
+          // for it whether or not we waited for the answer, so the step that catches this must
+          // ledger an estimate (docs/security-audit-2026-10-29.md, finding 12).
+          throw new TranscriptionTimeoutError(
             `Deepgram did not answer within ${Math.round(timeoutMs / 60_000)} minutes`,
             { cause },
           );

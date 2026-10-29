@@ -217,6 +217,7 @@ export function measureArguments(input: {
     '-nostats',
     '-loglevel',
     'info',
+    ...INPUT_GUARD_ARGUMENTS,
     ...excerptArguments(input.excerpt),
     '-i',
     input.sourcePath,
@@ -228,6 +229,16 @@ export function measureArguments(input: {
     '-',
   ];
 }
+
+/**
+ * **What the input is allowed to be.** The source is a file this process just wrote, but ffmpeg
+ * probes a file's *contents* to decide what it is, and a playlist or a container disguised as
+ * audio can name other paths or URLs for the demuxer to open. The whitelist confines every protocol
+ * ffmpeg may use to the local file it was given; `-nostdin` keeps it from ever waiting on a
+ * terminal that is not there (docs/security-audit-2026-10-29.md, finding 20). Both precede `-i`
+ * because they are input options.
+ */
+export const INPUT_GUARD_ARGUMENTS: readonly string[] = ['-nostdin', '-protocol_whitelist', 'file'];
 
 /** The encode — plain when `filterGraph` is `null`, the profile's second pass otherwise. */
 export function encodeArguments(input: {
@@ -241,6 +252,7 @@ export function encodeArguments(input: {
     '-loglevel',
     'error',
     '-y',
+    ...INPUT_GUARD_ARGUMENTS,
     ...excerptArguments(input.excerpt),
     '-i',
     input.sourcePath,
@@ -364,9 +376,14 @@ function run(
   return new Promise((resolvePromise, rejectPromise) => {
     const child = spawn(binary, args, { stdio: ['ignore', 'ignore', 'pipe'] });
 
+    // Bounded either way. The measurement pass prints its result at the very end of stderr, so
+    // the tail is what the parser needs; `info` on a long file prints a great deal before it, and
+    // keeping all of it was an unbounded string for the whole of a thirty-minute run
+    // (docs/security-audit-2026-10-29.md, finding 20).
+    const keepBytes = keep === 'all' ? 64 * 1024 : 2000;
     let stderr = '';
     child.stderr.on('data', (chunk: Buffer) => {
-      stderr = keep === 'all' ? stderr + chunk.toString() : (stderr + chunk.toString()).slice(-2000);
+      stderr = (stderr + chunk.toString()).slice(-keepBytes);
     });
 
     const timer = setTimeout(() => {

@@ -316,6 +316,20 @@
       "when": 1793235596423,
       "tag": "0044_sos_anonymous",
       "breakpoints": true
+    },
+    {
+      "idx": 45,
+      "version": "7",
+      "when": 1793297175786,
+      "tag": "0045_sos_report",
+      "breakpoints": true
+    },
+    {
+      "idx": 46,
+      "version": "7",
+      "when": 1793297804989,
+      "tag": "0046_sos_removal_and_report_guards",
+      "breakpoints": true
     }
   ]
 }

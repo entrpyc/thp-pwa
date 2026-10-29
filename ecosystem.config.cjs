@@ -25,7 +25,10 @@ module.exports = {
     {
       name: 'thp-web',
       script: 'npm',
-      args: 'start',
+      // Loopback only: nginx is the one caller, and `next start` would otherwise listen on every
+      // interface, trusting `X-Real-IP` from any process on the box that reached it directly
+      // (docs/security-audit-2026-10-29.md, finding 25). `--` hands the flag through npm to Next.
+      args: 'start -- -H 127.0.0.1',
       interpreter: 'none',
       cwd: __dirname,
       exec_mode: 'fork',

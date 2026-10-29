@@ -121,3 +121,15 @@ export function searchCache(): SearchCache {
   shared ??= createSearchCache();
   return shared;
 }
+
+/**
+ * **Drop every kept answer**, because what a member may see has just changed: a teaching was
+ * published or taken down, a note was edited, removed or moderated, a block was placed. The rows a
+ * search keeps were filtered by the visibility rule *as it stood*, and a kept row bypasses the rule
+ * for a week otherwise (docs/security-audit-2026-10-29.md, finding 7). Whole-cache rather than
+ * per-entry because the dependency is many-to-many and the cache is cheap to refill: one provider
+ * call per repeated search, for a small congregation.
+ */
+export function clearSearchCache(): void {
+  shared?.clear();
+}

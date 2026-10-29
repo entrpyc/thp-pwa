@@ -28,7 +28,7 @@ import {
   type UpdateSeriesRequest,
   type UploadGrantPayload,
 } from '@thp/shared';
-import { ARTWORK_KEY_PREFIX, UPLOAD_GRANT_SECONDS, mediaStore, mintArtworkKey } from '@thp/media';
+import { ARTWORK_KEY_PREFIX, IMAGE_UPLOAD_GRANT_SECONDS, mediaStore, mintArtworkKey } from '@thp/media';
 import { actorGuard } from '@/server/api/actor-limits';
 import { ApiError } from '@/server/api/errors';
 import { can, type Actor } from '@/server/auth/policy';
@@ -305,11 +305,13 @@ export async function grantArtworkUpload(
   actorGuard().spend('artwork-grant', actor);
 
   const key = mintArtworkKey(requested.contentType);
-  const expiresAt = new Date(Date.now() + UPLOAD_GRANT_SECONDS * 1000);
+  const expiresAt = new Date(Date.now() + IMAGE_UPLOAD_GRANT_SECONDS * 1000);
+  // Bound to the declared size as well as the type, and short-lived: see `IMAGE_UPLOAD_GRANT_SECONDS`.
   const url = await mediaStore().presignPut({
     key,
     contentType: requested.contentType,
-    expiresInSeconds: UPLOAD_GRANT_SECONDS,
+    contentLength: requested.size,
+    expiresInSeconds: IMAGE_UPLOAD_GRANT_SECONDS,
   });
 
   logger.info('series.artwork.granted', {

@@ -1,5 +1,8 @@
 import {
   findRecordingById,
+  formatUsd,
+  readSpendCeilingUsdPerDay,
+  readSpendLedger,
   replaceTranscript,
   type Executor,
   type JobRow,
@@ -7,7 +10,7 @@ import {
 } from '@thp/db';
 import { mediaStore, type MediaStore } from '@thp/media';
 import { logger } from '@thp/shared/observability/logger';
-import { transcriber as configuredTranscriber, type Transcriber } from './asr';
+import { TranscriptionTimeoutError, transcriber as configuredTranscriber, type Transcriber } from './asr';
 import type { JobHandler } from './handlers';
 import { PaidFailure, withSpend } from './paid-failure';
 import { checkSourceObject } from './source-object';
@@ -74,6 +77,18 @@ export interface TranscribeDependencies {
   readonly media?: MediaStore;
   /** Where the transcript is written. Defaults to the process's pool. */
   readonly executor?: Executor;
+  /** The day's ceiling the estimate is held against. Defaults to the configured one. */
+  readonly spendCeilingUsd?: number;
+}
+
+/**
+ * The lowest bitrate a teaching is plausibly uploaded at — 64 kbit/s, 8 000 bytes a second — so the
+ * length estimated from a file's size errs long, and the refusal above errs safe.
+ */
+export const ESTIMATE_FLOOR_BYTES_PER_SECOND = 8_000;
+
+export function estimateAudioSeconds(bytes: number): number {
+  return Math.max(0, bytes) / ESTIMATE_FLOOR_BYTES_PER_SECOND;
 }
 
 /**
@@ -108,6 +123,27 @@ export function createTranscribeHandler(deps: TranscribeDependencies = {}): JobH
       throw fail(fields, cause instanceof Error ? cause.message : String(cause));
     }
 
+    // **What this file would cost, before the provider is asked** (docs/security-audit-2026-10-29.md,
+    // finding 12). The provider bills by audio minute, and the runner's ceiling check looks only at
+    // what the day has already spent: a job that starts under the ceiling is allowed to finish over
+    // it, which for a 200 MB low-bitrate upload is tens of hours of audio against a ceiling of a
+    // couple of dollars. Nothing has measured the audio yet, so the length is estimated from the
+    // bytes at a floor bitrate — an overestimate for a well-encoded file, which refuses on the safe
+    // side — and a job whose estimate alone would pass the ceiling is refused here, unpaid.
+    const estimatedSeconds = estimateAudioSeconds(stored.size);
+    const estimatedUsd = asr.estimateCostUsd?.(estimatedSeconds) ?? null;
+    if (estimatedUsd !== null) {
+      const ledger = await readSpendLedger(deps.spendCeilingUsd ?? readSpendCeilingUsdPerDay(), deps.executor);
+      if (ledger.todayUsd + estimatedUsd > ledger.ceilingUsd) {
+        throw fail(
+          fields,
+          `the transcription is estimated at ${formatUsd(estimatedUsd)} for about ${Math.round(estimatedSeconds / 60)} ` +
+            `minutes of audio, which would pass today's ceiling of ${formatUsd(ledger.ceilingUsd)} ` +
+            `(${formatUsd(ledger.todayUsd)} spent); raise the ceiling or wait for the day to end`,
+        );
+      }
+    }
+
     const audioUrl = await media.presignGet({
       key,
       expiresInSeconds: TRANSCRIPTION_GRANT_SECONDS,
@@ -117,7 +153,19 @@ export function createTranscribeHandler(deps: TranscribeDependencies = {}): JobH
     try {
       result = await asr.transcribe({ audioUrl, language: TRANSCRIPTION_LANGUAGE });
     } catch (cause) {
-      throw fail(fields, cause instanceof Error ? cause.message : String(cause), cause);
+      const failure = fail(fields, cause instanceof Error ? cause.message : String(cause), cause);
+      // A provider that took the file and never answered has very probably billed the whole of
+      // it. The ledger gets the estimate, so the day's total moves and a re-run cannot repeat the
+      // charge past the ceiling unnoticed.
+      if (cause instanceof TranscriptionTimeoutError && estimatedUsd !== null) {
+        throw withSpend(failure, {
+          provider: asr.name,
+          estimated: true,
+          durationSeconds: estimatedSeconds,
+          costUsd: estimatedUsd,
+        });
+      }
+      throw failure;
     }
 
     // **From here on the call has been paid for.** Everything that can still fail — an empty

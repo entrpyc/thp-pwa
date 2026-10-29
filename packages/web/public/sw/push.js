@@ -26,10 +26,20 @@
 const NOTIFICATIONS_PAGE = '/notifications';
 const ICON = '/icons/icon-192.png';
 
-/** A path on this origin, or the centre. Never a URL. */
+/**
+ * A path on this origin, or the centre. Never a URL. Decided by resolving the value against this
+ * origin and comparing origins, not by looking at the first characters: `/\evil.example` begins
+ * with one slash and resolves off-origin (docs/security-audit-2026-10-29.md, finding 22).
+ */
 function landingPath(href) {
-  if (typeof href === 'string' && href.startsWith('/') && !href.startsWith('//')) return href;
-  return NOTIFICATIONS_PAGE;
+  if (typeof href !== 'string' || !href.startsWith('/')) return NOTIFICATIONS_PAGE;
+  try {
+    const resolved = new URL(href, self.location.origin);
+    if (resolved.origin !== self.location.origin) return NOTIFICATIONS_PAGE;
+    return `${resolved.pathname}${resolved.search}${resolved.hash}`;
+  } catch (_) {
+    return NOTIFICATIONS_PAGE;
+  }
 }
 
 function readPayload(event) {

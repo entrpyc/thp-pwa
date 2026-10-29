@@ -102,6 +102,67 @@ export function blockBetween(viewerId: string, other: AnyPgColumn | SQL): SQL {
 }
 
 /**
+ * **One direction only: the viewer placed a block on the member this column names.**
+ *
+ * The half of {@link blockBetween} that is the viewer's own choice. On its own it is the
+ * predicate a *moderator* reads under ({@link visibleAcrossBlocks}): an admin who blocked a member
+ * has chosen not to see them, and that choice stands, but a member who blocked an admin must not
+ * thereby hide their posts from moderation (docs/security-audit-2026-10-29.md, finding 5).
+ */
+export function blockPlacedByViewer(viewerId: string, other: AnyPgColumn | SQL): SQL {
+  return exists(
+    new QueryBuilder()
+      .select({ one: sql`1` })
+      .from(memberBlock)
+      .where(and(eq(memberBlock.blockerId, viewerId), sql`${memberBlock.blockedId} = ${other}`)),
+  );
+}
+
+/**
+ * **One direction only: the member this column names placed a block on the viewer.**
+ *
+ * The other half of {@link blockBetween}, and the only half an **anonymous** prayer request may
+ * be hidden by (`sos.ts`). Hiding an anonymous signal because the *viewer* blocked its author
+ * would let any member learn who raised it — block a candidate, reload, watch whether the request
+ * vanishes (docs/security-audit-2026-10-29.md, finding 2). The author's own block against the
+ * viewer carries no such information, because the viewer can see nothing of the author's to
+ * compare against.
+ */
+export function blockPlacedAgainstViewer(viewerId: string, other: AnyPgColumn | SQL): SQL {
+  return exists(
+    new QueryBuilder()
+      .select({ one: sql`1` })
+      .from(memberBlock)
+      .where(and(sql`${memberBlock.blockerId} = ${other}`, eq(memberBlock.blockedId, viewerId))),
+  );
+}
+
+/**
+ * **Who is reading**, as far as the block rule is concerned: the account, and whether it reads as
+ * a moderator of the content in question — which the policy module decides and the data layer is
+ * merely told.
+ */
+export interface BlockViewer {
+  readonly id: string;
+  /**
+   * `true` when the caller holds the `*.moderate` action for what is being read. A moderator's own
+   * blocks still apply; blocks placed *against* a moderator do not, so a member cannot hide a post
+   * from the people the group asked to judge it.
+   */
+  readonly moderator: boolean;
+}
+
+/**
+ * The content of the member this column names **is visible to this viewer** under the block rule:
+ * {@link noBlockBetween} for a member, and only the viewer's own blocks for a moderator.
+ */
+export function visibleAcrossBlocks(viewer: BlockViewer, other: AnyPgColumn | SQL): SQL {
+  return viewer.moderator
+    ? not(blockPlacedByViewer(viewer.id, other))
+    : not(blockBetween(viewer.id, other));
+}
+
+/**
  * Whether these two members have a block between them, whichever of them placed it.
  *
  * The write-path spelling of {@link blockBetween}: a reply, a reaction, an SOS reply or a direct

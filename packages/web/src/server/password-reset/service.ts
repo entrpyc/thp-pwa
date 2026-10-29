@@ -122,17 +122,32 @@ export async function requestPasswordReset(body: unknown): Promise<PasswordReset
     return REQUESTED;
   }
 
+  // **Off the request path.** The answer is the same for every address, but the *time* to it was
+  // not: a known address wrote a row and waited on an SMTP round-trip, an unknown one returned in
+  // milliseconds (docs/security-audit-2026-10-29.md, finding 9). So every well-formed address
+  // returns here, now, and the lookup, the row and the send happen after the response has gone.
+  // Nothing below can reach the caller: a failure is a line in the log.
+  void settleRequest(email).catch((cause: unknown) => {
+    logger.error('password-reset.request.failed', {
+      errorMessage: cause instanceof Error ? cause.message : String(cause),
+    });
+  });
+  return REQUESTED;
+}
+
+/** What a request does once the caller has been answered. */
+async function settleRequest(email: string): Promise<void> {
   const row = await findUserByEmail(email);
   if (row === null) {
     logger.warn('password-reset.request.ignored', { reason: 'unknown-address' });
-    return REQUESTED;
+    return;
   }
   if (row.deactivatedAt !== null) {
     logger.warn('password-reset.request.ignored', {
       reason: 'account-deactivated',
       actorId: row.id,
     });
-    return REQUESTED;
+    return;
   }
 
   const outstanding = await findLivePasswordResetForUser(row.id);
@@ -141,11 +156,10 @@ export async function requestPasswordReset(body: unknown): Promise<PasswordReset
       reason: 'within-resend-interval',
       actorId: row.id,
     });
-    return REQUESTED;
+    return;
   }
 
   await issueAndSend(row);
-  return REQUESTED;
 }
 
 /**

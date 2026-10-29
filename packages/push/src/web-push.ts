@@ -16,6 +16,8 @@ import { PUSH_TTL_SECONDS, type PlatformSender, type PushSendResult, type PushTa
  * permission or cleared site data — and are the only two answers that mean *gone*. Everything
  * else is a failure this send does not retry.
  */
+export const WEB_PUSH_TIMEOUT_MS = 10_000;
+
 export function webPushSender(settings: VapidSettings): PlatformSender {
   return {
     async send(target: PushTarget, message: PushMessage): Promise<PushSendResult> {
@@ -29,6 +31,9 @@ export function webPushSender(settings: VapidSettings): PlatformSender {
           {
             TTL: PUSH_TTL_SECONDS,
             urgency: 'normal',
+            // The same ceiling FCM and APNs have: a push service that hangs must not hold the
+            // member's request open (docs/security-audit-2026-10-29.md, finding 21).
+            timeout: WEB_PUSH_TIMEOUT_MS,
             vapidDetails: {
               subject: settings.subject,
               publicKey: settings.publicKey,

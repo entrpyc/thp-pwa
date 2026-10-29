@@ -6,9 +6,11 @@ import {
   type BlockedMemberRow,
 } from '@thp/db';
 import type { BlockListPayload, BlockedMemberView } from '@thp/shared';
+import { actorGuard } from '@/server/api/actor-limits';
 import { ApiError } from '@/server/api/errors';
 import type { Actor } from '@/server/auth/policy';
 import { logger } from '@/server/observability/logger';
+import { clearSearchCache } from '@/server/search/cache';
 
 /**
  * **A member's blocked list** — reading it, adding to it, taking from it.
@@ -50,6 +52,10 @@ export async function listBlocksFor(actor: Actor): Promise<BlockListPayload> {
  */
 export async function blockMemberFor(actor: Actor, memberId: string): Promise<BlockListPayload> {
   const target = await requireMember(actor, memberId);
+  // Blocks are free and reversible, which is what made a loop of them an oracle over who wrote
+  // what (docs/security-audit-2026-10-29.md, findings 2 and 8). The reads no longer answer that
+  // question; the budget keeps the loop slow as well.
+  actorGuard().spend('block', actor);
 
   const created = await insertMemberBlock(actor.id, target);
   logger.info('block.create', {
@@ -58,6 +64,9 @@ export async function blockMemberFor(actor: Actor, memberId: string): Promise<Bl
     target: `user:${target}`,
     created,
   });
+  // A search answered before the block would keep serving the blocked member's notes for a week
+  // otherwise (finding 7): the cache is per process and cheap to refill.
+  if (created) clearSearchCache();
 
   return listBlocksFor(actor);
 }

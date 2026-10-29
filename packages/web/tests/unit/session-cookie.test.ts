@@ -1,15 +1,21 @@
 import { describe, expect, it, vi } from 'vitest';
-import { SESSION_COOKIE_NAME } from '@thp/shared';
+import { SECURE_SESSION_COOKIE_NAME, SESSION_COOKIE_NAME as PLAIN_COOKIE_NAME } from '@thp/shared';
 import {
+  SESSION_ABSOLUTE_LIFETIME_MS,
   SESSION_LIFETIME_MS,
   clearedSessionCookieHeader,
   generateSessionToken,
   hashSessionToken,
   readSessionCookie,
+  rolledExpiry,
   sessionCookieHeader,
+  sessionCookieName,
 } from '@/server/auth/session';
 
 const TOKEN = 'tYaXk3Q2-token-value_example';
+// The unit suite runs with NODE_ENV=test, which is "not development": the cookie is `Secure` and so
+// carries the `__Host-` prefix (security audit 2026-10-29, finding 3).
+const SESSION_COOKIE_NAME = sessionCookieName();
 
 function requestWithCookieHeader(value: string): Request {
   return new Request('http://127.0.0.1/api/v1/anything', { headers: { cookie: value } });
@@ -31,9 +37,34 @@ describe('the session cookie', () => {
     vi.stubEnv('NODE_ENV', 'development');
     try {
       expect(sessionCookieHeader(TOKEN, new Date(Date.now() + 1000))).not.toContain('Secure');
+      // And so the plain name: a browser refuses a `__Host-` cookie that is not `Secure`.
+      expect(sessionCookieName()).toBe(PLAIN_COOKIE_NAME);
+      expect(readSessionCookie(requestWithCookieHeader(`${PLAIN_COOKIE_NAME}=${TOKEN}`))).toBe(TOKEN);
     } finally {
       vi.unstubAllEnvs();
     }
+  });
+
+  it('is a __Host- cookie wherever it is Secure, so no sibling host under the parent domain can plant one', () => {
+    expect(SESSION_COOKIE_NAME).toBe(SECURE_SESSION_COOKIE_NAME);
+    expect(SESSION_COOKIE_NAME.startsWith('__Host-')).toBe(true);
+    const header = sessionCookieHeader(TOKEN, new Date(Date.now() + 1000));
+    // The prefix's three conditions: Secure, Path=/, and no Domain.
+    expect(header).toContain('Secure');
+    expect(header).toContain('Path=/');
+    expect(header).not.toMatch(/Domain=/i);
+    // A cookie under the plain name is somebody else's and is not read.
+    expect(readSessionCookie(requestWithCookieHeader(`${PLAIN_COOKIE_NAME}=${TOKEN}`))).toBeNull();
+  });
+
+  it('rolls its window forward, but never past ninety days from sign-in (finding 13)', () => {
+    const createdAt = new Date('2026-01-01T00:00:00Z');
+    const early = createdAt.getTime() + 24 * 60 * 60 * 1000;
+    expect(rolledExpiry(createdAt, early).getTime()).toBe(early + SESSION_LIFETIME_MS);
+
+    const late = createdAt.getTime() + SESSION_ABSOLUTE_LIFETIME_MS - 1000;
+    expect(rolledExpiry(createdAt, late).getTime()).toBe(createdAt.getTime() + SESSION_ABSOLUTE_LIFETIME_MS);
+    expect(rolledExpiry(createdAt, late).getTime()).toBeLessThan(late + SESSION_LIFETIME_MS);
   });
 
   it('expires in the future, by the session lifetime', () => {

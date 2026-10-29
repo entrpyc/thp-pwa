@@ -14,6 +14,7 @@ import {
   insertNote,
   insertNoteReport,
   isBlockedEitherWay,
+  isUniqueViolation,
   listNotesByAuthor,
   listNotesForReader,
   listPinnedNoteIds,
@@ -71,7 +72,9 @@ import {
   notifyNoteReported,
 } from '@/server/notifications/service';
 import { audit } from '@/server/observability/audit';
+import { actorGuard } from '@/server/api/actor-limits';
 import { logger } from '@/server/observability/logger';
+import { clearSearchCache } from '@/server/search/cache';
 import { mintArtworkGrant } from '@/server/series/artwork-grant';
 import { BLOCKED_WORD_MESSAGE, findBlockedWord } from './filter';
 import {
@@ -144,6 +147,8 @@ export async function createNote(
     }
     // Read back from the store before anything is written, so a lying body costs no row.
     await verifyNewImageKeys(actor, images);
+    // After every refusal and before the row: the budget is on rows other members read.
+    actorGuard().spend('note-write', actor);
     const row = await withTransaction(async (tx) => {
       const written = await insertNote(
         {
@@ -178,6 +183,7 @@ export async function createNote(
   requireAllowedWords(actor, text, `note:${parent.id}`);
   requireAllowedAlts(actor, images, `note:${parent.id}`);
   await verifyNewImageKeys(actor, images);
+  actorGuard().spend('note-write', actor);
   const row = await withTransaction(async (tx) => {
     const written = await insertNote(
       {
@@ -282,6 +288,8 @@ export async function editNote(actor: Actor, noteId: string, body: unknown): Pro
   });
   if (row === null) throw ApiError.noteRemoved(NOTE_ALREADY_REMOVED_MESSAGE);
   await deleteNoteImageObjects(actor, removedKeys);
+  // A search answered before the edit would keep quoting the old words for a week (finding 7).
+  clearSearchCache();
 
   return { note: await describeOne(row, actor) };
 }
@@ -368,6 +376,9 @@ export async function deleteNote(actor: Actor, noteId: string): Promise<NotePayl
   });
   if (row === null) throw ApiError.noteRemoved(NOTE_ALREADY_REMOVED_MESSAGE);
   await deleteNoteImageObjects(actor, imageKeys);
+  // The vector went in the transaction; the kept search answers go here, for the same reason
+  // (docs/security-audit-2026-10-29.md, finding 7).
+  clearSearchCache();
 
   if (moderating) {
     logger.info('note.moderate', audit(actor, 'note.moderate', `note:${noteId}`));
@@ -433,23 +444,25 @@ export async function reportNote(
   const request = parseReport(body);
 
   const already = await findOpenNoteReportByReporter(noteId, actor.id);
-  if (already !== null) {
-    logger.info('note.report', {
-      actorId: actor.id,
-      action: 'note.report',
-      target: `note:${noteId}`,
-      reportId: already.id,
-      repeated: true,
-    });
-    return { payload: { reportId: already.id }, created: false };
-  }
+  if (already !== null) return repeatedReport(actor, noteId, already.id);
+  actorGuard().spend('report', actor);
 
-  const row = await insertNoteReport({
-    noteId,
-    reporterId: actor.id,
-    reason: request.reason,
-    detail: request.detail,
-  });
+  let row;
+  try {
+    row = await insertNoteReport({
+      noteId,
+      reporterId: actor.id,
+      reason: request.reason,
+      detail: request.detail,
+    });
+  } catch (caught) {
+    // Two presses racing past the read above: the partial unique index on open reports holds, and
+    // the second press is answered with the first's report (security audit 2026-10-29, finding 17).
+    if (!isUniqueViolation(caught)) throw caught;
+    const raced = await findOpenNoteReportByReporter(noteId, actor.id);
+    if (raced === null) throw caught;
+    return repeatedReport(actor, noteId, raced.id);
+  }
 
   // An audit-shaped line, because a report is the start of a moderation record even though it is
   // a member's act: who flagged which note, and why — never what the note said.
@@ -470,6 +483,21 @@ export async function reportNote(
   });
 
   return { payload: { reportId: row.id }, created: true };
+}
+
+function repeatedReport(
+  actor: Actor,
+  noteId: string,
+  reportId: string,
+): { readonly payload: ReportNotePayload; readonly created: boolean } {
+  logger.info('note.report', {
+    actorId: actor.id,
+    action: 'note.report',
+    target: `note:${noteId}`,
+    reportId,
+    repeated: true,
+  });
+  return { payload: { reportId }, created: false };
 }
 
 /**

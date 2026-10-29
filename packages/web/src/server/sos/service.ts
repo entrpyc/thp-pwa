@@ -1,24 +1,25 @@
 import {
   clearSosPraying,
   closeSosSignal,
-  countOpenSosSignalsByAuthor,
   countOpenSosSignalsByUrgency,
   deleteSosReply,
-  deleteSosSignal,
   findSosReplyById,
   findSosSignalById,
   findSosSignalForViewer,
   findOpenSosReportByReporter,
   insertSosReply,
   insertSosReport,
-  insertSosSignal,
+  insertSosSignalUnderCap,
   isBlockedEitherWay,
+  isUniqueViolation,
   listSosPraying,
   listSosReplies,
   listSosSignals,
+  removeSosSignal,
   setSosPraying,
   type SosReplyRow,
   type SosSignalListRow,
+  type SosViewer,
 } from '@thp/db';
 import {
   MAX_OPEN_SOS_PER_MEMBER,
@@ -27,7 +28,6 @@ import {
   MAX_SOS_REPLY_LENGTH,
   SOS_LIMIT_MESSAGE,
   ANONYMOUS_AUTHOR,
-  SOMEONE,
   TERMS_REQUIRED_MESSAGE,
   isSosStatus,
   isSosUrgency,
@@ -42,6 +42,7 @@ import {
   type SosSignalView,
   type SosStatus,
 } from '@thp/shared';
+import { actorGuard } from '@/server/api/actor-limits';
 import { ApiError } from '@/server/api/errors';
 import { authorise } from '@/server/auth/authorise';
 import { can, type Actor } from '@/server/auth/policy';
@@ -61,20 +62,27 @@ import { mintArtworkGrant } from '@/server/series/artwork-grant';
  * **The SOS channel** ([3.16](docs/project/prd.md)) — raising, reading, responding to and ending a
  * signal, with the policy asked once per act.
  *
- * Four rules the whole module keeps:
+ * Five rules the whole module keeps:
  *
  * 1. **What a member may read is the store's `where`**, not a check here. Every read goes through
  *    `findSosSignalForViewer` or `listSosSignals`, which hide a signal by a member either side of
- *    a block; a signal they hide is `not_found` to the caller, the same answer as for an id nobody
- *    has, so the route discloses neither.
+ *    a block — with the anonymous carve-out `sos.ts` describes — and hide a removed one; a signal
+ *    they hide is `not_found` to the caller, the same answer as for an id nobody has, so the route
+ *    discloses neither. **A moderator reads past blocks placed against them** ({@link viewerFor}):
+ *    a member cannot hide a reported post from an admin by blocking the admin
+ *    (docs/security-audit-2026-10-29.md, finding 5).
  * 2. **Every write answers the signal as it now reads.** The screens replace what they hold with
  *    the answer rather than guessing, so a praying press and a reply cannot leave the count and the
  *    list disagreeing.
  * 3. **A signal and a reply are posts** (Google Play's UGC policy; Apple guideline 1.2), so each
- *    is behind the same two gates a note is: current terms acceptance, and the word filter.
+ *    is behind the same two gates a note is: current terms acceptance, and the word filter — and
+ *    behind a per-account budget, because each one pushes to somebody (finding 8).
  * 4. **Owned then moderated**, in that order, exactly as `deleteNote` asks: an author closing their
  *    own signal satisfies the owned `sos.close` and is not logged as moderation; an admin closing
  *    somebody else's fails it and is asked `sos.moderate`, which is what the audit line records.
+ * 5. **An anonymous author is anonymous everywhere** ({@link describeSignal}, {@link describeReply},
+ *    the praying list, the notices): their own replies under their request and their press on it
+ *    read as "Anonymous" to everybody but them (finding 2).
  */
 
 // =================================================================================================
@@ -85,9 +93,10 @@ import { mintArtworkGrant } from '@/server/series/artwork-grant';
 export async function listSignalsFor(actor: Actor, rawStatus: string | null): Promise<SosListPayload> {
   authorise(actor, 'sos.read', 'sos');
   const status: SosStatus = rawStatus === null || rawStatus === '' ? 'open' : parseStatus(rawStatus);
+  const viewer = viewerFor(actor);
   const [rows, openCounts] = await Promise.all([
-    listSosSignals({ viewerId: actor.id, open: status === 'open' }),
-    countOpenSosSignalsByUrgency(actor.id),
+    listSosSignals({ viewer, open: status === 'open' }),
+    countOpenSosSignalsByUrgency(viewer),
   ]);
   const avatars = await signAvatars(rows.map((row) => row.authorAvatarKey));
   return {
@@ -110,10 +119,11 @@ export async function readSignalFor(actor: Actor, signalId: string): Promise<Sos
 /**
  * Raise a signal ([3.16.1](docs/project/prd.md)–[3.16.3](docs/project/prd.md)).
  *
- * The cap ([3.16.12](docs/project/prd.md)) is counted and then written without a lock: two raises
- * from one member in the same instant could leave them at eleven, and the cost of that is nothing
- * the channel cannot bear — the eleventh is one more card on the board, not a breach of anything a
- * member is owed. The broadcast is the notification service's, after the row is committed.
+ * The cap ([3.16.12](docs/project/prd.md)) is counted and written in one transaction under a
+ * per-author lock (`insertSosSignalUnderCap`), so two raises in the same instant cannot leave a
+ * member at eleven. The budget is spent after the body is accepted and before the row is written:
+ * a raise pushes to the whole group, and close-and-raise is otherwise free. The broadcast is the
+ * notification service's, after the row is committed.
  */
 export async function raiseSignalFor(actor: Actor, body: unknown): Promise<SosSignalPayload> {
   authorise(actor, 'sos.raise', 'sos');
@@ -131,8 +141,13 @@ export async function raiseSignalFor(actor: Actor, body: unknown): Promise<SosSi
   });
   requireAllowedWords(actor, description, 'sos.raise', 'sos');
   const anonymous = parseAnonymous(fields['anonymous']);
+  actorGuard().spend('sos-write', actor);
 
-  if ((await countOpenSosSignalsByAuthor(actor.id)) >= MAX_OPEN_SOS_PER_MEMBER) {
+  const row = await insertSosSignalUnderCap(
+    { authorId: actor.id, urgency, description, anonymous },
+    MAX_OPEN_SOS_PER_MEMBER,
+  );
+  if (row === null) {
     logger.warn('sos.refused', {
       actorId: actor.id,
       action: 'sos.raise',
@@ -142,17 +157,14 @@ export async function raiseSignalFor(actor: Actor, body: unknown): Promise<SosSi
     });
     throw ApiError.sosLimit(SOS_LIMIT_MESSAGE);
   }
-
-  const row = await insertSosSignal({ authorId: actor.id, urgency, description, anonymous });
   logger.info('sos.raise', { ...audit(actor, 'sos.raise', `sos:${row.id}`), urgency, anonymous });
 
-  // The notice names the member only when the signal does.
   await notifySosRaised({
     signalId: row.id,
     urgency,
     description,
     author: actor,
-    authorName: anonymous ? SOMEONE : actor.displayName,
+    anonymous,
   });
 
   return { signal: await detail(await requireVisible(actor, row.id), actor) };
@@ -209,6 +221,7 @@ export async function replyFor(actor: Actor, signalId: string, body: unknown): P
   });
   requireAllowedWords(actor, text, 'sos.respond', `sos:${signalId}`);
   const thread = await parseParent(fields['parentId'], signalId);
+  actorGuard().spend('sos-write', actor);
 
   await insertSosReply({ signalId, authorId: actor.id, parentId: thread?.id ?? null, text });
   logger.info('sos.reply', {
@@ -221,6 +234,7 @@ export async function replyFor(actor: Actor, signalId: string, body: unknown): P
     await notifySosThreadReply({
       signalId,
       signalAuthorId: signal.authorId,
+      signalAnonymous: signal.anonymous,
       threadAuthorId: thread.authorId,
       replier: actor,
       replyText: text,
@@ -271,7 +285,8 @@ export async function deleteReplyFor(
  *
  * A request or a reply the member cannot see — a block either way — is `not_found`, the answer
  * every read gives; your own is `invalid_input`. A member reporting the same thing twice is
- * answered with the report they made and nothing new is written. The admins are told after the
+ * answered with the report they made and nothing new is written — the read says so first, and the
+ * partial unique index says so when two presses race past the read. The admins are told after the
  * row is committed and never as a condition of it.
  */
 export async function reportSignalFor(
@@ -303,24 +318,24 @@ export async function reportSignalFor(
   const request = parseReport(body);
 
   const already = await findOpenSosReportByReporter({ signalId, replyId }, actor.id);
-  if (already !== null) {
-    logger.info('sos.report', {
-      actorId: actor.id,
-      action: 'sos.report',
-      target,
-      reportId: already.id,
-      repeated: true,
-    });
-    return { payload: { reportId: already.id }, created: false };
-  }
+  if (already !== null) return repeated(actor, target, already.id);
+  actorGuard().spend('report', actor);
 
-  const row = await insertSosReport({
-    signalId,
-    replyId,
-    reporterId: actor.id,
-    reason: request.reason,
-    detail: request.detail,
-  });
+  let row;
+  try {
+    row = await insertSosReport({
+      signalId,
+      replyId,
+      reporterId: actor.id,
+      reason: request.reason,
+      detail: request.detail,
+    });
+  } catch (caught) {
+    if (!isUniqueViolation(caught)) throw caught;
+    const raced = await findOpenSosReportByReporter({ signalId, replyId }, actor.id);
+    if (raced === null) throw caught;
+    return repeated(actor, target, raced.id);
+  }
 
   // An audit-shaped line, as a note's report writes: who flagged what, and why — never the text.
   logger.info('sos.report', {
@@ -340,6 +355,21 @@ export async function reportSignalFor(
   });
 
   return { payload: { reportId: row.id }, created: true };
+}
+
+function repeated(
+  actor: Actor,
+  target: string,
+  reportId: string,
+): { readonly payload: ReportPayload; readonly created: boolean } {
+  logger.info('sos.report', {
+    actorId: actor.id,
+    action: 'sos.report',
+    target,
+    reportId,
+    repeated: true,
+  });
+  return { payload: { reportId }, created: false };
 }
 
 /**
@@ -407,14 +437,19 @@ export async function closeSignalFor(actor: Actor, signalId: string, body: unkno
 }
 
 /**
- * Remove a signal entirely ([3.16.11](docs/project/prd.md)) — admin only, and a hard delete: the
- * replies, the acknowledgements and every notice that pointed at it go through the cascades.
+ * Remove a signal ([3.16.11](docs/project/prd.md)) — admin only. A mark on the row rather than a
+ * delete (`removeSosSignal`): the group no longer sees the request, every notice that pointed at
+ * it goes, and the replies, the praying rows and any report that asked for this stay as the
+ * moderation record. A request already removed is `not_found`, as it is to every other read.
  */
 export async function removeSignalFor(actor: Actor, signalId: string): Promise<SosRemovedPayload> {
   authorise(actor, 'sos.moderate', `sos:${signalId}`);
   const signal = await findSosSignalById(signalId);
-  if (signal === null) throw ApiError.notFound('There is no such prayer request.');
-  await deleteSosSignal(signalId);
+  // A request already removed reads as gone to everybody, this route included.
+  if (signal === null || signal.removedAt !== null) {
+    throw ApiError.notFound('There is no such prayer request.');
+  }
+  await removeSosSignal({ signalId, removedBy: actor.id });
   logger.info('sos.moderate', {
     ...audit(actor, 'sos.moderate', `sos:${signalId}`),
     outcome: 'removed',
@@ -427,9 +462,17 @@ export async function removeSignalFor(actor: Actor, signalId: string): Promise<S
 // Preconditions
 // =================================================================================================
 
+/**
+ * Who is reading, for the block rule: the account, reading as a moderator when the policy says
+ * they may moderate the channel. The data layer is told the answer, never asked the question.
+ */
+function viewerFor(actor: Actor): SosViewer {
+  return { id: actor.id, moderator: can(actor, 'sos.moderate') };
+}
+
 /** The signal as this member may read it, or `not_found` — for a missing id and a hidden row alike. */
 async function requireVisible(actor: Actor, signalId: string): Promise<SosSignalListRow> {
-  const row = await findSosSignalForViewer(signalId, actor.id);
+  const row = await findSosSignalForViewer(signalId, viewerFor(actor));
   if (row === null) throw ApiError.notFound('There is no such prayer request.');
   return row;
 }
@@ -474,21 +517,29 @@ function requireAllowedWords(actor: Actor, text: string, action: string, target:
 
 async function detail(row: SosSignalListRow, actor: Actor): Promise<SosSignalDetailView> {
   const [replies, praying] = await Promise.all([
-    listSosReplies(row.id, actor.id),
+    listSosReplies(row.id, viewerFor(actor)),
     listSosPraying(row.id, actor.id),
   ]);
   const avatars = await signAvatars([
     row.authorAvatarKey,
     ...replies.map((reply) => reply.authorAvatarKey),
   ]);
-  // A member's own anonymous press is theirs to see by name; everybody else's is a count.
-  const named = praying.filter((one) => !one.anonymous || one.userId === actor.id);
+  // A member's own anonymous press is theirs to see by name; everybody else's is a count — and so
+  // is the author's press on their own anonymous request, whatever the press said.
+  const named = praying.filter(
+    (one) => one.userId === actor.id || (!one.anonymous && !hidesAuthor(row, one.userId)),
+  );
   return {
     ...describeSignal(row, actor, avatars),
     prayingNames: named.map((one) => one.displayName),
     prayingAnonymousCount: praying.length - named.length,
-    replies: threaded(replies, actor, avatars),
+    replies: threaded(replies, row, actor, avatars),
   };
+}
+
+/** Whether this signal hides `memberId` — true only for the author of an anonymous request. */
+function hidesAuthor(signal: SosSignalListRow, memberId: string): boolean {
+  return signal.anonymous && memberId === signal.authorId;
 }
 
 /**
@@ -498,6 +549,7 @@ async function detail(row: SosSignalListRow, actor: Actor): Promise<SosSignalDet
  */
 function threaded(
   rows: readonly SosReplyRow[],
+  signal: SosSignalListRow,
   reader: Actor,
   avatars: ReadonlyMap<string, string>,
 ): SosReplyView[] {
@@ -506,14 +558,14 @@ function threaded(
   for (const row of rows) {
     if (row.parentId === null) {
       const replies: SosReplyView[] = [];
-      tops.set(row.id, { view: describeReply(row, reader, avatars, replies), replies });
+      tops.set(row.id, { view: describeReply(row, signal, reader, avatars, replies), replies });
     }
   }
   for (const row of rows) {
     if (row.parentId === null) continue;
     const top = tops.get(row.parentId);
-    if (top === undefined) orphans.push(describeReply(row, reader, avatars, []));
-    else top.replies.push(describeReply(row, reader, avatars, []));
+    if (top === undefined) orphans.push(describeReply(row, signal, reader, avatars, []));
+    else top.replies.push(describeReply(row, signal, reader, avatars, []));
   }
   return [...[...tops.values()].map((top) => top.view), ...orphans];
 }
@@ -544,8 +596,14 @@ function describeSignal(
   };
 }
 
+/**
+ * One reply as this reader sees it. **The author of an anonymous request is anonymous in their
+ * own thread too**: a reply they write under it carries the stand-in, no id and no picture, to
+ * everybody but them — otherwise "thank you all" would name the person the request did not.
+ */
 function describeReply(
   row: SosReplyRow,
+  signal: SosSignalListRow,
   reader: Actor,
   avatars: ReadonlyMap<string, string>,
   replies: SosReplyView[],
@@ -553,7 +611,10 @@ function describeReply(
   return {
     id: row.id,
     text: row.text,
-    author: author(row.authorId, row.authorDisplayName, row.authorAvatarKey, avatars),
+    author:
+      hidesAuthor(signal, row.authorId) && row.authorId !== reader.id
+        ? ANONYMOUS_AUTHOR
+        : author(row.authorId, row.authorDisplayName, row.authorAvatarKey, avatars),
     mine: row.authorId === reader.id,
     createdAt: row.createdAt.toISOString(),
     replies,
@@ -650,4 +711,3 @@ function parseText(
   }
   return trimmed;
 }
-

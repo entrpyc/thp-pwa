@@ -80,16 +80,32 @@ export interface Transcriber {
   /** Which adapter is in use, for the log line. Never a vendor decision made in code. */
   readonly name: string;
   transcribe(request: TranscriptionRequest): Promise<TranscriptionResult>;
+  /**
+   * What this many seconds of audio would cost at the provider's rate — so the step can refuse a
+   * file whose estimate alone would pass the day's ceiling, and can ledger an estimate when the
+   * provider took the file and never answered (docs/security-audit-2026-10-29.md, finding 12).
+   * Absent on an adapter that bills nothing.
+   */
+  estimateCostUsd?(durationSeconds: number): number;
 }
 
 /**
  * What a transcription failed with.
  *
- * One error type for every way the provider can refuse — an HTTP status, a timeout, a body that is
- * not the shape it promised — because as far as the handler is concerned they are the same event:
- * this recording has no transcript and the chain stops. What differs is the message, which is what
- * an operator reads off the failed job row.
+ * One error type for every way the provider can refuse — an HTTP status, a body that is not the
+ * shape it promised — because as far as the handler is concerned they are the same event: this
+ * recording has no transcript and the chain stops. What differs is the message, which is what an
+ * operator reads off the failed job row.
  */
 export class TranscriptionError extends Error {
-  override readonly name = 'TranscriptionError';
+  override readonly name: string = 'TranscriptionError';
+}
+
+/**
+ * The one refusal that is not like the others: the provider was handed the file and did not answer
+ * in time. A refusal billed nothing; this very probably billed the whole file, and the handler
+ * ledgers an estimate for it.
+ */
+export class TranscriptionTimeoutError extends TranscriptionError {
+  override readonly name: string = 'TranscriptionTimeoutError';
 }

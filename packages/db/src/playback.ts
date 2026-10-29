@@ -69,6 +69,9 @@ export async function upsertPlaybackProgress(
   return (await recordPlaybackProgress(input, executor)).row;
 }
 
+/** A day of listening — the most `listened_ms` may hold while the teaching's length is unknown. */
+const MAX_LISTENED_TOTAL_MS = 24 * 60 * 60_000;
+
 export interface PlaybackProgressInput {
   readonly userId: string;
   readonly recordingId: string;
@@ -110,7 +113,11 @@ export async function recordPlaybackProgress(
   const completesOnInsert = duration !== null && duration > 0 && delta * 5 >= duration * 4;
 
   const knownDuration = sql`coalesce(${duration}::integer, ${playbackProgress.durationMs})`;
-  const newTotal = sql`${playbackProgress.listenedMs} + ${delta}::integer`;
+  // The total is capped at twice the known length (a teaching heard twice over), or at a day when
+  // no length is known: each write's delta is bounded by the caller, but two hundred of them from
+  // one outbox were not, and a total that forces completion is a count the operator reads
+  // (docs/security-audit-2026-10-29.md, finding 16).
+  const newTotal = sql`least(${playbackProgress.listenedMs} + ${delta}::integer, coalesce(${knownDuration} * 2, ${MAX_LISTENED_TOTAL_MS}))`;
 
   const rows = await queryable(executor)
     .insert(playbackProgress)
