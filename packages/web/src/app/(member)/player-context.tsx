@@ -954,6 +954,7 @@ export function PlayerProvider({
         playedSinceLoad.current = true;
         track('playback_started', {
           recording_id: recording.id,
+          recording_title: recording.title,
           series_id: recording.seriesId,
           resumed: positionRef.current > 0,
           speed: speedRef.current,
@@ -1134,6 +1135,11 @@ export function PlayerProvider({
   const toggle = useCallback((): void => {
     const element = audioRef.current;
     if (element === null) return;
+    // The press, not the state it produces: a play the element then refuses is still a press.
+    const recording = loadedRef.current;
+    if (recording !== null) {
+      track('playback_controlled', { action: element.paused ? 'play' : 'pause', recording_id: recording.id });
+    }
     if (element.paused) requestPlay();
     else requestPause();
   }, [requestPause, requestPlay]);
@@ -1173,6 +1179,13 @@ export function PlayerProvider({
   const skipMs = useCallback((deltaMs: number): void => {
     const element = audioRef.current;
     if (element === null) return;
+    const recording = loadedRef.current;
+    if (recording !== null) {
+      track('playback_controlled', {
+        action: deltaMs < 0 ? 'jump_back' : 'jump_forward',
+        recording_id: recording.id,
+      });
+    }
     const next = Math.max(0, element.currentTime * 1000 + deltaMs);
     element.currentTime = next / 1000;
     positionRef.current = Math.round(next);

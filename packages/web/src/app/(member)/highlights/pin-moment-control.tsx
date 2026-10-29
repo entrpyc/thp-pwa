@@ -1,5 +1,6 @@
 'use client';
 
+import { track } from '@/client/observability/analytics';
 import { momentEntry } from './highlights-lookup';
 import { useHighlights } from './highlights-store';
 import { MarkerIcon } from './marker-icon';
@@ -45,7 +46,11 @@ export function PinMomentControl({
       aria-pressed={pinned}
       aria-label={`${pinned ? 'Remove highlight from' : 'Highlight'} ${label}`}
       disabled={highlights === null || busy}
-      onClick={() => void toggle(existing, { kind: 'segment', recordingId, positionMs })}
+      onClick={() => {
+        // Both callers pin a chapter's opening moment, which is what this control is for.
+        track('highlight_acted', { action: pinned ? 'removed' : 'added', target: 'chapter', recording_id: recordingId });
+        void toggle(existing, { kind: 'segment', recordingId, positionMs });
+      }}
     >
       <MarkerIcon marked={pinned} size={20} />
     </button>

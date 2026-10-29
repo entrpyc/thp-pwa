@@ -12,6 +12,7 @@ import {
   type FlowSessionsPayload,
 } from '@thp/shared';
 import { ApiClientError, apiFetch } from '@/client/api-client';
+import { track } from '@/client/observability/analytics';
 import { useBreadcrumbTrail } from '../player-context';
 import { formatDay, listTitles, plural } from './format';
 import styles from './flow-tracker.module.css';
@@ -168,7 +169,13 @@ export function FlowHome() {
           <ol className={styles.rows} aria-label="Completed sessions">
             {sessions.completed.map((one) => (
               <li className={styles.rowGroup} key={one.id}>
-                <Link className={styles.sessionRow} href={flowSessionPagePath(one.id)}>
+                <Link
+                  className={styles.sessionRow}
+                  href={flowSessionPagePath(one.id)}
+                  onClick={() =>
+                    track('flow_tracker_acted', { action: 'past_session_opened', session_id: one.id, recording_id: null })
+                  }
+                >
                   <span className={styles.rowText}>
                     <span className={styles.rowTitle}>
                       {one.completedAt === null ? 'Completed' : formatDay(one.completedAt)}

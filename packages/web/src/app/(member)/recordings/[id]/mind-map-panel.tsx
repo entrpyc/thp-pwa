@@ -9,6 +9,7 @@ import {
 } from '@thp/shared';
 import { ApiClientError, apiFetch } from '@/client/api-client';
 import { MindMapCanvas } from '@/client/mind-map/mind-map-canvas';
+import { track } from '@/client/observability/analytics';
 import { useRecordingContent } from './recording-content';
 import styles from './mind-map.module.css';
 
@@ -120,7 +121,13 @@ export function MindMapPanel({
               className={styles.control}
               type="button"
               aria-pressed={fullScreen}
-              onClick={() => setFullScreen(!fullScreen)}
+              onClick={() => {
+                track('mind_map_acted', {
+                  action: fullScreen ? 'full_screen_off' : 'full_screen_on',
+                  recording_id: content.recordingId,
+                });
+                setFullScreen(!fullScreen);
+              }}
             >
               {fullScreen ? 'Close full screen' : 'Full screen'}
             </button>
@@ -129,8 +136,17 @@ export function MindMapPanel({
             root={root}
             label={`Mind map of ${subject}`}
             className={fullScreen ? styles.fill : styles.fixed}
-            onSeek={(ms) => content.seekToMs(ms)}
-            onPlay={(ms) => content.playFromMs(ms)}
+            onSeek={(ms) => {
+              track('mind_map_acted', { action: 'seek', recording_id: content.recordingId });
+              content.seekToMs(ms);
+            }}
+            onPlay={(ms) => {
+              track('mind_map_acted', { action: 'play', recording_id: content.recordingId });
+              content.playFromMs(ms);
+            }}
+            onFold={(folded) =>
+              track('mind_map_acted', { action: folded ? 'collapsed' : 'expanded', recording_id: content.recordingId })
+            }
           />
         </div>
       )}

@@ -2,6 +2,7 @@
 
 import { useEffect, useState } from 'react';
 import { imageFallbackAlt, type NoteImageView } from '@thp/shared';
+import { track } from '@/client/observability/analytics';
 import styles from './notes.module.css';
 
 /**
@@ -15,9 +16,12 @@ import styles from './notes.module.css';
  */
 export function NoteImages({
   images,
+  recordingId,
   onRemove,
 }: {
   images: readonly NoteImageView[];
+  /** The teaching the note is on, which is all analytics learns when a picture is opened. */
+  recordingId: string;
   /** When given, a Remove control is offered on each picture in the overlay. */
   onRemove?: (imageId: string) => void;
 }) {
@@ -46,7 +50,10 @@ export function NoteImages({
               className={styles.imageThumbButton}
               type="button"
               aria-label={`Open ${image.alt ?? imageFallbackAlt(index, images.length)}`}
-              onClick={() => setOpen(index)}
+              onClick={() => {
+                track('note_interacted', { action: 'image_viewed', recording_id: recordingId });
+                setOpen(index);
+              }}
             >
               <img className={styles.imageThumb} src={image.url} alt={image.alt ?? imageFallbackAlt(index, images.length)} loading="lazy" />
             </button>

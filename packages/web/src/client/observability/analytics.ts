@@ -75,6 +75,8 @@ export function initAnalytics(): boolean {
       // The project settings say the same (observability.md § 5.5); the client says it too, so a
       // setting changed by hand in the browser does not change what leaves the product.
       autocapture: false,
+      // Views and leaves are both sent by the provider with the route pattern; the SDK's own would
+      // carry the URL.
       capture_pageview: false,
       capture_pageleave: false,
       capture_heatmaps: false,

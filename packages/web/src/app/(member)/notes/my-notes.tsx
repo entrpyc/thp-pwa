@@ -186,7 +186,7 @@ function NoteCard({ note, recordingId }: { note: NoteView; recordingId: string }
             {note.visibility === 'private' ? <span className={noteStyles.privatePill}>Private</span> : null}
             {note.pinned ? <span className={noteStyles.pinnedPill}>Pinned</span> : null}
           </div>
-          <Body note={note} />
+          <Body note={note} recordingId={recordingId} />
         </>
       )}
 
@@ -194,7 +194,7 @@ function NoteCard({ note, recordingId }: { note: NoteView; recordingId: string }
         <ol className={noteStyles.thread} aria-label="Replies">
           {note.replies.map((reply) => (
             <li key={reply.id} className={noteStyles.reply} id={noteCardId(reply.id)}>
-              <Body note={reply} />
+              <Body note={reply} recordingId={recordingId} />
             </li>
           ))}
         </ol>
@@ -204,7 +204,7 @@ function NoteCard({ note, recordingId }: { note: NoteView; recordingId: string }
 }
 
 /** The author line, the text, the pictures and the reactions — what a note and a reply share. */
-function Body({ note }: { note: NoteView }) {
+function Body({ note, recordingId }: { note: NoteView; recordingId: string }) {
   return (
     <>
       <div className={noteStyles.noteWho}>
@@ -219,7 +219,7 @@ function Body({ note }: { note: NoteView }) {
         <span className={noteStyles.noteWhen}>{writtenAt(note.createdAt)}</span>
       </div>
       {note.text === '' ? null : <p className={noteStyles.noteText}>{note.text}</p>}
-      <NoteImages images={note.images} />
+      <NoteImages images={note.images} recordingId={recordingId} />
       {/* The counts, as the teaching shows them; reacting is done there. A private note has none. */}
       {note.visibility === 'private' || note.reactions.length === 0 ? null : (
         <div className={noteStyles.reactions} aria-label="Reactions">

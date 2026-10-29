@@ -10,6 +10,7 @@ import {
   type PlaybackProgressPayload,
 } from '@thp/shared';
 import { apiFetch } from '@/client/api-client';
+import { track } from '@/client/observability/analytics';
 import { useBreadcrumbTrail, usePlayer } from '../player-context';
 import { useHighlights } from './highlights-store';
 import { highlightHref } from './open-at';
@@ -97,9 +98,15 @@ export function HighlightsPlaylist() {
   const { highlights, busy, failure, unpin } = useHighlights();
   const [playFailure, setPlayFailure] = useState<string | null>(null);
 
+  /** What an entry is, as the member saw it when pinning: the Highlights page cannot tell a chapter from a moment. */
+  function targetOf(entry: HighlightView): 'note' | 'moment' | 'recording' {
+    return entry.kind === 'note' ? 'note' : entry.kind === 'recording' ? 'recording' : 'moment';
+  }
+
   async function play(entry: HighlightView): Promise<void> {
     setPlayFailure(null);
     const { recording } = entry;
+    track('highlight_acted', { action: 'revisited', target: targetOf(entry), recording_id: recording.id });
     let at = entry.positionMs;
     if (at === null) {
       // A whole teaching resumes where the member had got to (3.2.12). The position is asked for
@@ -175,6 +182,13 @@ export function HighlightsPlaylist() {
                     className={styles.open}
                     href={highlightHref(entry.recording.id, entry.positionMs, entry.note?.id ?? null)}
                     aria-label={`Open ${title}${entry.positionMs === null ? '' : ` at ${formatTimecode(entry.positionMs)}`}`}
+                    onClick={() =>
+                      track('highlight_acted', {
+                        action: 'revisited',
+                        target: targetOf(entry),
+                        recording_id: entry.recording.id,
+                      })
+                    }
                   >
                     <span className={styles.kind}>{kindLabel(entry)}</span>
                     <span className={styles.title}>{title}</span>
@@ -199,7 +213,14 @@ export function HighlightsPlaylist() {
                     aria-label={`Remove ${title} from Highlights`}
                     title="Remove from Highlights"
                     disabled={busy}
-                    onClick={() => void unpin(entry.id).catch(() => undefined)}
+                    onClick={() => {
+                      track('highlight_acted', {
+                        action: 'removed',
+                        target: targetOf(entry),
+                        recording_id: entry.recording.id,
+                      });
+                      void unpin(entry.id).catch(() => undefined);
+                    }}
                   >
                     <EraserIcon />
                   </button>

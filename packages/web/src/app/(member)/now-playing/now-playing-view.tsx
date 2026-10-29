@@ -293,7 +293,7 @@ function NearNote({ note, recordingId }: { note: NoteView; recordingId: string }
         </span>
         {note.text === '' ? null : <span className={styles.noteText}>{note.text}</span>}
       </Link>
-      {note.images.length === 0 ? null : <NoteImages images={note.images} />}
+      {note.images.length === 0 ? null : <NoteImages images={note.images} recordingId={recordingId} />}
     </li>
   );
 }

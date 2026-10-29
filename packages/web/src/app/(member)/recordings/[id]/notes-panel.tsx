@@ -351,6 +351,7 @@ function NoteCard({ note, canModerate }: CardProps) {
               */}
               <NoteImages
                 images={note.images}
+                recordingId={content.recordingId}
                 {...((note.mine || (canModerate && note.visibility === 'public')) && !note.id.startsWith('pending:')
                   ? {
                       onRemove: (imageId: string) => {
@@ -388,7 +389,14 @@ function NoteCard({ note, canModerate }: CardProps) {
           onDone={() => setReplying(false)}
         />
       ) : note.deleted || isReply || note.visibility === 'private' ? null : (
-        <button className={styles.replyControl} type="button" onClick={() => setReplying(true)}>
+        <button
+          className={styles.replyControl}
+          type="button"
+          onClick={() => {
+            track('note_interacted', { action: 'reply_opened', recording_id: content.recordingId });
+            setReplying(true);
+          }}
+        >
           Reply
         </button>
       )}
@@ -432,7 +440,10 @@ function TimeLink({ note }: { note: NoteView }) {
       className={styles.noteTime}
       type="button"
       aria-label={`The note at ${at}`}
-      onClick={() => content.seekToMs(note.timestampMs ?? 0)}
+      onClick={() => {
+        track('note_interacted', { action: 'timestamp_clicked', recording_id: content.recordingId });
+        content.seekToMs(note.timestampMs ?? 0);
+      }}
     >
       {at}
     </button>
@@ -493,6 +504,11 @@ function ReactionRow({
     // Selecting what is already chosen clears it (3.4.4) — one gesture, two requests, and the
     // picker marks the current selection so the toggle is discoverable rather than a guess.
     const clearing = note.myReaction === emoji;
+    // That a reaction was given or taken back — never which emoji, which is the member's own.
+    track('note_interacted', {
+      action: clearing ? 'reaction_removed' : 'reaction_added',
+      recording_id: content.recordingId,
+    });
     const request = clearing
       ? { method: 'DELETE' as const, credentials: 'include' as const }
       : {
@@ -630,7 +646,7 @@ function Overflow({
     <div className={styles.overflow} ref={root}>
       {/* Any standing note can go to Highlights (3.12.17, widened to replies too); a reply opens at its thread's moment. */}
       {!note.deleted ? (
-        <PinNoteControl noteId={note.id} className={styles.overflowControl} />
+        <PinNoteControl noteId={note.id} recordingId={content.recordingId} className={styles.overflowControl} />
       ) : null}
       <button
         className={styles.overflowControl}
@@ -881,13 +897,18 @@ function ReplyComposer({
           credentials: 'include',
           headers: { 'content-type': 'application/json' },
           body: JSON.stringify({ text: text.trim(), parentId: note.id, ...(images.length === 0 ? {} : { images }) }),
-        }),
+        }).then(() => images.length),
       )
-      .then(() => {
+      .then((imageCount) => {
         setText('');
         attachments.reset();
         // A reply is always public (scope prd 3.3.3); what it said never travels.
-        track('note_created', { recording_id: recordingId, visibility: 'public', is_reply: true });
+        track('note_created', {
+          recording_id: recordingId,
+          visibility: 'public',
+          is_reply: true,
+          image_count: imageCount,
+        });
         onDone();
         content.refreshNotes();
       })

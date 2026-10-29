@@ -1,5 +1,6 @@
 'use client';
 
+import { track } from '@/client/observability/analytics';
 import { usePlayer } from '../player-context';
 import { momentEntry } from './highlights-lookup';
 import { useHighlights } from './highlights-store';
@@ -40,7 +41,10 @@ export function PinMomentTool({
       aria-pressed={pinned}
       aria-label={pinned ? 'Remove highlight from this moment' : 'Highlight this moment'}
       disabled={highlights === null || busy}
-      onClick={() => void toggle(existing, { kind: 'segment', recordingId: loaded.id, positionMs })}
+      onClick={() => {
+        track('highlight_acted', { action: pinned ? 'removed' : 'added', target: 'moment', recording_id: loaded.id });
+        void toggle(existing, { kind: 'segment', recordingId: loaded.id, positionMs });
+      }}
     >
       <MarkerIcon marked={pinned} />
     </button>

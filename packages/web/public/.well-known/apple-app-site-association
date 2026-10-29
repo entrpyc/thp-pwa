@@ -2,11 +2,11 @@
   "applinks": {
     "details": [
       {
-        "appIDs": ["APPLE_TEAM_ID_PLACEHOLDER.com.indepthwebsolutions.teachinghub"],
+        "appIDs": ["B2PZ326S78.com.indepthwebsolutions.teachinghub"],
         "components": [
           {
             "/": "*",
-            "comment": "Every path on the origin opens the installed app, so an invitation link (/accept-invitation), a password reset (/reset-password) and a shared recording all land in the shell rather than in Safari. Replace APPLE_TEAM_ID_PLACEHOLDER above with the Apple Team ID — see packages/shell/README.md."
+            "comment": "Every path on the origin opens the installed app, so an invitation link (/accept-invitation), a password reset (/reset-password) and a shared recording all land in the shell rather than in Safari. The prefix is the Apple Team ID — see packages/shell/README.md."
           }
         ]
       }
