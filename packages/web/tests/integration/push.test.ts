@@ -1,3 +1,4 @@
+import { randomBytes } from 'node:crypto';
 import { afterAll, beforeAll, describe, expect, it, inject } from 'vitest';
 import {
   ANNOUNCEMENTS_PATH,
@@ -87,7 +88,17 @@ function endpoint(label: string): string {
   return `https://push.example.test/${RUN}/${label}`;
 }
 
-const KEYS = { p256dh: 'BNcRdreALRFXTkOOUHK1EtK2wtaz5Ry4YfYCA_0QTpQtUbVlUls0VJXg7A8u-Ts1XbjhazAkj7I99e8QcYP7DkM', auth: 'tBHItJI5svbpez7KI4CCXg' };
+/**
+ * A subscription's two keys, **minted per run** rather than pasted from a browser: the capture
+ * transport never encrypts, so the server only ever checks their shape, and a real-looking key
+ * literal in the tree is a thing every secret scanner flags and nobody can tell from a leak. The
+ * same lengths a browser issues — a 65-byte uncompressed P-256 point and a 16-byte auth secret.
+ */
+const KEYS = { p256dh: randomBase64Url(65), auth: randomBase64Url(16) };
+
+function randomBase64Url(bytes: number): string {
+  return Buffer.from(randomBytes(bytes)).toString('base64url');
+}
 
 async function registerWeb(who: Signed, label: string): Promise<string> {
   const address = endpoint(label);
