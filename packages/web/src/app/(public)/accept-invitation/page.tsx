@@ -58,17 +58,16 @@ function DeadEnd({ code }: { code: ApiErrorCode | null }) {
       </div>
       <p className={styles.deadEnd}>
         {expired
-          ? 'Invitations last seven days. Ask an admin to send you a new one — it takes them a moment, and the new link will work straight away. You can also create an account yourself; you will join as a member, and an admin can set your role afterwards.'
-          : 'This invitation has already been used, was withdrawn, or the link was copied incompletely. Ask an admin to send you a new one, or create an account yourself.'}
+          ? 'Invitations last seven days. Ask an admin to send you a new one — it takes them a moment, and the new link will work straight away.'
+          : 'This invitation has already been used, was withdrawn, or the link was copied incompletely. Ask an admin to send you a new one.'}
       </p>
       {/*
-        The way on from a dead end. Since 3.1.15 an invitation is no longer the only route in, so
-        somebody holding a link that has stopped working is not stranded on this card waiting for
-        an admin — they can register, and the admin's part becomes setting the role rather than
-        issuing a second token.
+        The way on from a dead end. Registration is closed, so an invitation is the only route in
+        and the admin's part is issuing a second token; the screen behind this link says who to ask
+        and names the operator's mailbox for somebody who does not know an admin to ask.
       */}
       <Link className={styles.link} href={SIGN_UP_PAGE_PATH}>
-        Create an account
+        How to get access
       </Link>
     </div>
   );

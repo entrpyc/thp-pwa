@@ -102,7 +102,7 @@ const SECTIONS: readonly PublicDocumentSection[] = [
         <p>
           <strong>Technical records.</strong> Our server keeps logs of requests, each stamped with a
           correlation id, and a refused request is logged with the account that made it and what
-          it asked for. We count sign-in, sign-up and password-reset attempts per network address
+          it asked for. We count sign-in and password-reset attempts per network address
           to slow down guessing; those counts live in memory and are not written anywhere.
         </p>
         <p>

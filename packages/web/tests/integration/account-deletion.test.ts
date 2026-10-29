@@ -8,13 +8,12 @@ import {
   AVATAR_PATH,
   AVATAR_UPLOADS_PATH,
   DELETION_TOKEN_PARAM,
+  INVITATIONS_PATH,
   ME_PATH,
   NOTIFICATIONS_PATH,
   REACTIONS,
   REMOVED_MEMBER_DISPLAY_NAME,
   ROLE,
-  SIGN_UP_PATH,
-  TERMS_VERSION,
   USERS_PATH,
   isApiErrorBody,
   notePath,
@@ -358,17 +357,16 @@ describe('deleting your own account from a session', () => {
     const invitations = await sql<{ n: string }[]>`select count(*)::text as n from invitation where lower(email) = ${leaver.email}`;
     expect(Number(invitations[0]?.n)).toBe(0);
 
-    // The address is free again: the same person can register anew, and starts with nothing.
-    const again = await call<SessionPayload>(SIGN_UP_PATH, {
+    // The address is free again: an admin can invite the same person anew — the invitation route
+    // refuses with `email_taken` for as long as an account holds the address, so a `201` here is
+    // the proof that nothing does. (Registration is closed, so an invitation is the way back in.)
+    const again = await call(INVITATIONS_PATH, {
       method: 'POST',
-      body: {
-        email: leaver.email,
-        password: 'a-fresh-passphrase-for-a-fresh-start',
-        termsVersion: TERMS_VERSION,
-      },
+      cookie: admin.cookie,
+      body: { email: leaver.email, role: ROLE.member },
     });
     expect(again.status).toBe(201);
-    expect(again.body.user.id).not.toBe(leaver.id);
+    expect(again.code).not.toBe('email_taken');
 
     // And the placeholder is not in the member list.
     const list = await call<AccountListPayload>(USERS_PATH, { cookie: admin.cookie });

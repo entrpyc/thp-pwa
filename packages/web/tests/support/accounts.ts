@@ -63,8 +63,8 @@ export interface CreateAccountOptions {
  * a test came to drive. That is the tour's business, not every other suite's: the completion is
  * recorded up front, the way a member who has used the product for a week already has it. A test
  * that is *about* the tour asks for `{ onboarded: false }` and gets the account as registration
- * would have left it; the flows that create an account for real — sign-up, accepting an
- * invitation — never come through here, so they still land in the tour and their tests say so.
+ * would have left it; the flow that creates an account for real — accepting an
+ * invitation — never comes through here, so it still lands in the tour and its tests say so.
  *
  * **Past the terms by default, for the same reason.** A note write from an account with no
  * acceptance on record is refused with `terms_required`, so every suite that writes a note would
