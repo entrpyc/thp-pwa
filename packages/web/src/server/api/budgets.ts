@@ -3,7 +3,7 @@
  *
  * Two things, both small enough that duplicating them would have been the easy choice and the
  * wrong one: how a budget's number is read from the environment, and how a wait is described to a
- * person. Registration wrote both first (`server/auth/sign-up-limits.ts`); sign-in needs the same
+ * person. Registration wrote both first, before it was withdrawn; sign-in needs the same
  * two (docs/project/rate-limits.md § 2), and a third budget will need them again. Keeping them
  * here means a rule such as "a setting that is not a positive whole number is refused naming the
  * variable" is one rule, stated once, and holds for every budget at the same time.

@@ -12,7 +12,7 @@ import { mailOffset, readCapturedMail, waitForMail } from '../support/mail';
  * The reset-request budget, driven over HTTP (docs/project/prd.md, 3.1.21).
  *
  * **Against the rate-limited server**, started by tests/setup/global.ts with three requests per
- * caller. Every other server has the limit lifted out of the way, for the reason the sign-up
+ * caller. Every other server has the limit lifted out of the way, for the reason the sign-in
  * budget is.
  *
  * What this file is for is the **wiring and the HTTP contract**: that the guard is in front of the
@@ -21,7 +21,7 @@ import { mailOffset, readCapturedMail, waitForMail } from '../support/mail';
  * real member's address sends them nothing. The arithmetic is unit-tested against an injected
  * clock in `tests/unit/password-reset-limits.test.ts`.
  *
- * Each test uses a client address of its own, as the sign-up tests do.
+ * Each test uses a client address of its own, as the sign-in tests do.
  */
 
 const baseUrl = inject('rateLimitedBaseUrl');

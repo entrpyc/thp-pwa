@@ -1,6 +1,6 @@
 import { resolve } from 'node:path';
 import { afterAll, beforeAll, describe, expect, it, inject } from 'vitest';
-import { API_PREFIX, SIGN_UP_PATH, isApiErrorBody } from '@thp/shared';
+import { API_PREFIX, isApiErrorBody } from '@thp/shared';
 import { UNAUTHENTICATED_ROUTES, isAllowlisted } from '@/server/auth/allowlist';
 import {
   UNGUARDED_FIXTURE_HEADER,
@@ -56,7 +56,8 @@ describe('every /api/v1 route not on the allowlist refuses an anonymous request'
 
     expect(paths).toContain(`${API_PREFIX}/health`);
     expect(paths).toContain(`${API_PREFIX}/auth/session`);
-    expect(paths).toContain(`${API_PREFIX}${SIGN_UP_PATH}`);
+    // Registration is closed: no file under `auth/sign-up` exists to be discovered.
+    expect(paths).not.toContain(`${API_PREFIX}/auth/sign-up`);
     expect(paths).toContain(`${API_PREFIX}/diagnostics/admin-only`);
     expect(paths).toContain(`${API_PREFIX}/invitations`);
     expect(paths).toContain(`${API_PREFIX}/invitations/accept`);
@@ -124,12 +125,12 @@ describe('every /api/v1 route not on the allowlist refuses an anonymous request'
 
   it('subtracts exactly one named list, and it is the one the API reads', () => {
     // Pinned, so growing the unauthenticated surface is an edit somebody had to make on purpose.
-    // Eight since sign-up (docs/project/prd.md, 3.1.15): registering is how an account comes to
-    // exist, which is circular in exactly the way sign-in is, and `allowlist.ts` argues it against
-    // the seven that were already here rather than beside them. Eleven since account deletion
-    // (3.1.8): the stores require that deletion can be started by somebody with no session, and
-    // the three entries are the reset's three with the password required at the end.
-    expect(UNAUTHENTICATED_ROUTES).toHaveLength(11);
+    // Eleven at most: seven, then sign-up (docs/project/prd.md, 3.1.15), then account deletion's
+    // three (3.1.8) — the stores require that deletion can be started by somebody with no session,
+    // and the three entries are the reset's three with the password required at the end. Ten now
+    // that sign-up has been withdrawn: the app is published for one private group, so the only
+    // entry that ever wrote without a token an admin issued is gone, and `allowlist.ts` says so.
+    expect(UNAUTHENTICATED_ROUTES).toHaveLength(10);
     for (const entry of UNAUTHENTICATED_ROUTES) {
       expect(isAllowlisted(entry.method, entry.path), `${entry.method} ${entry.path}`).toBe(true);
       expect(entry.because.length).toBeGreaterThan(20);
@@ -140,11 +141,10 @@ describe('every /api/v1 route not on the allowlist refuses an anonymous request'
     expect(isAllowlisted('GET', `${API_PREFIX}/users`)).toBe(false);
     expect(isAllowlisted('PATCH', `${API_PREFIX}/users/anything`)).toBe(false);
     expect(isAllowlisted('POST', `${API_PREFIX}/health`)).toBe(false);
-    // Sign-up is one method on one path. Nothing else under `/auth` came with it, and no read of
-    // an account did: the route that creates an account is open, and every route that describes
-    // one stays closed.
-    expect(isAllowlisted('POST', `${API_PREFIX}${SIGN_UP_PATH}`)).toBe(true);
-    expect(isAllowlisted('GET', `${API_PREFIX}${SIGN_UP_PATH}`)).toBe(false);
+    // Registration is closed: nothing under `/auth` but sign-in is open, so no anonymous caller
+    // can create an account, and every route that describes one stays closed.
+    expect(isAllowlisted('POST', `${API_PREFIX}/auth/sign-up`)).toBe(false);
+    expect(isAllowlisted('GET', `${API_PREFIX}/auth/sign-up`)).toBe(false);
   });
 
   it('reaches every allowlisted route anonymously', async () => {

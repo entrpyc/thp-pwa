@@ -110,10 +110,10 @@ fails the build, not by convention.
 ## Accounts, sessions and authorisation
 
 **Every `/api/v1` route requires a session**, with a short enumerated list of exceptions: health
-(it must answer while the database is down, which is when a session lookup cannot), sign-in and
-sign-up (each is how a session or an account comes to exist), and the token routes behind
-invitations and password resets (the holder has no session yet, and a dead link has to be able to
-say so before anybody chooses a password). None of them carries account content. The list is
+(it must answer while the database is down, which is when a session lookup cannot), sign-in (it is
+how a session comes to exist), and the token routes behind invitations and password resets (the
+holder has no session yet, and a dead link has to be able to say so before anybody chooses a
+password). None of them carries account content. The list is
 [packages/web/src/server/auth/allowlist.ts](packages/web/src/server/auth/allowlist.ts), and it is
 the *only* source of exceptions — a route declared public that is not on it refuses anonymous
 callers like any other. How to add one is under [Public pages](#public-pages).
@@ -144,7 +144,7 @@ could not be read), `weak_password` (it could, and the password was refused on i
 `invitation_expired` versus `invitation_invalid`.
 
 One more, `rate_limited` (`429`, with `Retry-After`), is the answer from a route whose budget a
-caller has spent. Registration, sign-in, the reset request and the account-deletion request carry
+caller has spent. Sign-in, the reset request and the account-deletion request carry
 one; sign-in's is per caller *and* per account, spent before any password is verified, with no
 lockout and nothing for an admin to clear. Feedback and the three upload grants carry one per
 signed-in account, spent only on what would have left the server. Every budget, its keys and its
