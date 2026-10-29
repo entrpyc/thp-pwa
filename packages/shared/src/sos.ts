@@ -42,9 +42,13 @@ export const SOS_URGENCY_LABEL: Record<SosUrgency, string> = {
   green: 'Green',
 };
 
-/** When to use each — the PRD's own table, word for word, printed under the picker. */
+/**
+ * When to use each — the PRD's own table, printed under the picker. Red carries one sentence the
+ * table does not: the app is a prayer channel, not an emergency service, and a member in danger
+ * has to hear that before they type.
+ */
 export const SOS_URGENCY_MEANING: Record<SosUrgency, string> = {
-  red: 'Immediate crisis — acute danger or medical emergency',
+  red: 'Immediate crisis — acute danger or medical emergency. If you are in immediate danger, call your local emergency services (112 in Europe) before posting here.',
   orange: 'Serious situation needing prompt prayer',
   yellow: 'Difficult but not urgent — an ongoing struggle',
   green: 'General prayer request, no urgency',

@@ -2,10 +2,11 @@
  * **The word list behind the note filter** — the floor, and deliberately nothing more.
  *
  * Apple guideline 1.2 asks a product with user-generated content for "a method for filtering
- * objectionable material". This is that method's vocabulary: a short list of English words that
- * have no innocent use in a study note, matched as whole words by `filter.ts`. English only, by
- * operator decision — the group writes in Bulgarian as well, but a Bulgarian list would need a
- * native speaker's judgement about what is unambiguous, and a wrong guess here refuses a real note.
+ * objectionable material". This is that method's vocabulary: a short list of English and Bulgarian
+ * words that have no innocent use in a study note, matched as whole words by `filter.ts`. The
+ * group writes in both languages, so the Bulgarian half is held to the same bar as the English one:
+ * hard profanity and slurs only, nothing a verse or an honest sentence could contain. Bulgarian is
+ * inflected, so a word is listed in each form that is itself a whole word; the filter does not stem.
  *
  * **It is a floor, not moderation.** A member who wants to be unkind can be unkind without any of
  * these words, and a list that tried to anticipate that would refuse honest notes long before it
@@ -59,4 +60,34 @@ export const BLOCKED_WORDS: readonly string[] = [
   'spic',
   'chink',
   'paki',
+  // Bulgarian. Hard profanity, in the forms members actually type.
+  'еба',
+  'ебах',
+  'ебал',
+  'ебала',
+  'ебат',
+  'ебати',
+  'ебаси',
+  'ебаваш',
+  'шибан',
+  'шибана',
+  'шибано',
+  'шибани',
+  'путка',
+  'путки',
+  'пичка',
+  'пички',
+  'курва',
+  'курви',
+  'курво',
+  'лайно',
+  'лайна',
+  'лайнар',
+  'лайнари',
+  // Bulgarian slurs. Each is only ever an insult.
+  'педал',
+  'педали',
+  'педераст',
+  'педерасти',
+  'педерас',
 ];
