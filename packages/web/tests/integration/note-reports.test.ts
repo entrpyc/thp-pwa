@@ -16,6 +16,7 @@ import {
   recordingNotesPath,
   reportResolvePath,
   type CreateNotePayload,
+  type NoteReportView,
   type NoteView,
   type NotesPayload,
   type NotificationListPayload,
@@ -272,7 +273,9 @@ describe('reporting a note', () => {
   it('lists open reports to an admin, oldest first, with the note, its author, the reporter and the teaching', async () => {
     const list = await queue(admin);
     expect(list.status).toBe(200);
-    const ours = list.body.reports.filter((one) => one.recordingId === where);
+    const ours = list.body.reports.filter(
+      (one): one is NoteReportView => one.kind === 'note' && one.recordingId === where,
+    );
     expect(ours.map((one) => one.noteId)).toEqual([bobsNote, bobsReply]);
 
     const [onNote, onReply] = ours;
@@ -295,14 +298,16 @@ describe('reporting a note', () => {
     const aliceBefore = (await notices(alice, 'report_resolved')).length;
     const carolBefore = (await notices(carol, 'report_resolved')).length;
 
-    const open = (await queue(admin)).body.reports.filter((one) => one.noteId === bobsNote);
+    const open = (await queue(admin)).body.reports.filter(
+      (one) => one.kind === 'note' && one.noteId === bobsNote,
+    );
     expect(open).toHaveLength(2);
 
     const closed = await resolve(open[0]?.id ?? '', admin, 'dismissed');
     expect(closed.status).toBe(200);
     expect(closed.body.outcome).toBe('dismissed');
     expect(closed.body.closed).toBe(2);
-    expect(closed.body.reports.some((one) => one.noteId === bobsNote)).toBe(false);
+    expect(closed.body.reports.some((one) => one.kind === 'note' && one.noteId === bobsNote)).toBe(false);
 
     // The note is still there and still reads.
     const notes = await call<NotesPayload>(recordingNotesPath(where), { cookie: alice.cookie });
@@ -325,7 +330,9 @@ describe('reporting a note', () => {
 
   it('removes through the moderation path: the note becomes a tombstone, and the reporter is told', async () => {
     const carolBefore = (await notices(carol, 'report_resolved')).length;
-    const open = (await queue(admin)).body.reports.filter((one) => one.noteId === bobsReply);
+    const open = (await queue(admin)).body.reports.filter(
+      (one) => one.kind === 'note' && one.noteId === bobsReply,
+    );
     expect(open).toHaveLength(1);
 
     const removed = await resolve(open[0]?.id ?? '', admin, 'removed');
@@ -353,8 +360,9 @@ describe('reporting a note', () => {
     expect((await call(notePath(doomed), { method: 'DELETE', cookie: bob.cookie })).status).toBe(200);
 
     const listed = (await queue(admin)).body.reports.find((one) => one.id === made.body.reportId);
-    expect(listed?.noteDeleted).toBe(true);
-    expect(listed?.noteText).toBe('');
+    if (listed?.kind !== 'note') throw new Error('the report on a note was not listed as one');
+    expect(listed.noteDeleted).toBe(true);
+    expect(listed.noteText).toBe('');
 
     const removed = await resolve(made.body.reportId, admin, 'removed');
     expect(removed.status).toBe(200);

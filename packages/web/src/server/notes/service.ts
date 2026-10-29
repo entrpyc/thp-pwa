@@ -472,8 +472,11 @@ export async function reportNote(
   return { payload: { reportId: row.id }, created: true };
 }
 
-/** The reason from the shared list, and the optional sentence trimmed and bounded. */
-function parseReport(body: unknown): { readonly reason: ReportReason; readonly detail: string | null } {
+/**
+ * The reason from the shared list, and the optional sentence trimmed and bounded. Exported for the
+ * SOS service, whose report takes the same two fields and must refuse them the same way.
+ */
+export function parseReport(body: unknown): { readonly reason: ReportReason; readonly detail: string | null } {
   const fields = asObject(body, 'Send a JSON object with the reason.') as Partial<ReportNoteRequest>;
   if (!isReportReason(fields.reason)) {
     throw ApiError.invalidInput('Choose one of the reasons offered.');

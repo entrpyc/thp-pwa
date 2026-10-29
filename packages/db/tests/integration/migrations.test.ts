@@ -189,7 +189,8 @@ describe('migrations apply to an empty database by one command', () => {
       // table over segment pairs, a cache of the index rather than content. Push adds
       // `notification_preference` and `push_subscription`, Highlights adds `highlight`, offline
       // sync adds `sync_receipt`, and the Flow Tracker ([3.14](docs/project/prd.md)) adds
-      // `flow_question`, `flow_session` and `flow_session_item`.
+      // `flow_question`, `flow_session` and `flow_session_item`. Reporting on the SOS channel
+      // adds `sos_report` — `note_report`'s twin for a prayer request or a reply on one.
       expect(tables.map((row) => row.tablename)).toEqual([
         'account_deletion_request',
         'announcement',
@@ -224,6 +225,7 @@ describe('migrations apply to an empty database by one command', () => {
         'session',
         'sos_praying',
         'sos_reply',
+        'sos_report',
         'sos_signal',
         'sound_profile',
         'spend_ceiling_raise',
@@ -2822,12 +2824,17 @@ describe('the note_report table and the terms columns, and nothing beside them',
       ).map((row) => row.value);
     expect(await enumValues('report_reason')).toEqual([...REPORT_REASONS]);
     expect(await enumValues('report_outcome')).toEqual([...REPORT_OUTCOMES]);
-    // Less `summary_ready`, which `0033_summary_ready` adds next, and less the two SOS kinds,
-    // which `0039_sos_signal` adds after that; this database, migrated only as far as the UGC
-    // controls, does not admit any of the three yet.
+    // Less `summary_ready`, which `0033_summary_ready` adds next, less the two SOS kinds, which
+    // `0039_sos_signal` adds after that, and less `sos_reported`, which the SOS reports migration
+    // adds last; this database, migrated only as far as the UGC controls, does not admit any of
+    // the four yet.
     expect(await enumValues('notification_kind')).toEqual(
       NOTIFICATION_KINDS.filter(
-        (kind) => kind !== 'summary_ready' && kind !== 'sos_raised' && kind !== 'sos_reply',
+        (kind) =>
+          kind !== 'summary_ready' &&
+          kind !== 'sos_raised' &&
+          kind !== 'sos_reply' &&
+          kind !== 'sos_reported',
       ),
     );
   });

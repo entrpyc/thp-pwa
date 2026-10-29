@@ -8,8 +8,11 @@ import {
   findSosReplyById,
   findSosSignalById,
   findSosSignalForViewer,
+  findOpenSosReportByReporter,
   insertSosReply,
+  insertSosReport,
   insertSosSignal,
+  isBlockedEitherWay,
   listSosPraying,
   listSosReplies,
   listSosSignals,
@@ -29,6 +32,7 @@ import {
   isSosStatus,
   isSosUrgency,
   termsAcceptanceIsCurrent,
+  type ReportPayload,
   type SosAuthorView,
   type SosListPayload,
   type SosRemovedPayload,
@@ -42,9 +46,11 @@ import { ApiError } from '@/server/api/errors';
 import { authorise } from '@/server/auth/authorise';
 import { can, type Actor } from '@/server/auth/policy';
 import { BLOCKED_WORD_MESSAGE, findBlockedWord } from '@/server/notes/filter';
+import { parseReport } from '@/server/notes/service';
 import {
   notifySosRaised,
   notifySosReply,
+  notifySosReported,
   notifySosThreadReply,
 } from '@/server/notifications/service';
 import { audit } from '@/server/observability/audit';
@@ -251,6 +257,111 @@ export async function deleteReplyFor(
     signalId,
   });
   return { signal: await detail(await requireVisible(actor, signalId), actor) };
+}
+
+// =================================================================================================
+// Reporting
+// =================================================================================================
+
+/**
+ * Ask an admin to look at a prayer request, or at one reply on it (Apple guideline 1.2, Google
+ * Play's UGC policy) — `reportNote`'s twin, on `reportNote`'s terms. The body names the reply,
+ * or nothing for the request itself; the reason and the optional sentence are parsed by the one
+ * parser both reports share.
+ *
+ * A request or a reply the member cannot see — a block either way — is `not_found`, the answer
+ * every read gives; your own is `invalid_input`. A member reporting the same thing twice is
+ * answered with the report they made and nothing new is written. The admins are told after the
+ * row is committed and never as a condition of it.
+ */
+export async function reportSignalFor(
+  actor: Actor,
+  signalId: string,
+  body: unknown,
+): Promise<{ readonly payload: ReportPayload; readonly created: boolean }> {
+  authorise(actor, 'sos.report', `sos:${signalId}`);
+  const signal = await requireVisible(actor, signalId);
+  const fields = asObject(body, 'Send a JSON object with the reason.');
+  const replyId = parseReplyId(fields['replyId']);
+
+  let reply: SosReplyRow | null = null;
+  if (replyId !== null) {
+    reply = await findSosReplyById(replyId);
+    if (reply === null || reply.signalId !== signalId || (await isBlockedEitherWay(actor.id, reply.authorId))) {
+      throw ApiError.notFound('There is no such reply.');
+    }
+  }
+  const target = reply === null ? `sos:${signalId}` : `sos_reply:${reply.id}`;
+  if ((reply?.authorId ?? signal.authorId) === actor.id) {
+    throw ApiError.invalidInput(
+      reply === null
+        ? 'You cannot report your own prayer request. Close it instead.'
+        : 'You cannot report your own reply. Remove it instead.',
+    );
+  }
+
+  const request = parseReport(body);
+
+  const already = await findOpenSosReportByReporter({ signalId, replyId }, actor.id);
+  if (already !== null) {
+    logger.info('sos.report', {
+      actorId: actor.id,
+      action: 'sos.report',
+      target,
+      reportId: already.id,
+      repeated: true,
+    });
+    return { payload: { reportId: already.id }, created: false };
+  }
+
+  const row = await insertSosReport({
+    signalId,
+    replyId,
+    reporterId: actor.id,
+    reason: request.reason,
+    detail: request.detail,
+  });
+
+  // An audit-shaped line, as a note's report writes: who flagged what, and why — never the text.
+  logger.info('sos.report', {
+    ...audit(actor, 'sos.report', target),
+    reportId: row.id,
+    reason: row.reason,
+    signalId,
+  });
+
+  await notifySosReported({
+    reportId: row.id,
+    signalId,
+    replyId,
+    reason: row.reason,
+    text: reply?.text ?? signal.description,
+    reporter: actor,
+  });
+
+  return { payload: { reportId: row.id }, created: true };
+}
+
+/**
+ * Remove a reply on the reports console's say-so — the moderation half of `deleteReplyFor`
+ * without the viewer's own visibility question, because an admin working the queue is acting on
+ * a report, not reading the signal, and a block between the admin and the author must not hide
+ * what the group asked them to judge. A reply already gone is the end state asked for.
+ */
+export async function removeReplyThroughModeration(
+  actor: Actor,
+  signalId: string,
+  replyId: string,
+): Promise<void> {
+  authorise(actor, 'sos.moderate', `sos_reply:${replyId}`);
+  const reply = await findSosReplyById(replyId);
+  if (reply === null || reply.signalId !== signalId) return;
+  await deleteSosReply(replyId);
+  logger.info('sos.moderate', {
+    ...audit(actor, 'sos.moderate', `sos_reply:${replyId}`),
+    signalId,
+    outcome: 'removed',
+  });
 }
 
 // =================================================================================================
@@ -502,6 +613,15 @@ async function parseParent(value: unknown, signalId: string): Promise<SosReplyRo
   const top = await findSosReplyById(named.parentId);
   if (top === null) throw ApiError.invalidInput('The reply to answer is not on this prayer request.');
   return top;
+}
+
+/** `replyId` on a report: absent or null is the request itself; anything but a UUID is refused. */
+function parseReplyId(value: unknown): string | null {
+  if (value === undefined || value === null) return null;
+  if (typeof value !== 'string' || !UUID_PATTERN.test(value)) {
+    throw ApiError.invalidInput('Name the reply to report, or leave it out.');
+  }
+  return value;
 }
 
 /** `anonymous` on a raise or a press: absent is named; anything but a boolean is refused. */

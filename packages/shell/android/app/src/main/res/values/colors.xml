@@ -1,0 +1,11 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <!--
+      The document's background — `APP_BACKGROUND_COLOUR` in packages/web/src/app/app-theme.ts,
+      the token layer's -color-bg — for the three surfaces Android paints before or around the
+      page: the launch window, the status bar and the navigation bar (styles.xml). The adaptive
+      icon's background layer (ic_launcher_background.xml) holds the same value, because that
+      resource is one the launcher reads on its own.
+    -->
+    <color name="app_background">#01101F</color>
+</resources>
