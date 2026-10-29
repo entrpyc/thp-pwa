@@ -45,7 +45,7 @@ async function refusal(body: unknown): Promise<{ code: string; message: string }
 }
 
 describe('the vocabulary', () => {
-  it('names ten kinds, two of which an admin composes, each with a label', () => {
+  it('names eleven kinds, two of which an admin composes, each with a label', () => {
     expect(NOTIFICATION_KINDS).toEqual([
       'recording_published',
       'note_reply',
@@ -55,6 +55,7 @@ describe('the vocabulary', () => {
       'summary_ready',
       'sos_raised',
       'sos_reply',
+      'sos_reported',
       'announcement',
       'new_feature',
     ]);

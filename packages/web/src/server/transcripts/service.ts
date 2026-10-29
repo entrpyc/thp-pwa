@@ -182,7 +182,6 @@ export async function correctTranscriptSegment(
 
   logger.info('transcript.correct', {
     actorId: actor.id,
-    actorEmail: actor.email,
     action: 'transcript.correct',
     target: `segment:${segmentId}`,
     recordingId,
@@ -236,7 +235,6 @@ export async function regenerateSummary(
 
   logger.info('summary.regenerate', {
     actorId: actor.id,
-    actorEmail: actor.email,
     action: 'summary.regenerate',
     target: `recording:${recordingId}`,
     recordingId,

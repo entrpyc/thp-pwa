@@ -86,6 +86,10 @@ against the schema, not a second copy of it.
 - `sync_receipt.user_id` — cascade: a receipt for an outbox entry flushed from the person's own
   device is a fact about them and nothing else. `sync_receipt.note_id` — set null with the note,
   so the receipt outlives a deleted note the way a log line does.
+- `member_block.blocker_id` — cascade: the person's own blocks go; nobody is left for them to
+  protect. `member_block.blocked_id` — cascade, **after** each row is written again against the
+  placeholder (`reassignBlocksAgainst`), so a reader who had chosen not to see this person's
+  notes does not see them return as "Removed member".
 - `invitation.email` — rows addressed to the person are deleted.
 - `user` itself — the placeholder is excluded from the member list (`listUsers`) and from every
   guarded admin write (`withLastAdminGuard`, `reactivateUser`), so nobody can deactivate,

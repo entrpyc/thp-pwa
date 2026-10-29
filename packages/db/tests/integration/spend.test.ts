@@ -106,13 +106,18 @@ describe('the spend ledger', () => {
     expect(ledger.dayEndsAt.toISOString()).toMatch(/T00:00:00\.000Z$/);
   });
 
-  it('sums what succeeded paid work cost today, and nothing else', async () => {
+  it('sums what paid work cost today — succeeded, or failed after paying — and nothing else', async () => {
     await finishedJob({ step: 'transcribe', providerMeta: { costUsd: 0.39, provider: 'deepgram' } });
     await finishedJob({ step: 'generate_draft', providerMeta: { costUsd: 0.05, provider: 'minimax' } });
     await finishedJob({ step: 'generate_chapters', providerMeta: { costUsd: 0.04 } });
-    // None of these count: a failure billed nothing we can read; yesterday is not today; a run
-    // that recorded no cost is a run with no cost; a cost that is not a number is not a cost.
-    await finishedJob({ status: 'failed', providerMeta: { costUsd: 99 } });
+    // **A failure that paid counts** (security audit 2026-10-28, finding 8): a transcript billed
+    // and then refused by the confidence gate is still the day's money, and a ledger that ignored
+    // it would let a step that always fails after the provider call spend without bound.
+    await finishedJob({ step: 'transcribe', status: 'failed', providerMeta: { costUsd: 0.1 } });
+    // None of these count: a failure that recorded no cost spent nothing we can read; yesterday
+    // is not today; a run that recorded no cost is a run with no cost; a cost that is not a number
+    // is not a cost.
+    await finishedJob({ status: 'failed', providerMeta: null });
     await finishedJob({ finishedAgo: '1 day 1 minute', providerMeta: { costUsd: 99 } });
     await finishedJob({ providerMeta: null });
     await finishedJob({ providerMeta: { model: 'nova-3' } });
@@ -121,12 +126,12 @@ describe('the spend ledger', () => {
 
     const ledger = await readSpendLedger(2, handle);
 
-    expect(ledger.todayUsd).toBe(0.48);
+    expect(ledger.todayUsd).toBe(0.58);
     // Every step of the chain has a column, zero included: the split is the chain's shape, not the
     // set of steps that happened to cost something today.
     expect(ledger.byStep).toEqual({
       process_audio: 0,
-      transcribe: 0.39,
+      transcribe: 0.49,
       generate_draft: 0.05,
       generate_chapters: 0.04,
       generate_questions: 0,
@@ -137,9 +142,9 @@ describe('the spend ledger', () => {
   });
 
   it('is reached at the ceiling, not past it', async () => {
-    const ledger = await readSpendLedger(0.48, handle);
+    const ledger = await readSpendLedger(0.58, handle);
     expect(spendCeilingReached(ledger)).toBe(true);
-    expect(spendCeilingReached(await readSpendLedger(0.49, handle))).toBe(false);
+    expect(spendCeilingReached(await readSpendLedger(0.59, handle))).toBe(false);
   });
 
   it('takes the higher of the default and today’s raise, and remembers who raised it', async () => {

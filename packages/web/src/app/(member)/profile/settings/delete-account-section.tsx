@@ -10,6 +10,7 @@ import {
 } from '@thp/shared';
 import { apiFetch } from '@/client/api-client';
 import { resetAnalytics } from '@/client/observability/analytics';
+import { offlineManager } from '@/client/offline/manager';
 import {
   DELETION_CONFIRMATION_WORD,
   isDeletionConfirmed,
@@ -91,6 +92,8 @@ export function DeleteAccountSection() {
       });
       // Deliberately left "submitting": the button reads "Deleting…" until the page is gone.
       resetAnalytics();
+      // What sign-out forgets on the device, this forgets too: the draft and who was signed in.
+      await offlineManager().deactivate().catch(() => undefined);
       router.replace(ACCOUNT_DELETED_PAGE_PATH);
       router.refresh();
     } catch (caught) {

@@ -165,6 +165,37 @@ export async function deleteMemberBlock(
   return rows.length > 0;
 }
 
+/**
+ * **Carry the blocks others hold against a leaving member over to their placeholder** — the
+ * account-deletion step for this table (`account-deletion.ts`; README.md beside the schema).
+ *
+ * `blocked_id` cascades with the account, and the person's public notes are re-pointed at the
+ * placeholder before the row goes. Left alone, the two together would mean that a reader who had
+ * blocked the author sees those same notes again the moment the author leaves, as "Removed
+ * member" (docs/security-audit-2026-10-28.md, finding 15) — a block the reader placed, undone by
+ * something the other person did. So each block *against* the person is written again against the
+ * placeholder, keeping its date, and the originals go with the cascade. Blocks the person
+ * themselves placed go: there is no reader left for them to protect.
+ *
+ * `on conflict do nothing` because a placeholder is fresh and has never been blocked, but the
+ * statement should not be the one place that assumes it. Answers how many were carried over.
+ */
+export async function reassignBlocksAgainst(
+  deletedId: string,
+  placeholderId: string,
+  executor: Executor = getDatabase(),
+): Promise<number> {
+  const rows = await queryable(executor).execute<{ blocker_id: string }>(sql`
+    insert into ${memberBlock} (blocker_id, blocked_id, created_at)
+    select ${memberBlock.blockerId}, ${placeholderId}::uuid, ${memberBlock.createdAt}
+    from ${memberBlock}
+    where ${memberBlock.blockedId} = ${deletedId}
+    on conflict do nothing
+    returning blocker_id
+  `);
+  return rows.length;
+}
+
 // =================================================================================================
 // Reading
 // =================================================================================================

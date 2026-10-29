@@ -5,6 +5,7 @@ import {
 } from '@thp/shared';
 import { PUBLIC } from '@/server/api/access';
 import { apiRoute } from '@/server/api/route';
+import { tokenGuard } from '@/server/auth/token-limits';
 import { passwordResetGuard } from '@/server/password-reset/limits';
 import {
   previewPasswordReset,
@@ -48,6 +49,7 @@ export const POST = apiRoute(PUBLIC, async (request): Promise<PasswordResetReque
  * holding that token.
  */
 export const GET = apiRoute(PUBLIC, async (request): Promise<PasswordResetPreviewPayload> => {
+  tokenGuard().enforce(request);
   const token = new URL(request.url).searchParams.get(RESET_TOKEN_PARAM);
   return previewPasswordReset(token);
 });

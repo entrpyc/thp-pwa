@@ -76,32 +76,12 @@ export interface SignOutPayload {
 }
 
 /**
- * Path of `POST /api/v1/auth/sign-up` — registering an account without an invitation.
+ * The screen at `/sign-up`, on the web origin rather than under the API prefix.
  *
- * Its own path rather than a second method on {@link AUTH_SESSION_PATH}: signing up creates an
- * *account* and a session, where signing in creates only a session, and one path answering two
- * different creations is a path whose `201` means two things.
+ * **Registration is closed.** The app is published for the members of one private group, so the
+ * screen no longer carries a form: it says that an admin can invite the person (3.1.3) and names
+ * the operator's mailbox (`SUPPORT_EMAIL`). There is no `POST /api/v1/auth/sign-up` any more — the
+ * route was removed rather than switched off, so nothing can create an account without an
+ * invitation. The path is kept because sign-in and a dead invitation link still point here.
  */
-export const SIGN_UP_PATH = '/auth/sign-up';
-
-/** The screen that registration happens on, on the web origin rather than under the API prefix. */
 export const SIGN_UP_PAGE_PATH = '/sign-up';
-
-/**
- * Body of `POST /api/v1/auth/sign-up`.
- *
- * **No `role` field, deliberately.** A registrant is a Member and says nothing about it
- * (docs/project/prd.md, 3.1.15); a request shape with a role in it is a request shape somebody
- * will one day trust. Changing a role is an admin action on an account that already exists
- * (3.1.5), and it travels on `PATCH /api/v1/users/:id` where it can be authorised.
- *
- * **`termsVersion` is required** (Google Play UGC policy: a member accepts the terms before they
- * post). It is the version the form showed and the member ticked, and it has to equal
- * `TERMS_VERSION` — the same rule `TermsAcceptanceRequest` states, so registering and accepting
- * later are one act recorded two ways rather than two acts with two rules.
- */
-export interface SignUpRequest {
-  readonly email: string;
-  readonly password: string;
-  readonly termsVersion: string;
-}

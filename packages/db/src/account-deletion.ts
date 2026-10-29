@@ -5,6 +5,7 @@ import { isAdmin, withLastAdminGuard, type Guarded, type UserRow } from './accou
 import { getDatabase, queryable, type DatabaseHandle } from './client';
 import { deleteEmbeddingsForSources } from './embeddings';
 import { deleteInvitationsAddressedTo } from './invitations';
+import { reassignBlocksAgainst } from './member-blocks';
 import { reassignNotesOfDeletedAuthor } from './notes';
 import { anonymiseNotificationsByActor } from './notifications';
 import { user } from './schema';
@@ -47,6 +48,8 @@ export interface AccountDeletion {
   readonly deletedPrivateNotes: number;
   readonly anonymisedNotifications: number;
   readonly forgottenInvitations: number;
+  /** Blocks other members held against the person, now held against the placeholder. */
+  readonly retainedBlocks: number;
 }
 
 export type GuardedDeletion = Guarded<AccountDeletion>;
@@ -71,7 +74,10 @@ export type GuardedDeletion = Guarded<AccountDeletion>;
  *    note service gives when it deletes one: a vector is a copy of the words.
  * 4. **Other members' notifications stop naming the person** (`notifications.ts`).
  * 5. **Invitations addressed to the person are forgotten** (`invitations.ts`).
- * 6. **The account row is deleted**, and every foreign key to `user` does what the schema says:
+ * 6. **Blocks held against the person move to the placeholder** (`member-blocks.ts`), so the
+ *    public notes that moved in step 2 stay hidden from every reader who had chosen not to see
+ *    them. The person's own blocks go with the row: nobody is left for them to protect.
+ * 7. **The account row is deleted**, and every foreign key to `user` does what the schema says:
  *    sessions, password resets, deletion requests, playback positions, onboarding completions,
  *    reactions, the person's own notifications and the vectors of their private notes cascade;
  *    `invited_by`, `deleted_by`, `pinned_by`, `reviewed_by`, `corrected_by_user_id`, `sent_by`,
@@ -115,6 +121,7 @@ export async function deleteUserAccount(
         tx,
       );
       const forgottenInvitations = await deleteInvitationsAddressedTo(row.email, tx);
+      const retainedBlocks = await reassignBlocksAgainst(id, placeholder.id, tx);
 
       const gone = await db.delete(user).where(eq(user.id, id)).returning({ id: user.id });
       if (gone.length === 0) throw new Error('deleteUserAccount deleted no row');
@@ -128,6 +135,7 @@ export async function deleteUserAccount(
         deletedPrivateNotes: notes.deletedPrivateNoteIds.length,
         anonymisedNotifications,
         forgottenInvitations,
+        retainedBlocks,
       };
     },
     handle,

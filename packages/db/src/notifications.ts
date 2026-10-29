@@ -7,6 +7,7 @@ import {
   noteReactionNotificationTitle,
   noteReplyNotificationTitle,
   noteReportedNotificationTitle,
+  sosReportedNotificationTitle,
   sosReplyNotificationTitle,
   type AnnouncementKind,
   type NotificationKind,
@@ -318,7 +319,13 @@ export async function anonymiseNotificationsByActor(
     .set({ title: sosReplyNotificationTitle(placeholderName) })
     .where(and(eq(notification.actorId, actorId), eq(notification.kind, 'sos_reply')))
     .returning({ id: notification.id });
-  return replies.length + reactions.length + reports.length + sosReplies.length;
+  // The fifth: the admins' notice that this member reported a prayer request or a reply on one.
+  const sosReports = await db
+    .update(notification)
+    .set({ title: sosReportedNotificationTitle(placeholderName) })
+    .where(and(eq(notification.actorId, actorId), eq(notification.kind, 'sos_reported')))
+    .returning({ id: notification.id });
+  return replies.length + reactions.length + reports.length + sosReplies.length + sosReports.length;
 }
 
 // =================================================================================================

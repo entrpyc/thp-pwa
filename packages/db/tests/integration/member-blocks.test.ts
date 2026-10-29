@@ -2,6 +2,7 @@ import { afterAll, beforeAll, describe, expect, it, inject } from 'vitest';
 import {
   createDatabase,
   deleteMemberBlock,
+  deleteUserAccount,
   findMemberBlock,
   insertMemberBlock,
   insertNote,
@@ -136,6 +137,32 @@ describe('the member_block table', () => {
     expect(await findMemberBlock(alice, bob, handle)).toBeNull();
     expect(await findMemberBlock(carol, alice, handle)).toBeNull();
     expect(await listBlockedMembers(carol, handle)).toEqual([]);
+  });
+
+  it('survives the blocked member deleting their account: the block follows the placeholder (finding 15)', async () => {
+    // The public notes move to the placeholder; without this a reader who had blocked the author
+    // would see them come back as "Removed member" (docs/security-audit-2026-10-28.md, finding 15).
+    const [leaver, reader, other] = await Promise.all([newUser('Leaver'), newUser('Reader'), newUser('Other')]);
+    const where = await newRecording('Leaving');
+    const leaversNote = (await topLevel(where, leaver, 1_000)).id;
+    const othersNote = (await topLevel(where, other, 2_000)).id;
+    await insertMemberBlock(reader, leaver, handle);
+    await insertMemberBlock(leaver, other, handle);
+
+    const result = await deleteUserAccount(leaver, handle);
+    expect(result.outcome).toBe('applied');
+    if (result.outcome !== 'applied') return;
+    const placeholder = result.value.placeholderId;
+    expect(result.value.retainedBlocks).toBe(1);
+
+    // The reader's block now names the placeholder, and the leaver's own block is gone.
+    expect(await findMemberBlock(reader, placeholder, handle)).not.toBeNull();
+    expect((await listBlockedMembers(reader, handle)).map((row) => row.id)).toEqual([placeholder]);
+    expect(await handle.sql`select 1 from member_block where blocker_id = ${leaver} or blocked_id = ${leaver}`).toHaveLength(0);
+
+    // And the note, now the placeholder's, stays out of the reader's list and in everybody else's.
+    expect((await listNotesForReader(where, reader, handle)).map((row) => row.id)).toEqual([othersNote]);
+    expect((await listNotesForReader(where, other, handle)).map((row) => row.id)).toEqual([leaversNote, othersNote]);
   });
 
   it('lists only the blocker’s own direction, by display name', async () => {

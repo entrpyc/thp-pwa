@@ -28,6 +28,11 @@ export function smtpTransport(env: EnvSource = process.env): MailTransport {
     host: settings.host,
     port: settings.port,
     secure: settings.secure,
+    // On 587 and 25 the connection starts in the clear and upgrades with STARTTLS. Without this
+    // flag nodemailer carries on in the clear when the server offers no upgrade — which is how a
+    // downgraded or impersonated relay reads MAIL_PASSWORD (security audit, finding 18). With it,
+    // no TLS is a failed send, which is what a relay that cannot encrypt deserves.
+    requireTLS: !settings.secure,
     auth: { user: settings.user, pass: settings.password },
   });
 

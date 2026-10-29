@@ -85,7 +85,6 @@ export async function submitFeedback(
 
   logger.info('feedback.submitted', {
     actorId: actor.id,
-    actorEmail: actor.email,
     action: 'feedback.submit',
     target: `feedback:${kind}`,
     // Which of the two arrived and where it went, and nothing more. Not a length, not a hash, not

@@ -22,7 +22,8 @@ API routes, which is why nothing is bundled — `www/` holds one explanatory pag
   so a link to any other host opens in the system browser, where the member has a URL bar and a
   way back.
 - **Android back button** keeps Capacitor's default: it walks the WebView's history and leaves
-  the app from the first page. The status bar keeps the system default.
+  the app from the first page. The system bars, the launch window and the offline screen are
+  the product's own — see *Icons, splash screens, system bars and the offline screen* below.
 - **The web app can tell it is inside the shell** through `shellPlatform()` in
   `packages/web/src/client/platform.ts`, which reads the `Capacitor` bridge the shell injects.
   No custom user agent is set; the server sees an ordinary mobile browser. Two things read it:
@@ -146,10 +147,23 @@ cd packages/shell/android
 ./gradlew bundleRelease                          # gradlew.bat on a plain Windows shell
 ```
 
-The bundle lands at `android/app/build/outputs/bundle/release/app-release.aab`. It is unsigned:
-Play requires upload signing, so either add a `signingConfigs.release` block to
-`android/app/build.gradle` with a keystore that stays **out of git**, or sign the `.aab` with
-`jarsigner` before upload. `./gradlew assembleDebug` produces an installable debug APK for a device
+The bundle lands at `android/app/build/outputs/bundle/release/app-release.aab`. It is signed with
+the upload key when `android/local.properties` (gitignored) names it, and left unsigned otherwise:
+
+```properties
+sdk.dir=C:\Users\<you>\AppData\Local\Android\Sdk
+thp.upload.storeFile=C:\path\outside\the\repo\upload.keystore
+thp.upload.storePassword=...
+thp.upload.keyAlias=upload
+thp.upload.keyPassword=...
+```
+
+The same four values are read from `THP_UPLOAD_STORE_FILE`, `THP_UPLOAD_STORE_PASSWORD`,
+`THP_UPLOAD_KEY_ALIAS` and `THP_UPLOAD_KEY_PASSWORD` when the file does not set them. The keystore
+was generated once with `keytool -genkeypair -keyalg RSA -keysize 2048 -validity 10000` and is
+**not in the repository**: it is the upload key Play App Signing trusts, so back it up with its
+password, and if it is ever lost ask Play for an upload-key reset rather than making a new app.
+`./gradlew assembleDebug` produces an installable debug APK for a device
 or an emulator; `npm --workspace @thp/shell run open:android` opens the project in Android Studio.
 
 `versionCode` in `android/app/build.gradle` must go up by one for every Play upload.
@@ -241,9 +255,9 @@ value only takes effect once the web app is deployed with it.
 
 | File                         | Entry                                     | Status and where the value comes from                                                                                                                                                                                                                                                                                                                                                                                                      |
 | :--------------------------- | :---------------------------------------- | :----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| `apple-app-site-association` | `APPLE_TEAM_ID_PLACEHOLDER`               | **Still a placeholder.** The 10-character Team ID from https://developer.apple.com/account under Membership details, or `xcrun security find-identity -v -p codesigning` on a Mac that holds the signing certificate (the ID is in parentheses). The value becomes `TEAMID.com.indepthwebsolutions.teachinghub`.                                                                                                                                 |
-| `assetlinks.json`            | `ANDROID_SIGNING_CERT_SHA256_PLACEHOLDER` | **Still a placeholder.** The SHA-256 of the certificate that signs what members install. With Play App Signing that is Play's key: Play Console, Setup, App signing, *App signing key certificate*, SHA-256. For an upload key or a local release keystore: `keytool -list -v -keystore <release.keystore> -alias <alias>`. Colon-separated upper-case hex, as both tools print it.                                                            |
-| `assetlinks.json`            | `4D:7B:92:…:2A:EA`                        | **Filled.** The SHA-256 of the Android debug keystore on the machine this was built on (`~/.android/debug.keystore`, alias `androiddebugkey`, store password `android`), so a `./gradlew assembleDebug` build from that machine opens links against the live site. Another machine's debug build needs its own, from `keytool -list -v -keystore ~/.android/debug.keystore -alias androiddebugkey -storepass android`. Remove it once Play App Signing is live: the debug key is unprotected, and any APK signed with it could claim the site's links on a device it is installed on. |
+| `apple-app-site-association` | `B2PZ326S78`                              | **Set.** The 10-character Team ID from https://developer.apple.com/account under Membership details, or `xcrun security find-identity -v -p codesigning` on a Mac that holds the signing certificate (the ID is in parentheses). The value becomes `TEAMID.com.indepthwebsolutions.teachinghub`.                                                                                                                                 |
+| `assetlinks.json`            | `75:16:1E:41:…:40:68`                     | **Set** to the Play App Signing certificate. The SHA-256 of the certificate that signs what members install. With Play App Signing that is Play's key: Play Console, Setup, App signing, *App signing key certificate*, SHA-256. For an upload key or a local release keystore: `keytool -list -v -keystore <release.keystore> -alias <alias>`. Colon-separated upper-case hex, as both tools print it.                                                            |
+| `assetlinks.json`            | *(debug keystore)*                        | **Removed.** The debug keystore's fingerprint used to sit beside the placeholder so a local `assembleDebug` build opened links; it was removed before the first store submission because the debug key is unprotected and any APK signed with it could claim the site's links. To test links from a debug build, add that machine's fingerprint (`keytool -list -v -keystore ~/.android/debug.keystore -alias androiddebugkey -storepass android`) locally and do not commit it. |
 
 Both files are served by Next from `public/`. `apple-app-site-association` has no extension, and
 Apple refuses anything not typed `application/json`, so `packages/web/next.config.ts` carries a
@@ -285,6 +299,14 @@ member would notice; the automated suites cannot see any of them.
    playing: the page is replaced and playback stops, which is the documented behaviour.
 6. **Other origins stay out.** A link to any other host from inside the app opens the system
    browser.
+7. **Offline screen.** Turn on aeroplane mode, force-quit the app and open it. The product's own
+   "You're offline" page shows, not a browser error. Turn aeroplane mode off: the page loads the
+   app on its own within a few seconds. With the network on but the server stopped (a build
+   pointed at a local dev server), the page says the server could not be reached.
+8. **Icon, splash and system bars.** The launcher and home screen show the purple play mark on
+   the dark background, not Capacitor's logo. The launch window is the same dark colour with the
+   mark. Once loaded, the status bar icons are light and the top bar sits below them; the
+   transport bar clears the gesture area or home indicator with no dark band between.
 
 **Android, from a terminal**
 
@@ -337,9 +359,34 @@ injected bridge script. It does not affect any item above and is not addressed h
 - Run with Xcode attached and lock the phone: the debugger shows the app still running and no
   `AVAudioSession` errors in the console while sound continues.
 
+## Icons, splash screens, system bars and the offline screen
+
+- **Icons and splash screens** are generated from the web app's own mark by
+  `npm --workspace @thp/shell run assets` (`tools/generate-assets.mjs`): the Android launcher
+  icons at every density (legacy, round and the adaptive foreground over `ic_launcher_background`),
+  the Android splash drawables, the 1024 px iOS icon and the three iOS launch images. The
+  background is `APP_BACKGROUND_COLOUR` read from `packages/web/src/app/app-theme.ts`. To change
+  the art, replace `packages/web/public/icons/icon-512.png` and run the script; nothing is drawn by
+  hand here. Android 12+ draws its own splash — the launcher icon on `windowSplashScreenBackground`
+  (styles.xml) — and the drawables serve Android 11 and earlier; iOS shows `Splash.imageset`
+  through LaunchScreen.storyboard on a background of the same colour.
+- **System bars.** Android paints the status and navigation bars in the document background with
+  light icons on Android 14 and earlier (styles.xml); on Android 15+, which an app targeting API
+  36 draws edge-to-edge, the bars are transparent and the WebView follows the document's
+  `viewport-fit=cover`, so `env(safe-area-inset-*)` carries the bar heights and the web app's own
+  padding keeps the top bar and the transport bar clear (capacitor.config.ts, `SystemBars`). iOS
+  shows a light status bar over the dark document (Info.plist, `UIStatusBarStyle`), and WebKit
+  fills the same insets from the notch and the home indicator.
+- **The offline screen.** `www/offline.html` is what `server.errorPath` shows when the origin
+  cannot be loaded — no network, a captive portal, the server down — instead of the WebView's own
+  error page. It is styled like the product, says whether it is the network or the server that is
+  unreachable, retries on a press, and retries on its own when the device reports connectivity
+  (`online`). Its retry navigates to the origin named in its `data-origin`, which
+  `tools/write-offline-origin.mjs` rewrites from `THP_SHELL_SERVER_URL` before every `cap sync`
+  (the `sync` scripts), so a build against a development server retries against that server.
+
 ## What is not done in this package
 
-- No app icons or splash screens beyond Capacitor's defaults (prd 5.2.3 is a later ticket).
 - No download storage. The shell stays empty of product logic by design; that ticket adds a
   plugin here and reads `shellPlatform()` in the web app, as push did.
 - Push has not been exercised on a device from this machine: there is no Mac for iOS, and the

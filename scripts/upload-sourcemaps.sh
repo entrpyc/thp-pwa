@@ -30,12 +30,27 @@ fi
 
 cd "$(dirname "$0")/.."
 
-# The same loader the app's npm scripts use, so `.env` is read once and the same way.
+# Read the four values this script needs out of `.env` — **without executing it.** `source .env`
+# runs the file as shell, so a value holding `$(…)` or a backtick would run on the box with this
+# script's permissions. The app's own loader (scripts/with-env.mjs, dotenv) never executes it
+# either; this mirrors that for the one shell script that reads `.env`. A value already in the
+# environment wins, as it does for the npm scripts. Surrounding quotes are stripped; nothing else
+# is interpreted.
+env_value() {
+  local key="$1" line
+  line=$(grep -E "^${key}=" .env 2>/dev/null | tail -1 || true)
+  line="${line#*=}"
+  line="${line%\"}"; line="${line#\"}"
+  line="${line%\'}"; line="${line#\'}"
+  printf '%s' "$line"
+}
 if [[ -f .env ]]; then
-  set -a
-  # shellcheck disable=SC1091
-  source .env
-  set +a
+  : "${POSTHOG_CLI_API_KEY:=$(env_value POSTHOG_CLI_API_KEY)}"
+  : "${POSTHOG_CLI_PROJECT_ID:=$(env_value POSTHOG_CLI_PROJECT_ID)}"
+  : "${POSTHOG_CLI_HOST:=$(env_value POSTHOG_CLI_HOST)}"
+  : "${NEXT_PUBLIC_POSTHOG_HOST:=$(env_value NEXT_PUBLIC_POSTHOG_HOST)}"
+  # The CLI reads its two credentials from the environment, so those two are exported.
+  export POSTHOG_CLI_API_KEY POSTHOG_CLI_PROJECT_ID
 fi
 
 CHUNKS="packages/web/.next/static"

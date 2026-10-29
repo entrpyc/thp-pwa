@@ -102,7 +102,7 @@ export function acceptUrlFor(token: string): string {
 /**
  * A display name for an account created by accepting.
  *
- * Re-exported rather than defined here: sign-up creates accounts the same way and derives a name
+ * Re-exported rather than defined here: the admin seed creates accounts the same way and derives a name
  * the same way, and two copies of that rule would be two answers to "what is a new account called".
  */
 export { displayNameFor };
@@ -196,7 +196,6 @@ async function createAndSend(
 
   logger.info(action, {
     actorId: actor.id,
-    actorEmail: actor.email,
     action,
     target: `invitation:${row.id}`,
     email: row.email,
@@ -258,7 +257,6 @@ export async function revokeInvitationById(actor: Actor, id: string): Promise<In
 
   logger.info('invitation.revoke', {
     actorId: actor.id,
-    actorEmail: actor.email,
     action: 'invitation.revoke',
     target: `invitation:${revoked.id}`,
     email: revoked.email,
@@ -370,7 +368,6 @@ export async function acceptInvitationWithPassword(
   const session = await issueSession(accepted.user.id);
   logger.info('invitation.accept', {
     actorId: accepted.user.id,
-    actorEmail: accepted.user.email,
     action: 'invitation.accept',
     target: `invitation:${accepted.invitation.id}`,
   });

@@ -28,7 +28,7 @@ import {
   type UpdateSeriesRequest,
   type UploadGrantPayload,
 } from '@thp/shared';
-import { UPLOAD_GRANT_SECONDS, mediaStore, mintArtworkKey } from '@thp/media';
+import { ARTWORK_KEY_PREFIX, UPLOAD_GRANT_SECONDS, mediaStore, mintArtworkKey } from '@thp/media';
 import { actorGuard } from '@/server/api/actor-limits';
 import { ApiError } from '@/server/api/errors';
 import { can, type Actor } from '@/server/auth/policy';
@@ -438,6 +438,12 @@ function parseArtworkKey(body: unknown): string {
   const { key } = body as Partial<SetSeriesArtworkRequest>;
   if (typeof key !== 'string' || key.trim() === '' || key.length > MAX_FIELD_LENGTH) {
     throw ApiError.invalidInput('Name the upload this cover is for.');
+  }
+  // Only a key `mintArtworkKey` could have produced. An admin's session is still a session that
+  // can be stolen, and a cover that could name a member's avatar or a recording's audio would turn
+  // `head` into an oracle over the whole bucket (docs/security-audit-2026-10-28.md, finding 4).
+  if (!key.trim().startsWith(ARTWORK_KEY_PREFIX)) {
+    throw ApiError.invalidInput('That is not an upload this accepts. Choose the image again.');
   }
   return key.trim();
 }

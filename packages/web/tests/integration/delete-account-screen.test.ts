@@ -97,7 +97,9 @@ async function askThroughTheScreen(email: string): Promise<{ heading: string; bo
       heading: ((await heading.textContent()) ?? '').trim(),
       // The address is echoed back, so it is removed before comparing — what must match is
       // everything the screen says *about the outcome*.
-      body: ((await page.textContent('body')) ?? '').replace(email, '(the address)'),
+      // The rendered text, not the DOM's: `textContent` would include Next's inline bootstrap
+      // scripts, which carry a per-request CSP nonce and so never compare equal.
+      body: (await page.innerText('body')).replace(email, '(the address)'),
     };
   } finally {
     await page.context().close();
@@ -248,6 +250,9 @@ describe('the mailed link', () => {
 
   it('refuses the only active admin in the API’s words and leaves the same link usable afterwards', async () => {
     const { account: only, token } = await linkFor('only-admin', ROLE.admin);
+    // Somebody to restore afterwards, whatever ran before this test in the shared database: the
+    // seeded admin is not guaranteed to be active by the time this file runs on its own.
+    await createAccount(databaseUrl, ROLE.admin, 'public-delete-spare-admin');
     const others = await sql<{ id: string }[]>`
       select id from "user" where role = 'admin' and deactivated_at is null and id <> ${only.id}
     `;

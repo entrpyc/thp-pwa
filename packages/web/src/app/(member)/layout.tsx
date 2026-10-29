@@ -4,6 +4,7 @@ import { onboardingPagePath } from '@thp/shared';
 import { currentActor } from '@/server/auth/current-actor';
 import { pendingOnboardingFor } from '@/server/onboarding/completion';
 import { analyticsPerson, can } from '@/server/auth/policy';
+import { AccountProvider } from '@/client/account/account-context';
 import { AnalyticsProvider } from '@/client/observability/analytics-provider';
 import { OfflineBanner } from './downloads/offline-banner';
 import { OfflineStatus } from './downloads/offline-status';
@@ -49,6 +50,8 @@ export default async function MemberLayout({ children }: { children: ReactNode }
     // crosses this line is what the policy module says analytics may know; the e-mail is not in it.
     // The preference crosses with it, off the same row, so the client knows before its first event.
     <AnalyticsProvider person={analyticsPerson(actor)} optedOut={actor.analyticsOptedOut}>
+      {/* The account id, for client code that keys device storage by account (the note draft). */}
+      <AccountProvider userId={actor.id}>
       <PlayerProvider initialSpeed={actor.preferredPlaybackSpeed}>
         {/*
           Inside the player rather than around it, because it is the smaller thing: the bell and the
@@ -74,6 +77,7 @@ export default async function MemberLayout({ children }: { children: ReactNode }
           </div>
         </NotificationsProvider>
       </PlayerProvider>
+      </AccountProvider>
     </AnalyticsProvider>
   );
 }

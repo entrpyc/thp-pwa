@@ -390,9 +390,10 @@ describe('the top navigation', () => {
 
       // Absent from the DOM, not merely hidden or disabled — which is the whole decision. A greyed
       // control is a promise this epic cannot keep and a thing the next epic has to un-disable.
-      // *All series* left this list in Story 6 — it is a live destination now, which is exactly
+      // *All series* left this list in Story 6 and *My notes* with the notes epic — each a live
+      // destination now, which is exactly
       // what dropping rather than disabling was for. The rest stay deferred.
-      for (const absent of ['All chapters', 'Search', 'My notes']) {
+      for (const absent of ['All chapters', 'Search']) {
         expect(await page.getByText(absent, { exact: false }).count(), absent).toBe(0);
       }
       expect(await page.getByRole('searchbox').count()).toBe(0);

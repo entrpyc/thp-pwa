@@ -7,6 +7,7 @@
  */
 export { deliverPush, buildTransport, configuredTransport, type DispatchOptions, type DispatchReport } from './dispatch';
 export { GONE_MARKER, captureTransport, type CapturedPush } from './capture';
+export { WEB_PUSH_SERVICE_HOSTS, isAllowedWebPushEndpoint } from './web-push';
 export {
   PUSH_TRANSPORTS,
   readPushTransportName,

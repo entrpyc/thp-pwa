@@ -9,8 +9,11 @@ import type { Actor } from '@/server/auth/policy';
  * until the third copy drifts, and drift here is silent: a renamed field still logs, and the line
  * still looks like an audit line to everyone except the search that was supposed to find it.
  *
- * **Four fields, and they are not negotiable.** `actorId` and `actorEmail` say who; `action` says
- * what; `target` says which thing. The time and the request's correlation id are the logger's, so
+ * **Three fields, and they are not negotiable.** `actorId` says who; `action` says what; `target`
+ * says which thing. **Not the address**: pm2 keeps these lines on disk for as long as logrotate
+ * says, and a member's email in every one of them is personal data held for no reason the line
+ * needs — the id is what a search keys on, and the member list is where it becomes a person
+ * (security audit, finding 19). The time and the request's correlation id are the logger's, so
  * one search on a correlation id returns the refused request, the write and this line together.
  *
  * **The prefix stays at the call site.** `recording:`, `series:` and `note:` are how a target is
@@ -23,7 +26,6 @@ import type { Actor } from '@/server/auth/policy';
 export function audit(actor: Actor, action: string, target: string): Record<string, unknown> {
   return {
     actorId: actor.id,
-    actorEmail: actor.email,
     action,
     target,
   };

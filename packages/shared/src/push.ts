@@ -69,6 +69,7 @@ export const NOTIFICATION_CATEGORY_OF_KIND: Record<NotificationKind, Notificatio
   announcement: 'announcements',
   new_feature: 'announcements',
   note_reported: 'admin_alerts',
+  sos_reported: 'admin_alerts',
   summary_ready: 'admin_alerts',
   sos_raised: 'sos',
   sos_reply: 'sos',

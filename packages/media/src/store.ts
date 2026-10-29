@@ -130,6 +130,14 @@ export interface MediaStore {
 /** The prefix {@link MediaStore.deleteAvatar} is confined to. The adapter checks against this. */
 export const AVATAR_KEY_PREFIX = 'avatars/';
 
+/**
+ * Where a series cover lives. Not a prefix the store may delete under — a replaced cover is left
+ * where it is — but the one a finalisation must name: a key an admin sends back to `setArtwork` is
+ * accepted only under it, so a cover can never alias a recording's audio or a member's picture
+ * (docs/security-audit-2026-10-28.md, finding 4).
+ */
+export const ARTWORK_KEY_PREFIX = 'artwork/';
+
 /** Where a note's pictures live — the one other prefix the store may delete under. */
 export const NOTE_IMAGE_KEY_PREFIX = 'note-images/';
 
@@ -227,7 +235,7 @@ export function mintArtworkKey(contentType: string): string {
     // object nobody can name the format of.
     throw new Error(`no accepted artwork extension for content type "${contentType}"`);
   }
-  return `artwork/${randomUUID()}.${extension}`;
+  return `${ARTWORK_KEY_PREFIX}${randomUUID()}.${extension}`;
 }
 
 /**

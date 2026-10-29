@@ -20,7 +20,7 @@ exists yet — no invitations, no uploads, no library.
 
 ```bash
 cp .env.example .env      # then edit if your Postgres is not the compose one
-docker compose up -d      # PostgreSQL 17 + pgvector on :5432, MinIO on :9000 + its bucket
+docker compose up -d      # PostgreSQL 17 + pgvector on 127.0.0.1:5432, MinIO on 127.0.0.1:9000 + its bucket
 npm install
 npm run migrate
 
@@ -110,10 +110,10 @@ fails the build, not by convention.
 ## Accounts, sessions and authorisation
 
 **Every `/api/v1` route requires a session**, with a short enumerated list of exceptions: health
-(it must answer while the database is down, which is when a session lookup cannot), sign-in and
-sign-up (each is how a session or an account comes to exist), and the token routes behind
-invitations and password resets (the holder has no session yet, and a dead link has to be able to
-say so before anybody chooses a password). None of them carries account content. The list is
+(it must answer while the database is down, which is when a session lookup cannot), sign-in (it is
+how a session comes to exist), and the token routes behind invitations and password resets (the
+holder has no session yet, and a dead link has to be able to say so before anybody chooses a
+password). None of them carries account content. The list is
 [packages/web/src/server/auth/allowlist.ts](packages/web/src/server/auth/allowlist.ts), and it is
 the *only* source of exceptions — a route declared public that is not on it refuses anonymous
 callers like any other. How to add one is under [Public pages](#public-pages).
@@ -144,7 +144,7 @@ could not be read), `weak_password` (it could, and the password was refused on i
 `invitation_expired` versus `invitation_invalid`.
 
 One more, `rate_limited` (`429`, with `Retry-After`), is the answer from a route whose budget a
-caller has spent. Registration, sign-in, the reset request and the account-deletion request carry
+caller has spent. Sign-in, the reset request and the account-deletion request carry
 one; sign-in's is per caller *and* per account, spent before any password is verified, with no
 lockout and nothing for an admin to clear. Feedback and the three upload grants carry one per
 signed-in account, spent only on what would have left the server. Every budget, its keys and its
@@ -596,6 +596,11 @@ The workflow needs, in the repository's **Settings**:
 | Variables → Actions        | `DEPLOY_HOST`          | `167.86.71.60`                                                               |
 | Variables → Actions        | `DEPLOY_USER`          | `thp`                                                                        |
 | Variables → Actions        | `DEPLOY_KNOWN_HOSTS`   | The output of `ssh-keyscan -t ed25519 167.86.71.60`, so the runner pins the host. |
+| Rules → Rulesets           | Tag protection on `v*`  | Only the workflow (and admins) may create or delete release tags. The box deploys whatever `vX.Y.Z` it is handed, so a tag anyone with push access could cut is a deploy anyone with push access could make. |
+
+The actions the workflows use are pinned to commit SHAs rather than moving tags
+(`uses: actions/checkout@<sha> # v5`), so a compromised or force-moved tag upstream changes
+nothing here; bump the SHA and the comment together when upgrading.
 
 ### Two things that bite silently
 
@@ -687,12 +692,18 @@ at runtime by the API), and the worker's `HEALTHCHECK_WORKER_URL` come from the 
 
 The service user has no password, and two things in this repository escalate from it:
 `verify:production` and the restore drill. [deploy/sudoers/thp](deploy/sudoers/thp) lets it run
-exactly those commands without one, and nothing else:
+exactly those commands without one — every argument pinned, and nothing else. The drill's steps as
+`postgres` go through one root-owned helper,
+[deploy/bin/thp-restore-drill-pg](deploy/bin/thp-restore-drill-pg), so the service user (and
+therefore the web and worker processes, which run as it) never holds a bare `psql` or `pg_ctl`:
 
 ```bash
+sudo install -o root -g root -m 755 deploy/bin/thp-restore-drill-pg /usr/local/sbin/thp-restore-drill-pg
 sudo install -o root -g root -m 440 deploy/sudoers/thp /etc/sudoers.d/thp
 sudo visudo -cf /etc/sudoers.d/thp     # must print "parsed OK" — a broken file here breaks sudo for everyone
 ```
+
+Re-run both `install` lines whenever either file changes in a release; the deploy does not.
 
 **6 — Build and supervise.**
 

@@ -381,6 +381,15 @@ const CHECKS: readonly Check[] = [
       if (!response.ok && response.status !== 502) {
         return bad(`the origin answered ${response.status}`);
       }
+      // deploy/nginx/thp.conf sets it with `always`, so a 502 carries it too. Without it the
+      // port-80 redirect is the only thing between a member and a downgrade, on every visit.
+      const hsts = response.headers.get('strict-transport-security') ?? '';
+      const maxAge = Number(/max-age=(\d+)/.exec(hsts)?.[1] ?? '0');
+      if (maxAge < 31_536_000) {
+        return bad(
+          `Strict-Transport-Security is ${hsts ? `"${hsts}"` : 'missing'} — expected a max-age of a year or more`,
+        );
+      }
       const enddate = execFileSync(
         'sh',
         [
@@ -392,7 +401,7 @@ const CHECKS: readonly Check[] = [
         .trim()
         .replace('notAfter=', '');
       const days = daysUntil(new Date(enddate).getTime(), Date.now());
-      return days > 20 ? ok(`valid, ${days} days left`) : bad(`expires in ${days} days`);
+      return days > 20 ? ok(`valid, ${days} days left, HSTS ${hsts}`) : bad(`expires in ${days} days`);
     },
   },
   {

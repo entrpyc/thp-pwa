@@ -11,6 +11,7 @@ import { mediaStore, mintPlaybackKey, type MediaStore } from '@thp/media';
 import { logger } from '@thp/shared/observability/logger';
 import { audioProcessor as configuredProcessor, type AudioProcessor } from './audio';
 import type { JobHandler } from './handlers';
+import { checkSourceObject } from './source-object';
 
 /**
  * **The `process_audio` step** — the first in the chain, in the slot
@@ -93,6 +94,8 @@ export async function producePlaybackRendition(
   const sourceKey = recording.originalMediaKey;
   const source = await media.head(sourceKey);
   if (source === null) throw new Error(`no object at key "${sourceKey}"`);
+  // What is there now, not what was finalised: the processor streams it to disk (source-object.ts).
+  checkSourceObject(sourceKey, source);
 
   const rendition = processor.outputFor(extensionOf(sourceKey), source.contentType);
   const renditionKey = mintPlaybackKey(rendition.extension);

@@ -44,6 +44,11 @@ advertising, crash-reporting or attribution SDK.
 
 ## Apple — App Privacy (App Store Connect → App Privacy)
 
+The same answers are carried in the privacy manifest at
+[packages/shell/ios/App/App/PrivacyInfo.xcprivacy](../../packages/shell/ios/App/App/PrivacyInfo.xcprivacy),
+which also declares the file-timestamp and UserDefaults API categories the Capacitor plugins use.
+Change the table below and the manifest together.
+
 **Does this app collect data?** Yes.
 
 **Do you or your third-party partners use data for tracking?** No.
@@ -60,7 +65,7 @@ For every type below: *Linked to the user* = **Yes**; *Used for tracking* = **No
 | User Content | Audio Data | No | — | Members do not record or upload audio; the library is uploaded by admins and contributors as the group's content, not as personal data |
 | User Content | Emails or Text Messages, Gameplay Content, Customer Support | No | — | Bug reports are sent *to* us as email and not stored in the app; declared under Other User Content above |
 | Identifiers | User ID | Yes | App Functionality, Analytics | The account's opaque UUID, which is also the analytics `distinct_id` |
-| Identifiers | Device ID | No | — | No device identifier is read; `install_source` is an enum, not an id |
+| Identifiers | Device ID | No | — | No device identifier is read; `install_source` is an enum, not an id. The push token (APNs) is a routing handle Apple does not count as a device identifier, and it is not entered here |
 | Usage Data | Product Interaction | Yes | App Functionality, Analytics | Playback position, speed, listening completion, notification read state, onboarding completion; the PostHog events (plays, completions, tabs, notes, chapter jumps, speed changes, notification opens, page views by route pattern) |
 | Usage Data | Advertising Data, Other Usage Data | No | — | |
 | Diagnostics | Crash Data, Performance Data, Other Diagnostic Data | No | — | No crash or performance reporting from the client; server logs are not sent from the device |
@@ -114,7 +119,7 @@ For every row below: *Collected* = **Yes**; *Shared* = **No** (processors are se
 | App activity | Other actions | Not collected | — | |
 | Web browsing | Web browsing history | Not collected | — | Page views are sent as route patterns within the app, declared under App interactions |
 | App info and performance | Crash logs, Diagnostics, Other app performance data | Not collected | — | Nothing is sent from the device; server logs are the server's |
-| Device or other IDs | Device or other IDs | Not collected | — | |
+| Device or other IDs | Device or other IDs | Optional (only when notifications are on) | App functionality | The push registration token (FCM) that the store shell sends to the server so a notification can reach the device. Google counts a push token as a device identifier; it is stored against the account and removed with it or when the member turns notifications off |
 | Location, Financial info, Health and fitness, Contacts, Calendar, Files and docs | — | Not collected | — | |
 
 **Data retention and deletion** (free text, if asked): "Account data is kept while the account
@@ -129,19 +134,24 @@ users. The product's answers:
 
 | Requirement | Where it is |
 | :--- | :--- |
-| Terms the user accepts before posting | `/terms`, section *Posting rules*, rendered from `POSTING_RULES` in `packages/web/src/app/(public)/terms/posting-rules.ts`. Sign-up requires a ticked consent and records `TERMS_VERSION` (the page's date) on the account; a member whose acceptance is missing or older than the current terms is asked again, with the same rules, before their next note or reply is saved (`PUT /api/v1/users/me/terms`). |
-| Removal by the operator | Admins delete any public note or reply (project prd 3.12.10); a placeholder, never the text, remains (3.12.18, 3.12.19). The *Reports* console panel removes through the same path. |
+| Terms the user accepts before posting | `/terms`, section *Posting rules*, rendered from `POSTING_RULES` in `packages/web/src/app/(public)/terms/posting-rules.ts`. A member whose acceptance is missing or older than the current terms is asked, with the same rules, before their next note or reply is saved (`PUT /api/v1/users/me/terms`); the acceptance records `TERMS_VERSION` (the page's date) on the account. There is no self-service registration: accounts are created by an admin's invitation only. |
+| Removal by the operator | Admins delete any public note or reply (project prd 3.12.10); a placeholder, never the text, remains (3.12.18, 3.12.19). Admins remove any prayer request or any reply on one (3.16.11). The *Reports* console panel removes through the same paths. |
 | Restricting abusive users | Admins deactivate an account, ending its sessions at once (3.1.7). A member blocks another from *Block* in the note actions menu, after a confirmation that names the consequence; the blocked list with Unblock is on `/profile/settings`. A block hides each member's notes, replies and reactions from the other and refuses replies and reactions across it. |
-| Reporting content | *Report* in the note actions menu on any other member's public note or reply: a reason from a fixed list and an optional sentence. Admins are notified in-app and work the queue on `/admin/reports` (dismiss, or remove the note); the reporter is notified of the outcome. |
+| Reporting content | *Report* in the note actions menu on any other member's public note or reply, and *Report* beside any other member's prayer request or reply on one (`/prayer-requests/{id}`): a reason from a fixed list and an optional sentence. Admins are notified in-app and work one queue on `/admin/reports` (dismiss, or remove the note, reply or request); the reporter is notified of the outcome. *Block* sits beside *Report* on both surfaces. |
 | Filtering objectionable material (Apple 1.2) | A server-side whole-word check against a short English list (`packages/web/src/server/notes/blocked-words.ts`) refuses a public note, reply or edit at write time. A floor, not moderation: the report path and the admin's delete are the moderation. |
 
 ## Age rating
 
 Both questionnaires: no violence, no sexual content, no profanity by design, no gambling, no
-controlled substances, **user-generated content: yes** (notes, moderated by admins), **religious
-content: yes** (teachings). Expect IARC *Everyone / PEGI 3* with the UGC flag; Apple *4+* with the
-*Unrestricted Web Access* answer **No** (the app loads its own origin only). The terms set the
-minimum age at 16 as a contractual matter, which is separate from the content rating.
+controlled substances, **religious content: yes** (teachings), and answered **yes** on both
+*user-generated content* (public notes, replies, prayer requests, moderated by admins and filtered
+at write time) and *user interaction* (members reply to and react to one another, and the prayer
+board reaches the whole group). Expect the interaction answers to lift the rating: IARC usually
+answers *Teen / PEGI 12* (or at least *Everyone 10+*) once users can exchange content, and Apple's
+questionnaire answers *12+* on the same ground, with *Unrestricted Web Access* **No** (the app
+loads its own origin only). Accept whatever the questionnaires produce; a rating argued down is a
+rejection waiting to happen. The terms set the minimum age at 16 as a contractual matter, which is
+separate from the content rating.
 
 ## Questions for the lawyer, carried from the pages
 

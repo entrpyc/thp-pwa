@@ -842,7 +842,8 @@ describe('a draft waiting on an admin', () => {
    * the review queue and the pipeline view says the step ran; nobody's inbox is written to.
    */
   it('writes no notice to anybody, admin or member', async () => {
-    const [admin, member] = await Promise.all([account('admin'), account('member')]);
+    const admin = await account('admin');
+    const member = await account('member');
     const job = await claimedJob();
 
     const row = await run(job);

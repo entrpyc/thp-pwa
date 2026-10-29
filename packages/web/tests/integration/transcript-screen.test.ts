@@ -479,10 +479,19 @@ describe('the transcript is fetched once per loaded recording, and only when nee
       await page.getByRole('button', { name: 'Menu' }).click();
       await page.getByRole('link', { name: 'All series' }).click();
       await page.waitForURL(`${baseUrl}${MEMBER_SERIES_PAGE_PATH}`, { timeout: 30_000 });
-      // Back through history is a client-side step too, under the same provider.
+      // Back through history is a client-side step too, under the same provider. The entry it lands
+      // on names the tab (`?tab=transcript`, written on the press), so the page reopens Transcript
+      // itself — pressing the tab again would close it.
       await page.goBack();
-      await page.waitForURL(`${baseUrl}${recordingPagePath(recordingId)}`, { timeout: 30_000 });
-      await openTranscript(page);
+      await page.waitForURL(
+        (url) =>
+          url.pathname === recordingPagePath(recordingId) &&
+          url.searchParams.get('tab') === 'transcript',
+        { timeout: 30_000 },
+      );
+      await expect
+        .poll(() => page.getByRole('list', { name: 'Transcript' }).count(), { timeout: 30_000 })
+        .toBe(1);
 
       expect(transcriptRequests(requests, recordingId)).toHaveLength(1);
     } finally {

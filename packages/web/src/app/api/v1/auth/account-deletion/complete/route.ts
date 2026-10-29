@@ -1,6 +1,7 @@
 import type { AccountDeletedPayload } from '@thp/shared';
 import { PUBLIC } from '@/server/api/access';
 import { apiRoute } from '@/server/api/route';
+import { tokenGuard } from '@/server/auth/token-limits';
 import { completeAccountDeletion } from '@/server/account-deletion/service';
 
 export const runtime = 'nodejs';
@@ -15,6 +16,7 @@ export const dynamic = 'force-dynamic';
  * one thing to render.
  */
 export const POST = apiRoute(PUBLIC, async (request): Promise<AccountDeletedPayload> => {
+  tokenGuard().enforce(request);
   const body: unknown = await request.json().catch(() => null);
   return completeAccountDeletion(body);
 });

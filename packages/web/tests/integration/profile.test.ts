@@ -236,6 +236,36 @@ describe('finalising', () => {
     expect((await session(person.cookie)).body.user.avatarUrl).toBeNull();
   }, 60_000);
 
+  it('refuses a key outside avatars/ before asking the store, and the avatar is as it was (finding 4)', async () => {
+    // A cover, a note's picture or a recording's audio is not something a profile may point at,
+    // and `head` is not an oracle over the bucket (docs/security-audit-2026-10-28.md, finding 4).
+    const person = await signedInAccount(baseUrl, databaseUrl, ROLE.member, 'wrong-prefix');
+    for (const key of ['artwork/anything.webp', 'note-images/anything.webp', 'originals/anything.mp3', '../avatars/x.webp']) {
+      const answer = await finalise(person.cookie, key);
+      expect(answer.status, key).toBe(400);
+      expect(answer.code, key).toBe('invalid_input');
+    }
+    expect(await storedKeyOf(person.account.id)).toBeNull();
+  }, 60_000);
+
+  it('refuses a key another member already holds, and leaves both avatars as they were (finding 4)', async () => {
+    // Keys are not secrets — every public note carries a URL whose path is one — so one object is
+    // one account's picture, and a copied key cannot alias another member's avatar.
+    const owner = await signedInAccount(baseUrl, databaseUrl, ROLE.member, 'owns-picture');
+    const copier = await signedInAccount(baseUrl, databaseUrl, ROLE.member, 'copies-picture');
+    const grant = await uploaded(owner.cookie);
+    expect((await finalise(owner.cookie, grant.key)).status).toBe(200);
+
+    const answer = await finalise(copier.cookie, grant.key);
+    expect(answer.status).toBe(400);
+    expect(answer.code).toBe('invalid_input');
+    expect(await storedKeyOf(copier.account.id)).toBeNull();
+    expect(await storedKeyOf(owner.account.id)).toBe(grant.key);
+
+    // The owner finalising their own key again is still fine: a repeat is not a theft.
+    expect((await finalise(owner.cookie, grant.key)).status).toBe(200);
+  }, 60_000);
+
   it('refuses a key whose stored object is over the ceiling — the declaration was a lie', async () => {
     const person = await signedInAccount(baseUrl, databaseUrl, ROLE.member, 'lied-about-size');
     const grant = await grantFor(person.cookie, 1_024);

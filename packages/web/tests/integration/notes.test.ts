@@ -1147,7 +1147,6 @@ describe('an admin moderates a public note', () => {
     );
     expect(logged).toMatchObject({
       actorId: admin.id,
-      actorEmail: admin.email,
       action: 'note.moderate',
     });
     expect(typeof logged?.correlationId).toBe('string');
@@ -1282,7 +1281,7 @@ describe('an admin raises notes above the list', () => {
         (one) => one.message === message && one['target'] === `note:${note.id}`,
       );
       expect(line, message).toBeDefined();
-      expect(line).toMatchObject({ actorId: admin.id, actorEmail: admin.email, action: message });
+      expect(line).toMatchObject({ actorId: admin.id, action: message });
       expect(typeof line?.correlationId).toBe('string');
     }
   });

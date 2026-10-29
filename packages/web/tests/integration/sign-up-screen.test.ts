@@ -1,25 +1,17 @@
 import { afterAll, beforeAll, describe, expect, it, inject } from 'vitest';
 import { chromium, type Browser, type Page } from 'playwright';
-import {
-  NEW_USER_ONBOARDING_ID,
-  ROLE,
-  SIGN_UP_PAGE_PATH,
-  TERMS_PAGE_PATH,
-  onboardingPagePath,
-} from '@thp/shared';
-import { closeTestDatabase, createAccount, type TestAccount } from '../support/accounts';
+import { API_PREFIX, SIGN_UP_PAGE_PATH, SUPPORT_EMAIL, isApiErrorBody } from '@thp/shared';
 
 /**
- * The sign-up screen, driven in a real browser (docs/project/prd.md, 3.1.15).
+ * The closed sign-up screen, driven in a real browser.
  *
- * A DOM simulation cannot answer what this file has to answer — whether the form submits without
- * reloading, whether the layout holds at a phone width, whether the fields have accessible names,
- * whether the route out to sign-in is reachable — so it drives Chromium against the same production
- * build the API tests use, exactly as `sign-in-screen.test.ts` does.
+ * Registration was withdrawn so that only people the group already knows can sign in: the screen
+ * at `/sign-up` is a message rather than a form, and the route that created accounts is gone. This
+ * file pins both halves — that the page says who to ask and offers the way back to sign-in, and
+ * that nothing on the server will register an account however it is asked.
  */
 
 const baseUrl = inject('apiBaseUrl');
-const databaseUrl = inject('databaseUrl');
 
 /** Phone, tablet, desktop — the responsive standing constraint of the implementation plan. */
 const VIEWPORTS = [
@@ -28,20 +20,14 @@ const VIEWPORTS = [
   { label: 'desktop', width: 1440, height: 900 },
 ] as const;
 
-/** Long enough for the shipped rule, and obviously not a real password. */
-const PASSWORD = 'chosen-in-the-browser';
-
 let browser: Browser;
-let existing: TestAccount;
 
 beforeAll(async () => {
   browser = await chromium.launch();
-  existing = await createAccount(databaseUrl, ROLE.member, 'signup-browser');
 }, 120_000);
 
 afterAll(async () => {
   await browser?.close();
-  await closeTestDatabase();
 });
 
 async function openSignUp(width = 1280, height = 800): Promise<Page> {
@@ -51,136 +37,29 @@ async function openSignUp(width = 1280, height = 800): Promise<Page> {
   return page;
 }
 
-function freshEmail(label: string): string {
-  const suffix = `${Date.now().toString(36)}${Math.floor(Math.random() * 1e6).toString(36)}`;
-  return `${label}-${suffix}@example.test`;
-}
-
-/** The consent box, by the sentence that labels it (Google Play UGC policy). */
-function consent(page: Page) {
-  return page.getByRole('checkbox', { name: /accept the terms of use/i });
-}
-
-async function fillAndSubmit(
-  page: Page,
-  email: string,
-  password: string,
-  options: { readonly acceptTerms?: boolean } = {},
-): Promise<void> {
-  await page.getByLabel('Email').fill(email);
-  await page.getByLabel('Password').fill(password);
-  if (options.acceptTerms !== false) await consent(page).check();
-  await page.getByRole('button', { name: 'Create account' }).click();
-}
-
 describe('the sign-up screen', () => {
-  it('renders email, password, the rule, the terms consent and a submit', async () => {
+  it('says registration is closed, who to ask, and where to write', async () => {
     const page = await openSignUp();
     try {
-      await expect.poll(() => page.getByLabel('Email').count()).toBe(1);
-      expect(await page.getByLabel('Password').count()).toBe(1);
-      expect(await page.getByRole('button', { name: 'Create account' }).count()).toBe(1);
-      // The consent is unticked until the person ticks it, and its sentence links to the terms.
-      expect(await consent(page).count()).toBe(1);
-      expect(await consent(page).isChecked()).toBe(false);
-      expect(
-        await page.locator('form').getByRole('link', { name: 'terms of use' }).getAttribute('href'),
-      ).toBe(TERMS_PAGE_PATH);
-      expect(await page.getByRole('heading', { level: 1 }).textContent()).toContain(
-        'Create your account',
+      await expect
+        .poll(() => page.getByRole('heading', { level: 1 }).textContent())
+        .toContain('Registration is closed');
+      expect(await page.getByText('ask someone from the group', { exact: false }).count()).toBe(1);
+      expect(await page.getByRole('link', { name: SUPPORT_EMAIL }).getAttribute('href')).toBe(
+        `mailto:${SUPPORT_EMAIL}`,
       );
-      // The rule is on screen before anything has been typed, not revealed by failing it.
-      expect(await page.getByText('At least', { exact: false }).count()).toBeGreaterThan(0);
     } finally {
       await page.context().close();
     }
   }, 60_000);
 
-  it('registers somebody and lands them, signed in, in the new-user tour', async () => {
+  it('offers no form: nothing to type into and nothing to submit', async () => {
     const page = await openSignUp();
     try {
-      await fillAndSubmit(page, freshEmail('browser-signup'), PASSWORD);
-      // A brand-new account has never been through the tour, so the member layout routes it there
-      // before the dashboard renders. Registering therefore lands in the tour — signed in, and
-      // never via the sign-in form — and the tour's own way out is what is on screen.
-      await page.waitForURL(`${baseUrl}${onboardingPagePath(NEW_USER_ONBOARDING_ID)}`, {
-        timeout: 30_000,
-      });
-      await expect
-        .poll(() => page.getByRole('button', { name: 'Skip' }).count(), { timeout: 30_000 })
-        .toBe(1);
-      expect(new URL(page.url()).pathname).not.toBe('/sign-in');
-    } finally {
-      await page.context().close();
-    }
-  }, 60_000);
-
-  it('refuses to register without the terms ticked, keeps what was typed, and sends nothing', async () => {
-    const page = await openSignUp();
-    const sent: string[] = [];
-    page.on('request', (request) => {
-      if (request.method() === 'POST') sent.push(request.url());
-    });
-    try {
-      const email = freshEmail('browser-unticked');
-      await fillAndSubmit(page, email, PASSWORD, { acceptTerms: false });
-
-      const error = page.locator('form').getByRole('alert');
-      await expect
-        .poll(async () => ((await error.textContent().catch(() => '')) ?? '').trim(), {
-          timeout: 20_000,
-        })
-        .toContain('accept the terms of use');
-      expect(await page.getByLabel('Email').inputValue()).toBe(email);
-      expect(new URL(page.url()).pathname).toBe(SIGN_UP_PAGE_PATH);
-      expect(sent.filter((url) => url.includes('/auth/sign-up'))).toEqual([]);
-    } finally {
-      await page.context().close();
-    }
-  }, 60_000);
-
-  it('refuses a weak password on the screen, before anything is sent', async () => {
-    const page = await openSignUp();
-    try {
-      await fillAndSubmit(page, freshEmail('browser-weak'), 'short');
-
-      const error = page.locator('form').getByRole('alert');
-      await expect
-        .poll(async () => ((await error.textContent().catch(() => '')) ?? '').trim().length, {
-          timeout: 20_000,
-        })
-        .toBeGreaterThan(0);
-      expect(new URL(page.url()).pathname).toBe(SIGN_UP_PAGE_PATH);
-    } finally {
-      await page.context().close();
-    }
-  }, 60_000);
-
-  it('says plainly that an address is taken, without clearing it or reloading the page', async () => {
-    const page = await openSignUp();
-    try {
-      // A mark that only survives if the document is never replaced.
-      await page.evaluate(() => {
-        (window as unknown as { __sameDocument: boolean }).__sameDocument = true;
-      });
-
-      await fillAndSubmit(page, existing.email, PASSWORD);
-
-      const error = page.locator('form').getByRole('alert');
-      await expect
-        .poll(async () => ((await error.textContent().catch(() => '')) ?? '').trim(), {
-          timeout: 20_000,
-        })
-        .toContain('already has an account');
-
-      // What you typed survives being refused, and the page never reloaded under you.
-      expect(await page.getByLabel('Email').inputValue()).toBe(existing.email);
-      expect(new URL(page.url()).pathname).toBe(SIGN_UP_PAGE_PATH);
-      expect(
-        await page.evaluate(
-          () => (window as unknown as { __sameDocument?: boolean }).__sameDocument === true,
-        ),
-      ).toBe(true);
+      await expect.poll(() => page.getByRole('heading', { level: 1 }).count()).toBe(1);
+      expect(await page.locator('form').count()).toBe(0);
+      expect(await page.locator('input').count()).toBe(0);
+      expect(await page.getByRole('button').count()).toBe(0);
     } finally {
       await page.context().close();
     }
@@ -191,7 +70,7 @@ describe('the sign-up screen', () => {
     const page = await context.newPage();
     try {
       await page.goto(`${baseUrl}/sign-in`, { waitUntil: 'domcontentloaded' });
-      await page.getByRole('link', { name: /create an account/i }).click();
+      await page.getByRole('link', { name: /get access/i }).click();
       await page.waitForURL(`${baseUrl}${SIGN_UP_PAGE_PATH}`, { timeout: 30_000 });
 
       await page.getByRole('link', { name: /sign in/i }).click();
@@ -204,7 +83,7 @@ describe('the sign-up screen', () => {
   it.each(VIEWPORTS)('does not overflow sideways at $label', async ({ width, height }) => {
     const page = await openSignUp(width, height);
     try {
-      await expect.poll(() => page.getByLabel('Email').count()).toBe(1);
+      await expect.poll(() => page.getByRole('heading', { level: 1 }).count()).toBe(1);
       const overflow = await page.evaluate(
         () => document.documentElement.scrollWidth - document.documentElement.clientWidth,
       );
@@ -213,20 +92,27 @@ describe('the sign-up screen', () => {
       await page.context().close();
     }
   }, 60_000);
+});
 
-  it('reaches the submit button by keyboard alone', async () => {
-    const page = await openSignUp();
-    try {
-      await page.getByLabel('Email').focus();
-      // Password, the consent box, the terms link inside its sentence, then the submit.
-      await page.keyboard.press('Tab');
-      await page.keyboard.press('Tab');
-      await page.keyboard.press('Tab');
-      await page.keyboard.press('Tab');
-      const focused = await page.evaluate(() => document.activeElement?.textContent ?? '');
-      expect(focused).toContain('Create account');
-    } finally {
-      await page.context().close();
-    }
-  }, 60_000);
+describe('the registration route', () => {
+  it('no longer exists, however it is asked', async () => {
+    // The old path, with a body that would once have created an account. Not a refusal from a
+    // closed route — no route at all, so there is nothing to probe, rate-limit or re-enable by
+    // configuration. The catch-all answers an anonymous caller the way it answers every path no
+    // route claims: `unauthenticated`, before saying whether anything is there.
+    const response = await fetch(`${baseUrl}${API_PREFIX}/auth/sign-up`, {
+      method: 'POST',
+      headers: { 'content-type': 'application/json', accept: 'application/json' },
+      body: JSON.stringify({
+        email: `closed-${Date.now().toString(36)}@example.test`,
+        password: 'a-perfectly-good-passphrase',
+        termsVersion: '2026-01-01',
+      }),
+    });
+    expect([401, 404]).toContain(response.status);
+    expect(response.headers.get('set-cookie')).toBeNull();
+    const body: unknown = await response.json().catch(() => undefined);
+    expect(isApiErrorBody(body) ? body.error.code : null).not.toBe('rate_limited');
+    expect(JSON.stringify(body ?? null)).not.toContain('"user"');
+  });
 });

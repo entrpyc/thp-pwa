@@ -1,5 +1,6 @@
 export { MEDIA_VARIABLES, readMediaSettings, type EnvSource, type MediaSettings } from './env';
 export {
+  ARTWORK_KEY_PREFIX,
   AVATAR_KEY_PREFIX,
   UPLOAD_GRANT_SECONDS,
   mediaStore,

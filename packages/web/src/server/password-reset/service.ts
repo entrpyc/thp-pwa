@@ -162,7 +162,6 @@ async function issueAndSend(row: UserRow): Promise<void> {
 
   logger.info('password-reset.request', {
     actorId: row.id,
-    actorEmail: row.email,
     action: 'password-reset.request',
     target: `account:${row.id}`,
     expiresAt: reset.expiresAt.toISOString(),
@@ -287,7 +286,6 @@ export async function completePasswordResetWithPassword(
   const session = await issueSession(completed.user.id);
   logger.info('password-reset.complete', {
     actorId: completed.user.id,
-    actorEmail: completed.user.email,
     action: 'password-reset.complete',
     target: `account:${completed.user.id}`,
   });

@@ -1,6 +1,7 @@
 import { afterAll, beforeAll, beforeEach, describe, expect, it, inject } from 'vitest';
 import postgres from 'postgres';
 import {
+  MAX_SWEEP_RECLAIMS,
   createDatabase,
   enqueueJob,
   insertRecording,
@@ -159,6 +160,95 @@ describe('the startup sweep', () => {
 
   it('is not an error when there was nothing in flight', async () => {
     await expect(sweepAbandonedJobs(handle)).resolves.toEqual([]);
+  });
+
+  /**
+   * **The crash loop** (security audit 2026-10-28, finding 10). A job that kills the worker is
+   * `running` at every boot, and a sweep that always requeued it would run it — and pay for it —
+   * forever, with the supervisor restarting the process in between.
+   */
+  describe('a step that keeps crashing the worker', () => {
+    /** Boot, crash under the requeued job, boot again: what the ledger looks like after each. */
+    async function crashAndReboot(job: JobRow): Promise<JobRow | null> {
+      const [reclaimed] = await sweepAbandonedJobs(handle);
+      const requeued = reclaimed?.requeued ?? null;
+      if (requeued !== null) {
+        await sql`update job set status = 'running', started_at = now() where id = ${requeued.id}`;
+      }
+      return requeued;
+    }
+
+    it(`is requeued ${MAX_SWEEP_RECLAIMS - 1} times and then left failed, saying so`, async () => {
+      const job = await abandonedJob('transcribe');
+
+      // Crash, boot, crash, boot: every boot but the last queues a fresh attempt.
+      let latest: JobRow | null = job;
+      for (let boot = 1; boot < MAX_SWEEP_RECLAIMS; boot += 1) {
+        latest = await crashAndReboot(latest!);
+        expect(latest).not.toBeNull();
+      }
+
+      // The MAX_SWEEP_RECLAIMSth boot: the row is failed, nothing is queued, and the row says why.
+      captured = [];
+      expect(await crashAndReboot(latest!)).toBeNull();
+
+      const rows = await ledger(job.recordingId);
+      expect(rows).toHaveLength(MAX_SWEEP_RECLAIMS);
+      expect(rows.every((row) => row.status === 'failed')).toBe(true);
+      expect(rows[MAX_SWEEP_RECLAIMS - 1]?.error).toContain('restarted');
+      expect(rows[MAX_SWEEP_RECLAIMS - 1]?.error).toContain('not queued again');
+      expect(rows[MAX_SWEEP_RECLAIMS - 1]?.error).toContain('re-run the step');
+
+      // Loudly: the line an operator's alert keys on, at error rather than warn.
+      const stopped = captured.filter((line) => line.message === 'worker.sweep.crash_loop_stopped');
+      expect(stopped).toHaveLength(1);
+      expect(stopped[0]).toMatchObject({
+        level: 'error',
+        step: 'transcribe',
+        recordingId: job.recordingId,
+        reclaims: MAX_SWEEP_RECLAIMS,
+      });
+      expect(captured.find((line) => line.message === 'worker.sweep.finished')).toMatchObject({
+        reclaimed: 1,
+        stopped: 1,
+      });
+    });
+
+    it('starts counting again after a run that was not a crash', async () => {
+      const job = await abandonedJob('transcribe');
+      const second = await crashAndReboot(job);
+      expect(second).not.toBeNull();
+
+      // The second attempt finishes on its own merits — here, a failure a provider answered with —
+      // and an admin re-runs the step; that re-run is then crashed under.
+      await sql`update job set status = 'failed', finished_at = now(), error = 'the provider refused the audio' where id = ${second!.id}`;
+      const rerun = await enqueueJob(
+        { recordingId: job.recordingId, step: 'transcribe', correlationId: job.correlationId },
+        handle,
+      );
+      await sql`update job set status = 'running', started_at = now() where id = ${rerun.id}`;
+
+      // Three rows before this one, but only the crash streak counts: this is the first crash
+      // since something else happened, so it is requeued.
+      const requeued = await crashAndReboot(rerun);
+      expect(requeued).not.toBeNull();
+      expect(requeued?.attempt).toBe(rerun.attempt + 1);
+    });
+
+    it('never refuses an admin’s re-run: the cap is the sweep’s, not the queue’s', async () => {
+      const job = await abandonedJob('transcribe');
+      let latest: JobRow | null = job;
+      for (let boot = 1; boot < MAX_SWEEP_RECLAIMS; boot += 1) latest = await crashAndReboot(latest!);
+      expect(await crashAndReboot(latest!)).toBeNull();
+
+      // The ordinary enqueue — what the pipeline view's re-run button does — still queues.
+      const rerun = await enqueueJob(
+        { recordingId: job.recordingId, step: 'transcribe', correlationId: job.correlationId },
+        handle,
+      );
+      expect(rerun.status).toBe('pending');
+      expect(rerun.attempt).toBe(MAX_SWEEP_RECLAIMS + 1);
+    });
   });
 
   it('logs one line per reclaimed job, and one naming what it assumes', async () => {
