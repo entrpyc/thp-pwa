@@ -24,7 +24,7 @@ export const metadata: Metadata = { title: 'Support' };
  * **Decisions recorded here:**
  *
  * - *An address rather than a form.* A public form would be a public API route that writes, with
- *   the rate-limit and abuse story sign-up needed, for a page whose whole job is to be reachable.
+ *   the rate-limit and abuse story sign-up once needed, for a page whose whole job is to be reachable.
  *   A `mailto:` is reachable from any device without a session and costs nothing to run.
  * - *The forgot-password route is linked*, because "I cannot sign in" is the one support question
  *   the product already answers by itself, and a reader at the door should be sent there before
@@ -69,9 +69,9 @@ const SECTIONS: readonly PublicDocumentSection[] = [
       <p>
         If you have forgotten your password,{' '}
         <Link href={FORGOT_PASSWORD_PAGE_PATH}>ask for a reset link</Link>; it arrives by email and
-        works for seven days. If you have no account yet, the group&rsquo;s admins can invite you,
-        or you can register from the sign-in screen. If an invitation link has expired, ask the
-        admin who sent it to resend it.
+        works for seven days. If you have no account yet, ask someone from the group: an admin
+        can invite you, or write to {contact}. If an invitation link has expired, ask the admin
+        who sent it to resend it.
       </p>
     ),
   },
