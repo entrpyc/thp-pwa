@@ -7,13 +7,16 @@ import {
   ROLE,
   recordingNotesPath,
   recordingPagePath,
+  seriesPagePath,
   type NotesPayload,
 } from '@thp/shared';
 import {
   createDatabase,
   insertNote,
   insertRecording,
+  insertSeries,
   setRecordingPublication,
+  setRecordingSeries,
   softDeleteNote,
   type DatabaseHandle,
 } from '@thp/db';
@@ -61,6 +64,8 @@ let markedId: string;
 let bareId: string;
 /** A second teaching, so "the set is replaced" is a change rather than a re-render. */
 let otherId: string;
+/** The series the other teaching sits in — the road from the listing to it. */
+let otherSeriesId: string;
 /** Carries the two notes Task 5.3.5 deletes — one bare, one with a reply. */
 let deletingId: string;
 /** Carries one note and one reply, so a reply proving marker-less is a real reply. */
@@ -204,6 +209,11 @@ beforeAll(async () => {
     publishedRecording(`Transport deleting ${RUN}`),
     publishedRecording(`Transport threaded ${RUN}`),
   ]);
+  // The series listing links to series, not to teachings, so the walk from the listing to the
+  // other teaching goes through a series page — which means the other teaching needs one.
+  const series = await insertSeries({ title: `Transport series ${RUN}`, description: null }, handle);
+  otherSeriesId = series.id;
+  await setRecordingSeries(otherId, otherSeriesId, handle);
 
   await plant(markedId, neighbour, 'The first of two close together.', FIRST_MS);
   await plant(markedId, neighbour, 'The second of two close together.', SECOND_MS);
@@ -366,7 +376,11 @@ describe('the transport shows where the teaching has been annotated', () => {
         await route.continue();
       });
 
-      // Client-side, so the player stays mounted and the swap is a swap rather than a reload.
+      // Client-side, so the player stays mounted and the swap is a swap rather than a reload. The
+      // listing links to series, not to teachings, so the walk goes through the other teaching's
+      // series page — every step of it a client-side link.
+      await page.getByRole('link', { name: new RegExp(`Transport series ${RUN}`) }).click();
+      await page.waitForURL(`${baseUrl}${seriesPagePath(otherSeriesId)}`, { timeout: 30_000 });
       await page.getByRole('link', { name: new RegExp(`Transport other ${RUN}`) }).click();
       await page.waitForURL(`${baseUrl}${recordingPagePath(otherId)}`, { timeout: 30_000 });
 
