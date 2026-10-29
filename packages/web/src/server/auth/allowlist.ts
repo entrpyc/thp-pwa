@@ -3,7 +3,6 @@ import {
   ACCOUNT_DELETION_PATH,
   API_PREFIX,
   AUTH_SESSION_PATH,
-  SIGN_UP_PATH,
   INVITATIONS_ACCEPT_PATH,
   PASSWORD_RESET_COMPLETE_PATH,
   PASSWORD_RESET_PATH,
@@ -45,17 +44,12 @@ import {
  * the current password as well as the token, so the link proves the inbox and the password proves
  * the person, and nothing on this list can delete an account by itself.
  *
- * **Sign-up is the eighth** (docs/project/prd.md, 3.1.15), and it is the entry that had to argue
- * against the seven. It wins on the same ground the second one does: registering is how an account
- * comes to exist, so requiring a session to reach it is circular in exactly the way requiring one to
- * sign in would be. It carries no account content — a refusal, or the account it has just created
- * for the caller — but it is the first entry on this list that **writes**, and the first that will
- * tell an anonymous caller that an address is taken. That disclosure is unavoidable rather than
- * accepted lightly: an address that already has an account cannot be given a second one, so the
- * only alternative is to claim a success that did not happen. It is also, for exactly that reason,
- * **the one route in the product with a rate limit** (docs/project/prd.md, 3.1.18): a budget per
- * caller and a ceiling across the route, spent before the request body is read. See
- * `server/auth/sign-up-limits.ts` for the numbers and the argument for each.
+ * **Sign-up was the eighth, and has been withdrawn.** Self-service registration
+ * (docs/project/prd.md, 3.1.15) was the one entry that wrote, and the one that told an anonymous
+ * caller that an address was taken. The app is now published for the members of one private group
+ * and only people the group already knows may sign in, so the route was removed outright — not
+ * switched off, not left on the list — and an invitation (3.1.3) is again the only way an account
+ * comes to exist. Ten entries remain, and none of them writes without a token an admin issued.
  */
 export interface AllowlistEntry {
   readonly method: string;
@@ -77,14 +71,6 @@ export const UNAUTHENTICATED_ROUTES: readonly AllowlistEntry[] = [
     method: 'POST',
     path: `${API_PREFIX}${AUTH_SESSION_PATH}`,
     because: 'Signing in is how a session comes to exist; requiring one would be circular.',
-  },
-  {
-    method: 'POST',
-    path: `${API_PREFIX}${SIGN_UP_PATH}`,
-    because:
-      'Registering is how the account comes to exist; requiring a session would be circular in ' +
-      'exactly the way sign-in is. It answers with a refusal or with the account it has just ' +
-      'created for the caller, and with nothing about anybody else.',
   },
   {
     method: 'GET',

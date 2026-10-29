@@ -1,4 +1,5 @@
 import { NextResponse, type NextRequest } from 'next/server';
+import { readAppOrigin } from '@/server/mail/env';
 
 /**
  * **The Content-Security-Policy, set per request** (docs/security-audit-2026-10-28.md, finding 6).
@@ -43,7 +44,7 @@ export function proxy(request: NextRequest): NextResponse {
     // The API origin the client is built to call. In production it is the page's own origin and
     // adds nothing; a developer opening `127.0.0.1` against an origin configured as `localhost`
     // would otherwise have every fetch refused by `connect-src 'self'`.
-    apiOrigin: mediaOrigin(process.env['NEXT_PUBLIC_API_ORIGIN']),
+    apiOrigin: configuredApiOrigin(),
     development: process.env.NODE_ENV !== 'production',
   });
 
@@ -88,6 +89,18 @@ export function contentSecurityPolicy(nonce: string, options: PolicyOptions): st
     `form-action 'self'`,
   ];
   return directives.join('; ');
+}
+
+/**
+ * The API origin, through the one server-side reader the origin boundary permits
+ * (tools/origin-boundary.ts); `null` when it is unset, which the reader reports by throwing.
+ */
+function configuredApiOrigin(): string | null {
+  try {
+    return readAppOrigin();
+  } catch {
+    return null;
+  }
 }
 
 /** The origin of a configured endpoint URL, or `null` for an unset or unparsable one. */

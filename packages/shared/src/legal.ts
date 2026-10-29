@@ -73,7 +73,7 @@ export function termsAcceptanceIsCurrent(accepted: string | null | undefined): b
 export const TERMS_ACCEPTANCE_PATH = '/users/me/terms';
 
 /**
- * Body of `PUT /api/v1/users/me/terms`, and of the acceptance half of `POST /api/v1/auth/sign-up`.
+ * Body of `PUT /api/v1/users/me/terms`.
  *
  * The version is **sent by the client, and must equal {@link TERMS_VERSION}**. A body that only
  * said "yes" would let a screen built against last month's terms record acceptance of this

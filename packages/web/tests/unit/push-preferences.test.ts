@@ -58,7 +58,7 @@ describe('the categories', () => {
     expect(NOTIFICATION_CATEGORY_OF_KIND.summary_ready).toBe('admin_alerts');
     expect(NOTIFICATION_CATEGORY_OF_KIND.note_reported).toBe('admin_alerts');
     const adminKinds = NOTIFICATION_KINDS.filter((kind) => NOTIFICATION_CATEGORY_OF_KIND[kind] === 'admin_alerts');
-    expect(adminKinds.sort()).toEqual(['note_reported', 'summary_ready']);
+    expect(adminKinds.sort()).toEqual(['note_reported', 'sos_reported', 'summary_ready']);
   });
 
   it('are offered without the admin-only one unless the policy says so, in the declared order', () => {

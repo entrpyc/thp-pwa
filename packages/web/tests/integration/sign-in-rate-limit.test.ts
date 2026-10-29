@@ -7,7 +7,7 @@ import { TEST_PASSWORD, closeTestDatabase, createAccount, type TestAccount } fro
  *
  * **Against the rate-limited server**, started by tests/setup/global.ts with three attempts per
  * account and six per caller. Every other server has the limit lifted out of the way, for the
- * reason the sign-up budget is: a test run has no proxy in front of it and is one caller as far as
+ * reason every other budget is: a test run has no proxy in front of it and is one caller as far as
  * a limiter can tell.
  *
  * What this file is for is the **wiring and the HTTP contract**: that the guard is in front of the

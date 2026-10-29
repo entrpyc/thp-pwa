@@ -102,7 +102,7 @@ export function acceptUrlFor(token: string): string {
 /**
  * A display name for an account created by accepting.
  *
- * Re-exported rather than defined here: sign-up creates accounts the same way and derives a name
+ * Re-exported rather than defined here: the admin seed creates accounts the same way and derives a name
  * the same way, and two copies of that rule would be two answers to "what is a new account called".
  */
 export { displayNameFor };

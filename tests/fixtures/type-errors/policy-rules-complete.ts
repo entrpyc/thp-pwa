@@ -78,6 +78,7 @@ export const rules: PolicyRules = {
   'block.remove': { roles: { admin: true, member: true } },
   'block.list': { roles: { admin: true, member: true } },
   'note.report': { roles: { admin: true, member: true } },
+  'sos.report': { roles: { admin: true, member: true } },
   'report.list': { roles: { admin: true, member: false } },
   'report.resolve': { roles: { admin: true, member: false } },
   'notification.admin-alerts': { roles: { admin: true, member: false } },

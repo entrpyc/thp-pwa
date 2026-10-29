@@ -53,47 +53,13 @@ const FAILING_MAIL = {
 } as const;
 
 /**
- * **The sign-up budget, for every server but one.**
- *
- * The suite registers dozens of accounts, all of them from 127.0.0.1 with no proxy in front — so
- * as far as the limiter can tell, the entire test run is one caller. Left at the shipped defaults
- * the twenty-first registration in the run would be refused, and which test that landed on would
- * depend on the order the files happened to run in. That is not a limiter finding a bug; it is a
- * suite testing its own arithmetic.
- *
- * So the limit is lifted out of the way here, the same move {@link TEST_BIBLE} and
- * {@link FAILING_MAIL} make: the suite's configuration is the suite's. What proves the limiter
- * works is the server below, which has one, plus the unit tests over the policy itself.
- */
-const UNLIMITED_SIGN_UP = {
-  SIGNUP_RATE_LIMIT_WINDOW_SECONDS: '600',
-  SIGNUP_RATE_LIMIT_PER_IP: '100000',
-  SIGNUP_RATE_LIMIT_TOTAL: '100000',
-} as const;
-
-/**
- * **The server that has a budget**, and the only one.
- *
- * Three per caller, so a fourth request is a refusal a test can drive in four lines rather than in
- * twenty. The window is long on purpose — five minutes is far longer than the run — because a short
- * one would make every assertion here a race against the clock, and a limiter test that passes
- * because a window expired has proved nothing. Each test uses a client address of its own instead,
- * which is a fresh budget without a fresh server.
- *
- * The whole-route ceiling is set out of reach for the same reason it is set generously in
- * production: it is a backstop, its logic is exercised exhaustively in the unit tests where a clock
- * can be held still, and a ceiling low enough to trip here would trip on whichever test ran last.
- */
-const TIGHT_SIGN_UP = {
-  SIGNUP_RATE_LIMIT_WINDOW_SECONDS: '300',
-  SIGNUP_RATE_LIMIT_PER_IP: '3',
-  SIGNUP_RATE_LIMIT_TOTAL: '1000',
-} as const;
-
-/**
- * **The sign-in budget, lifted for every server but one** — the same argument as
- * {@link UNLIMITED_SIGN_UP}, and more pressing: the suite signs in far more often than it
- * registers, always from 127.0.0.1, so the shipped fifty-per-caller would be spent a few files in.
+ * **The sign-in budget, lifted for every server but one.**
+ * The suite signs in constantly, always from 127.0.0.1 with no proxy in front — so as far as the
+ * limiter can tell the entire run is one caller, and the shipped fifty-per-caller would be spent a
+ * few files in. Which test that landed on would depend on the order the files ran in: not a limiter
+ * finding a bug, but a suite testing its own arithmetic. So the limit is lifted out of the way, the
+ * same move {@link TEST_BIBLE} and {@link FAILING_MAIL} make; what proves the limiter works is the
+ * server below, which has one, plus the unit tests over the policy itself.
  */
 const UNLIMITED_SIGN_IN = {
   SIGNIN_RATE_LIMIT_WINDOW_SECONDS: '900',
@@ -107,7 +73,7 @@ const UNLIMITED_SIGN_IN = {
  * Three per account, so a fourth attempt at one address is a refusal a test can drive in four
  * lines. Six per caller — tight enough to drive the address budget too, and wide enough that a test
  * about the account budget (three attempts, one refusal, one success on another account) never
- * brushes it. Each test uses a client address of its own, as the sign-up tests do.
+ * brushes it. Each test uses a client address of its own.
  */
 const TIGHT_SIGN_IN = {
   SIGNIN_RATE_LIMIT_WINDOW_SECONDS: '300',
@@ -115,14 +81,14 @@ const TIGHT_SIGN_IN = {
   SIGNIN_RATE_LIMIT_PER_ACCOUNT: '3',
 } as const;
 
-/** **The reset-request budget, lifted for every server but one.** Same argument as sign-up's. */
+/** **The reset-request budget, lifted for every server but one.** Same argument as sign-in's. */
 const UNLIMITED_PASSWORD_RESET = {
   RESET_RATE_LIMIT_WINDOW_SECONDS: '900',
   RESET_RATE_LIMIT_PER_IP: '100000',
   RESET_RATE_LIMIT_TOTAL: '100000',
 } as const;
 
-/** **The reset-request budget on the server that has one.** Three per caller, as sign-up's. */
+/** **The reset-request budget on the server that has one.** Three per caller. */
 const TIGHT_PASSWORD_RESET = {
   RESET_RATE_LIMIT_WINDOW_SECONDS: '300',
   RESET_RATE_LIMIT_PER_IP: '3',
@@ -237,14 +203,14 @@ export default async function setup(project: TestProject): Promise<() => Promise
       // time ([3.10.2](docs/project/prd.md)): without it a machine with no `.env` would send every
       // search to a paid provider behind a key nobody set, and every search would fall back to
       // words alone for a reason that has nothing to do with the test.
-      env: { ...media, ...TEST_BIBLE, ...TEST_EMBEDDER, ...UNLIMITED_SIGN_UP, ...UNLIMITED_SIGN_IN, ...UNLIMITED_PASSWORD_RESET, ...UNLIMITED_ACCOUNT_DELETION, ...UNLIMITED_TOKEN, ...captureMail('primary'), ...capturePush('primary') },
+      env: { ...media, ...TEST_BIBLE, ...TEST_EMBEDDER, ...UNLIMITED_SIGN_IN, ...UNLIMITED_PASSWORD_RESET, ...UNLIMITED_ACCOUNT_DELETION, ...UNLIMITED_TOKEN, ...captureMail('primary'), ...capturePush('primary') },
     });
     servers.push(primary);
 
     const broken = await startNextServer({
       name: 'broken-db',
       databaseUrl: UNREACHABLE_DATABASE_URL,
-      env: { ...media, ...TEST_BIBLE, ...TEST_EMBEDDER, ...UNLIMITED_SIGN_UP, ...UNLIMITED_SIGN_IN, ...UNLIMITED_PASSWORD_RESET, ...UNLIMITED_ACCOUNT_DELETION, ...UNLIMITED_TOKEN, ...captureMail('broken-db'), ...capturePush('broken-db') },
+      env: { ...media, ...TEST_BIBLE, ...TEST_EMBEDDER, ...UNLIMITED_SIGN_IN, ...UNLIMITED_PASSWORD_RESET, ...UNLIMITED_ACCOUNT_DELETION, ...UNLIMITED_TOKEN, ...captureMail('broken-db'), ...capturePush('broken-db') },
     });
     servers.push(broken);
 
@@ -253,7 +219,7 @@ export default async function setup(project: TestProject): Promise<() => Promise
     const mailDown = await startNextServer({
       name: 'mail-down',
       databaseUrl: appDatabase.url,
-      env: { ...media, ...TEST_BIBLE, ...TEST_EMBEDDER, ...UNLIMITED_SIGN_UP, ...UNLIMITED_SIGN_IN, ...UNLIMITED_PASSWORD_RESET, ...UNLIMITED_ACCOUNT_DELETION, ...UNLIMITED_TOKEN, ...FAILING_MAIL, ...capturePush('mail-down') },
+      env: { ...media, ...TEST_BIBLE, ...TEST_EMBEDDER, ...UNLIMITED_SIGN_IN, ...UNLIMITED_PASSWORD_RESET, ...UNLIMITED_ACCOUNT_DELETION, ...UNLIMITED_TOKEN, ...FAILING_MAIL, ...capturePush('mail-down') },
     });
     servers.push(mailDown);
 
@@ -266,7 +232,6 @@ export default async function setup(project: TestProject): Promise<() => Promise
         ...media,
         ...TEST_BIBLE,
         ...TEST_EMBEDDER,
-        ...TIGHT_SIGN_UP,
         ...TIGHT_SIGN_IN,
         ...TIGHT_PASSWORD_RESET,
         ...TIGHT_ACCOUNT_DELETION,
@@ -283,10 +248,6 @@ export default async function setup(project: TestProject): Promise<() => Promise
     project.provide('brokenDbBaseUrl', broken.baseUrl);
     project.provide('mailDownBaseUrl', mailDown.baseUrl);
     project.provide('rateLimitedBaseUrl', rateLimited.baseUrl);
-    project.provide('rateLimitedSignUp', {
-      perAddress: Number(TIGHT_SIGN_UP.SIGNUP_RATE_LIMIT_PER_IP),
-      windowSeconds: Number(TIGHT_SIGN_UP.SIGNUP_RATE_LIMIT_WINDOW_SECONDS),
-    });
     project.provide('rateLimitedSignIn', {
       perAddress: Number(TIGHT_SIGN_IN.SIGNIN_RATE_LIMIT_PER_IP),
       perAccount: Number(TIGHT_SIGN_IN.SIGNIN_RATE_LIMIT_PER_ACCOUNT),
@@ -325,13 +286,12 @@ declare module 'vitest' {
     /** A server whose mail transport refuses everything. Shares the primary's database. */
     mailDownBaseUrl: string;
     /**
-     * A server with real sign-up and sign-in budgets — three registrations per caller, three
+     * A server with real sign-in, reset and deletion budgets — three
      * sign-in attempts per account and six per caller. Every other server has both limits lifted
      * out of the way, because the suite is one caller as far as a limiter can tell.
      */
     rateLimitedBaseUrl: string;
     /** What that server was configured with, so no test restates a number the harness chose. */
-    rateLimitedSignUp: { readonly perAddress: number; readonly windowSeconds: number };
     rateLimitedSignIn: {
       readonly perAddress: number;
       readonly perAccount: number;

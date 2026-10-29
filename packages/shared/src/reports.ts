@@ -1,9 +1,15 @@
 import { notePath } from './notes';
+import { sosPath, type SosUrgency } from './sos';
 
 /**
- * **A report on a note, said once for the whole repository** — the member-facing half of what
- * Apple guideline 1.2 and Google Play's user-generated-content policy ask of a product with
- * member-written content: a way to flag something, and an operator who acts on it.
+ * **A report on member-written content, said once for the whole repository** — the member-facing
+ * half of what Apple guideline 1.2 and Google Play's user-generated-content policy ask of a product
+ * with member-written content: a way to flag something, and an operator who acts on it.
+ *
+ * Two kinds of content can be flagged, and the queue lists both: a public note (or a reply, which
+ * is a note with a parent), and a prayer request or a reply on one ([3.16](docs/project/prd.md)).
+ * Each kind has its own route to report through, because each is addressed by its own id; the
+ * reasons, the outcomes, the detail ceiling and the console are the same for both.
  *
  * Three things live here because the menu, the API, the console and the database each have to
  * agree about them:
@@ -83,13 +89,22 @@ export function noteReportPath(noteId: string): string {
 /** The console's list of open reports, relative to the `/api/v1` prefix. `GET` lists them. */
 export const REPORTS_PATH = '/reports';
 
-/** `POST` — close every open report on the note this report is about, with one outcome. */
+/** `POST` — close every open report on the content this report is about, with one outcome. */
 export function reportResolvePath(reportId: string): string {
   return `${REPORTS_PATH}/${reportId}/resolve`;
 }
 
 /** The console's panel, on the web origin rather than under the API prefix. */
 export const ADMIN_REPORTS_PAGE_PATH = '/admin/reports';
+
+/**
+ * `POST` — report a prayer request, or one reply on it when the body names `replyId`. One route
+ * for both because a reply is read on the signal's page and addressed through it, as every reply
+ * route under `/sos` is.
+ */
+export function sosReportPath(signalId: string): string {
+  return `${sosPath(signalId)}/report`;
+}
 
 /** Body of `POST /api/v1/notes/{id}/report`. */
 export interface ReportNoteRequest {
@@ -98,38 +113,76 @@ export interface ReportNoteRequest {
   readonly detail?: string | null;
 }
 
-/**
- * Payload of `POST /api/v1/notes/{id}/report`. Only the id: the member has nothing to render from
- * a report beyond the fact that it was taken, and the screen says so in its own words.
- */
-export interface ReportNotePayload {
-  readonly reportId: string;
+/** Body of `POST /api/v1/sos/{id}/report`: the same, plus which reply, or none for the request itself. */
+export interface ReportSosRequest extends ReportNoteRequest {
+  readonly replyId?: string | null;
 }
 
 /**
- * One open report as the console lists it: the note as it reads now, who wrote it, who reported
- * it and why, and where the note is.
+ * Payload of `POST /api/v1/notes/{id}/report` and of `POST /api/v1/sos/{id}/report`. Only the id:
+ * the member has nothing to render from a report beyond the fact that it was taken, and the screen
+ * says so in its own words.
+ */
+export interface ReportPayload {
+  readonly reportId: string;
+}
+
+export type ReportNotePayload = ReportPayload;
+
+/** What every open report carries, whatever it is about. */
+interface ReportViewBase {
+  readonly id: string;
+  readonly reason: ReportReason;
+  readonly detail: string | null;
+  /** ISO 8601. */
+  readonly createdAt: string;
+  readonly reporterDisplayName: string;
+}
+
+/**
+ * One open report on a note as the console lists it: the note as it reads now, who wrote it, who
+ * reported it and why, and where the note is.
  *
  * `noteText` is the text **at the moment of listing**, not at the moment of reporting — the
  * author may have edited since, and what an admin is deciding about is what members can read now.
  * An empty string means the note has already been removed (by its author, or by an earlier
  * resolution of another report), in which case the only sensible action left is dismiss.
  */
-export interface ReportView {
-  readonly id: string;
-  readonly reason: ReportReason;
-  readonly detail: string | null;
-  /** ISO 8601. */
-  readonly createdAt: string;
+export interface NoteReportView extends ReportViewBase {
+  readonly kind: 'note';
   readonly noteId: string;
   readonly noteText: string;
   /** Whether the note is a tombstone already. */
   readonly noteDeleted: boolean;
   readonly noteAuthorDisplayName: string;
-  readonly reporterDisplayName: string;
   readonly recordingId: string;
   readonly recordingTitle: string;
 }
+
+/**
+ * One open report on a prayer request ([3.16](docs/project/prd.md)) as the console lists it —
+ * on the request itself (`kind: 'sos_signal'`, `replyId` null) or on one reply (`kind:
+ * 'sos_reply'`). `text` is the request's description or the reply's words **as they read now**;
+ * `deleted` says the reply has already gone (a reply is a hard delete, so there is no tombstone
+ * to quote), in which case the only action left is dismiss. A request that has gone takes its
+ * reports with it, so a request report is never listed as deleted.
+ *
+ * `authorDisplayName` is the stand-in name on a request raised anonymously
+ * ([3.16.13](docs/project/prd.md)): the console is an admin's screen, but the promise the product
+ * made is to everybody but the author, and moderation needs the text, not the name.
+ */
+export interface SosReportView extends ReportViewBase {
+  readonly kind: 'sos_signal' | 'sos_reply';
+  readonly signalId: string;
+  readonly replyId: string | null;
+  readonly urgency: SosUrgency;
+  readonly text: string;
+  readonly deleted: boolean;
+  readonly authorDisplayName: string;
+}
+
+/** One open report, whichever kind of content it is about. `kind` says which. */
+export type ReportView = NoteReportView | SosReportView;
 
 /** Payload of `GET /api/v1/reports` — every open report, oldest first, so the queue is a queue. */
 export interface ReportListPayload {
@@ -144,10 +197,13 @@ export interface ResolveReportRequest {
 /** Payload of the same: the list as it now stands, so the console renders what came back. */
 export interface ResolveReportPayload {
   readonly outcome: ReportOutcome;
-  /** How many open reports on that note were closed together — at least one. */
+  /** How many open reports on that content were closed together — at least one. */
   readonly closed: number;
   readonly reports: readonly ReportView[];
 }
 
 /** What a member reads once a report is taken. */
 export const REPORT_TAKEN_MESSAGE = 'Thank you. An admin will review this note.';
+
+/** The same, on a prayer request or a reply on one. */
+export const SOS_REPORT_TAKEN_MESSAGE = 'Thank you. An admin will review it.';

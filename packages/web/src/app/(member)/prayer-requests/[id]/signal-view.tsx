@@ -28,6 +28,7 @@ import { TermsPrompt, isTermsRequired } from '../../recordings/[id]/terms-prompt
 import { AuthorLine } from '../author-line';
 import { whenRaised } from '../format';
 import { UrgencyDot } from '../urgency-dot';
+import { SosBlockConfirm, SosReportForm, type SosModerationSubject } from './sos-moderation';
 import styles from '../sos.module.css';
 
 /**
@@ -41,7 +42,20 @@ import styles from '../sos.module.css';
  * compares ids) shows Close and the closing-note field; `canModerate` (the page's, from the policy
  * module) shows Close and Remove on anybody's, and Remove on any reply. Neither permits anything —
  * the API refuses on its own.
+ *
+ * **Report and Block** (Apple guideline 1.2, Google Play's UGC policy) sit beside Reply on every
+ * post that is somebody else's — the request and each reply — and open `sos-moderation.tsx`'s
+ * panel under that post. An anonymous request names nobody, so it offers Report and not Block.
+ * After a block the page does what the server's block rule now implies: a blocked request is one
+ * the member can no longer read, so the page goes to the board; a blocked reply's author has left
+ * the thread, so the signal is read again.
  */
+
+/** Which post has the report or block panel open under it, if any. */
+interface Moderating {
+  readonly kind: 'report' | 'block';
+  readonly subject: SosModerationSubject;
+}
 
 const FAILED_MESSAGE = 'Could not do that. Check your connection and try again.';
 
@@ -56,6 +70,7 @@ export function SignalView({ signalId, canModerate }: { signalId: string; canMod
   const [answering, setAnswering] = useState<string | null>(null);
   /** Whether the next press of Praying goes without the member's name. */
   const [prayAnonymously, setPrayAnonymously] = useState(false);
+  const [moderating, setModerating] = useState<Moderating | null>(null);
 
   useBreadcrumbTrail(
     signal === null ? 'Prayer request' : `${SOS_URGENCY_LABEL[signal.urgency]} prayer request`,
@@ -77,6 +92,38 @@ export function SignalView({ signalId, canModerate }: { signalId: string; canMod
       stale = true;
     };
   }, [signalId]);
+
+  /** The signal as it now reads — after a block, when the thread has lost a member. */
+  async function reread(): Promise<void> {
+    try {
+      const payload = await apiFetch<SosSignalPayload>(sosPath(signalId), { credentials: 'include' });
+      setSignal(payload.signal);
+    } catch (caught) {
+      if (caught instanceof ApiClientError && caught.code === 'not_found') setMissing(true);
+      else setFailure(caught instanceof ApiClientError ? caught.message : FAILED_MESSAGE);
+    }
+  }
+
+  /** What follows a block: the board when the request's author is now hidden, a re-read otherwise. */
+  function afterBlock(subject: SosModerationSubject): void {
+    if (subject.replyId === null) router.push(SOS_PAGE_PATH);
+    else void reread();
+  }
+
+  /** The panel under one post, when it is that post's turn. */
+  function moderationPanel(subject: SosModerationSubject): ReactNode {
+    if (moderating === null) return null;
+    const same =
+      moderating.subject.replyId === subject.replyId &&
+      moderating.subject.signalId === subject.signalId;
+    if (!same) return null;
+    const close = () => setModerating(null);
+    return moderating.kind === 'report' ? (
+      <SosReportForm subject={subject} onDone={close} onBlocked={() => afterBlock(subject)} />
+    ) : (
+      <SosBlockConfirm subject={subject} onDone={close} onBlocked={() => afterBlock(subject)} />
+    );
+  }
 
   /** One write, then the signal as it now reads. `terms_required` opens the prompt instead of a sentence. */
   async function write(path: string, init: { method: string; body?: unknown }): Promise<boolean> {
@@ -167,6 +214,15 @@ export function SignalView({ signalId, canModerate }: { signalId: string; canMod
 
   const open = signal.closedAt === null;
   const mayClose = open && (signal.mine || canModerate);
+  // Somebody else's request is something to report; an anonymous one has nobody to block.
+  const requestSubject: SosModerationSubject | null = signal.mine
+    ? null
+    : {
+        signalId,
+        replyId: null,
+        authorId: signal.author.id ?? '',
+        authorDisplayName: signal.author.displayName,
+      };
 
   return (
     <>
@@ -180,8 +236,19 @@ export function SignalView({ signalId, canModerate }: { signalId: string; canMod
       </header>
 
       <section className={styles.card} aria-label="The prayer request">
-        <AuthorLine author={signal.author} at={signal.raisedAt} />
+        <div className={styles.replyHead}>
+          <AuthorLine author={signal.author} at={signal.raisedAt} />
+          {requestSubject === null ? null : (
+            <ModerationActions
+              subject={requestSubject}
+              busy={busy}
+              onReport={() => setModerating({ kind: 'report', subject: requestSubject })}
+              onBlock={() => setModerating({ kind: 'block', subject: requestSubject })}
+            />
+          )}
+        </div>
         <p className={styles.text}>{signal.description}</p>
+        {requestSubject === null ? null : moderationPanel(requestSubject)}
         {signal.closedAt === null ? null : (
           <>
             <p className={styles.when}>Resolved {whenRaised(signal.closedAt)}</p>
@@ -258,10 +325,13 @@ export function SignalView({ signalId, canModerate }: { signalId: string; canMod
             {signal.replies.map((reply) => (
               <li className={styles.reply} key={reply.id}>
                 <ReplyBlock
+                  signalId={signalId}
                   reply={reply}
                   busy={busy}
                   canModerate={canModerate}
                   onRemove={() => void removeReply(reply)}
+                  onModerate={(kind, subject) => setModerating({ kind, subject })}
+                  panel={moderationPanel(replySubject(signalId, reply))}
                   action={
                     open && !termsNeeded && answering !== reply.id ? (
                       <button
@@ -280,10 +350,13 @@ export function SignalView({ signalId, canModerate }: { signalId: string; canMod
                     {reply.replies.map((answer) => (
                       <li className={styles.threadReply} key={answer.id}>
                         <ReplyBlock
+                          signalId={signalId}
                           reply={answer}
                           busy={busy}
                           canModerate={canModerate}
                           onRemove={() => void removeReply(answer)}
+                          onModerate={(kind, subject) => setModerating({ kind, subject })}
+                          panel={moderationPanel(replySubject(signalId, answer))}
                           action={null}
                         />
                       </li>
@@ -347,20 +420,67 @@ export function SignalView({ signalId, canModerate }: { signalId: string; canMod
   );
 }
 
-/** One reply as drawn — who, when, the text, and the quiet actions at the right: Reply and Remove. */
+/** A reply's author as something to report or block. A reply is never anonymous, so the id is always there. */
+function replySubject(signalId: string, reply: SosReplyView): SosModerationSubject {
+  return {
+    signalId,
+    replyId: reply.id,
+    authorId: reply.author.id ?? '',
+    authorDisplayName: reply.author.displayName,
+  };
+}
+
+/** Report, and Block where there is somebody to block — the quiet pair beside somebody else's post. */
+function ModerationActions({
+  subject,
+  busy,
+  onReport,
+  onBlock,
+}: {
+  subject: SosModerationSubject;
+  busy: boolean;
+  onReport: () => void;
+  onBlock: () => void;
+}) {
+  return (
+    <span className={styles.replyActions}>
+      <button className={styles.quietAction} type="button" disabled={busy} onClick={onReport}>
+        Report
+      </button>
+      {subject.authorId === '' ? null : (
+        <button className={styles.quietAction} type="button" disabled={busy} onClick={onBlock}>
+          Block
+        </button>
+      )}
+    </span>
+  );
+}
+
+/**
+ * One reply as drawn — who, when, the text, and the quiet actions at the right: Reply and Remove
+ * on one's own or as an admin; Report and Block on somebody else's. The moderation panel, when it
+ * is this reply's turn, reads under the text.
+ */
 function ReplyBlock({
+  signalId,
   reply,
   busy,
   canModerate,
   action,
+  panel,
   onRemove,
+  onModerate,
 }: {
+  signalId: string;
   reply: SosReplyView;
   busy: boolean;
   canModerate: boolean;
   action: ReactNode;
+  panel: ReactNode;
   onRemove: () => void;
+  onModerate: (kind: 'report' | 'block', subject: SosModerationSubject) => void;
 }) {
+  const subject = reply.mine ? null : replySubject(signalId, reply);
   return (
     <>
       <div className={styles.replyHead}>
@@ -372,9 +492,30 @@ function ReplyBlock({
               Remove
             </button>
           ) : null}
+          {subject === null ? null : (
+            <>
+              <button
+                className={styles.quietAction}
+                type="button"
+                disabled={busy}
+                onClick={() => onModerate('report', subject)}
+              >
+                Report
+              </button>
+              <button
+                className={styles.quietAction}
+                type="button"
+                disabled={busy}
+                onClick={() => onModerate('block', subject)}
+              >
+                Block
+              </button>
+            </>
+          )}
         </span>
       </div>
       <p className={styles.text}>{reply.text}</p>
+      {panel}
     </>
   );
 }

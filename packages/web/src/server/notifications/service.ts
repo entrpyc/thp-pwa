@@ -25,6 +25,7 @@ import {
   REPORT_DISMISSED_TITLE,
   REPORT_REASON_LABEL,
   REPORT_REMOVED_TITLE,
+  SOS_PAGE_PATH,
   excerptForNotification,
   isAnnouncementKind,
   isOnboardingId,
@@ -36,6 +37,8 @@ import {
   sosPagePath,
   sosRaisedNotificationTitle,
   sosReplyNotificationTitle,
+  sosReportResolvedTitle,
+  sosReportedNotificationTitle,
   sosThreadReplyNotificationTitle,
   type AnnouncementListPayload,
   type AnnouncementView,
@@ -271,6 +274,95 @@ export async function notifyReportResolved(input: {
     );
     await deliverPush(rows.map((row) => row.id));
     return { noteId: input.noteId, outcome: input.outcome, recipients: recipients.length };
+  });
+}
+
+/**
+ * A member reported a prayer request or a reply on one — `notifyNoteReported`'s twin for the SOS
+ * channel, on the same terms: every active admin but the reporter, one row per report, a press
+ * that lands on the console's queue, and not suppressed across a block.
+ *
+ * The row names the signal so it goes with the signal: once an admin has removed the request,
+ * a notice about reporting it is about nothing.
+ */
+export async function notifySosReported(input: {
+  readonly reportId: string;
+  readonly signalId: string;
+  readonly replyId: string | null;
+  readonly reason: ReportReason;
+  readonly text: string;
+  readonly reporter: Actor;
+}): Promise<void> {
+  await raise('sos.report', async () => {
+    const admins = (await listActiveAdminIds()).filter((id) => id !== input.reporter.id);
+    const body = `${REPORT_REASON_LABEL[input.reason]}: ${excerptForNotification(input.text)}`;
+    const rows = await Promise.all(
+      admins.map((adminId) =>
+        insertNotification(adminId, {
+          kind: 'sos_reported',
+          title: sosReportedNotificationTitle(input.reporter.displayName),
+          body,
+          href: ADMIN_REPORTS_PAGE_PATH,
+          sosSignalId: input.signalId,
+          actorId: input.reporter.id,
+        }),
+      ),
+    );
+    await deliverPush(rows.map((row) => row.id));
+    return {
+      reportId: input.reportId,
+      signalId: input.signalId,
+      replyId: input.replyId,
+      recipients: admins.length,
+    };
+  });
+}
+
+/**
+ * An admin closed a report on the SOS channel — `notifyReportResolved`'s twin. The press lands on
+ * the request's page while there is one; a request that was removed has no page, so the press
+ * lands on the board instead, and the row does not name the signal, or the cascade that removes
+ * the request would take the answer with it.
+ */
+export async function notifySosReportResolved(input: {
+  readonly reporterIds: readonly (string | null)[];
+  readonly signalId: string;
+  readonly about: 'signal' | 'reply';
+  readonly outcome: ReportOutcome;
+  readonly resolver: Actor;
+}): Promise<void> {
+  await raise('report.resolve', async () => {
+    const recipients = [
+      ...new Set(
+        input.reporterIds.filter(
+          (id): id is string => id !== null && id !== input.resolver.id,
+        ),
+      ),
+    ];
+    const removed = input.outcome === 'removed';
+    const what = input.about === 'signal' ? 'prayer request' : 'reply';
+    const requestGone = input.about === 'signal' && removed;
+    const rows = await Promise.all(
+      recipients.map((reporterId) =>
+        insertNotification(reporterId, {
+          kind: 'report_resolved',
+          title: sosReportResolvedTitle(input.about, input.outcome),
+          body: removed
+            ? `An admin reviewed your report and removed the ${what}. Thank you for flagging it.`
+            : `An admin reviewed your report and decided the ${what} can stay. Thank you for flagging it.`,
+          href: requestGone ? SOS_PAGE_PATH : sosPagePath(input.signalId),
+          sosSignalId: requestGone ? null : input.signalId,
+          actorId: input.resolver.id,
+        }),
+      ),
+    );
+    await deliverPush(rows.map((row) => row.id));
+    return {
+      signalId: input.signalId,
+      about: input.about,
+      outcome: input.outcome,
+      recipients: recipients.length,
+    };
   });
 }
 

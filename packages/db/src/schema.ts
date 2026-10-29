@@ -2317,6 +2317,66 @@ export const sosReply = pgTable(
 );
 
 /**
+ * **A member's report on a prayer request, or on one reply on it** — `note_report`'s twin for the
+ * SOS channel ([3.16](docs/project/prd.md)), so Apple guideline 1.2's "mechanism to report" covers
+ * every post a member can read, not only the notes.
+ *
+ * **One row is about one thing.** `about_reply` says which: false is the request itself and
+ * `reply_id` is null; true is one reply, and `reply_id` names it **until the reply goes** — a
+ * reply is a hard delete, so the column **sets null** and the row keeps saying what it was about,
+ * which is what lets the console list it as already removed and the service still tell the
+ * reporter when an admin closes it. A request is a hard delete too, and `signal_id` **cascades**:
+ * a report about a request that no longer exists is about nothing. The service closes a request's
+ * open reports before removing it, so the reporters are told first.
+ *
+ * Everything else is `note_report`'s shape for `note_report`'s reasons: one row per report, the
+ * resolution as `resolved_at` plus an outcome and the check that keeps them together, the partial
+ * index that is the queue, and `reporter_id` and `resolved_by` set null so a record outlives the
+ * account that caused it.
+ */
+export const sosReport = pgTable(
+  'sos_report',
+  {
+    id: uuid('id').primaryKey().defaultRandom(),
+    signalId: uuid('signal_id')
+      .notNull()
+      .references(() => sosSignal.id, { onDelete: 'cascade' }),
+    /** Whether the report is about a reply rather than the request. Survives the reply's removal. */
+    aboutReply: boolean('about_reply').notNull().default(false),
+    /** The reply, for a report about one, until it is removed. Null for a report about the request. */
+    replyId: uuid('reply_id').references(() => sosReply.id, { onDelete: 'set null' }),
+    reporterId: uuid('reporter_id').references(() => user.id, { onDelete: 'set null' }),
+    reason: reportReason('reason').notNull(),
+    /** The reporter's sentence to the admin, or null. Trimmed by the service; empty is stored null. */
+    detail: text('detail'),
+    createdAt: timestamp('created_at', { withTimezone: true }).notNull().defaultNow(),
+    /** Null while open. Set once, with the outcome and who decided, and never cleared. */
+    resolvedAt: timestamp('resolved_at', { withTimezone: true }),
+    outcome: reportOutcome('outcome'),
+    resolvedBy: uuid('resolved_by').references(() => user.id, { onDelete: 'set null' }),
+  },
+  (table) => [
+    /** The queue: open reports, oldest first. */
+    index('sos_report_open_idx')
+      .on(table.createdAt)
+      .where(sql`${table.resolvedAt} is null`),
+    /** The resolution: every open report on one request, or on one reply, closed together. */
+    index('sos_report_signal_idx').on(table.signalId),
+    index('sos_report_reply_idx').on(table.replyId),
+    /** A report about the request names no reply. (The converse cannot hold: the reply may have gone.) */
+    check('sos_report_reply_only_when_about_reply', sql`${table.aboutReply} or ${table.replyId} is null`),
+    check(
+      'sos_report_resolution_whole',
+      sql`(${table.resolvedAt} is null) = (${table.outcome} is null)`,
+    ),
+    check(
+      'sos_report_detail_length',
+      sql`char_length(${table.detail}) <= ${sql.raw(String(MAX_REPORT_DETAIL_LENGTH))}`,
+    ),
+  ],
+);
+
+/**
  * **A picture on a note** ([3.12.22](docs/project/prd.md)–[3.12.25](docs/project/prd.md)) — one
  * row per image, up to `MAX_NOTE_IMAGES` a note, in the author's order.
  *

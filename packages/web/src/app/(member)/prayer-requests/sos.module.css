@@ -474,3 +474,66 @@
   accent-color: var(--color-primary);
   cursor: pointer;
 }
+
+/* ------------------------------------------------------------------ report and block (sos-moderation.tsx) */
+
+/*
+ * The panel under a post somebody is reporting or blocking: the note menu's moderation panel
+ * (`notes.module.css`), drawn inline rather than floated, because a reply here has no menu to
+ * hang it from — it reads under the text it is about, in the card's own column.
+ */
+.moderation {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-3);
+  margin-top: var(--space-3);
+  background: var(--color-surface-raised);
+  border: 1px solid var(--color-border-strong);
+  border-radius: var(--radius-md);
+  padding: var(--space-4);
+}
+
+.moderationTitle {
+  margin: 0;
+  color: var(--color-text);
+  font-size: var(--fs-body);
+  font-weight: 600;
+}
+
+.reasonList {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-2);
+  margin: 0;
+  padding: 0;
+  border: none;
+}
+
+.reasonOption {
+  display: flex;
+  align-items: center;
+  gap: var(--space-2);
+  color: var(--color-text);
+  font-size: var(--fs-body);
+  cursor: pointer;
+}
+
+.confirmText {
+  margin: 0;
+  color: var(--color-text-muted);
+  font-size: var(--fs-body);
+  line-height: 1.5;
+}
+
+/* The press that blocks: the secondary button's shape with the stronger border, as the note menu draws it. */
+.danger {
+  background: transparent;
+  border: 1px solid var(--color-border-strong);
+  border-radius: var(--radius-pill);
+  padding: var(--space-2) var(--space-5);
+  color: var(--color-text);
+  font-family: inherit;
+  font-size: var(--fs-body);
+  font-weight: 600;
+  cursor: pointer;
+}

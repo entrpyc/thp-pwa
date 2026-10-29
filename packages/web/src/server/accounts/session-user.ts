@@ -8,7 +8,7 @@ import { mintArtworkGrant } from '@/server/series/artwork-grant';
  * `describeActor` is the policy module's and stays synchronous: it reads the row and nothing else.
  * The one field it cannot give is the avatar, which travels as a signed URL rather than as the key
  * the row holds, and signing is the store's answer. This is where the two meet, and it is the only
- * place they do — sign-in, sign-up, invitation acceptance, password-reset completion and the
+ * place they do — sign-in, invitation acceptance, password-reset completion and the
  * "who am I" read all come through here, so what a client is told about the picture beside its
  * own name is one function's decision.
  *

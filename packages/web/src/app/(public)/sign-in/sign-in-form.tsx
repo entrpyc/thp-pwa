@@ -126,16 +126,17 @@ export function SignInForm() {
         {/*
           Inside the form and after the button, so they are the next things a keyboard reaches after
           failing — and always present, not revealed by a refusal. A reset flow nobody can get to
-          from where they failed is a flow that does not exist, and the same is true of registering:
-          the two reasons a sign-in fails are a password you have forgotten and an account you never
-          made, so both ways out are here (docs/project/prd.md, 3.1.15).
+          from where they failed is a flow that does not exist, and the same is true of not having
+          an account: the two reasons a sign-in fails are a password you have forgotten and an
+          account you never had, so both ways out are here. Registration is closed, so the second
+          way out is the screen that says who to ask rather than a form.
         */}
         <Link className={styles.link} href={FORGOT_PASSWORD_PAGE_PATH}>
           Forgotten your password?
         </Link>
 
         <Link className={styles.link} href={SIGN_UP_PAGE_PATH}>
-          New here? Create an account
+          No account yet? How to get access
         </Link>
       </form>
 
