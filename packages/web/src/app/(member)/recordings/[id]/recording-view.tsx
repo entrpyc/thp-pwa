@@ -295,7 +295,8 @@ export function RecordingScreen({
   /**
    * `Related` is drawn only for a teaching with a related moment somewhere in it — the same line
    * `Scripture` and `Chapters` draw. The groups are fetched here, once per teaching, so the strip
-   * can decide before the tab is pressed; the panel filters them to the part playing.
+   * can decide before the tab is pressed; the panel lists every one of them, each anchored to the
+   * moment of this teaching it was found at.
    */
   const relatedGroups = useRelatedGroups(recordingId);
   const hasRelated = (relatedGroups?.length ?? 0) > 0;
@@ -597,11 +598,12 @@ export function RecordingScreen({
               </button>
             ) : null}
             {/*
-              `Related` — the moments in other teachings anchored to the part playing (3.9.2) —
-              last, and **drawn only for a teaching with a related moment somewhere in it**: the
-              strip decides off the groups fetched above, and the panel narrows them to the chapter
-              playing. It used to be a strip above the tabs that drew nothing until it had something
-              to say; as a tab, the empty part is stated inside the panel instead.
+              `Related` — the moments in other teachings this one touches (3.9.2), each anchored to
+              the moment here that triggered it — last, and **drawn only for a teaching with a
+              related moment somewhere in it**: the strip decides off the groups fetched above, and
+              the panel lists all of them. It used to narrow the list to the chapter playing, and
+              before that was a strip above the tabs; the whole list is what a member reading the
+              tab is asking for, and the chapter page is where the chapter's own slice lives.
             */}
             {hasRelated ? (
               <button
@@ -677,7 +679,7 @@ export function RecordingScreen({
               ) : null}
 
               {openTab === 'related' && hasRelated && relatedGroups !== null ? (
-                <RelatedTeachings recordingId={recordingId} groups={relatedGroups} />
+                <RelatedTeachings groups={relatedGroups} />
               ) : null}
             </div>
           )}
