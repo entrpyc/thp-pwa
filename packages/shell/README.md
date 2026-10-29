@@ -22,7 +22,8 @@ API routes, which is why nothing is bundled — `www/` holds one explanatory pag
   so a link to any other host opens in the system browser, where the member has a URL bar and a
   way back.
 - **Android back button** keeps Capacitor's default: it walks the WebView's history and leaves
-  the app from the first page. The status bar keeps the system default.
+  the app from the first page. The system bars, the launch window and the offline screen are
+  the product's own — see *Icons, splash screens, system bars and the offline screen* below.
 - **The web app can tell it is inside the shell** through `shellPlatform()` in
   `packages/web/src/client/platform.ts`, which reads the `Capacitor` bridge the shell injects.
   No custom user agent is set; the server sees an ordinary mobile browser. Two things read it:
@@ -285,6 +286,14 @@ member would notice; the automated suites cannot see any of them.
    playing: the page is replaced and playback stops, which is the documented behaviour.
 6. **Other origins stay out.** A link to any other host from inside the app opens the system
    browser.
+7. **Offline screen.** Turn on aeroplane mode, force-quit the app and open it. The product's own
+   "You're offline" page shows, not a browser error. Turn aeroplane mode off: the page loads the
+   app on its own within a few seconds. With the network on but the server stopped (a build
+   pointed at a local dev server), the page says the server could not be reached.
+8. **Icon, splash and system bars.** The launcher and home screen show the purple play mark on
+   the dark background, not Capacitor's logo. The launch window is the same dark colour with the
+   mark. Once loaded, the status bar icons are light and the top bar sits below them; the
+   transport bar clears the gesture area or home indicator with no dark band between.
 
 **Android, from a terminal**
 
@@ -337,9 +346,34 @@ injected bridge script. It does not affect any item above and is not addressed h
 - Run with Xcode attached and lock the phone: the debugger shows the app still running and no
   `AVAudioSession` errors in the console while sound continues.
 
+## Icons, splash screens, system bars and the offline screen
+
+- **Icons and splash screens** are generated from the web app's own mark by
+  `npm --workspace @thp/shell run assets` (`tools/generate-assets.mjs`): the Android launcher
+  icons at every density (legacy, round and the adaptive foreground over `ic_launcher_background`),
+  the Android splash drawables, the 1024 px iOS icon and the three iOS launch images. The
+  background is `APP_BACKGROUND_COLOUR` read from `packages/web/src/app/app-theme.ts`. To change
+  the art, replace `packages/web/public/icons/icon-512.png` and run the script; nothing is drawn by
+  hand here. Android 12+ draws its own splash — the launcher icon on `windowSplashScreenBackground`
+  (styles.xml) — and the drawables serve Android 11 and earlier; iOS shows `Splash.imageset`
+  through LaunchScreen.storyboard on a background of the same colour.
+- **System bars.** Android paints the status and navigation bars in the document background with
+  light icons on Android 14 and earlier (styles.xml); on Android 15+, which an app targeting API
+  36 draws edge-to-edge, the bars are transparent and the WebView follows the document's
+  `viewport-fit=cover`, so `env(safe-area-inset-*)` carries the bar heights and the web app's own
+  padding keeps the top bar and the transport bar clear (capacitor.config.ts, `SystemBars`). iOS
+  shows a light status bar over the dark document (Info.plist, `UIStatusBarStyle`), and WebKit
+  fills the same insets from the notch and the home indicator.
+- **The offline screen.** `www/offline.html` is what `server.errorPath` shows when the origin
+  cannot be loaded — no network, a captive portal, the server down — instead of the WebView's own
+  error page. It is styled like the product, says whether it is the network or the server that is
+  unreachable, retries on a press, and retries on its own when the device reports connectivity
+  (`online`). Its retry navigates to the origin named in its `data-origin`, which
+  `tools/write-offline-origin.mjs` rewrites from `THP_SHELL_SERVER_URL` before every `cap sync`
+  (the `sync` scripts), so a build against a development server retries against that server.
+
 ## What is not done in this package
 
-- No app icons or splash screens beyond Capacitor's defaults (prd 5.2.3 is a later ticket).
 - No download storage. The shell stays empty of product logic by design; that ticket adds a
   plugin here and reads `shellPlatform()` in the web app, as push did.
 - Push has not been exercised on a device from this machine: there is no Mac for iOS, and the

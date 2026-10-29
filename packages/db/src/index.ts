@@ -289,6 +289,17 @@ export {
   type SosSignalRow,
 } from './sos';
 export {
+  findOpenSosReportByReporter,
+  findSosReportById,
+  insertSosReport,
+  listOpenSosReports,
+  resolveOpenSosReports,
+  type NewSosReport,
+  type OpenSosReportRow,
+  type ResolvedSosReportRow,
+  type SosReportRow,
+} from './sos-reports';
+export {
   findPlaybackProgress,
   setPreferredPlaybackSpeed,
   upsertPlaybackProgress,

@@ -67,6 +67,13 @@ export const NOTIFICATION_KINDS = [
   'sos_raised',
   /** Somebody replied to your SOS signal ([3.17.8](docs/project/prd.md), [3.16.7](docs/project/prd.md)). The author. */
   'sos_reply',
+  /**
+   * A member reported a prayer request or a reply on one (Apple guideline 1.2, Google Play UGC
+   * policy) — `note_reported`'s twin for the SOS channel. Every active admin, one row per report.
+   * Its own kind rather than a second title under `note_reported` because account deletion
+   * rewrites titles by kind, and the two titles differ.
+   */
+  'sos_reported',
   ...ANNOUNCEMENT_KINDS,
 ] as const;
 
@@ -94,6 +101,7 @@ export const NOTIFICATION_KIND_LABEL: Record<NotificationKind, string> = {
   summary_ready: 'Summary ready',
   sos_raised: 'Prayer request',
   sos_reply: 'Prayer request reply',
+  sos_reported: 'Report',
   announcement: 'Announcement',
   new_feature: 'New feature',
 };
@@ -290,9 +298,25 @@ export function noteReportedNotificationTitle(reporterDisplayName: string): stri
   return `${reporterDisplayName} reported a note`;
 }
 
+/** The same title for a report on a prayer request or a reply on one — one sentence for both. */
+export function sosReportedNotificationTitle(reporterDisplayName: string): string {
+  return `${reporterDisplayName} reported a prayer request`;
+}
+
 /**
  * The two sentences a reporter reads when an admin closes their report. Neither names the admin:
  * a decision of the group's moderation is the product's answer, not one person's.
  */
 export const REPORT_REMOVED_TITLE = 'The note you reported was removed';
 export const REPORT_DISMISSED_TITLE = 'The note you reported was reviewed';
+
+/** The same two sentences for a report on the SOS channel, naming what was reported. */
+export function sosReportResolvedTitle(
+  about: 'signal' | 'reply',
+  outcome: 'dismissed' | 'removed',
+): string {
+  const what = about === 'signal' ? 'prayer request' : 'reply';
+  return outcome === 'removed'
+    ? `The ${what} you reported was removed`
+    : `The ${what} you reported was reviewed`;
+}

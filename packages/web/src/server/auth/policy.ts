@@ -320,6 +320,8 @@ export const POLICY_ACTIONS = [
    * authorise against, so the route is behind a session and nothing more.
    */
   'note.report',
+  /** The same, on a prayer request or a reply on one ([3.16](docs/project/prd.md)): both roles, not owned. */
+  'sos.report',
   'report.list',
   'report.resolve',
   /**
@@ -586,6 +588,7 @@ const RULES: PolicyRules = {
   // Both roles may ask an admin to look at a note. Reading the queue and deciding about it is
   // moderation, which [3.12.10](docs/project/prd.md) keeps with the admin.
   'note.report': { roles: { admin: true, member: true } },
+  'sos.report': { roles: { admin: true, member: true } },
   'report.list': { roles: { admin: true, member: false } },
   'report.resolve': { roles: { admin: true, member: false } },
   // A member is never a recipient of a draft-ready or reported-note notice, so a switch for the

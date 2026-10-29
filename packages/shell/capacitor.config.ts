@@ -28,6 +28,13 @@ const config: CapacitorConfig = {
     // No `allowNavigation`: only the app's own origin renders inside the WebView. A link to another
     // host — Spotify, a Bible source, anything in an email — opens in the system browser, where
     // the member has a URL bar and a way back.
+    //
+    // When the origin cannot be loaded — no network, a captive portal, the server down — the
+    // WebView shows this page of ours instead of its own error page. It lives in `www/` beside
+    // the placeholder index, is styled like the product, and retries on its own when connectivity
+    // returns. On Android the file runs without Capacitor plugins (the documented limit), which
+    // is why its retry is a plain navigation back to the origin.
+    errorPath: 'offline.html',
   },
   plugins: {
     // A push that arrives while the app is open is still shown by the OS (project prd 3.17.1):
@@ -35,6 +42,13 @@ const config: CapacitorConfig = {
     // learn of a reply on another until the bell polled. The web app refreshes the bell on the
     // same event (push-shell-listener.tsx), so both happen.
     PushNotifications: { presentationOptions: ['badge', 'sound', 'alert'] },
+    // Android 15+ draws edge-to-edge for an app targeting API 35+ (variables.gradle targets 36).
+    // `css` is Capacitor 8's default and is named here so it is a decision rather than a default:
+    // the WebView follows the document's `viewport-fit=cover` (packages/web/src/app/layout.tsx),
+    // so `env(safe-area-inset-*)` carries the real status-bar and gesture-bar heights and the web
+    // app's own padding — the top bar and the transport bar already read those insets for the
+    // installed PWA — keeps the chrome clear of the system bars on both platforms.
+    SystemBars: { insetsHandling: 'css' },
   },
 };
 
