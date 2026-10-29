@@ -11,6 +11,7 @@ import {
   type TranscriptSegmentView,
 } from '@thp/shared';
 import { ApiClientError, apiFetch } from '@/client/api-client';
+import { track } from '@/client/observability/analytics';
 import { shellPlatform } from '@/client/platform';
 import { segmentAt } from '@/client/transcript/current-segment';
 import { transcriptFileName, transcriptFileText } from '@/client/transcript/transcript-file';
@@ -172,6 +173,7 @@ export function TranscriptPanel({
 
   const select = useCallback(
     (segment: TranscriptSegmentView): void => {
+      track('transcript_acted', { action: 'row_clicked', recording_id: recordingId });
       player.seekToMs(segment.startMs);
       // Selecting a line is a member saying where they want to be, which is the clearest possible
       // signal that they want the transcript to keep up again.
@@ -251,7 +253,10 @@ export function TranscriptPanel({
             type="button"
             role="switch"
             aria-checked={following}
-            onClick={() => setFollowing((on) => !on)}
+            onClick={() => {
+              track('transcript_acted', { action: following ? 'follow_off' : 'follow_on', recording_id: recordingId });
+              setFollowing((on) => !on);
+            }}
           >
             <span className={styles.switchKnob} aria-hidden="true" />
             <span>Follow along</span>
@@ -260,7 +265,10 @@ export function TranscriptPanel({
             className={styles.jump}
             type="button"
             disabled={currentId === null}
-            onClick={scrollToCurrent}
+            onClick={() => {
+              track('transcript_acted', { action: 'jump_to_current', recording_id: recordingId });
+              scrollToCurrent();
+            }}
           >
             Jump to current
           </button>
@@ -269,7 +277,10 @@ export function TranscriptPanel({
           className={styles.download}
           type="button"
           aria-label="Download transcript"
-          onClick={() => void download()}
+          onClick={() => {
+            track('transcript_acted', { action: 'downloaded', recording_id: recordingId });
+            void download();
+          }}
         >
           <DownloadIcon held={false} size={18} />
           <span>Download</span>
@@ -322,13 +333,18 @@ export function TranscriptPanel({
                     aria-pressed={pinned}
                     aria-label={`${pinned ? 'Remove highlight from' : 'Highlight'} the line at ${at}`}
                     disabled={highlights === null || busy}
-                    onClick={() =>
+                    onClick={() => {
+                      track('highlight_acted', {
+                        action: pinned ? 'removed' : 'added',
+                        target: 'moment',
+                        recording_id: recordingId,
+                      });
                       void toggle(entry, {
                         kind: 'segment',
                         recordingId,
                         positionMs: segment.startMs,
-                      })
-                    }
+                      });
+                    }}
                   >
                     <MarkerIcon marked={pinned} size={16} />
                   </button>

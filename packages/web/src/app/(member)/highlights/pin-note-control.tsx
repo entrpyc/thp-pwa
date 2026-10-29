@@ -1,5 +1,6 @@
 'use client';
 
+import { track } from '@/client/observability/analytics';
 import { noteEntry } from './highlights-lookup';
 import { useHighlights } from './highlights-store';
 import { MarkerIcon } from './marker-icon';
@@ -18,9 +19,12 @@ import { MarkerIcon } from './marker-icon';
  */
 export function PinNoteControl({
   noteId,
+  recordingId,
   className,
 }: {
   noteId: string;
+  /** The teaching the note is on, for the analytics event; the note itself never travels. */
+  recordingId: string;
   /** The panel's own round control class, so the marker draws as the `···` beside it. */
   className: string | undefined;
 }) {
@@ -35,7 +39,10 @@ export function PinNoteControl({
       aria-pressed={pinned}
       aria-label={pinned ? 'Remove from Highlights' : 'Add to Highlights'}
       disabled={highlights === null || busy}
-      onClick={() => void toggle(existing, { kind: 'note', noteId })}
+      onClick={() => {
+        track('highlight_acted', { action: pinned ? 'removed' : 'added', target: 'note', recording_id: recordingId });
+        void toggle(existing, { kind: 'note', noteId });
+      }}
     >
       <MarkerIcon marked={pinned} size={20} />
     </button>

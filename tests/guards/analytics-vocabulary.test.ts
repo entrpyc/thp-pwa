@@ -3,6 +3,7 @@ import {
   ANALYTICS_COMMON_PROPERTIES,
   ANALYTICS_EVENTS,
   ANALYTICS_ROUTES,
+  MAX_ANALYTICS_TITLE_LENGTH,
   matchesAnalyticsKind,
   sanitiseAnalyticsProperties,
 } from '@thp/shared';
@@ -21,8 +22,16 @@ import {
  */
 
 const SNAKE_CASE = /^[a-z][a-z0-9_]*$/;
-const KINDS = new Set(['id', 'id?', 'number', 'boolean']);
+const KINDS = new Set(['id', 'id?', 'number', 'boolean', 'title']);
 const CONTENT_WORDS = ['text', 'email', 'name', 'query', 'body', 'title', 'url', 'address', 'content', 'message'];
+
+/**
+ * **The one exception to "no free text"**: a published teaching's title, which the catalogue
+ * shows every member and which an insight is read by. It is public content, not a member's, and
+ * it is allowed on exactly these properties — adding a `'title'` elsewhere fails here, so the
+ * exception cannot quietly widen into a string kind.
+ */
+const TITLE_PROPERTIES = new Set(['playback_started.recording_title']);
 
 const UUID = 'a3f1c2d4-0000-4000-8000-000000000001';
 
@@ -31,6 +40,10 @@ describe('the analytics vocabulary', () => {
     for (const [event, properties] of Object.entries(ANALYTICS_EVENTS)) {
       for (const [property, kind] of Object.entries(properties)) {
         const label = `${event}.${property}`;
+        if (kind === 'title') {
+          expect(TITLE_PROPERTIES.has(label), `${label} is a title the exception does not cover`).toBe(true);
+          continue;
+        }
         if (Array.isArray(kind)) {
           expect(kind.length, label).toBeGreaterThan(0);
           for (const word of kind) {
@@ -46,21 +59,37 @@ describe('the analytics vocabulary', () => {
     }
   });
 
-  it('names events and properties in snake_case, with the one PostHog-native name excepted', () => {
+  it('names events and properties in snake_case, with the two PostHog-native names excepted', () => {
     for (const [event, properties] of Object.entries(ANALYTICS_EVENTS)) {
-      if (event !== '$pageview') expect(event).toMatch(SNAKE_CASE);
+      if (event !== '$pageview' && event !== '$pageleave') expect(event).toMatch(SNAKE_CASE);
       for (const property of Object.keys(properties)) expect(property).toMatch(SNAKE_CASE);
     }
   });
 
-  it('has no property whose name suggests content', () => {
+  it('has no property whose name suggests content, the titled exception apart', () => {
     for (const [event, properties] of Object.entries(ANALYTICS_EVENTS)) {
       for (const property of Object.keys(properties)) {
+        if (TITLE_PROPERTIES.has(`${event}.${property}`)) continue;
         for (const word of CONTENT_WORDS) {
           expect(property.split('_'), `${event}.${property}`).not.toContain(word);
         }
       }
     }
+  });
+
+  it('holds a title to a bound and to a teaching, never to a member', () => {
+    expect(matchesAnalyticsKind('Grace, part one', 'title')).toBe(true);
+    expect(matchesAnalyticsKind('   ', 'title')).toBe(false);
+    expect(matchesAnalyticsKind(null, 'title')).toBe(false);
+    const long = 'x'.repeat(MAX_ANALYTICS_TITLE_LENGTH + 50);
+    const clean = sanitiseAnalyticsProperties('playback_started', {
+      recording_id: UUID,
+      recording_title: `  ${long}  `,
+      series_id: null,
+      resumed: false,
+      speed: 1,
+    });
+    expect(clean?.['recording_title']).toBe('x'.repeat(MAX_ANALYTICS_TITLE_LENGTH));
   });
 
   it('holds the common properties to the same rule', () => {

@@ -27,7 +27,16 @@ import {
   type MarkFlowItemRequest,
 } from '@thp/shared';
 import { ApiClientError, apiFetch } from '@/client/api-client';
+import { track } from '@/client/observability/analytics';
 import { useBreadcrumbTrail, usePlayer, useTransportHidden } from '../../../player-context';
+
+/** The presses a reading-list row offers, as the analytics vocabulary names them. */
+type FlowRowAction =
+  | 'chapter_opened'
+  | 'recording_opened'
+  | 'play_clicked'
+  | 'related_chapter_opened'
+  | 'related_play_clicked';
 import { formatDay, listTitles, plural } from '../../format';
 import styles from '../../flow-tracker.module.css';
 
@@ -133,6 +142,11 @@ export function SessionView({ sessionId }: { sessionId: string }) {
     setPending((was) => new Set(was).add(item.id));
     setFailure(null);
     setSession((was) => (was === null ? was : withDone(was, item.id, done)));
+    track('flow_tracker_acted', {
+      action: done ? 'chapter_checked' : 'chapter_unchecked',
+      session_id: sessionId,
+      recording_id: item.recording?.id ?? null,
+    });
     const body: MarkFlowItemRequest = { done };
     try {
       const payload = await apiFetch<FlowSessionPayload>(flowSessionItemDonePath(sessionId, item.id), {
@@ -459,7 +473,13 @@ function ReadingList({
       </header>
 
       {groups.map((group, index) => (
-        <ReadingGroup key={group.recording?.id ?? `themes-${index}`} group={group} pending={pending} onMark={onMark} />
+        <ReadingGroup
+          key={group.recording?.id ?? `themes-${index}`}
+          sessionId={session.id}
+          group={group}
+          pending={pending}
+          onMark={onMark}
+        />
       ))}
 
       {failure === null ? null : (
@@ -478,10 +498,12 @@ function ReadingList({
 }
 
 function ReadingGroup({
+  sessionId,
   group,
   pending,
   onMark,
 }: {
+  sessionId: string;
   group: FlowReadingGroup;
   pending: ReadonlySet<string>;
   onMark: (item: FlowSessionItemView, done: boolean) => void;
@@ -511,7 +533,17 @@ function ReadingGroup({
       {group.recording === null ? (
         <div className={styles.groupHead}>{head}</div>
       ) : (
-        <Link className={styles.groupLink} href={recordingPagePath(group.recording.id)}>
+        <Link
+          className={styles.groupLink}
+          href={recordingPagePath(group.recording.id)}
+          onClick={() =>
+            track('flow_tracker_acted', {
+              action: 'recording_opened',
+              session_id: sessionId,
+              recording_id: group.recording?.id ?? null,
+            })
+          }
+        >
           {head}
         </Link>
       )}
@@ -519,6 +551,7 @@ function ReadingGroup({
         {group.rows.map((row) => (
           <ReadingRowView
             key={row.item.id}
+            sessionId={sessionId}
             row={row}
             teaching={group.recording}
             pending={pending.has(row.item.id)}
@@ -531,11 +564,13 @@ function ReadingGroup({
 }
 
 function ReadingRowView({
+  sessionId,
   row,
   teaching,
   pending,
   onMark,
 }: {
+  sessionId: string;
   row: FlowReadingRow;
   teaching: FlowTeachingRef | null;
   pending: boolean;
@@ -543,6 +578,10 @@ function ReadingRowView({
 }) {
   const player = usePlayer();
   const { item } = row;
+  /** One press in this row, for analytics: which, and on which teaching. */
+  function acted(action: FlowRowAction, recordingId: string | null): void {
+    track('flow_tracker_acted', { action, session_id: sessionId, recording_id: recordingId });
+  }
   const title = item.chapter?.title ?? item.tag?.name ?? item.recording?.title ?? item.question;
   const tickId = `tick-${item.id}`;
   /** Where the title opens: the chapter's page, or the teaching's for a chapterless one (3.14.7). */
@@ -589,7 +628,11 @@ function ReadingRowView({
             {title}
           </label>
         ) : (
-          <Link className={styles.readingTitleLink} href={href}>
+          <Link
+            className={styles.readingTitleLink}
+            href={href}
+            onClick={() => acted(item.chapter?.id != null ? 'chapter_opened' : 'recording_opened', teaching?.id ?? null)}
+          >
             {title}
           </Link>
         )}
@@ -604,7 +647,10 @@ function ReadingRowView({
             className={styles.play}
             type="button"
             aria-label={`Play ${teaching.title}${item.chapter === null ? '' : ` from ${formatTimecode(item.chapter.startMs)}`}`}
-            onClick={() => play(teaching, item.chapter?.startMs ?? null)}
+            onClick={() => {
+              acted('play_clicked', teaching.id);
+              play(teaching, item.chapter?.startMs ?? null);
+            }}
           >
             <span aria-hidden="true">▶</span>
           </button>
@@ -623,6 +669,7 @@ function ReadingRowView({
                     ? recordingPagePath(related.recording.id)
                     : chapterPagePath(related.recording.id, related.chapter.id)
                 }
+                onClick={() => acted('related_chapter_opened', related.recording.id)}
               >
                 {related.recording.title} · {related.chapter.title}
               </Link>
@@ -630,7 +677,10 @@ function ReadingRowView({
                 className={styles.textLink}
                 type="button"
                 aria-label={`Play ${related.recording.title} from ${formatTimecode(related.chapter.startMs)}`}
-                onClick={() => play(related.recording, related.chapter.startMs)}
+                onClick={() => {
+                  acted('related_play_clicked', related.recording.id);
+                  play(related.recording, related.chapter.startMs);
+                }}
               >
                 ▶ {formatTimecode(related.chapter.startMs)}
               </button>

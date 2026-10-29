@@ -16,6 +16,7 @@ import { NoteComposer } from './recordings/[id]/note-composer';
 import { momentEntry } from './highlights/highlights-lookup';
 import { useHighlights } from './highlights/highlights-store';
 import { PinMomentTool } from './highlights/pin-moment-tool';
+import { track } from '@/client/observability/analytics';
 import { usePlayer, useTransportHiddenValue } from './player-context';
 import styles from './transport.module.css';
 
@@ -349,6 +350,7 @@ export function TransportBar() {
 
     const wasOpen = toolbarOpen;
     pointerHandledRef.current = false;
+    if (!wasOpen && loaded !== null) track('player_menu_acted', { action: 'opened', recording_id: loaded.id });
     setToolbarOpen(true);
 
     function finish() {
@@ -487,6 +489,8 @@ export function TransportBar() {
     if (scrubTimerRef.current !== null) window.clearTimeout(scrubTimerRef.current);
     scrubTimerRef.current = window.setTimeout(() => {
       scrubTimerRef.current = null;
+      // One drag is one seek, so it is counted here, where the drag settles, and not per pixel.
+      if (loaded !== null) track('playback_controlled', { action: 'seek', recording_id: loaded.id });
       player.seekToMs(ms);
       setScrubMs(null);
     }, SCRUB_SETTLE_MS);
@@ -795,6 +799,9 @@ export function TransportBar() {
                   aria-pressed={chaptersOpen}
                   onClick={() => {
                     setToolbarOpen(false);
+                    if (!chaptersOpen) {
+                      track('player_menu_acted', { action: 'chapters_opened', recording_id: loaded.id });
+                    }
                     // The same press puts it away, the rule the two tools beside it follow.
                     setChaptersOpenFor(chaptersOpen ? null : loaded.id);
                   }}
@@ -821,6 +828,7 @@ export function TransportBar() {
                    * Opening this way is therefore the same open the Notes tab performs.
                    */
                   player.releaseComposerAnchor();
+                  if (!sheetOpen) track('player_menu_acted', { action: 'note_opened', recording_id: loaded.id });
                   setSheetOpen((open) => !open);
                 }}
               >
@@ -832,6 +840,10 @@ export function TransportBar() {
                 aria-pressed={player.captionsOn}
                 aria-label="Captions"
                 onClick={() => {
+                  track('player_menu_acted', {
+                    action: player.captionsOn ? 'captions_off' : 'captions_on',
+                    recording_id: loaded.id,
+                  });
                   player.setCaptions(!player.captionsOn);
                   setToolbarOpen(false);
                 }}
@@ -859,6 +871,7 @@ export function TransportBar() {
                 pointerHandledRef.current = false;
                 return;
               }
+              if (!toolbarOpen) track('player_menu_acted', { action: 'opened', recording_id: loaded.id });
               setToolbarOpen((open) => !open);
             }}
           >

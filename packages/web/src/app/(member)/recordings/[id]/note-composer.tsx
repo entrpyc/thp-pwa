@@ -142,7 +142,7 @@ export function NoteComposer({
   const count = text.trim().length;
   const overLimit = count > MAX_NOTE_LENGTH;
   // Pictures ([3.12.22](docs/project/prd.md)). A note of pictures alone needs no words (3.12.23),
-  // so the save is enabled by either; a picture still on its way holds the save until it lands.
+  // so the save is enabled by either; a picture still on its way holds the save until it lands.
   const fieldId = useId();
   const attachments = useImageAttachments();
   const attached = attachments.images.filter((one) => one.status !== 'refused').length;
@@ -200,13 +200,13 @@ export function NoteComposer({
             timestampMs: anchorMs,
             ...(images.length === 0 ? {} : { images }),
           }),
-        }),
+        }).then(() => images.length),
       )
-      .then(() => {
+      .then((imageCount) => {
         setText('');
         attachments.reset();
-        // That a note was written, and whether it was private — never what it said.
-        track('note_created', { recording_id: recordingId, visibility, is_reply: false });
+        // That a note was written, whether it was private, and how many pictures — never what it said.
+        track('note_created', { recording_id: recordingId, visibility, is_reply: false, image_count: imageCount });
         // The draft is the note until the note exists; once it does, it is a second copy of one
         // the member can see in the list, and it would reopen the composer holding it again.
         setDraftAnchorMs(null);

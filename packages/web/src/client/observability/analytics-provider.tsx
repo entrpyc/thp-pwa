@@ -53,7 +53,19 @@ export function AnalyticsProvider({
 
   useEffect(() => {
     const properties = pageviewProperties(pathname, params);
-    if (properties !== null) track('$pageview', properties);
+    if (properties === null) return;
+    track('$pageview', properties);
+    // The leave pairs with the view: once when the route changes (the cleanup), and once when the
+    // page is hidden — a tab switched away, the app backgrounded or closed — which is the last
+    // leave a view gets. The SDK's own leave capture stays off because it would carry the URL.
+    const onHide = () => {
+      if (document.visibilityState === 'hidden') track('$pageleave', properties);
+    };
+    document.addEventListener('visibilitychange', onHide);
+    return () => {
+      document.removeEventListener('visibilitychange', onHide);
+      track('$pageleave', properties);
+    };
     // The params for a pathname do not change under it — see the note above.
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [pathname]);
