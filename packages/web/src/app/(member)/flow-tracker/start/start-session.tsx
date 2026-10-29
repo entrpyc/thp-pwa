@@ -13,6 +13,7 @@ import {
   type StartFlowSessionRequest,
 } from '@thp/shared';
 import { ApiClientError, apiFetch } from '@/client/api-client';
+import { track } from '@/client/observability/analytics';
 import { useBreadcrumbTrail, useTransportHidden } from '../../player-context';
 import { formatDay, plural } from '../format';
 import styles from '../flow-tracker.module.css';
@@ -90,6 +91,7 @@ export function StartSession() {
         headers: { 'content-type': 'application/json' },
         body: JSON.stringify(body),
       });
+      track('flow_tracker_acted', { action: 'session_started', session_id: answer.session.id, recording_id: null });
       router.push(flowSessionPagePath(answer.session.id));
     } catch (caught) {
       if (caught instanceof ApiClientError && caught.code === 'flow_session_in_progress') {

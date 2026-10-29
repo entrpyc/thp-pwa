@@ -230,12 +230,33 @@ sign-out.
 | Speed changes | `speed_changed` | `speed` | `chooseSpeed` accepts a new rate. |
 | Notifications | `notification_opened` | `kind` (the shared tuple), `channel` (`in_app`) | A row in the notifications centre is tapped. Opens from an OS push notification do not pass through the centre and are not counted (section 9). |
 | Page visits | `$pageview` | `route` (the pattern, never the URL), `recording_id` or `series_id` where the route has one | Member-area navigation, from the provider's router hook. Admin pages send nothing. |
+| Page leaves | `$pageleave` | The same three as `$pageview` | The route changes (the view's effect cleanup) and the page is hidden (`visibilitychange`). Sent by the provider; the SDK's own leave capture stays off because it carries the URL. |
+
+**Added 30 October 2026**, for the dashboards in section 5.4. One generic event per feature with an
+`action` enum, so "all actions" is the event and "by action" is one breakdown.
+
+| Question | Event | Properties | Fires when |
+| :--- | :--- | :--- | :--- |
+| Plays by title | `playback_started` gains `recording_title` | The teaching's published title — the one `'title'` kind in the vocabulary, allowed on this property alone (section 5.5) | As before. |
+| Transport presses | `playback_controlled` | `action` (`play`, `pause`, `jump_back`, `jump_forward`, `seek`), `recording_id` | `toggle` and `skipMs` in `player-context.tsx`; `seek` once per settled scrubber drag in `transport-bar.tsx`. |
+| Pictures on notes | `note_created` gains `image_count` | The pictures attached; "images uploaded" is the sum | As before, for notes and replies. |
+| Reading others' notes | `note_interacted` | `action` (`reply_opened`, `reaction_added`, `reaction_removed`, `timestamp_clicked`, `image_viewed`), `recording_id` | The notes panel's controls and the picture strip (also on My notes and Now playing). Never the emoji. |
+| Highlights | `highlight_acted` | `action` (`added`, `removed`, `revisited`), `target` (`note`, `moment`, `chapter`, `recording`), `recording_id` | The four pin controls, and the Highlights page's play, link and eraser. `target` is the surface the pin was made from: the server stores a chapter as a moment, so the Highlights page reports a moment. |
+| Searches | `search_submitted` | `blend` (0 words only … 1 meaning only), `per_teaching` (`one`, `three`, `all`), one boolean per searchable kind (`kind_segment` …), `result_count`, `meaning_available` | A search answers. A control changed with words in the box is a new search and counts. Never the words. |
+| Search follow-through | `search_result_opened` | `action` (`link`, `play`), `kind` (the hit's), `recording_id`, `rank` | A hit's link or its play control. |
+| Search paging | `search_expanded` | `offset` | *Show more*. |
+| Flow Tracker | `flow_tracker_acted` | `action` (`session_started`, `past_session_opened`, `recording_opened`, `chapter_opened`, `chapter_checked`, `chapter_unchecked`, `play_clicked`, `related_chapter_opened`, `related_play_clicked`), `session_id`, `recording_id` (either may be null) | The home, start and session screens. Never an answer or a rating. |
+| Transcript | `transcript_acted` | `action` (`follow_on`, `follow_off`, `jump_to_current`, `downloaded`, `row_clicked`), `recording_id` | The transcript panel's header and rows. |
+| Mind map | `mind_map_acted` | `action` (`full_screen_on`, `full_screen_off`, `collapsed`, `expanded`, `seek`, `play`), `recording_id` | The panel's control and the canvas's `onFold`, `onSeek`, `onPlay`. |
+| Player menu | `player_menu_acted` | `action` (`opened`, `chapters_opened`, `note_opened`, `captions_on`, `captions_off`), `recording_id` | The transport's `···` and the three tools inside it. Opening is counted; closing is not. |
 
 The `route` patterns are the member-area page files as they stand: `/`, `/recordings`,
 `/recordings/[id]`, `/recordings/[id]/chapters/[chapterId]`, `/series`, `/series/[id]`,
-`/now-playing`, `/notifications`, `/profile`, `/feedback`. A page view carries the id as a property
-so "how often is the recording page visited" and "how often is *this* recording's page visited" are
-both one breakdown.
+`/now-playing`, `/notifications`, `/profile`, `/profile/downloads`, `/profile/notifications`,
+`/profile/settings`, `/feedback`, `/search`, `/highlights`, `/notes`, `/flow-tracker`,
+`/flow-tracker/start`, `/flow-tracker/sessions/[id]`, `/prayer-requests`, `/prayer-requests/new`,
+`/prayer-requests/[id]`. A page view carries the id as a property so "how often is the recording
+page visited" and "how often is *this* recording's page visited" are both one breakdown.
 
 ### 5.3 Completion, in the database
 
@@ -301,6 +322,21 @@ All on one dashboard, *Teaching Hub*.
 8. **Notifications opened** — `notification_opened` by `kind`.
 9. **Page visits** — `$pageview` by `route`, and the recording page by `recording_id`.
 
+**The four dashboards (30 October 2026).** Built from the events above and the ones added that
+day; every chart is a trend, a pie or a total unless it says otherwise.
+
+- *General usage* — `$pageview` trend and by `route`; `playback_started` trend and by
+  `recording_title`; the returns table (the HogQL query in item 3); unique users, trend and total;
+  all events but `$pageview`/`$pageleave` as one trend ("features") and by event name.
+- *Users* — a world map on the SDK's country property; a pie on `$device_type`.
+- *Playback* — `playback_controlled` by `action`; `speed_changed` by `speed`.
+- *Features* — one section per event: `note_created` (trend, by `visibility`, sum of
+  `image_count`) with `note_interacted` by `action`; `highlight_acted` by `action` and, for
+  `added`, by `target`; `search_submitted` (trend, total, by each `kind_*`, by `blend`, by
+  `per_teaching`) against `search_result_opened` (trend, total, and as a pie beside queries) and
+  the total of `search_expanded`; `flow_tracker_acted`, `transcript_acted`, `mind_map_acted` and
+  `player_menu_acted` each as a trend and by `action`; `tab_opened` by `tab`.
+
 **Cross-checks.** Two numbers must agree with the database or the instrumentation is wrong:
 completions against `count(completed_at)` on `playback_progress`, and notes created against the
 `note` table. Streams and listeners have no database counterpart because there is no play log
@@ -314,9 +350,14 @@ into is a second admin. So:
 - **Never sent, in any property, under any name:** note text, search query text, questionnaire
   responses, Flow Tracker answers, mind-map content, display names, e-mail addresses, IP addresses,
   raw URLs containing more than a route pattern.
-- **Allowed:** opaque ids, enums, counts, durations, booleans.
+- **Allowed:** opaque ids, enums, counts, durations, booleans — and, since 30 October 2026, **one
+  exception**: a published teaching's title, on `playback_started.recording_title` alone. A title
+  is catalogue content every member sees, not a member's own, and it exists so plays can be read by
+  title rather than by UUID. The vocabulary types it with a `'title'` kind that is trimmed and cut
+  to 200 characters, and the guard test names the one property allowed to carry it, so the
+  exception cannot widen into a string kind.
 - **Held by a guard test.** `tests/guards/analytics-vocabulary.test.ts` walks the event union and
-  refuses any property typed `string` that is not an id or an enum, and
+  refuses any property typed `string` that is not an id, an enum or the titled exception, and
   `tests/guards/analytics-boundary.test.ts` refuses `posthog-js` or `posthog-node` imported anywhere
   but their adapter files — the same shape as `asr-boundary.test.ts`.
 - **PostHog project settings:** *Discard client IP data* on; autocapture off; session replay off;

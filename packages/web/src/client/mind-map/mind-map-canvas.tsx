@@ -51,6 +51,8 @@ export interface MindMapCanvasProps {
   readonly onSeek?: (ms: number) => void;
   /** Go to a moment and play. When absent, chips carry no play control. */
   readonly onPlay?: (ms: number) => void;
+  /** A branch folded (`true`) or unfolded by hand — for the caller's own bookkeeping, nothing more. */
+  readonly onFold?: (folded: boolean) => void;
 }
 
 /** The height the editing controls add to every box, which the layout has to know about. */
@@ -75,6 +77,7 @@ export function MindMapCanvas({
   onChange,
   onSeek,
   onPlay,
+  onFold,
 }: MindMapCanvasProps) {
   /** Which nodes show their children. Everything starts open; a member folds what they are done with. */
   const [expanded, setExpanded] = useState<ReadonlySet<string>>(() => allBranches(root));
@@ -93,14 +96,19 @@ export function MindMapCanvas({
     [root, expanded, editable],
   );
 
-  const toggle = useCallback((id: string) => {
-    setExpanded((current) => {
-      const next = new Set(current);
-      if (next.has(id)) next.delete(id);
-      else next.add(id);
-      return next;
-    });
-  }, []);
+  const toggle = useCallback(
+    (id: string) => {
+      // Read outside the updater, which may run twice in development.
+      onFold?.(expanded.has(id));
+      setExpanded((current) => {
+        const next = new Set(current);
+        if (next.has(id)) next.delete(id);
+        else next.add(id);
+        return next;
+      });
+    },
+    [expanded, onFold],
+  );
 
   const change = (next: MindMapNode): void => {
     if (next !== root) onChange?.(next);

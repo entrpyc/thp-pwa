@@ -203,13 +203,13 @@ export function NoteComposer({
             timestampMs: anchorMs,
             ...(images.length === 0 ? {} : { images }),
           }),
-        }),
+        }).then(() => images.length),
       )
-      .then(() => {
+      .then((imageCount) => {
         setText('');
         attachments.reset();
-        // That a note was written, and whether it was private — never what it said.
-        track('note_created', { recording_id: recordingId, visibility, is_reply: false });
+        // That a note was written, whether it was private, and how many pictures — never what it said.
+        track('note_created', { recording_id: recordingId, visibility, is_reply: false, image_count: imageCount });
         // The draft is the note until the note exists; once it does, it is a second copy of one
         // the member can see in the list, and it would reopen the composer holding it again.
         setDraftAnchorMs(null);

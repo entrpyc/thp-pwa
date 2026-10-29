@@ -29,6 +29,7 @@ import {
   type SearchableKind,
 } from '@thp/shared';
 import { ApiClientError, apiFetch } from '@/client/api-client';
+import { track } from '@/client/observability/analytics';
 import { useBreadcrumbTrail, usePlayer, type LoadedRecording } from '../player-context';
 import screen from '../screens.module.css';
 import styles from './search.module.css';
@@ -151,6 +152,19 @@ export function SearchScreen() {
       .then((payload) => {
         if (live) {
           setOutcome({ status: 'done', payload, hits: payload.hits, hasMore: payload.hasMore, loadingMore: false });
+          // The shape of the search and the size of the answer — never the words.
+          const { kinds, blend, perTeaching } = check.request;
+          track('search_submitted', {
+            blend,
+            per_teaching: perTeaching === 1 ? 'one' : perTeaching === 3 ? 'three' : 'all',
+            kind_segment: kinds.includes('segment'),
+            kind_chapter: kinds.includes('chapter'),
+            kind_note: kinds.includes('note'),
+            kind_summary: kinds.includes('summary'),
+            kind_recording: kinds.includes('recording'),
+            result_count: payload.hits.length,
+            meaning_available: payload.meaningAvailable,
+          });
         }
       })
       .catch((caught: unknown) => {
@@ -200,6 +214,7 @@ export function SearchScreen() {
   function showMore() {
     if (outcome.status !== 'done' || !check.ok || outcome.loadingMore) return;
     const shown = outcome;
+    track('search_expanded', { offset: shown.hits.length });
     setOutcome({ ...shown, loadingMore: true });
     void apiFetch<SearchPayload>(
       // The address always asks for the first page, so what is shown is exactly the offset.
@@ -229,6 +244,7 @@ export function SearchScreen() {
     if (event.metaKey || event.ctrlKey || event.shiftKey || event.altKey || event.button !== 0) return;
     event.preventDefault();
     const { recording, startMs } = hit;
+    track('search_result_opened', { action: 'link', kind: hit.kind, recording_id: recording.id, rank: rankOf(hit) });
     if (player.loaded?.id === recording.id) {
       if (startMs !== null) player.seekToMs(startMs);
     } else {
@@ -241,7 +257,13 @@ export function SearchScreen() {
    * Play the teaching from the moment, here, in the docked transport. The page stays where it is:
    * the member asked to hear the hit, not to leave the results.
    */
+  /** The hit's place in the list as shown, for "how far down do members go". */
+  function rankOf(hit: SearchHit): number {
+    return outcome.status === 'done' ? Math.max(0, outcome.hits.indexOf(hit)) : 0;
+  }
+
   function playFromMoment(hit: SearchHit, startMs: number) {
+    track('search_result_opened', { action: 'play', kind: hit.kind, recording_id: hit.recording.id, rank: rankOf(hit) });
     if (player.loaded?.id === hit.recording.id) {
       player.playFromMs(startMs);
     } else {
