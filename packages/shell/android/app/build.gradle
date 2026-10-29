@@ -1,5 +1,20 @@
 apply plugin: 'com.android.application'
 
+// Release signing for Play. The upload keystore and its passwords live in local.properties
+// (gitignored) as thp.upload.* — see README.md, "Building the Android bundle" — or in the
+// THP_UPLOAD_* environment variables, so nothing secret is ever committed. When neither is set
+// the release build type is left unsigned, which is what a machine without the keystore should
+// produce rather than a bundle signed with a key Play has never seen.
+def localProperties = new Properties()
+def localPropertiesFile = rootProject.file('local.properties')
+if (localPropertiesFile.exists()) {
+    localPropertiesFile.withInputStream { localProperties.load(it) }
+}
+def uploadProperty = { String name ->
+    localProperties.getProperty('thp.upload.' + name) ?: System.getenv('THP_UPLOAD_' + name.replaceAll(/([A-Z])/, '_$1').toUpperCase())
+}
+def uploadStoreFile = uploadProperty('storeFile')
+
 android {
     namespace = "com.indepthwebsolutions.teachinghub"
     compileSdk = rootProject.ext.compileSdkVersion
@@ -16,10 +31,23 @@ android {
             ignoreAssetsPattern = '!.svn:!.git:!.ds_store:!*.scc:.*:!CVS:!thumbs.db:!picasa.ini:!*~'
         }
     }
+    signingConfigs {
+        if (uploadStoreFile) {
+            release {
+                storeFile file(uploadStoreFile)
+                storePassword uploadProperty('storePassword')
+                keyAlias uploadProperty('keyAlias')
+                keyPassword uploadProperty('keyPassword')
+            }
+        }
+    }
     buildTypes {
         release {
             minifyEnabled false
             proguardFiles getDefaultProguardFile('proguard-android.txt'), 'proguard-rules.pro'
+            if (uploadStoreFile) {
+                signingConfig signingConfigs.release
+            }
         }
     }
 }

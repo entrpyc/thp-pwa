@@ -147,10 +147,23 @@ cd packages/shell/android
 ./gradlew bundleRelease                          # gradlew.bat on a plain Windows shell
 ```
 
-The bundle lands at `android/app/build/outputs/bundle/release/app-release.aab`. It is unsigned:
-Play requires upload signing, so either add a `signingConfigs.release` block to
-`android/app/build.gradle` with a keystore that stays **out of git**, or sign the `.aab` with
-`jarsigner` before upload. `./gradlew assembleDebug` produces an installable debug APK for a device
+The bundle lands at `android/app/build/outputs/bundle/release/app-release.aab`. It is signed with
+the upload key when `android/local.properties` (gitignored) names it, and left unsigned otherwise:
+
+```properties
+sdk.dir=C:\Users\<you>\AppData\Local\Android\Sdk
+thp.upload.storeFile=C:\path\outside\the\repo\upload.keystore
+thp.upload.storePassword=...
+thp.upload.keyAlias=upload
+thp.upload.keyPassword=...
+```
+
+The same four values are read from `THP_UPLOAD_STORE_FILE`, `THP_UPLOAD_STORE_PASSWORD`,
+`THP_UPLOAD_KEY_ALIAS` and `THP_UPLOAD_KEY_PASSWORD` when the file does not set them. The keystore
+was generated once with `keytool -genkeypair -keyalg RSA -keysize 2048 -validity 10000` and is
+**not in the repository**: it is the upload key Play App Signing trusts, so back it up with its
+password, and if it is ever lost ask Play for an upload-key reset rather than making a new app.
+`./gradlew assembleDebug` produces an installable debug APK for a device
 or an emulator; `npm --workspace @thp/shell run open:android` opens the project in Android Studio.
 
 `versionCode` in `android/app/build.gradle` must go up by one for every Play upload.
