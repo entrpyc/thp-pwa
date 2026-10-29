@@ -1,9 +1,11 @@
 import { and, asc, desc, eq, isNotNull, sql, type SQL } from 'drizzle-orm';
 import type { EmbeddingSourceKind } from '@thp/shared';
 import { getDatabase, queryable, type Executor } from './client';
+import { noBlockBetween } from './member-blocks';
 import {
   embedding,
   mindMap,
+  note,
   playbackProgress,
   recording,
   scriptureReference,
@@ -490,12 +492,19 @@ export interface EmbeddingVisibilityFacts {
   /** The summary's own gate. Read only when the kind is `summary`. */
   readonly summaryPublishedAt: Date | null;
   readonly ownerUserId: string | null;
+  /**
+   * Whether the reader and the note's author have a block between them, either way. Read only
+   * when the kind is `note`; absent means none. A public note's row carries no author, so this is
+   * a fact about the `note` row the embedding stands for, not about the embedding.
+   */
+  readonly authorBlocked?: boolean;
 }
 
 /** The rule over facts already read. Must say exactly what {@link embeddingVisibleTo} says. */
 export function isEmbeddingVisibleTo(readerId: string, facts: EmbeddingVisibilityFacts): boolean {
   if (facts.recordingPublishedAt === null) return false;
   if (facts.sourceKind === 'summary' && facts.summaryPublishedAt === null) return false;
+  if (facts.sourceKind === 'note' && facts.authorBlocked === true) return false;
   return facts.ownerUserId === null || facts.ownerUserId === readerId;
 }
 
@@ -505,6 +514,17 @@ export function isEmbeddingVisibleTo(readerId: string, facts: EmbeddingVisibilit
  * Correlated `exists` rather than joins, so the caller adds one `where` and no join a second
  * caller would have to repeat in the same shape. Both gates are the same `is not null` the lists
  * above compare, and this file is the only one allowed to spell them.
+ *
+ * **A note's row also states the block rule** (docs/security-audit-2026-10-28.md, finding 7).
+ * The notes list leaves out every note whose author the reader has a block with, but a public
+ * note's embedding carries no author — only a private one carries an owner — so search would
+ * otherwise hand a blocked member the blocker's note, with its recording and its timestamp, by
+ * the words in it. The author is read off the `note` row the embedding stands for (`source_id` is
+ * the note's id for this kind) rather than copied onto `embedding`: a copy would be a second
+ * column every writer of a note vector — the note service, the worker's embed step, account
+ * deletion's re-pointing — would have to keep in step, and the correlated lookup is one primary
+ * key read per candidate row, the same shape as the two gates above. A note row that is gone
+ * (a hard-deleted private note whose vector is about to go with it) is not answered either.
  */
 export function embeddingVisibleTo(readerId: string): SQL {
   return sql`(
@@ -520,6 +540,13 @@ export function embeddingVisibleTo(readerId: string): SQL {
       )
     )
     and (${embedding.ownerUserId} is null or ${embedding.ownerUserId} = ${readerId})
+    and (
+      ${embedding.sourceKind} <> 'note'
+      or exists (
+        select 1 from ${note}
+        where ${note.id} = ${embedding.sourceId} and ${noBlockBetween(readerId, note.authorId)}
+      )
+    )
   )`;
 }
 

@@ -27,6 +27,11 @@ const config: NextConfig = {
   // so a deployed box never serves them. A build nobody uploads from (a machine without the CLI
   // token) keeps its maps on disk, which is a local matter.
   productionBrowserSourceMaps: true,
+  // Nothing in the app renders through `next/image`, so the `/_next/image` optimiser would only
+  // ever be reached by somebody feeding it bytes of their own choosing — which is the surface the
+  // 2026 image-optimisation advisories (AVIF, SVG, SSRF) were about. Off, so the route does not
+  // exist rather than merely being unused (docs/security-audit-2026-10-28.md, finding 1).
+  images: { unoptimized: true },
   env: {
     NEXT_PUBLIC_APP_VERSION: appVersion(),
     // The one switch (.env.example, THP_MOCK_EXTERNAL) mirrored to the client bundle, so a
@@ -37,6 +42,26 @@ const config: NextConfig = {
   },
   async headers() {
     return [
+      {
+        // The browser-side hardening every response carries (security audit, finding 6). The
+        // Content-Security-Policy is not here: it needs a per-request nonce for Next's inline
+        // bootstrap scripts, so it is set by `src/proxy.ts`. HSTS is nginx's, because only the
+        // process that terminates TLS knows the connection was secure (deploy/nginx/thp.conf).
+        //
+        // `X-Frame-Options` duplicates the CSP's `frame-ancestors` for the WebViews and older
+        // browsers that read only the former. `Permissions-Policy` turns off the device features
+        // nothing here uses, so a future injected script cannot ask for them either.
+        source: '/(.*)',
+        headers: [
+          { key: 'X-Content-Type-Options', value: 'nosniff' },
+          { key: 'X-Frame-Options', value: 'DENY' },
+          { key: 'Referrer-Policy', value: 'strict-origin-when-cross-origin' },
+          {
+            key: 'Permissions-Policy',
+            value: 'camera=(), microphone=(), geolocation=(), payment=(), usb=()',
+          },
+        ],
+      },
       {
         // Apple fetches this file with no extension and refuses it unless it is served as JSON;
         // Next would otherwise type it by extension and send an octet stream, and universal links

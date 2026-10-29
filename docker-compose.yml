@@ -10,8 +10,10 @@ services:
       POSTGRES_USER: thp
       POSTGRES_PASSWORD: thp
       POSTGRES_DB: thp
+    # Loopback only: the credentials are fixed and public, so the port must not be — on a laptop
+    # on café wifi, `5432:5432` is a superuser Postgres for everyone on the network.
     ports:
-      - '5432:5432'
+      - '127.0.0.1:5432:5432'
     volumes:
       - thp-pgdata:/var/lib/postgresql/data
     healthcheck:
@@ -49,9 +51,11 @@ services:
       MINIO_ROOT_USER: thp
       MINIO_ROOT_PASSWORD: thp-secret-not-a-real-key
       MINIO_API_CORS_ALLOW_ORIGIN: '*'
+    # Loopback only, as for Postgres: a fixed root password behind a port open to the network is
+    # a public bucket. The app reaches it as 127.0.0.1:9000 (README.md "Media store") already.
     ports:
-      - '9000:9000'
-      - '9001:9001'
+      - '127.0.0.1:9000:9000'
+      - '127.0.0.1:9001:9001'
     volumes:
       - thp-minio-data:/data
     healthcheck:

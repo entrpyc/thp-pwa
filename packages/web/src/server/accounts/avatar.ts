@@ -1,4 +1,4 @@
-import { findUserById, setUserAvatar } from '@thp/db';
+import { findUserByAvatarKey, findUserById, isUniqueViolation, setUserAvatar } from '@thp/db';
 import {
   ACCEPTED_ARTWORK_LABEL,
   MAX_ARTWORK_BYTES,
@@ -10,7 +10,7 @@ import {
   type SetAvatarRequest,
   type UploadGrantPayload,
 } from '@thp/shared';
-import { UPLOAD_GRANT_SECONDS, mediaStore, mintAvatarKey } from '@thp/media';
+import { AVATAR_KEY_PREFIX, UPLOAD_GRANT_SECONDS, mediaStore, mintAvatarKey } from '@thp/media';
 import { actorGuard } from '@/server/api/actor-limits';
 import { ApiError } from '@/server/api/errors';
 import { toActor, type Actor } from '@/server/auth/policy';
@@ -59,7 +59,6 @@ export async function grantAvatarUpload(actor: Actor, body: unknown): Promise<Up
 
   logger.info('profile.avatar.granted', {
     actorId: actor.id,
-    actorEmail: actor.email,
     action: 'profile.update',
     target: `account:${actor.id}`,
     mediaKey: key,
@@ -81,9 +80,20 @@ export async function grantAvatarUpload(actor: Actor, body: unknown): Promise<Up
  * server-side" can mean when the API never sees the file; and only then is the pointer written. A
  * client that declared 1 KB and uploaded 3 MB gets a grant it cannot finalise.
  *
- * **Every refusal leaves the avatar exactly as it was.** Nothing is written before all three checks
+ * **Every refusal leaves the avatar exactly as it was.** Nothing is written before all four checks
  * pass. The object behind a refused key stays in the bucket, invisible — there is nothing to
  * delete it with, by design.
+ *
+ * **The key is bound twice** (docs/security-audit-2026-10-28.md, finding 4). It has to be under
+ * `avatars/` — the only prefix a grant ever mints and the only one the account's deletion may
+ * later remove from the store — so a member cannot point their profile at a cover, a note's
+ * picture or a recording's audio, and cannot use `head` as an oracle over the rest of the bucket.
+ * And it has to be **nobody else's**: every public note and prayer request carries a presigned URL
+ * whose path is the author's key, so a key is not a secret, and a member who copied another's
+ * could otherwise alias their picture and — by deleting their own account — take the object out
+ * from under the person it belongs to. The lookup here is the readable refusal; the unique index on
+ * `user.avatar_key` is what holds when two finalisations race, and its violation is translated to
+ * the same answer below rather than surfacing as a server error.
  *
  * Answers with the whole session payload rather than a URL alone, because the screen that called
  * is the screen that renders the session user, and a second read to learn what it just wrote would
@@ -111,12 +121,24 @@ export async function setAvatar(actor: Actor, body: unknown): Promise<SessionPay
     );
   }
 
-  const row = await setUserAvatar(actor.id, key);
+  const holder = await findUserByAvatarKey(key);
+  if (holder !== null && holder.id !== actor.id) {
+    throw refuse(actor, 'key-held', 'That upload is not yours. Choose the picture again.');
+  }
+
+  let row;
+  try {
+    row = await setUserAvatar(actor.id, key);
+  } catch (caught) {
+    if (isUniqueViolation(caught)) {
+      throw refuse(actor, 'key-held', 'That upload is not yours. Choose the picture again.');
+    }
+    throw caught;
+  }
   if (row === null) throw ApiError.notFound('There is no such account.');
 
   logger.info('profile.avatar', {
     actorId: actor.id,
-    actorEmail: actor.email,
     action: 'profile.update',
     target: `account:${actor.id}`,
     mediaKey: key,
@@ -142,7 +164,6 @@ export async function clearAvatar(actor: Actor): Promise<SessionPayload> {
 
   logger.info('profile.avatar.cleared', {
     actorId: actor.id,
-    actorEmail: actor.email,
     action: 'profile.update',
     target: `account:${actor.id}`,
     changed: current.avatarKey !== null,
@@ -154,7 +175,6 @@ export async function clearAvatar(actor: Actor): Promise<SessionPayload> {
 function refuse(actor: Actor, reason: string, message: string): ApiError {
   logger.warn('profile.avatar.refused', {
     actorId: actor.id,
-    actorEmail: actor.email,
     action: 'profile.update',
     target: `account:${actor.id}`,
     reason,
@@ -200,6 +220,11 @@ function parseKey(body: unknown): string {
   const { key } = body as Partial<SetAvatarRequest>;
   if (typeof key !== 'string' || key.trim() === '' || key.length > MAX_FIELD_LENGTH) {
     throw ApiError.invalidInput('Name the upload this picture is.');
+  }
+  // Only a key a grant could have minted. Refused before the store is asked anything, so a key
+  // under another prefix is not even an existence check against the bucket.
+  if (!key.trim().startsWith(AVATAR_KEY_PREFIX)) {
+    throw ApiError.invalidInput('That is not an upload this accepts. Choose the picture again.');
   }
   return key.trim();
 }

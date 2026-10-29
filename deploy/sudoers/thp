@@ -1,20 +1,29 @@
-# /etc/sudoers.d/thp — **what the service user may run as root without a password, and nothing else.**
+# /etc/sudoers.d/thp — **what the service user may run without a password, and nothing else.**
 #
 # The service user is created with no password (README.md "First setup"), and two scripts in this
 # repository escalate from it: `verify:production`'s `certbot-renewal`, `network`, `hardening` and
-# `backup` checks, and scripts/restore-drill.sh for the scratch cluster. This is exactly that list.
-# It is **not** `thp ALL=(ALL) NOPASSWD: ALL`, because the web and worker processes run as this user
-# and a code-execution bug in either would otherwise be a root shell.
+# `backup` checks, and scripts/restore-drill.sh for the scratch cluster. This is exactly that list,
+# **with every argument pinned.** The web and worker processes run as this user, so each line here
+# is what a code-execution bug in either would be able to reach: a bare `psql`, `tee` or `pg_ctl`
+# as `postgres` is a Postgres superuser and a shell as the cluster's owner, which is why none of
+# those appear below. The drill's steps live in one root-owned helper that only knows how to act on
+# the scratch directory, and the two pgbackrest invocations are the read-only ones the backup check
+# makes, argument for argument.
 #
+#   sudo install -o root -g root -m 755 deploy/bin/thp-restore-drill-pg /usr/local/sbin/thp-restore-drill-pg
 #   sudo install -o root -g root -m 440 deploy/sudoers/thp /etc/sudoers.d/thp
 #   sudo visudo -cf /etc/sudoers.d/thp        # must print "parsed OK"; a broken file here breaks sudo for everyone
+#
+# sudoers matches an argument list exactly, so a step added to the drill or the check is a change
+# here too — add it as a pinned entry (or a subcommand of the helper), never by dropping the
+# arguments.
 #
 # `certbot renew --dry-run` covers every certificate on the box, not only this app's — a stale
 # certificate for another site fails the check until it is renewed or deleted.
 
 Cmnd_Alias THP_VERIFY = /usr/bin/certbot renew --dry-run, /usr/sbin/ufw status, /usr/sbin/sshd -T
-Cmnd_Alias THP_DRILL  = /usr/bin/rm -rf /var/lib/postgresql/restore-drill, /usr/bin/install -d -o postgres -g postgres -m 700 /var/lib/postgresql/restore-drill
-Cmnd_Alias THP_AS_PG  = /usr/bin/pgbackrest, /usr/bin/psql, /usr/lib/postgresql/17/bin/pg_ctl, /usr/bin/tee, /usr/bin/test, /usr/bin/touch
+Cmnd_Alias THP_BACKUP = /usr/bin/pgbackrest --stanza=thp check, /usr/bin/pgbackrest --stanza=thp --output=json info
+Cmnd_Alias THP_DRILL  = /usr/local/sbin/thp-restore-drill-pg
 
-thp ALL=(root) NOPASSWD: THP_VERIFY, THP_DRILL
-thp ALL=(postgres) NOPASSWD: THP_AS_PG
+thp ALL=(root) NOPASSWD: THP_VERIFY
+thp ALL=(postgres) NOPASSWD: THP_BACKUP, THP_DRILL

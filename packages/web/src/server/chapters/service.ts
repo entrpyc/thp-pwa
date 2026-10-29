@@ -238,7 +238,6 @@ export async function editChapter(
 
   logger.info('chapter.edit', {
     actorId: actor.id,
-    actorEmail: actor.email,
     action: 'chapter.edit',
     target: `chapter:${chapterId}`,
     recordingId,
@@ -298,7 +297,6 @@ export async function splitChapter(
 
   logger.info('chapter.split', {
     actorId: actor.id,
-    actorEmail: actor.email,
     action: 'chapter.edit',
     target: `chapter:${chapterId}`,
     recordingId,
@@ -360,7 +358,6 @@ export async function mergeChapter(
 
   logger.info('chapter.merge', {
     actorId: actor.id,
-    actorEmail: actor.email,
     action: 'chapter.edit',
     target: `chapter:${chapterId}`,
     recordingId: outcome.recordingId,

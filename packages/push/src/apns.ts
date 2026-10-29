@@ -88,7 +88,8 @@ export function apnsSender(settings: ApnsSettings): PlatformSender {
         try {
           request = openSession().request({
             [constants.HTTP2_HEADER_METHOD]: 'POST',
-            [constants.HTTP2_HEADER_PATH]: `/3/device/${target.endpoint}`,
+            // Encoded, so a token that is not the hex string APNs issues cannot write its own path.
+            [constants.HTTP2_HEADER_PATH]: `/3/device/${encodeURIComponent(target.endpoint)}`,
             authorization: `bearer ${providerToken()}`,
             'apns-topic': settings.bundleId,
             'apns-push-type': 'alert',

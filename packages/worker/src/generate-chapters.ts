@@ -13,6 +13,7 @@ import { logger } from '@thp/shared/observability/logger';
 import { settleChapters } from './chapters/boundaries';
 import { generator as configuredGenerator, type Generator, type TranscriptLine } from './generate';
 import type { JobHandler } from './handlers';
+import { withSpend } from './paid-failure';
 
 /**
  * **The `generate_chapters` step** ([3.22.1](docs/project/prd.md)) — the step after transcription
@@ -131,15 +132,25 @@ export function createGenerateChaptersHandler(
       editedByAdmin: false,
     }));
 
-    await replaceChapters(job.recordingId, chapters, generatedBy, deps.executor);
-
-    const providerMeta: ProviderMeta = {
+    // **The call has been paid for.** A write that fails carries this, so the failed row counts in
+    // the day's ledger (paid-failure.ts).
+    const billed: ProviderMeta = {
       provider: model.name,
       ...generatedBy,
       inputTokens: result.spend.inputTokens,
       outputTokens: result.spend.outputTokens,
       costUsd: result.spend.costUsd,
       requestId: result.spend.requestId,
+    };
+
+    try {
+      await replaceChapters(job.recordingId, chapters, generatedBy, deps.executor);
+    } catch (cause) {
+      throw withSpend(cause, billed);
+    }
+
+    const providerMeta: ProviderMeta = {
+      ...billed,
       // What the run produced and what it had to repair, on the job that caused it — the same shape
       // `generate_draft` records its dropped citations in, and for the same reason: a prompt going
       // wrong should be visible rather than quiet.

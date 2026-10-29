@@ -238,6 +238,14 @@ export const user = pgTable(
   },
   (table) => [
     uniqueIndex('user_email_lower_unique').on(sql`lower(${table.email})`),
+    /**
+     * **One object is one account's picture.** The key is not a secret — every public note carries
+     * a URL whose path is it — so without this a member could point their row at another's avatar
+     * and, by deleting their own account, take the object out from under its owner
+     * (docs/security-audit-2026-10-28.md, finding 4). Nulls are not compared, so the ordinary
+     * state of having no picture is shared by everybody.
+     */
+    uniqueIndex('user_avatar_key_unique').on(table.avatarKey),
     /** A placeholder cannot be an account somebody signs in to: deleted implies deactivated. */
     check(
       'user_deleted_is_deactivated',
@@ -449,7 +457,10 @@ export const series = pgTable('series', {
    */
   artworkKey: text('artwork_key'),
   createdAt: timestamp('created_at', { withTimezone: true }).notNull().defaultNow(),
-});
+}, (table) => [
+  /** One object is one series' cover, for the reason `user_avatar_key_unique` gives. */
+  uniqueIndex('series_artwork_key_unique').on(table.artworkKey),
+]);
 
 /**
  * A recording (Story 2 Ticket 01) — the first row in the spine

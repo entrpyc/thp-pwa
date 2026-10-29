@@ -1,6 +1,7 @@
 import { INVITATION_TOKEN_PARAM, type InvitationPreviewPayload, type SessionPayload } from '@thp/shared';
 import { PUBLIC } from '@/server/api/access';
 import { ApiSuccess, apiRoute } from '@/server/api/route';
+import { tokenGuard } from '@/server/auth/token-limits';
 import { sessionCookieHeader } from '@/server/auth/session';
 import { acceptInvitationWithPassword, previewInvitation } from '@/server/invitations/service';
 
@@ -22,6 +23,7 @@ export const dynamic = 'force-dynamic';
  * after they have typed one into a form that was always going to fail.
  */
 export const GET = apiRoute(PUBLIC, async (request): Promise<InvitationPreviewPayload> => {
+  tokenGuard().enforce(request);
   const token = new URL(request.url).searchParams.get(INVITATION_TOKEN_PARAM);
   return previewInvitation(token);
 });
@@ -31,6 +33,7 @@ export const GET = apiRoute(PUBLIC, async (request): Promise<InvitationPreviewPa
  * no sign-in form between choosing a password and being inside.
  */
 export const POST = apiRoute(PUBLIC, async (request) => {
+  tokenGuard().enforce(request);
   const body: unknown = await request.json().catch(() => null);
   const { user, session } = await acceptInvitationWithPassword(body);
   const payload: SessionPayload = { user };

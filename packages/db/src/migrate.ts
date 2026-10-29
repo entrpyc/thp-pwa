@@ -22,7 +22,14 @@ export interface RunMigrationsOptions extends CreateDatabaseOptions {
  */
 export async function runMigrations(options: RunMigrationsOptions = {}): Promise<void> {
   const { migrationsFolder = MIGRATIONS_DIR, ...connection } = options;
-  const handle = createDatabase({ max: 1, ...connection });
+  // No statement ceiling: a migration that builds an index over every row is the one statement
+  // allowed to take as long as it takes (`DEFAULT_STATEMENT_TIMEOUT_MS` says why the rest are not).
+  const handle = createDatabase({
+    max: 1,
+    statementTimeoutMs: 0,
+    idleInTransactionTimeoutMs: 0,
+    ...connection,
+  });
   try {
     await migrate(handle.db, { migrationsFolder });
   } finally {

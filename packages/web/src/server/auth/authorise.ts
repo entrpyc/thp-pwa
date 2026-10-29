@@ -26,7 +26,6 @@ export function authorise(
 
   logger.warn('authorisation.refused', {
     actorId: actor.id,
-    actorEmail: actor.email,
     action,
     target,
     code: 'forbidden',

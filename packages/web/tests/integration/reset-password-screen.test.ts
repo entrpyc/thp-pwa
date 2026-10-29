@@ -135,7 +135,9 @@ describe('the forgot-password screen', () => {
           heading: ((await heading.textContent()) ?? '').trim(),
           // The address is echoed back, so it is removed before comparing — what must match is
           // everything the screen says *about the outcome*.
-          body: ((await page.textContent('body')) ?? '').replace(email, '(the address)'),
+          // The rendered text, not the DOM's: `textContent` would include Next's inline bootstrap
+          // scripts, which carry a per-request CSP nonce and so never compare equal.
+          body: (await page.innerText('body')).replace(email, '(the address)'),
         };
       } finally {
         await page.context().close();

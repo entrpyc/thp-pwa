@@ -9,6 +9,7 @@ import {
   type CreateNotePayload,
   type NoteVisibility,
 } from '@thp/shared';
+import { useAccountId } from '@/client/account/account-context';
 import { ApiClientError, apiFetch } from '@/client/api-client';
 import { track } from '@/client/observability/analytics';
 import { clearNoteDraft, readNoteDraft, writeNoteDraft } from '@/client/notes/draft';
@@ -101,6 +102,8 @@ export function NoteComposer({
   onSaved?: () => void;
 }) {
   const content = useRecordingContent();
+  // The draft is keyed under this account, so another member on the device never reads it back.
+  const accountId = useAccountId();
   const [text, setText] = useState('');
   const [visibility, setVisibility] = useState<NoteVisibility>('private');
   /**
@@ -142,7 +145,7 @@ export function NoteComposer({
   const count = text.trim().length;
   const overLimit = count > MAX_NOTE_LENGTH;
   // Pictures ([3.12.22](docs/project/prd.md)). A note of pictures alone needs no words (3.12.23),
-  // so the save is enabled by either; a picture still on its way holds the save until it lands.
+  // so the save is enabled by either; a picture still on its way holds the save until it lands.
   const fieldId = useId();
   const attachments = useImageAttachments();
   const attached = attachments.images.filter((one) => one.status !== 'refused').length;
@@ -157,13 +160,13 @@ export function NoteComposer({
    * anything the server could not have known.
    */
   useEffect(() => {
-    const draft = readNoteDraft(recordingId);
+    const draft = readNoteDraft(accountId, recordingId);
     setHydrated(true);
     if (draft === null) return;
     setText(draft.text);
     setVisibility(draft.visibility);
     setDraftAnchorMs(draft.anchorMs);
-  }, [recordingId]);
+  }, [accountId, recordingId]);
 
   /*
    * **Kept in step on every change, not on the way out.** There is no event that reliably fires
@@ -176,8 +179,8 @@ export function NoteComposer({
   useEffect(() => {
     // Before the read-back, this would store the empty box over the draft it is about to restore.
     if (!hydrated) return;
-    writeNoteDraft(recordingId, { text, visibility, anchorMs });
-  }, [anchorMs, hydrated, recordingId, text, visibility]);
+    writeNoteDraft(accountId, recordingId, { text, visibility, anchorMs });
+  }, [accountId, anchorMs, hydrated, recordingId, text, visibility]);
 
   /**
    * One save for the submit and for the terms prompt's `onAccepted`: a member who accepted the
@@ -210,7 +213,7 @@ export function NoteComposer({
         // The draft is the note until the note exists; once it does, it is a second copy of one
         // the member can see in the list, and it would reopen the composer holding it again.
         setDraftAnchorMs(null);
-        clearNoteDraft(recordingId);
+        clearNoteDraft(accountId, recordingId);
         // Armed again: the member has finished this note, so the next one starts from wherever
         // the teaching has reached rather than from where this one did (3.1.1).
         releaseComposerAnchor();

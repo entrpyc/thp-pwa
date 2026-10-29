@@ -3,7 +3,9 @@ import postgres from 'postgres';
 import {
   createDatabase,
   deleteEmbeddingsForSources,
+  deleteMemberBlock,
   findEmbeddingsForSources,
+  insertMemberBlock,
   insertNote,
   insertRecording,
   insertUser,
@@ -342,6 +344,25 @@ describe('the SQL visibility rule says what the pure one says (3.10.9)', () => {
     expect(mine.has(theirNote)).toBe(false);
     expect(theirs.has(theirNote)).toBe(true);
     expect(theirs.has(myNote)).toBe(false);
+  });
+
+  it('leaves out a public note across a block, and answers it again once the block lifts (finding 7)', async () => {
+    const theirPublic = seeded.find((one) => one.label === "somebody else's public note")?.id as string;
+    const blocked = { ...facts('note', new Date()), authorBlocked: true };
+    expect(isEmbeddingVisibleTo(me, blocked)).toBe(false);
+
+    await insertMemberBlock(me, somebodyElse, handle);
+    try {
+      const mine = new Set((await listVisibleEmbeddings(me, handle)).map((one) => one.sourceId));
+      const theirs = new Set((await listVisibleEmbeddings(somebodyElse, handle)).map((one) => one.sourceId));
+      expect(mine.has(theirPublic)).toBe(false);
+      // The author still sees their own; the block hides the other party, not oneself.
+      expect(theirs.has(theirPublic)).toBe(true);
+    } finally {
+      await deleteMemberBlock(me, somebodyElse, handle);
+    }
+    const again = new Set((await listVisibleEmbeddings(me, handle)).map((one) => one.sourceId));
+    expect(again.has(theirPublic)).toBe(true);
   });
 
   it('shows nobody the draft summary, the unpublished teaching, or the series', async () => {

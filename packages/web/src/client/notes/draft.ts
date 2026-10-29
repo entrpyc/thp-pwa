@@ -21,6 +21,13 @@ import { NOTE_VISIBILITIES, type NoteVisibility } from '@thp/shared';
  * It is **per device, never synced**, and it never reaches the server. An unsaved note is not a note
  * yet; nothing in the product knows about it until the member presses save.
  *
+ * **It is per account, and it goes with the session.** The key carries the account id, and every
+ * draft on the device is dropped when a member signs out ({@link clearAllNoteDrafts}). A shared
+ * family device is the case: a paragraph one member typed and never saved — which may be a
+ * *private* note — must not come back pre-filled in the composer for whoever signs in next. The
+ * account id in the key is the second guard for the same case, for a draft that survived because
+ * the sign-out never ran (a tab closed before it, a session that expired on its own).
+ *
  * **The moment travels with the text.** A note is a paragraph *and* the second it is about
  * ([3.1.1](docs/project/prd.md)), and the anchor is frozen at the first keystroke — so restoring the
  * words without the moment would quietly re-anchor the note to wherever playback had reached by the
@@ -38,13 +45,17 @@ export interface NoteDraft {
   readonly anchorMs: number;
 }
 
+/** What every draft key starts with, so sign-out can find them all without knowing any. */
+export const NOTE_DRAFT_KEY_PREFIX = 'thp:note-draft:';
+
 /**
- * One draft per teaching, namespaced so nothing else in the origin's local storage collides with
- * it. Per *recording* rather than per composer: the inline panel and the transport's sheet are two
- * mounts of one composer writing one note, and a key each would make them two different notes.
+ * One draft per account and teaching, namespaced so nothing else in the origin's local storage
+ * collides with it. Per *recording* rather than per composer: the inline panel and the transport's
+ * sheet are two mounts of one composer writing one note, and a key each would make them two
+ * different notes. Per *account* so that a draft is only ever read back by the member who typed it.
  */
-export function noteDraftKey(recordingId: string): string {
-  return `thp:note-draft:${recordingId}`;
+export function noteDraftKey(userId: string, recordingId: string): string {
+  return `${NOTE_DRAFT_KEY_PREFIX}${userId}:${recordingId}`;
 }
 
 function storage(): Storage | null {
@@ -65,13 +76,13 @@ function storage(): Storage | null {
  * may have been written by an older version of this code, and a `visibility` that is neither of the
  * two values would otherwise reach the API as a refusal a member cannot explain.
  */
-export function readNoteDraft(recordingId: string): NoteDraft | null {
+export function readNoteDraft(userId: string, recordingId: string): NoteDraft | null {
   const store = storage();
   if (store === null) return null;
 
   let raw: string | null;
   try {
-    raw = store.getItem(noteDraftKey(recordingId));
+    raw = store.getItem(noteDraftKey(userId, recordingId));
   } catch {
     return null;
   }
@@ -98,28 +109,51 @@ export function readNoteDraft(recordingId: string): NoteDraft | null {
  * progress, and a stored blank would reopen the composer holding nothing while claiming to hold
  * something. Trimmed, for the same reason the composer counts trimmed — whitespace is not a note.
  */
-export function writeNoteDraft(recordingId: string, draft: NoteDraft): void {
+export function writeNoteDraft(userId: string, recordingId: string, draft: NoteDraft): void {
   const store = storage();
   if (store === null) return;
 
   try {
     if (draft.text.trim() === '') {
-      store.removeItem(noteDraftKey(recordingId));
+      store.removeItem(noteDraftKey(userId, recordingId));
       return;
     }
-    store.setItem(noteDraftKey(recordingId), JSON.stringify(draft));
+    store.setItem(noteDraftKey(userId, recordingId), JSON.stringify(draft));
   } catch {
     // A full quota costs the draft, not the note being written — the composer still holds the text.
   }
 }
 
 /** Drop this teaching's draft. Called when the note it held has been saved. */
-export function clearNoteDraft(recordingId: string): void {
+export function clearNoteDraft(userId: string, recordingId: string): void {
   const store = storage();
   if (store === null) return;
   try {
-    store.removeItem(noteDraftKey(recordingId));
+    store.removeItem(noteDraftKey(userId, recordingId));
   } catch {
     // Nothing to do and nothing to say: the draft outliving its note is a stale box, not a failure.
+  }
+}
+
+/**
+ * Drop **every** draft on this device. Called on sign-out and on account deletion.
+ *
+ * Every key under the prefix rather than this account's keys: the member leaving is the one the
+ * drafts belong to, and a draft written by an older version of this code — keyed without an
+ * account — is one nobody can read back and one the next member must not find. Keys are collected
+ * before anything is removed, because removing while walking `key(i)` skips every other entry.
+ */
+export function clearAllNoteDrafts(): void {
+  const store = storage();
+  if (store === null) return;
+  try {
+    const keys: string[] = [];
+    for (let index = 0; index < store.length; index += 1) {
+      const key = store.key(index);
+      if (key !== null && key.startsWith(NOTE_DRAFT_KEY_PREFIX)) keys.push(key);
+    }
+    for (const key of keys) store.removeItem(key);
+  } catch {
+    // Storage that cannot be walked holds nothing this code could have written there either.
   }
 }

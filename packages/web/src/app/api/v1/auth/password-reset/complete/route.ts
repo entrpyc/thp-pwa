@@ -1,6 +1,7 @@
 import type { SessionPayload } from '@thp/shared';
 import { PUBLIC } from '@/server/api/access';
 import { ApiSuccess, apiRoute } from '@/server/api/route';
+import { tokenGuard } from '@/server/auth/token-limits';
 import { sessionCookieHeader } from '@/server/auth/session';
 import { completePasswordResetWithPassword } from '@/server/password-reset/service';
 
@@ -16,6 +17,7 @@ export const dynamic = 'force-dynamic';
  * password is known, and leaving those alive would make it cosmetic.
  */
 export const POST = apiRoute(PUBLIC, async (request) => {
+  tokenGuard().enforce(request);
   const body: unknown = await request.json().catch(() => null);
   const { user, session } = await completePasswordResetWithPassword(body);
   const payload: SessionPayload = { user };

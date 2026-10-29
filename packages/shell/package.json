@@ -19,6 +19,6 @@
     "@capgo/capacitor-media-session": "8.1.5"
   },
   "devDependencies": {
-    "@capacitor/cli": "8.5.3"
+    "@capacitor/cli": "8.6.0"
   }
 }

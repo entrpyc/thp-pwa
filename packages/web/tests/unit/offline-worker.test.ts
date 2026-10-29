@@ -55,12 +55,18 @@ describe('what the worker decides', () => {
     expect(offline.decide({ url: 'https://hub.test/highlights', mode: 'navigate', prefetch: true }).kind).toBe('pass');
   });
 
-  it('never claims an API request, except to notice the sign-out', () => {
+  it('never claims an API request, except to notice a session beginning or ending', () => {
     expect(offline.decide({ url: 'https://hub.test/api/v1/recordings?surface=library' }).kind).toBe('pass');
     expect(offline.decide({ url: 'https://hub.test/api/v1/recordings/r1/notes', method: 'POST' }).kind).toBe('pass');
     expect(offline.decide({ url: 'https://hub.test/api/v1/notifications' }).kind).toBe('pass');
     expect(offline.decide({ url: 'https://hub.test/api/v1/auth/session', method: 'DELETE' }).kind).toBe('sign-out');
+    // A sign-in or sign-up is noticed too: the pages of whoever was here before go when the
+    // server admits the next member, since a session can end without a sign-out (finding 21).
+    expect(offline.decide({ url: 'https://hub.test/api/v1/auth/session', method: 'POST' }).kind).toBe('sign-in');
+    expect(offline.decide({ url: 'https://hub.test/api/v1/auth/sign-up', method: 'POST' }).kind).toBe('sign-in');
     expect(offline.decide({ url: 'https://hub.test/api/v1/auth/session', method: 'GET' }).kind).toBe('pass');
+    // The reset-request and other auth posts are not a session beginning.
+    expect(offline.decide({ url: 'https://hub.test/api/v1/auth/password-reset', method: 'POST' }).kind).toBe('pass');
   });
 
   it('caches static chunks and member pages, in both the document and the RSC form', () => {

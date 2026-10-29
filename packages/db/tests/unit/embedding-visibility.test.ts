@@ -101,6 +101,20 @@ describe('private notes (3.12.3, NFR 6.7)', () => {
   });
 });
 
+describe('member blocks (docs/security-audit-2026-10-28.md, finding 7)', () => {
+  it('a public note whose author the reader has a block with is hidden, whichever side placed it', () => {
+    // The notes list already leaves it out; search is not a second door to the same words.
+    expect(
+      isEmbeddingVisibleTo(SOMEBODY_ELSE, facts({ sourceKind: 'note', ownerUserId: null, authorBlocked: true })),
+    ).toBe(false);
+  });
+
+  it('the block is read only for a note — a passage or a chapter has no author to block', () => {
+    expect(isEmbeddingVisibleTo(ME, facts({ sourceKind: 'segment', authorBlocked: true }))).toBe(true);
+    expect(isEmbeddingVisibleTo(ME, facts({ sourceKind: 'chapter', authorBlocked: true }))).toBe(true);
+  });
+});
+
 describe('rows that belong to no recording', () => {
   it('a series row is visible to nobody until the scope that writes it says what its gate is', () => {
     // Stated so a kind arriving later cannot be visible by default — the failure this product

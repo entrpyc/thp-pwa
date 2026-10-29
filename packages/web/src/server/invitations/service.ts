@@ -196,7 +196,6 @@ async function createAndSend(
 
   logger.info(action, {
     actorId: actor.id,
-    actorEmail: actor.email,
     action,
     target: `invitation:${row.id}`,
     email: row.email,
@@ -258,7 +257,6 @@ export async function revokeInvitationById(actor: Actor, id: string): Promise<In
 
   logger.info('invitation.revoke', {
     actorId: actor.id,
-    actorEmail: actor.email,
     action: 'invitation.revoke',
     target: `invitation:${revoked.id}`,
     email: revoked.email,
@@ -370,7 +368,6 @@ export async function acceptInvitationWithPassword(
   const session = await issueSession(accepted.user.id);
   logger.info('invitation.accept', {
     actorId: accepted.user.id,
-    actorEmail: accepted.user.email,
     action: 'invitation.accept',
     target: `invitation:${accepted.invitation.id}`,
   });

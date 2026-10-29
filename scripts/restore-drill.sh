@@ -11,9 +11,16 @@
 # and removes the scratch cluster and writes a dated receipt. `verify:production`'s
 # `restore-drill-age` check reads that receipt and fails once it is more than 90 days old.
 #
-# **Run it as the service user, from the checkout — not under `sudo`.** It escalates per command,
+# **Run it as the service user, from the checkout — not under `sudo`.** It escalates per step,
 # and running the whole thing as root would write the receipt as root into a checkout that the
 # `secrets` check requires be owned by the service user.
+#
+# Every step that must run as `postgres` goes through `thp-restore-drill-pg`
+# (deploy/bin/thp-restore-drill-pg, installed root-owned under /usr/local/sbin), which is the one
+# command deploy/sudoers/thp lets this user run as `postgres` for the drill. The helper owns the
+# scratch directory, the stanza and the server binaries; this script owns the guards, the
+# comparison and the receipt. A bare `psql`/`pg_ctl`/`tee` as `postgres` is deliberately not
+# available here — see the sudoers file for why.
 #
 # **It never touches production.** The guards below refuse to run if the target directory or port
 # is the live one — a drill must not be one typo away from being the incident it rehearses.
@@ -22,13 +29,17 @@ set -euo pipefail
 
 cd "$(dirname "$0")/.."
 
-STANZA=thp
+# The same values the helper carries; named here for the guards and the messages only.
 SCRATCH_DIR=/var/lib/postgresql/restore-drill
 SCRATCH_PORT=5433
 RECEIPT=.restore-drill
 
-# On Ubuntu/PGDG the server binaries are not on PATH — only the client ones are.
-PG_BIN=/usr/lib/postgresql/17/bin
+DRILL_PG=/usr/local/sbin/thp-restore-drill-pg
+if [[ ! -x "$DRILL_PG" ]]; then
+  echo "$DRILL_PG is not installed — see deploy/sudoers/thp for the install line." >&2
+  exit 1
+fi
+as_postgres() { sudo -u postgres "$DRILL_PG" "$@"; }
 
 # The connection string is not exported into every shell, so read it from the same `.env` every
 # other command in this repository reads. Falls back to the environment when it is already set.
@@ -41,7 +52,7 @@ if [[ -z "${DATABASE_URL:-}" ]]; then
 fi
 
 LIVE_DIR=$(awk -F= '/^pg1-path/ {gsub(/ /, "", $2); print $2}' /etc/pgbackrest/pgbackrest.conf)
-LIVE_PORT=$(sudo -u postgres psql -Atc 'show port')
+LIVE_PORT=$(as_postgres live-port)
 
 # ------------------------------------------------------------------------------------------------
 # The guards. These are the difference between a drill and an outage.
@@ -73,45 +84,22 @@ echo "==> Reading production"
 LIVE_COUNTS=$(psql "$DATABASE_URL" -At -c "$COUNTS_SQL")
 
 echo "==> Restoring the latest backup into $SCRATCH_DIR"
-sudo rm -rf "$SCRATCH_DIR"
-sudo install -d -o postgres -g postgres -m 700 "$SCRATCH_DIR"
-sudo -u postgres pgbackrest --stanza="$STANZA" --pg1-path="$SCRATCH_DIR" --type=default restore
+as_postgres restore
 
 # From here on there is something to clean up, whether or not the scratch cluster ever starts.
 cleanup() {
-  sudo -u postgres "$PG_BIN/pg_ctl" -D "$SCRATCH_DIR" -m immediate stop > /dev/null 2>&1 || true
-  sudo rm -rf "$SCRATCH_DIR"
+  as_postgres stop
 }
 trap cleanup EXIT
 
-# Ubuntu keeps postgresql.conf, pg_hba.conf and pg_ident.conf under /etc/postgresql rather than in
-# the data directory, so the backup does not contain them and the restored directory has none.
-# Postgres refuses to start without the first two. Minimal ones are written here — **not copied from
-# /etc**, whose postgresql.conf pins `data_directory` to the live cluster and would start production
-# instead of the scratch copy. On a layout that does keep them in the data directory, the restored
-# files are left alone.
-if ! sudo -u postgres test -f "$SCRATCH_DIR/postgresql.conf"; then
-  sudo -u postgres tee "$SCRATCH_DIR/postgresql.conf" > /dev/null <<CONF
-# Written by scripts/restore-drill.sh for the scratch cluster. Everything else is the default.
-listen_addresses = ''
-CONF
-fi
-if ! sudo -u postgres test -f "$SCRATCH_DIR/pg_hba.conf"; then
-  sudo -u postgres tee "$SCRATCH_DIR/pg_hba.conf" > /dev/null <<CONF
-local all postgres peer
-CONF
-fi
-sudo -u postgres touch "$SCRATCH_DIR/pg_ident.conf"
-
-# The scratch cluster must not archive its own WAL back into the repository, and must not take the
-# live port. Both are set after the restore, because restore lays down the configuration files.
-sudo -u postgres tee -a "$SCRATCH_DIR/postgresql.auto.conf" > /dev/null <<CONF
-port = $SCRATCH_PORT
-archive_mode = off
-CONF
+# The minimal configuration the scratch cluster needs (Ubuntu keeps the real one under /etc, which
+# the backup does not contain and which must not be copied — it pins `data_directory` to the live
+# cluster), the scratch port, and `archive_mode = off` so the copy never archives its own WAL back
+# into the repository. The helper writes all of it; the comment there says what and why.
+as_postgres prepare "$SCRATCH_PORT"
 
 echo "==> Starting the scratch cluster on port $SCRATCH_PORT"
-sudo -u postgres "$PG_BIN/pg_ctl" -D "$SCRATCH_DIR" -o "-p $SCRATCH_PORT" -w -t 120 start
+as_postgres start "$SCRATCH_PORT"
 
 # `pg_ctl -w` returns as soon as the server takes connections, and a recovering cluster does that at
 # the first consistent point — before it has replayed the WAL that followed the backup. Counting
@@ -120,20 +108,21 @@ sudo -u postgres "$PG_BIN/pg_ctl" -D "$SCRATCH_DIR" -o "-p $SCRATCH_PORT" -w -t 
 # once the archive is exhausted; wait for that.
 echo "==> Waiting for WAL replay to finish"
 for _ in $(seq 1 300); do
-  if [[ "$(sudo -u postgres psql -p "$SCRATCH_PORT" -Atc 'select pg_is_in_recovery()')" == "f" ]]; then
+  if [[ "$(as_postgres in-recovery "$SCRATCH_PORT")" == "f" ]]; then
     break
   fi
   sleep 1
 done
-if [[ "$(sudo -u postgres psql -p "$SCRATCH_PORT" -Atc 'select pg_is_in_recovery()')" != "f" ]]; then
+if [[ "$(as_postgres in-recovery "$SCRATCH_PORT")" != "f" ]]; then
   echo "The scratch cluster is still replaying WAL after five minutes." >&2
   exit 1
 fi
 
 # The restored cluster carries production's databases, so the database name is the one in
-# DATABASE_URL rather than a guess.
+# DATABASE_URL rather than a guess. The helper runs the same COUNTS_SQL as above — the two queries
+# are held equal by hand, which is what the string comparison below relies on.
 SCRATCH_DB=$(basename "${DATABASE_URL%%\?*}")
-RESTORED_COUNTS=$(sudo -u postgres psql -p "$SCRATCH_PORT" -d "$SCRATCH_DB" -At -c "$COUNTS_SQL")
+RESTORED_COUNTS=$(as_postgres counts "$SCRATCH_PORT" "$SCRATCH_DB")
 
 echo
 echo "production: $LIVE_COUNTS"

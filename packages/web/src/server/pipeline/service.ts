@@ -109,7 +109,6 @@ export async function rerunStep(
 
   logger.info('pipeline.rerun', {
     actorId: actor.id,
-    actorEmail: actor.email,
     action: 'pipeline.rerun',
     target: `recording:${recordingId}`,
     step,

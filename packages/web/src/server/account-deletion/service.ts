@@ -141,7 +141,6 @@ async function issueAndSend(row: UserRow): Promise<void> {
 
   logger.info('account-deletion.request', {
     actorId: row.id,
-    actorEmail: row.email,
     action: 'account-deletion.request',
     target: `account:${row.id}`,
     expiresAt: request.expiresAt.toISOString(),

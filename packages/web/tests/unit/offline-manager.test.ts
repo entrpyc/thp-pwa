@@ -280,3 +280,53 @@ describe('the flush', () => {
     expect(manager.getSnapshot().pending).toBe(1);
   });
 });
+
+describe('leaving the device', () => {
+  it('forgets who was signed in and drops every note draft, but keeps the downloads', async () => {
+    const store = createMemoryDownloadStore();
+    const forgetActiveUser = vi.fn(async () => undefined);
+    const manager = createOfflineManager({
+      store,
+      fetchJson: fakeApi({ [memberRecordingPath('r1')]: recordingPayload('r1', 's1') }),
+      outbox: fakeOutbox([]),
+      rememberActiveUser: async () => undefined,
+      forgetActiveUser,
+      warm: vi.fn(),
+      isOnline: () => true,
+    });
+    await manager.activate('u1');
+    manager.download('r1', 'Teaching r1');
+    await settled();
+    expect(manager.isDownloaded('r1')).toBe(true);
+
+    // A draft of this member's, and one keyed the old way — both are the leaving member's.
+    const drafts = new Map<string, string>([
+      ['thp:note-draft:u1:r1', '{"text":"private thought","visibility":"private","anchorMs":1}'],
+      ['thp:note-draft:r1', '{"text":"older build","visibility":"private","anchorMs":1}'],
+      ['thp:other', 'kept'],
+    ]);
+    vi.stubGlobal('window', {
+      localStorage: {
+        get length() {
+          return drafts.size;
+        },
+        key: (index: number) => [...drafts.keys()][index] ?? null,
+        removeItem: (key: string) => void drafts.delete(key),
+      },
+    });
+    try {
+      await manager.deactivate();
+    } finally {
+      vi.unstubAllGlobals();
+    }
+
+    expect(forgetActiveUser).toHaveBeenCalledTimes(1);
+    expect([...drafts.keys()]).toEqual(['thp:other']);
+    // The snapshot names nobody and lists nothing, which is what the surface shows anonymous.
+    expect(manager.getSnapshot().userId).toBeNull();
+    expect(manager.getSnapshot().downloads).toEqual([]);
+    expect(manager.isDownloaded('r1')).toBe(false);
+    // The bytes are still in the store under the account, for the member's return (3.18).
+    expect((await store.list('u1')).map((one) => one.recordingId)).toEqual(['r1']);
+  });
+});

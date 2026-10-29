@@ -9,9 +9,13 @@
  * 2. **Member pages** are network-first, and a copy is kept only after the server answered a
  *    signed-in member with 200. The copy is served only when the network cannot be reached, never
  *    ahead of it — so a signed-out visitor online still meets the server's redirect — and the
- *    whole page cache is dropped when the sign-out request passes through here. That is how the
- *    core's "no cached shell" rule survives offline: nothing cached is ever shown to somebody the
- *    server has not just admitted, except on a device where that member signed in and lost signal.
+ *    whole page cache is dropped when the sign-out request passes through here, **and again when
+ *    a sign-in or sign-up succeeds** — a session can end without a sign-out (it expires, an admin
+ *    deactivates the account, the tab was closed first), and the next member's sign-in is the
+ *    moment the previous member's pages must already be gone (security audit 2026-10-28, finding
+ *    21). That is how the core's "no cached shell" rule survives offline: nothing cached is ever
+ *    shown to somebody the server has not just admitted, except on a device where that member
+ *    signed in and lost signal.
  * 3. **Warming** (`thp:warm`): a download pre-fetches the pages it will need, in both forms a page
  *    is requested in, so a teaching downloaded online opens offline without having been visited.
  * 4. **Every other navigation** — sign-in, the console, the member pages that need the server to
@@ -31,6 +35,8 @@
 
 const API_PREFIX = '/api/v1';
 const SIGN_OUT_PATH = `${API_PREFIX}/auth/session`;
+/** `POST` here is a sign-in (the same resource as the sign-out), and `POST` sign-up is one too. */
+const SIGN_IN_PATHS = [`${API_PREFIX}/auth/session`, `${API_PREFIX}/auth/sign-up`];
 const PAGE_CACHE = 'thp-pages-v1';
 const STATIC_CACHE = 'thp-static-v1';
 /** The member surface. Anything else — sign-in, admin, the public pages — is never cached. */
@@ -51,6 +57,7 @@ function decide(input) {
 
   if (path.startsWith('/_next/static/')) return { kind: 'static' };
   if (method === 'DELETE' && path === SIGN_OUT_PATH) return { kind: 'sign-out' };
+  if (method === 'POST' && SIGN_IN_PATHS.includes(path)) return { kind: 'sign-in' };
   if (path.startsWith(API_PREFIX)) return { kind: 'pass' };
 
   const isRsc = input.rsc === true;
@@ -144,6 +151,18 @@ async function handleSignOut(request) {
   return response;
 }
 
+/**
+ * A sign-in or a sign-up that the server accepted. Whatever this device still holds was rendered
+ * for whoever was here before — a member whose session ended without passing through
+ * `handleSignOut` — and the member who has just been admitted must not be able to reach it, online
+ * or off. Only on success: a refused attempt changes nothing about who is signed in.
+ */
+async function handleSignIn(request) {
+  const response = await fetch(request);
+  if (response.ok) await caches.delete(PAGE_CACHE).catch(() => undefined);
+  return response;
+}
+
 self.addEventListener('fetch', (event) => {
   const { request } = event;
   const header = (name) => (request.headers && typeof request.headers.get === 'function' ? request.headers.get(name) : null);
@@ -166,6 +185,9 @@ self.addEventListener('fetch', (event) => {
       break;
     case 'sign-out':
       event.respondWith(handleSignOut(request));
+      break;
+    case 'sign-in':
+      event.respondWith(handleSignIn(request));
       break;
     default:
       break;

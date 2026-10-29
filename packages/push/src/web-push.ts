@@ -55,3 +55,37 @@ function describe(cause: unknown): string {
   const message = cause instanceof Error ? cause.message : String(cause);
   return message.split('\n')[0]?.slice(0, 200) ?? '';
 }
+
+/**
+ * **The hosts a browser's push endpoint may be on** (docs/security-audit-2026-10-28.md, finding
+ * 12). A web endpoint is a URL this process will later POST to with the VAPID bearer token, from
+ * the production box, sixteen at a time; a registration naming any `https://` URL made the
+ * dispatcher a request whose destination the member chooses. Browsers are issued endpoints by a
+ * handful of services, and those are the only hosts accepted. A browser that appears with a new
+ * one fails registration with a clear message, and the host is added here on purpose rather than
+ * discovered in a log. Here, beside the sender, because this is the one file allowed to know a
+ * push provider's name (tools/push-boundary.ts).
+ *
+ * Suffixes, matched on the whole host or at a dot boundary.
+ */
+export const WEB_PUSH_SERVICE_HOSTS: readonly string[] = [
+  'fcm.googleapis.com', // Chrome, Edge (Android), Brave, Opera, Vivaldi, Samsung Internet
+  'android.googleapis.com', // Older Chrome registrations
+  'push.apple.com', // Safari and installed PWAs on iOS and macOS: web.push.apple.com
+  'push.services.mozilla.com', // Firefox: updates.push.services.mozilla.com
+  'notify.windows.com', // Edge on Windows: wns2-*.notify.windows.com
+  'push.samsungosp.com', // Samsung Internet's own service
+];
+
+/** Whether `address` is an `https://` URL, without credentials, on one of the known push services. */
+export function isAllowedWebPushEndpoint(address: string): boolean {
+  let url: URL;
+  try {
+    url = new URL(address);
+  } catch {
+    return false;
+  }
+  if (url.protocol !== 'https:' || url.username !== '' || url.password !== '') return false;
+  const host = url.hostname.toLowerCase();
+  return WEB_PUSH_SERVICE_HOSTS.some((service) => host === service || host.endsWith(`.${service}`));
+}

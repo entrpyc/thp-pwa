@@ -275,6 +275,18 @@ describe('finalising', () => {
     expect((await consoleView(series.id)).artworkUrl).toBe(before);
   }, 120_000);
 
+  it('refuses a key outside artwork/ before asking the store, and the cover is as it was (finding 4)', async () => {
+    // A member's avatar or a recording's audio is not something a cover may point at, and `head`
+    // is not an oracle over the bucket (docs/security-audit-2026-10-28.md, finding 4).
+    const series = await newSeries('Wrong prefix');
+    for (const key of ['avatars/anything.webp', 'originals/anything.mp3', 'note-images/anything.webp']) {
+      const answer = await finalise(series.id, key);
+      expect(answer.status, key).toBe(400);
+      expect(answer.code, key).toBe('invalid_input');
+    }
+    expect((await consoleView(series.id)).artworkUrl).toBeNull();
+  }, 120_000);
+
   it('refuses a key with nothing behind it, and the cover is as it was', async () => {
     // scope plan 1.2.7.
     const series = await newSeries('Never finished');

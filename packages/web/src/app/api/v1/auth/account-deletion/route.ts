@@ -5,6 +5,7 @@ import {
 } from '@thp/shared';
 import { PUBLIC } from '@/server/api/access';
 import { apiRoute } from '@/server/api/route';
+import { tokenGuard } from '@/server/auth/token-limits';
 import { accountDeletionGuard } from '@/server/account-deletion/limits';
 import {
   previewAccountDeletion,
@@ -36,6 +37,7 @@ export const POST = apiRoute(PUBLIC, async (request): Promise<AccountDeletionReq
 
 /** Preview: the address the token was mailed to, so a dead link can say so before a password is typed. */
 export const GET = apiRoute(PUBLIC, async (request): Promise<AccountDeletionPreviewPayload> => {
+  tokenGuard().enforce(request);
   const token = new URL(request.url).searchParams.get(DELETION_TOKEN_PARAM);
   return previewAccountDeletion(token);
 });

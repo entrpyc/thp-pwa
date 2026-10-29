@@ -329,7 +329,9 @@ function parseEntry(entry: unknown): SyncEntry {
   if (!isSyncEntryKind(kind)) {
     throw ApiError.invalidInput('Each outbox entry is a progress or a note entry.');
   }
-  if (typeof recordingId !== 'string' || recordingId.length === 0 || recordingId.length > 64) {
+  // The same uuid shape as the client id: a recording id that is not one would otherwise fail the
+  // whole batch with a database error rather than refusing the one entry (security audit, 14).
+  if (!isClientId(recordingId)) {
     throw ApiError.invalidInput('Each outbox entry names the recording it is about.');
   }
   if (typeof at !== 'string' || Number.isNaN(Date.parse(at))) {

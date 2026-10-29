@@ -1,4 +1,4 @@
-import { sweepRunning, type Executor, type ReclaimedJob } from '@thp/db';
+import { MAX_SWEEP_RECLAIMS, sweepRunning, type Executor, type ReclaimedJob } from '@thp/db';
 import { withCorrelationId } from '@thp/shared/observability/correlation';
 import { logger } from '@thp/shared/observability/logger';
 
@@ -30,6 +30,10 @@ export const SOLE_WORKER_ASSUMPTION =
  * **This is where at-least-once comes from.** A worker killed mid-job has that step run again from
  * the beginning on the next boot, so every handler in this epic and every later epic has to be
  * idempotent — it is a property of the dispatch mechanism, not a preference.
+ *
+ * **And where it stops.** A step that crashes the worker every time it runs is reclaimed
+ * {@link MAX_SWEEP_RECLAIMS} times and then left failed, loudly, rather than restarted forever
+ * (security audit 2026-10-28, finding 10).
  */
 export async function sweepAbandonedJobs(executor?: Executor): Promise<ReclaimedJob[]> {
   logger.warn('worker.sweep.start', { assumption: SOLE_WORKER_ASSUMPTION });
@@ -40,6 +44,20 @@ export async function sweepAbandonedJobs(executor?: Executor): Promise<Reclaimed
     // Under the id of the request that started it: the sweep has no request of its own, and a
     // reclaimed job is still part of the upload somebody made.
     withCorrelationId(failed.correlationId, () => {
+      if (requeued === null) {
+        // **The crash loop, stopped.** At error, because this is the line an operator needs to
+        // see: the step has taken the worker down MAX_SWEEP_RECLAIMS times running and nothing
+        // will run it again until somebody does (docs/project/prd.md 3.21.2.3's halt and flag).
+        logger.error('worker.sweep.crash_loop_stopped', {
+          jobId: failed.id,
+          step: failed.step,
+          recordingId: failed.recordingId,
+          attempt: failed.attempt,
+          reclaims: MAX_SWEEP_RECLAIMS,
+          reason: failed.error,
+        });
+        return;
+      }
       logger.warn('worker.sweep.reclaimed', {
         jobId: failed.id,
         step: failed.step,
@@ -52,6 +70,9 @@ export async function sweepAbandonedJobs(executor?: Executor): Promise<Reclaimed
     });
   }
 
-  logger.info('worker.sweep.finished', { reclaimed: reclaimed.length });
+  logger.info('worker.sweep.finished', {
+    reclaimed: reclaimed.length,
+    stopped: reclaimed.filter((one) => one.requeued === null).length,
+  });
   return reclaimed;
 }

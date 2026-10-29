@@ -67,7 +67,6 @@ export async function setChapterQuestionFor(
   const row = await setChapterQuestion(id, text);
   logger.info('flow.question.edit', {
     actorId: actor.id,
-    actorEmail: actor.email,
     action: 'flow.question.edit',
     target: `chapter:${id}`,
     recordingId: chapter.recordingId,
@@ -93,7 +92,6 @@ export async function addTagQuestionFor(
   const row = await insertTagQuestion(id, text);
   logger.info('flow.bank.add', {
     actorId: actor.id,
-    actorEmail: actor.email,
     action: 'flow.bank.manage',
     target: `tag:${id}`,
     questionId: row.id,
@@ -116,7 +114,6 @@ export async function editTagQuestionFor(
   }
   logger.info('flow.bank.edit', {
     actorId: actor.id,
-    actorEmail: actor.email,
     action: 'flow.bank.manage',
     target: `tag:${id}`,
     questionId: question,
@@ -136,7 +133,6 @@ export async function removeTagQuestionFor(
   const removed = await deleteTagQuestion(id, question);
   logger.info('flow.bank.remove', {
     actorId: actor.id,
-    actorEmail: actor.email,
     action: 'flow.bank.manage',
     target: `tag:${id}`,
     questionId: question,

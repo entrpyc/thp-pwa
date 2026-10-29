@@ -9,6 +9,8 @@ import { mediaStore, type MediaStore } from '@thp/media';
 import { logger } from '@thp/shared/observability/logger';
 import { transcriber as configuredTranscriber, type Transcriber } from './asr';
 import type { JobHandler } from './handlers';
+import { PaidFailure, withSpend } from './paid-failure';
+import { checkSourceObject } from './source-object';
 
 /**
  * **The `transcribe` step, doing the work the stub stood in for.**
@@ -96,7 +98,15 @@ export function createTranscribeHandler(deps: TranscribeDependencies = {}): JobH
 
     // Asked before the provider is, so a recording pointing at nothing fails naming the key rather
     // than as a fetch error inside somebody else's service.
-    if ((await media.head(key)) === null) throw fail(fields, `no object at key "${key}"`);
+    const stored = await media.head(key);
+    if (stored === null) throw fail(fields, `no object at key "${key}"`);
+    // And refused before the provider is handed it, if it is no longer the file that was
+    // finalised (source-object.ts): a provider bills by the minute of whatever it fetches.
+    try {
+      checkSourceObject(key, stored);
+    } catch (cause) {
+      throw fail(fields, cause instanceof Error ? cause.message : String(cause));
+    }
 
     const audioUrl = await media.presignGet({
       key,
@@ -110,31 +120,9 @@ export function createTranscribeHandler(deps: TranscribeDependencies = {}): JobH
       throw fail(fields, cause instanceof Error ? cause.message : String(cause), cause);
     }
 
-    if (result.segments.length === 0) {
-      // Silence is a recording nobody wants a summary of, and an empty transcript would chain
-      // forward looking exactly like a successful one.
-      throw fail(fields, `${asr.name} returned no segments for "${key}"`);
-    }
-
-    await replaceTranscript(
-      {
-        recordingId: job.recordingId,
-        language: result.language,
-        confidence: result.confidence,
-        segments: result.segments.map((one) => ({
-          startMs: one.startMs,
-          endMs: one.endMs,
-          text: one.text.trim(),
-          // What the port answered, persisted as it came. Nothing here turns an index into a name,
-          // and nothing reads the column yet — the data exists before the surface that would.
-          speaker: one.speaker,
-          // Likewise the paragraph the provider put it in, which the passage-window builder reads.
-          paragraphIndex: one.paragraphIndex,
-        })),
-      },
-      deps.executor,
-    );
-
+    // **From here on the call has been paid for.** Everything that can still fail — an empty
+    // answer, the write, the confidence gate — fails carrying this meta, so the failed row says
+    // what the day spent on it (paid-failure.ts).
     const providerMeta: ProviderMeta = {
       provider: asr.name,
       model: result.spend.model,
@@ -143,6 +131,36 @@ export function createTranscribeHandler(deps: TranscribeDependencies = {}): JobH
       costUsd: result.spend.costUsd,
       requestId: result.spend.requestId,
     };
+
+    if (result.segments.length === 0) {
+      // Silence is a recording nobody wants a summary of, and an empty transcript would chain
+      // forward looking exactly like a successful one.
+      throw withSpend(fail(fields, `${asr.name} returned no segments for "${key}"`), providerMeta);
+    }
+
+    try {
+      await replaceTranscript(
+        {
+          recordingId: job.recordingId,
+          language: result.language,
+          confidence: result.confidence,
+          segments: result.segments.map((one) => ({
+            startMs: one.startMs,
+            endMs: one.endMs,
+            text: one.text.trim(),
+            // What the port answered, persisted as it came. Nothing here turns an index into a
+            // name, and nothing reads the column yet — the data exists before the surface that
+            // would.
+            speaker: one.speaker,
+            // Likewise the paragraph the provider put it in, which the passage-window builder reads.
+            paragraphIndex: one.paragraphIndex,
+          })),
+        },
+        deps.executor,
+      );
+    } catch (cause) {
+      throw withSpend(cause, providerMeta);
+    }
 
     const measured = {
       ...fields,
@@ -168,9 +186,11 @@ export function createTranscribeHandler(deps: TranscribeDependencies = {}): JobH
       // which is the whole of "rather than proceeding to downstream generation on bad input". The
       // escape hatch is Ticket 04's per-step re-run of `generate_draft`.
       logger.warn('transcribe.low_confidence', { ...measured, threshold: CONFIDENCE_THRESHOLD });
-      throw new Error(
+      // A paid failure: the provider billed the minutes whatever the gate made of them.
+      throw new PaidFailure(
         `the transcript was written, but its confidence of ${result.confidence} is below the ` +
           `threshold of ${CONFIDENCE_THRESHOLD}; nothing was generated from it`,
+        providerMeta,
       );
     }
 

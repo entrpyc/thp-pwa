@@ -21,6 +21,7 @@ import { withCorrelationId } from '@thp/shared/observability/correlation';
 import { logger } from '@thp/shared/observability/logger';
 import type { HandlerRegistry } from './handlers';
 import { NO_EXCEPTION_REPORTER, type ExceptionReporter } from './observability/exceptions';
+import { spendOfFailure } from './paid-failure';
 
 export interface RunJobOptions {
   /** Where the outcome is written. Defaults to the process's pool. */
@@ -138,9 +139,11 @@ export async function runJob(
     try {
       providerMeta = (await handler(job)) ?? null;
     } catch (cause) {
-      // The message on the row, the whole error in the log — see MAX_JOB_ERROR_LENGTH.
+      // The message on the row, the whole error in the log — see MAX_JOB_ERROR_LENGTH. And what
+      // the step had already paid when it failed, so the ledger counts it (paid-failure.ts).
       const reason = cause instanceof Error ? cause.message : String(cause);
-      const row = await failJob(job.id, reason, executor);
+      const spent = spendOfFailure(cause);
+      const row = await failJob(job.id, reason, executor, spent);
       // **The chain stops here.** A failed step enqueues nothing, which is what turns
       // docs/project/prd.md 3.21.2.3's "halt and flag" into a property of the mechanism rather than
       // a rule each handler has to remember. The same failure goes to the error tracker under the
@@ -153,7 +156,13 @@ export async function runJob(
         attempt: job.attempt,
         recording_id: job.recordingId,
       });
-      logger.error('job.failed', { ...fields, reason, error: describeError(cause), reported });
+      logger.error('job.failed', {
+        ...fields,
+        reason,
+        error: describeError(cause),
+        reported,
+        ...(spent === null ? {} : { costUsd: spent['costUsd'] }),
+      });
       return row;
     }
 

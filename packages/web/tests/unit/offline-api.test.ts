@@ -5,6 +5,7 @@ import {
   offlineAnswer,
   offlineNoteWrite,
   positionFor,
+  storedSession,
   type Snapshot,
 } from '@/client/offline/offline-api';
 import type { DownloadRecord, OutboxRecord } from '@/client/offline/schema';
@@ -84,8 +85,9 @@ const snapshot: Snapshot = {
   userId: 'u1',
   downloads: [download('old', 's1', '2026-01-01'), download('new', 's1', '2026-03-03'), download('loose', null, '2026-02-02'), download('other', null, '2026-04-04', 'u2')],
   outbox,
+  // As the device keeps it: no e-mail address (finding 11 of the 2026-10-28 security audit).
   session: {
-    user: { id: 'u1', email: 'ada@example.test', displayName: 'Ada', role: 'member', preferredPlaybackSpeed: 1, analyticsOptedOut: false, avatarUrl: null },
+    user: { id: 'u1', displayName: 'Ada', role: 'member', preferredPlaybackSpeed: 1, analyticsOptedOut: false, avatarUrl: null },
   },
 };
 
@@ -144,9 +146,21 @@ describe('what is answered offline', () => {
   });
 
   it('answers the session only when one was kept, and nothing for a teaching not held', () => {
-    expect(offlineAnswer({ name: 'session' }, snapshot)?.body).toEqual(snapshot.session);
+    // The shape the client reads, with the address the device never held left empty.
+    expect(offlineAnswer({ name: 'session' }, snapshot)?.body).toEqual({
+      user: { ...snapshot.session?.user, email: '' },
+    });
     expect(offlineAnswer({ name: 'session' }, { ...snapshot, session: null })).toBeNull();
     expect(offlineAnswer({ name: 'recording', id: 'nope', chapter: null }, snapshot)).toBeNull();
+  });
+
+  it('keeps the session without the e-mail address, so the device never holds one', () => {
+    const answered = {
+      user: { id: 'u1', email: 'ada@example.test', displayName: 'Ada', role: 'member' as const, preferredPlaybackSpeed: 1, analyticsOptedOut: false, avatarUrl: null },
+    };
+    const kept = storedSession(answered);
+    expect(kept).toEqual(snapshot.session);
+    expect('email' in kept.user).toBe(false);
   });
 });
 

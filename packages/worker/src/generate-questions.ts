@@ -23,6 +23,7 @@ import {
   type ReflectionSubject,
 } from './generate';
 import type { JobHandler } from './handlers';
+import { withSpend } from './paid-failure';
 
 /**
  * **The `generate_questions` step** ([3.14.4](docs/project/prd.md)) — one self-reflection
@@ -131,6 +132,16 @@ export function createGenerateQuestionsHandler(
       modelVersion: result.spend.modelVersion,
       promptVersion: result.promptVersion,
     };
+    // **From here on the call has been paid for.** A subject the model skipped or a write that
+    // fails carries this, so the failed row counts in the day's ledger (paid-failure.ts).
+    const billed: ProviderMeta = {
+      provider: model.name,
+      ...generatedBy,
+      inputTokens: result.spend.inputTokens,
+      outputTokens: result.spend.outputTokens,
+      costUsd: result.spend.costUsd,
+      requestId: result.spend.requestId,
+    };
     const questions: NewGeneratedQuestion[] = [];
     const unanswered: string[] = [];
     for (const subject of subjects) {
@@ -146,24 +157,27 @@ export function createGenerateQuestionsHandler(
       );
     }
     if (unanswered.length > 0) {
-      throw fail(
-        fields,
-        `the model wrote no question for ${unanswered.length === 1 ? 'the chapter' : 'the chapters'} ${unanswered.map((one) => `“${one}”`).join(', ')}`,
+      throw withSpend(
+        fail(
+          fields,
+          `the model wrote no question for ${unanswered.length === 1 ? 'the chapter' : 'the chapters'} ${unanswered.map((one) => `“${one}”`).join(', ')}`,
+        ),
+        billed,
       );
     }
 
-    const written = await withTransaction(async (tx) => {
-      if (!wholeTeaching) await deleteRecordingQuestion(job.recordingId, tx);
-      return insertGeneratedQuestions(questions, tx);
-    }, deps.executor);
+    let written: number;
+    try {
+      written = await withTransaction(async (tx) => {
+        if (!wholeTeaching) await deleteRecordingQuestion(job.recordingId, tx);
+        return insertGeneratedQuestions(questions, tx);
+      }, deps.executor);
+    } catch (cause) {
+      throw withSpend(cause, billed);
+    }
 
     const providerMeta: ProviderMeta = {
-      provider: model.name,
-      ...generatedBy,
-      inputTokens: result.spend.inputTokens,
-      outputTokens: result.spend.outputTokens,
-      costUsd: result.spend.costUsd,
-      requestId: result.spend.requestId,
+      ...billed,
       questionsAsked: subjects.length,
       questionsWritten: written,
       wholeTeaching,

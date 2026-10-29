@@ -5,6 +5,7 @@ import { useState } from 'react';
 import { AUTH_SESSION_PATH } from '@thp/shared';
 import { apiFetch } from '@/client/api-client';
 import { resetAnalytics } from '@/client/observability/analytics';
+import { offlineManager } from '@/client/offline/manager';
 import { disablePushOnThisDevice } from '@/client/push/push-device';
 import styles from './sign-out.module.css';
 
@@ -34,8 +35,11 @@ export function SignOutButton({ className }: { className?: string | undefined })
       await disablePushOnThisDevice().catch(() => undefined);
       await apiFetch(AUTH_SESSION_PATH, { method: 'DELETE', credentials: 'include' });
     } finally {
-      // The next member on this browser starts anonymous rather than as this one.
+      // The next member on this browser starts anonymous rather than as this one: no analytics
+      // identity, no note draft in the composer, no record in the on-device database of who was
+      // signed in (security audit 2026-10-28, finding 11). Downloads stay, under the account.
       resetAnalytics();
+      await offlineManager().deactivate().catch(() => undefined);
       router.replace('/sign-in');
       router.refresh();
     }

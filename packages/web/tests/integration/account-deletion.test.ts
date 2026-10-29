@@ -280,7 +280,8 @@ describe('deleting your own account from a session', () => {
     const line = await auditLine(logFrom, leaver.id);
     expect(line?.['action']).toBe('account.delete');
     expect(line?.['target']).toBe(`account:${leaver.id}`);
-    expect(line?.['actorEmail']).toBe(leaver.email);
+    // The address is not on the line: audit lines name the account by id only (security audit, 19).
+    expect(line?.['actorEmail']).toBeUndefined();
     expect(line?.['placeholderId']).toBe(placeholder[0]?.id);
     expect(line?.['retainedPublicNotes']).toBe(1);
     expect(line?.['deletedPrivateNotes']).toBe(1);

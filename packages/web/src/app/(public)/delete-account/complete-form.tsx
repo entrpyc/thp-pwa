@@ -9,7 +9,9 @@ import {
   type CompleteAccountDeletionRequest,
 } from '@thp/shared';
 import { ApiClientError, apiFetch } from '@/client/api-client';
+import { clearAllNoteDrafts } from '@/client/notes/draft';
 import { resetAnalytics } from '@/client/observability/analytics';
+import { forgetActiveAccount } from '@/client/offline/forget';
 import { DELETION_CONFIRMATION_WORD, isDeletionConfirmed } from './confirmation';
 import styles from './delete-account.module.css';
 import { WhatDeletionDoes } from './what-deletion-does';
@@ -64,6 +66,10 @@ export function CompleteDeletionForm({ email, token }: { email: string; token: s
         body: JSON.stringify(body),
       });
       resetAnalytics();
+      // This browser may still hold what a session here left behind — a draft, the on-device
+      // record of who was signed in. The account is gone; so is anything about it on the device.
+      clearAllNoteDrafts();
+      await forgetActiveAccount();
       router.replace(ACCOUNT_DELETED_PAGE_PATH);
       router.refresh();
     } catch (caught) {
