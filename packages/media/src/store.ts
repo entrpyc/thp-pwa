@@ -69,6 +69,15 @@ export interface MediaStore {
     readonly key: string;
     readonly contentType: string;
     readonly expiresInSeconds: number;
+    /**
+     * When given, the exact byte length the `PUT` must carry — a signed header like the content
+     * type, so a body of any other size fails the signature at the store. Without it a grant that
+     * was verified and committed accepts a second `PUT` of any size for the rest of its life
+     * (docs/security-audit-2026-10-29.md, finding 4). The image grants pass the declared size; the
+     * recording grant does not, because a browser streaming a 200 MB file is the one case where the
+     * declared length and the sent length can honestly differ.
+     */
+    readonly contentLength?: number;
   }): Promise<string>;
 
   /** The object's size and content type, or `null` when nothing is behind the key. */
@@ -146,6 +155,15 @@ export const NOTE_IMAGE_KEY_PREFIX = 'note-images/';
  * copied out of a browser's network tab is not a standing invitation to write to the bucket.
  */
 export const UPLOAD_GRANT_SECONDS = 60 * 60;
+
+/**
+ * Ten minutes, for a picture. A 4 MB image is sent in seconds; what the hour bought was a window in
+ * which a grant already verified and committed could be re-used to swap the object behind a
+ * profile picture or a note's picture a moderator had already looked at
+ * (docs/security-audit-2026-10-29.md, finding 4). Together with the signed length this closes it
+ * to "the same bytes' worth, within ten minutes".
+ */
+export const IMAGE_UPLOAD_GRANT_SECONDS = 10 * 60;
 
 /**
  * `originals/<uuid>.<ext>` — **minted here, never derived from what the client sent.**
@@ -262,11 +280,23 @@ export function mintAvatarKey(contentType: string): string {
   return `${AVATAR_KEY_PREFIX}${randomUUID()}.${extension}`;
 }
 
-/** A note image's key: the prefix the delete is confined to, a uuid, and the format's extension. */
-export function mintNoteImageKey(contentType: string): string {
+/**
+ * A note image's key: the prefix the delete is confined to, **the member the grant was minted
+ * for**, a uuid, and the format's extension. The member's id in the path is what binds the key to
+ * its grantee: a note's write accepts a new key only under the writer's own
+ * {@link noteImageKeyPrefixFor}, so a key that leaked — the log line names it — cannot be attached
+ * to somebody else's note (docs/security-audit-2026-10-29.md, finding 14). Keys minted before this
+ * carry no member and are already on their notes; nothing re-reads them against the rule.
+ */
+export function mintNoteImageKey(contentType: string, ownerId: string): string {
   const extension = extensionForArtworkType(contentType);
   if (extension === null) {
     throw new Error(`no accepted note image extension for content type "${contentType}"`);
   }
-  return `${NOTE_IMAGE_KEY_PREFIX}${randomUUID()}.${extension}`;
+  return `${noteImageKeyPrefixFor(ownerId)}${randomUUID()}.${extension}`;
+}
+
+/** Where one member's note-image grants are minted: `note-images/<member id>/`. */
+export function noteImageKeyPrefixFor(ownerId: string): string {
+  return `${NOTE_IMAGE_KEY_PREFIX}${ownerId}/`;
 }

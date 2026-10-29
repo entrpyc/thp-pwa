@@ -6,6 +6,7 @@ import {
 } from '@thp/db';
 import type { AccountDeletedPayload, DeleteOwnAccountRequest } from '@thp/shared';
 import { mediaStore } from '@thp/media';
+import { actorGuard } from '@/server/api/actor-limits';
 import { ApiError } from '@/server/api/errors';
 import { verifyPassword } from '@/server/auth/password';
 import { toActor, type Actor } from '@/server/auth/policy';
@@ -55,6 +56,10 @@ export async function deleteOwnAccount(
   current: UserRow,
 ): Promise<AccountDeletedPayload> {
   const password = parsePassword(body);
+  // Spent before the hash is checked: a session on a shared device is not the person, and without
+  // a budget this door is an unbounded online guess at the password whose success erases the
+  // account (docs/security-audit-2026-10-29.md, finding 8).
+  actorGuard().spend('self-delete', actor);
   await requireCurrentPassword(actor, current, password, 'account.delete');
   return eraseAccount(current, 'session');
 }

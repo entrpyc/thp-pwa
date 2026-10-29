@@ -137,10 +137,18 @@ export async function listFlowSessionsFor(actor: Actor): Promise<FlowSessionsPay
  * One session in progress at a time is the table's rule: the unique violation it raises is read
  * here as `flow_session_in_progress`.
  */
+/** The most teachings one session may be started over — years of weekly recordings. */
+const MAX_PICKED_RECORDINGS = 500;
+
 export async function startFlowSessionFor(actor: Actor, body: unknown): Promise<FlowSessionPayload> {
   const picked = (body as { recordingIds?: unknown } | null)?.recordingIds;
   if (!Array.isArray(picked) || picked.length === 0) {
     throw ApiError.invalidInput('recordingIds must name at least one teaching.');
+  }
+  // Bounded before it is parsed: the pick is drawn from the library the screen listed, and no
+  // library is longer than this (docs/security-audit-2026-10-29.md, finding 16).
+  if (picked.length > MAX_PICKED_RECORDINGS) {
+    throw ApiError.invalidInput(`recordingIds can name at most ${MAX_PICKED_RECORDINGS} teachings.`);
   }
   const pickedIds = new Set(picked.map((one) => parseId(one, 'recordingIds must be recording ids.')));
 

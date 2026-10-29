@@ -1,4 +1,5 @@
 import { REVIEW_FIELD, type ProposedCitation, type ProposedMindMap, type ReviewKind } from '@thp/shared';
+import { redactProviderText } from '@thp/shared/observability/redact';
 import { readGenerateApiKey, type EnvSource } from './env';
 import {
   GenerationError,
@@ -149,7 +150,7 @@ export function miniMaxGenerator(options: MiniMaxOptions = {}): Generator {
       if (!response.ok) {
         // The status, and the provider's own words, truncated — an operator reads this off the
         // failed job row and it has to say which end refused.
-        const detail = (await response.text().catch(() => '')).slice(0, 400);
+        const detail = redactProviderText(await response.text().catch(() => ''));
         throw new GenerationError(
           `The generation provider refused the request with HTTP ${response.status}${detail ? `: ${detail}` : ''}`,
         );

@@ -30,7 +30,11 @@ import { clearAllNoteDrafts, readNoteDraft, writeNoteDraft } from '@/client/note
 import { shellPlatform } from '@/client/platform';
 import { createBrowserDownloadStore } from './browser-store';
 import { forgetActiveAccount } from './forget';
-import { idbPut } from './idb';
+import { sessionMetaKey } from './schema';
+
+/** What every per-account session entry in `meta` starts with — `sessionMetaKey('')`. */
+const SESSION_META_PREFIX = sessionMetaKey('');
+import { idbDelete, idbKeys, idbPut } from './idb';
 import { createOfflineHooks } from './offline-api';
 import { forgetPendingImages, prepareOutboxImages } from './pending-images';
 import {
@@ -187,6 +191,16 @@ export function createOfflineManager(options: OfflineManagerOptions): OfflineMan
       await idbPut(OFFLINE_STORES.meta, { userId }, ACTIVE_USER_KEY);
     });
   const forgetActiveUser = options.forgetActiveUser ?? forgetActiveAccount;
+  /** Drop every `session:<id>` entry in `meta` that is not this account's. */
+  async function forgetForeignSessions(userId: string): Promise<void> {
+    if (typeof indexedDB === 'undefined') return;
+    const own = sessionMetaKey(userId);
+    for (const key of await idbKeys(OFFLINE_STORES.meta)) {
+      if (typeof key === 'string' && key.startsWith(SESSION_META_PREFIX) && key !== own) {
+        await idbDelete(OFFLINE_STORES.meta, key);
+      }
+    }
+  }
   const warm =
     options.warm ??
     ((urls: readonly string[]) => {
@@ -418,6 +432,10 @@ export function createOfflineManager(options: OfflineManagerOptions): OfflineMan
       if (snapshot.userId === userId && snapshot.ready) return;
       set({ userId, ready: false, downloads: [], queue: EMPTY_QUEUE, online: isOnline() });
       await rememberActiveUser(userId).catch(() => undefined);
+      // The last session answer kept for any *other* account goes now: it was written for whoever
+      // used this device before, and the member just admitted has no business reading it
+      // (docs/security-audit-2026-10-29.md, finding 22).
+      await forgetForeignSessions(userId).catch(() => undefined);
       await reload();
       void flush();
     },

@@ -11,7 +11,13 @@ import {
   type NoteImageView,
   type UploadGrantPayload,
 } from '@thp/shared';
-import { NOTE_IMAGE_KEY_PREFIX, UPLOAD_GRANT_SECONDS, mediaStore, mintNoteImageKey } from '@thp/media';
+import {
+  IMAGE_UPLOAD_GRANT_SECONDS,
+  NOTE_IMAGE_KEY_PREFIX,
+  mediaStore,
+  mintNoteImageKey,
+  noteImageKeyPrefixFor,
+} from '@thp/media';
 import { actorGuard } from '@/server/api/actor-limits';
 import { ApiError } from '@/server/api/errors';
 import type { Actor } from '@/server/auth/policy';
@@ -53,12 +59,14 @@ export async function grantNoteImageUpload(actor: Actor, body: unknown): Promise
   const requested = parseGrantRequest(body);
   actorGuard().spend('note-image-grant', actor);
 
-  const key = mintNoteImageKey(requested.contentType);
-  const expiresAt = new Date(Date.now() + UPLOAD_GRANT_SECONDS * 1000);
+  // Minted under the member's own prefix, so the write below can tell whose grant a key came from.
+  const key = mintNoteImageKey(requested.contentType, actor.id);
+  const expiresAt = new Date(Date.now() + IMAGE_UPLOAD_GRANT_SECONDS * 1000);
   const url = await mediaStore().presignPut({
     key,
     contentType: requested.contentType,
-    expiresInSeconds: UPLOAD_GRANT_SECONDS,
+    contentLength: requested.size,
+    expiresInSeconds: IMAGE_UPLOAD_GRANT_SECONDS,
   });
 
   logger.info('note.image.granted', {
@@ -164,6 +172,12 @@ export async function verifyNewImageKeys(actor: Actor, refs: readonly ParsedImag
     throw refuse(actor, 'duplicate-key', 'The same picture is listed twice.');
   }
   for (const key of keys) {
+    // The key has to be one of *this member's* grants (`mintNoteImageKey`): a key copied out of a
+    // log or off the wire is otherwise attachable to anybody's note
+    // (docs/security-audit-2026-10-29.md, finding 14).
+    if (!key.startsWith(noteImageKeyPrefixFor(actor.id))) {
+      throw refuse(actor, 'key-not-granted-to-actor', 'That upload is not yours. Choose the picture again.');
+    }
     const stored = await mediaStore().head(key);
     if (stored === null) {
       throw refuse(actor, 'nothing-at-key', 'A picture did not finish uploading. Choose it again.');

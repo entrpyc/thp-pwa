@@ -100,6 +100,13 @@ export async function idbDelete(store: StoreName, key: IDBValidKey): Promise<voi
   await request(tx.objectStore(store).delete(key));
 }
 
+/** Every key in a store. For the small `meta` store; the big ones are read through their index. */
+export async function idbKeys(store: StoreName): Promise<IDBValidKey[]> {
+  const db = await openOfflineDatabase();
+  const tx = db.transaction(store, 'readonly');
+  return request(tx.objectStore(store).getAllKeys());
+}
+
 /**
  * Read a value and write `change(value)` back **in one transaction**, so a delete made between
  * the read and the write cannot be undone by the write: a value gone when the transaction starts

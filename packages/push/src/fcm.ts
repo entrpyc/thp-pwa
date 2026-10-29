@@ -23,6 +23,14 @@ import { PUSH_TTL_SECONDS, type PlatformSender, type PushSendResult, type PushTa
 
 const SCOPE = 'https://www.googleapis.com/auth/firebase.messaging';
 
+/**
+ * Ten seconds for either request. A send is awaited inside the request that caused it — an
+ * admin's publish, a member's reply — and a provider that hangs would otherwise hold that request
+ * open for as long as the socket lasts (docs/security-audit-2026-10-29.md, finding 21). APNs
+ * already has one; this is the same ceiling.
+ */
+export const FCM_TIMEOUT_MS = 10_000;
+
 function base64url(value: Buffer | string): string {
   return Buffer.from(value).toString('base64url');
 }
@@ -59,6 +67,7 @@ export function fcmSender(settings: FcmSettings, fetchImpl: typeof fetch = fetch
         grant_type: 'urn:ietf:params:oauth:grant-type:jwt-bearer',
         assertion: mintAssertion(settings, key),
       }),
+      signal: AbortSignal.timeout(FCM_TIMEOUT_MS),
     });
     if (!response.ok) throw new Error(`fcm token exchange ${response.status}`);
     const body = (await response.json()) as { access_token?: unknown; expires_in?: unknown };
@@ -81,6 +90,7 @@ export function fcmSender(settings: FcmSettings, fetchImpl: typeof fetch = fetch
       try {
         response = await fetchImpl(endpoint, {
           method: 'POST',
+          signal: AbortSignal.timeout(FCM_TIMEOUT_MS),
           headers: { authorization: `Bearer ${token}`, 'content-type': 'application/json' },
           body: JSON.stringify({
             message: {

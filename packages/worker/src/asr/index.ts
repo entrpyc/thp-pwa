@@ -14,6 +14,7 @@ export {
 } from './env';
 export {
   TranscriptionError,
+  TranscriptionTimeoutError,
   type TranscribedSegment,
   type Transcriber,
   type TranscriptionRequest,

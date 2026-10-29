@@ -270,12 +270,15 @@ describe('finalising', () => {
     const person = await signedInAccount(baseUrl, databaseUrl, ROLE.member, 'lied-about-size');
     const grant = await grantFor(person.cookie, 1_024);
     expect(grant.status).toBe(200);
-    expect((await putBytes(grant.body, webpBytes(MAX_ARTWORK_BYTES + 1))).status).toBe(200);
+    // The grant signs the declared length (security audit 2026-10-29, finding 4), so the store
+    // itself refuses a body of any other size — the lie never lands, and the finalisation finds
+    // nothing behind the key.
+    expect((await putBytes(grant.body, webpBytes(MAX_ARTWORK_BYTES + 1))).status).toBe(403);
 
     const answer = await finalise(person.cookie, grant.body.key);
     expect(answer.status).toBe(400);
     expect(answer.code).toBe('invalid_input');
-    expect(answer.message).toContain('4 MB');
+    expect(answer.message).toContain('did not finish');
     expect(await storedKeyOf(person.account.id)).toBeNull();
   }, 60_000);
 

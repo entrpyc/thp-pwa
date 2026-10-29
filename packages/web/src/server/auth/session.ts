@@ -4,7 +4,7 @@ import {
   revokeSessionByTokenHash,
   touchSession,
 } from '@thp/db';
-import { SESSION_COOKIE_NAME } from '@thp/shared';
+import { SECURE_SESSION_COOKIE_NAME, SESSION_COOKIE_NAME } from '@thp/shared';
 import { generateToken, hashToken } from './tokens';
 import { toActor, type Actor } from './policy';
 
@@ -24,11 +24,24 @@ import { toActor, type Actor } from './policy';
 export const SESSION_LIFETIME_MS = 30 * 24 * 60 * 60 * 1000;
 
 /**
+ * **Ninety days from sign-in, however much the window rolls.** A rolling window alone means a
+ * session in daily use never expires, so a cookie copied off a device once is a key for ever
+ * (docs/security-audit-2026-10-29.md, finding 13). Three months is long enough that a member who
+ * listens every week is not asked to sign in again inside a season; after it they are, once.
+ */
+export const SESSION_ABSOLUTE_LIFETIME_MS = 90 * 24 * 60 * 60 * 1000;
+
+/**
  * How stale a session must be before using it rolls the window forward. Without this every request
  * would write a row; with it, a session in constant use is refreshed at most hourly and still never
- * expires under someone.
+ * expires under someone — until the absolute cap, which it cannot roll past.
  */
 const REFRESH_AFTER_MS = 60 * 60 * 1000;
+
+/** Where this session's window may roll to: thirty days from now, but never past the absolute cap. */
+export function rolledExpiry(createdAt: Date, now: number = Date.now()): Date {
+  return new Date(Math.min(now + SESSION_LIFETIME_MS, createdAt.getTime() + SESSION_ABSOLUTE_LIFETIME_MS));
+}
 
 /**
  * The cookie value, and its digest. Both are the shared helpers in `./tokens`, which ticket 3's
@@ -61,9 +74,20 @@ export async function actorForToken(token: string | null | undefined): Promise<A
   if (!live) return null;
 
   if (Date.now() - live.session.lastUsedAt.getTime() > REFRESH_AFTER_MS) {
-    await touchSession(live.session.id, new Date(Date.now() + SESSION_LIFETIME_MS));
+    await touchSession(live.session.id, rolledExpiry(live.session.createdAt));
   }
   return toActor(live.user);
+}
+
+/**
+ * **The cookie's name in this environment.** `__Host-thp_session` wherever the cookie is `Secure`:
+ * a browser accepts the `__Host-` prefix only with `Secure`, `Path=/` and no `Domain`, so no other
+ * host under the parent domain can set a cookie of that name and have it sent here — which closes
+ * the login-CSRF half of docs/security-audit-2026-10-29.md, finding 3. Development runs over plain
+ * `http://localhost` without `Secure` and so keeps the plain name.
+ */
+export function sessionCookieName(): string {
+  return isSecureContext() ? SECURE_SESSION_COOKIE_NAME : SESSION_COOKIE_NAME;
 }
 
 /** End the session behind this cookie. Returns whether there was a live one to end. */
@@ -82,7 +106,7 @@ export function readSessionCookie(request: Request): string | null {
   for (const part of header.split(';')) {
     const separator = part.indexOf('=');
     if (separator === -1) continue;
-    if (part.slice(0, separator).trim() !== SESSION_COOKIE_NAME) continue;
+    if (part.slice(0, separator).trim() !== sessionCookieName()) continue;
     return decodeCookieValue(part.slice(separator + 1).trim()) || null;
   }
   return null;
@@ -115,7 +139,7 @@ function isSecureContext(): boolean {
 export function sessionCookieHeader(token: string, expiresAt: Date): string {
   const maxAge = Math.max(0, Math.floor((expiresAt.getTime() - Date.now()) / 1000));
   return [
-    `${SESSION_COOKIE_NAME}=${encodeURIComponent(token)}`,
+    `${sessionCookieName()}=${encodeURIComponent(token)}`,
     'Path=/',
     'HttpOnly',
     'SameSite=Lax',
@@ -127,7 +151,7 @@ export function sessionCookieHeader(token: string, expiresAt: Date): string {
 
 export function clearedSessionCookieHeader(): string {
   return [
-    `${SESSION_COOKIE_NAME}=`,
+    `${sessionCookieName()}=`,
     'Path=/',
     'HttpOnly',
     'SameSite=Lax',

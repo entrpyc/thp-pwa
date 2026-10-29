@@ -1,6 +1,5 @@
 import { cookies } from 'next/headers';
-import { SESSION_COOKIE_NAME } from '@thp/shared';
-import { actorForToken } from './session';
+import { actorForToken, sessionCookieName } from './session';
 import type { Actor } from './policy';
 
 /**
@@ -13,5 +12,5 @@ import type { Actor } from './policy';
  */
 export async function currentActor(): Promise<Actor | null> {
   const store = await cookies();
-  return actorForToken(store.get(SESSION_COOKIE_NAME)?.value ?? null);
+  return actorForToken(store.get(sessionCookieName())?.value ?? null);
 }

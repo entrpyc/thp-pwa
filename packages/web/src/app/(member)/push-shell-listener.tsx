@@ -32,6 +32,27 @@ import { useNotifications } from './notifications-context';
  * Renders nothing, mounts nothing outside a shell, and asks for no permission: the prompt is the
  * settings section's button and only that.
  */
+/**
+ * A path on this origin, or the centre — `public/sw/push.js`'s rule, decided the same way: the
+ * value is resolved against a base and must stay on it, because `/\evil.example` starts with a
+ * slash and resolves elsewhere (docs/security-audit-2026-10-29.md, finding 22). The base is a
+ * sentinel rather than the page's own origin: the question is "does this leave whatever origin it
+ * is resolved against", and the answer is the same for any base. (The origin boundary also forbids
+ * deriving an origin from the page, for a different reason.)
+ */
+const PATH_PROBE_BASE = 'https://path-probe.invalid';
+
+export function landingPath(href: unknown): string {
+  if (typeof href !== 'string' || !href.startsWith('/')) return NOTIFICATIONS_PAGE_PATH;
+  try {
+    const resolved = new URL(href, PATH_PROBE_BASE);
+    if (resolved.origin !== PATH_PROBE_BASE) return NOTIFICATIONS_PAGE_PATH;
+    return `${resolved.pathname}${resolved.search}${resolved.hash}`;
+  } catch {
+    return NOTIFICATIONS_PAGE_PATH;
+  }
+}
+
 export function PushShellListener() {
   const router = useRouter();
   const { refresh } = useNotifications();
@@ -41,9 +62,7 @@ export function PushShellListener() {
     const handles = [
       PushNotifications.addListener('pushNotificationActionPerformed', ({ notification }) => {
         const data = (notification.data ?? {}) as Record<string, unknown>;
-        const href = typeof data['href'] === 'string' && data['href'].startsWith('/') && !data['href'].startsWith('//')
-          ? data['href']
-          : NOTIFICATIONS_PAGE_PATH;
+        const href = landingPath(data['href']);
         if (isNotificationKind(data['kind'])) {
           track('notification_opened', { kind: data['kind'], channel: 'push' });
         }

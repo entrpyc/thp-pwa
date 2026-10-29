@@ -1,3 +1,4 @@
+import { redactProviderText } from '@thp/shared/observability/redact';
 import { readEmbedApiKey, type EnvSource } from './env';
 import {
   EmbeddingError,
@@ -91,7 +92,7 @@ export function openAiEmbedder(options: OpenAiOptions = {}): Embedder {
         if (!response.ok) {
           // The status, and the provider's own words, truncated — an operator reads this off the
           // failed job row and it has to say which end refused.
-          const detail = (await response.text().catch(() => '')).slice(0, 400);
+          const detail = redactProviderText(await response.text().catch(() => ''));
           throw new EmbeddingError(
             `The embedding provider refused the request with HTTP ${response.status}${detail ? `: ${detail}` : ''}`,
           );

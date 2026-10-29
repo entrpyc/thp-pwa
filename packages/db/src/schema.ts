@@ -1936,6 +1936,14 @@ export const noteReport = pgTable(
       .where(sql`${table.resolvedAt} is null`),
     /** The resolution: every open report on one note, closed together. */
     index('note_report_note_idx').on(table.noteId),
+    /**
+     * One open report per member per note. The service reads before it writes, and this is what
+     * holds when two of one member's presses race past that read
+     * (docs/security-audit-2026-10-29.md, finding 17); the violation is read as "already reported".
+     */
+    uniqueIndex('note_report_open_per_reporter_unique')
+      .on(table.noteId, table.reporterId)
+      .where(sql`${table.resolvedAt} is null`),
     /** Closed means an outcome was recorded; open means none was. Both directions, one check. */
     check(
       'note_report_resolution_whole',
@@ -2218,6 +2226,15 @@ export const sosSignal = pgTable(
     closedAt: timestamp('closed_at', { withTimezone: true }),
     closedBy: uuid('closed_by').references(() => user.id, { onDelete: 'set null' }),
     closingNote: text('closing_note'),
+    /**
+     * Set when an admin removed the request ([3.16.11](docs/project/prd.md)) — **a mark, not a
+     * delete** (docs/security-audit-2026-10-29.md, finding 6). Every member read filters it, so
+     * the group sees the request gone; the row, its replies and the report that asked for the
+     * removal stay as the moderation record. `removed_by` sets null with the admin's account, as
+     * `closed_by` does.
+     */
+    removedAt: timestamp('removed_at', { withTimezone: true }),
+    removedBy: uuid('removed_by').references(() => user.id, { onDelete: 'set null' }),
   },
   (table) => [
     /**
@@ -2363,6 +2380,17 @@ export const sosReport = pgTable(
     /** The resolution: every open report on one request, or on one reply, closed together. */
     index('sos_report_signal_idx').on(table.signalId),
     index('sos_report_reply_idx').on(table.replyId),
+    /**
+     * One open report per member per request, and one per member per reply — `note_report`'s
+     * race guard, in two halves because a row is about one or the other
+     * (docs/security-audit-2026-10-29.md, finding 17).
+     */
+    uniqueIndex('sos_report_open_signal_per_reporter_unique')
+      .on(table.signalId, table.reporterId)
+      .where(sql`${table.resolvedAt} is null and ${table.aboutReply} = false`),
+    uniqueIndex('sos_report_open_reply_per_reporter_unique')
+      .on(table.replyId, table.reporterId)
+      .where(sql`${table.resolvedAt} is null and ${table.replyId} is not null`),
     /** A report about the request names no reply. (The converse cannot hold: the reply may have gone.) */
     check('sos_report_reply_only_when_about_reply', sql`${table.aboutReply} or ${table.replyId} is null`),
     check(

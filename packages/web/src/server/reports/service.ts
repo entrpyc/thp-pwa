@@ -1,12 +1,15 @@
 import {
+  deleteSosReply,
   findNoteById,
   findNoteReportById,
   findSosReportById,
   findSosSignalById,
   listOpenNoteReports,
   listOpenSosReports,
+  removeSosSignal,
   resolveOpenReportsForNote,
   resolveOpenSosReports,
+  withTransaction,
   type NoteReportRow,
   type OpenNoteReportRow,
   type OpenSosReportRow,
@@ -24,12 +27,12 @@ import {
   type SosReportView,
 } from '@thp/shared';
 import { ApiError } from '@/server/api/errors';
+import { authorise } from '@/server/auth/authorise';
 import type { Actor } from '@/server/auth/policy';
 import { deleteNote } from '@/server/notes/service';
 import { notifyReportResolved, notifySosReportResolved } from '@/server/notifications/service';
 import { audit } from '@/server/observability/audit';
 import { logger } from '@/server/observability/logger';
-import { removeReplyThroughModeration, removeSignalFor } from '@/server/sos/service';
 
 /**
  * **The admin's side of a report** — reading the queue, and closing it one subject at a time.
@@ -158,19 +161,37 @@ async function resolveSosReport(
   const signal = await findSosSignalById(report.signalId);
   if (signal === null) throw ApiError.notFound('The reported prayer request no longer exists.');
   const about = report.aboutReply ? 'reply' : 'signal';
+  const removing = outcome === 'removed';
 
-  // The reports close first and the content goes after — the reverse of a note's order, because
-  // both removals here are hard deletes that the report rows react to: a removed reply sets the
-  // rows' `reply_id` null (and "every open report on this reply" would then match nothing), and a
-  // removed request cascades its rows away. Closing first is what lets the rows be found and the
-  // reporters told.
-  const closed = await resolveOpenSosReports({ report, outcome, resolvedBy: actor.id });
+  // **The decision and its effect are one transaction** (docs/security-audit-2026-10-29.md,
+  // finding 6): the reports close and the content goes together, or neither happens. The reports
+  // close first because a removed reply sets the rows' `reply_id` null, and "every open report on
+  // this reply" would then match nothing. A request's removal is a mark on its row, so its reports
+  // survive it as the moderation record; a reply's removal is a delete, and its reports keep
+  // saying what they were about through `about_reply`.
+  if (removing && about === 'signal') authorise(actor, 'sos.moderate', `sos:${report.signalId}`);
+  if (removing && about === 'reply') authorise(actor, 'sos.moderate', `sos_reply:${report.replyId}`);
+  const { closed, removed } = await withTransaction(async (tx) => {
+    const closed = await resolveOpenSosReports({ report, outcome, resolvedBy: actor.id }, tx);
+    let removed = false;
+    if (removing && about === 'signal') {
+      removed = await removeSosSignal({ signalId: report.signalId, removedBy: actor.id }, tx);
+    }
+    // A reply already gone — by its author, or by an admin on the page — is the end state asked for.
+    if (removing && about === 'reply' && report.replyId !== null) {
+      removed = await deleteSosReply(report.replyId, tx);
+    }
+    return { closed, removed };
+  });
 
-  // A reply already gone — by its author, or by an admin on the page — is the end state asked for.
-  if (outcome === 'removed' && about === 'reply' && report.replyId !== null) {
-    await removeReplyThroughModeration(actor, report.signalId, report.replyId);
+  if (removing) {
+    logger.info('sos.moderate', {
+      ...audit(actor, 'sos.moderate', about === 'signal' ? `sos:${report.signalId}` : `sos_reply:${report.replyId}`),
+      signalId: report.signalId,
+      outcome: removed ? 'removed' : 'already-removed',
+      authorId: signal.authorId,
+    });
   }
-
   logger.info('report.resolve', {
     ...audit(actor, 'report.resolve', `report:${report.id}`),
     signalId: report.signalId,
@@ -180,6 +201,8 @@ async function resolveSosReport(
     closed: closed.length,
   });
 
+  // After the decision is committed and never as a condition of it. The notice does not name a
+  // removed request, so the press lands on the board rather than on a page that is gone.
   await notifySosReportResolved({
     reporterIds: closed.map((row) => row.reporterId),
     signalId: report.signalId,
@@ -187,11 +210,6 @@ async function resolveSosReport(
     outcome,
     resolver: actor,
   });
-
-  // The request goes last: removing it cascades every report on it, and every notice that names
-  // it, so the rows above had to be closed and the reporters told — by a notice that does not name
-  // it — while they still existed.
-  if (outcome === 'removed' && about === 'signal') await removeSignalFor(actor, report.signalId);
 
   return { outcome, closed: closed.length, ...(await listReportsFor(actor)) };
 }

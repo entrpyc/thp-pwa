@@ -471,6 +471,80 @@ describe('blocks, the cap and the terms', () => {
     expect((await call(sosRepliesPath(signal.id), { method: 'POST', cookie: blocker.cookie, body: { text: 'x' } })).code).toBe('not_found');
   });
 
+  it('does not let a block become an oracle over who raised an anonymous request (security audit 2026-10-29, finding 2)', async () => {
+    const curious = await signedIn('member', 'sos-curious');
+    const quiet = await signedIn('member', 'sos-quiet');
+    await insertMemberBlock(curious.id, quiet.id, handle);
+
+    // The curious member blocked the author. A named request vanishes for them, as it always did…
+    const named = await raised(quiet, 'red', `Named ${RUN}`);
+    expect((await read(curious, named.id)).code).toBe('not_found');
+
+    // …and an anonymous one does not — otherwise "block a candidate, reload, watch" names the author.
+    const answer = await raise(quiet, { urgency: 'red', description: `Quiet ${RUN}`, anonymous: true });
+    expect(answer.status).toBe(201);
+    const anonymous = answer.body.signal;
+    const seen = await read(curious, anonymous.id);
+    expect(seen.status).toBe(200);
+    expect(seen.body.signal.author.displayName).toBe(ANONYMOUS_DISPLAY_NAME);
+    expect(seen.body.signal.author.id).toBeNull();
+    expect((await board(curious)).signals.some((one) => one.id === anonymous.id)).toBe(true);
+    expect(about(await inbox(curious), anonymous.id)).toHaveLength(1);
+
+    // The author's own words under their request read as Anonymous to everybody but them.
+    const thanks = await call<SosSignalPayload>(sosRepliesPath(anonymous.id), {
+      method: 'POST',
+      cookie: quiet.cookie,
+      body: { text: `thank you all ${RUN}` },
+    });
+    expect(thanks.status).toBe(201);
+    const theirs = await read(ben, anonymous.id);
+    const reply = theirs.body.signal.replies.find((one) => one.text === `thank you all ${RUN}`);
+    expect(reply?.author).toEqual({ id: null, displayName: ANONYMOUS_DISPLAY_NAME, avatarUrl: null });
+    expect(reply?.mine).toBe(false);
+    const own = await read(quiet, anonymous.id);
+    expect(own.body.signal.replies.find((one) => one.text === `thank you all ${RUN}`)?.author.id).toBe(quiet.id);
+
+    // A thread reply by the anonymous author names nobody in the thread author's notice either.
+    const bensReply = await call<SosSignalPayload>(sosRepliesPath(anonymous.id), {
+      method: 'POST',
+      cookie: ben.cookie,
+      body: { text: `praying ${RUN}` },
+    });
+    const top = bensReply.body.signal.replies.find((one) => one.text === `praying ${RUN}`);
+    await call(sosRepliesPath(anonymous.id), {
+      method: 'POST',
+      cookie: quiet.cookie,
+      body: { text: `bless you ${RUN}`, parentId: top?.id },
+    });
+    const bensNotices = about(await inbox(ben), anonymous.id);
+    expect(bensNotices.some((one) => one.title === sosThreadReplyNotificationTitle(SOMEONE))).toBe(true);
+    expect(bensNotices.some((one) => one.title.includes(quiet.displayName))).toBe(false);
+
+    // The author's own block still works the other way: a member *they* blocked sees nothing.
+    const shunned = await signedIn('member', 'sos-shunned');
+    await insertMemberBlock(quiet.id, shunned.id, handle);
+    expect((await read(shunned, anonymous.id)).code).toBe('not_found');
+    expect(about(await inbox(shunned), anonymous.id)).toHaveLength(0);
+  });
+
+  it('lets an admin moderate a request whose author blocked them (finding 5)', async () => {
+    const evasive = await signedIn('member', 'sos-evasive');
+    await insertMemberBlock(evasive.id, admin.id, handle);
+    const signal = await raised(evasive, 'yellow', `Evasive ${RUN}`);
+
+    expect((await read(admin, signal.id)).status).toBe(200);
+    expect((await board(admin)).signals.some((one) => one.id === signal.id)).toBe(true);
+    const closed = await call<SosSignalPayload>(sosClosePath(signal.id), { method: 'POST', cookie: admin.cookie, body: {} });
+    expect(closed.status).toBe(200);
+    expect(closed.body.signal.closedAt).not.toBeNull();
+    // A member is still hidden from, both ways.
+    expect((await read(ben, (await raised(evasive, 'green', `Still hidden ${RUN}`)).id)).status).toBe(200);
+    const bystander = await signedIn('member', 'sos-bystander');
+    await insertMemberBlock(evasive.id, bystander.id, handle);
+    expect((await board(bystander)).signals.some((one) => one.id === signal.id)).toBe(false);
+  });
+
   it('refuses the eleventh open signal with sos_limit, and takes one again once one is closed', async () => {
     const busy = await signedIn('member', 'sos-busy');
     const ids: string[] = [];

@@ -27,10 +27,15 @@ on:
         default: patch
         options: [patch, minor, major]
       skip_ci_gate:
-        description: Deploy even though CI has not passed on this commit
+        description: Deploy even though CI has not passed on this commit (an incident action — say why below)
         type: boolean
         required: false
         default: false
+      skip_ci_gate_reason:
+        description: Why the CI gate is being skipped. Required when it is; written into the run summary and the release notes.
+        type: string
+        required: false
+        default: ''
 
 # One deploy at a time, and never cancel one that has started — half a deploy is the worst outcome.
 concurrency:
@@ -75,12 +80,23 @@ jobs:
           fi
           echo "::error::No successful CI run for ${{ github.sha }}. Runs seen: $runs. Re-run with 'skip_ci_gate' ticked to deploy anyway."; exit 1
 
+      # Skipping the gate is an incident action (docs/security-audit-2026-10-29.md, finding 23: v1.7.0
+      # shipped past a red CI with a schema its database did not have). It needs a written reason,
+      # which the summary and the release notes carry, so the decision is on the record beside the
+      # release it produced rather than in somebody's memory.
       - name: CI gate skipped
         if: ${{ inputs.skip_ci_gate }}
+        env:
+          REASON: ${{ inputs.skip_ci_gate_reason }}
         run: |
-          echo "::warning::The CI gate was skipped by ${{ github.actor }}. This deploy has not been verified by CI."
+          if [ -z "$(echo "$REASON" | tr -d '[:space:]')" ]; then
+            echo "::error::skip_ci_gate needs skip_ci_gate_reason. Say why CI is being bypassed, or wait for it."; exit 1
+          fi
+          echo "::warning::The CI gate was skipped by ${{ github.actor }}: $REASON. This deploy has not been verified by CI."
           echo "## ⚠️ CI gate skipped" >> "$GITHUB_STEP_SUMMARY"
           echo "${{ github.actor }} chose to deploy \`${{ github.sha }}\` without a passing CI run." >> "$GITHUB_STEP_SUMMARY"
+          echo >> "$GITHUB_STEP_SUMMARY"
+          echo "**Reason given:** $REASON" >> "$GITHUB_STEP_SUMMARY"
           echo >> "$GITHUB_STEP_SUMMARY"
 
       - uses: actions/checkout@fbc6f3992d24b796d5a048ff273f7fcc4a7b6c09 # v5
@@ -142,11 +158,12 @@ jobs:
         env:
           PREVIOUS: ${{ needs.gate.outputs.previous }}
           SKIPPED_CI: ${{ inputs.skip_ci_gate }}
+          SKIP_REASON: ${{ inputs.skip_ci_gate_reason }}
           REPO_URL: ${{ github.server_url }}/${{ github.repository }}
         run: |
           {
             if [ "$SKIPPED_CI" = "true" ]; then
-              echo "> ⚠️ **Released with the CI gate skipped** by ${{ github.actor }}. CI had not passed on this commit."
+              echo "> ⚠️ **Released with the CI gate skipped** by ${{ github.actor }}. CI had not passed on this commit. Reason given: $SKIP_REASON"
               echo
             fi
             scripts/release-notes.sh "$PREVIOUS" "${{ github.sha }}"

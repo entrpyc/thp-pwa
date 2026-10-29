@@ -267,7 +267,9 @@ describe('finalising', () => {
     const grant = await grantFor(series.id, 1_024);
     expect(grant.status).toBe(200);
     const oversized = 4 * 1024 * 1024 + 1;
-    expect((await putBytes(grant.body, webpBytes(oversized))).status).toBe(200);
+    // The grant signs the declared length (security audit 2026-10-29, finding 4): the store refuses
+    // the lying body outright, and the finalisation finds nothing behind the key.
+    expect((await putBytes(grant.body, webpBytes(oversized))).status).toBe(403);
 
     const answer = await finalise(series.id, grant.body.key);
     expect(answer.status).toBe(400);

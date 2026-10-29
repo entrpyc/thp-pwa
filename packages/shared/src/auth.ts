@@ -6,8 +6,17 @@ import type { Role } from './roles';
  * authorisation is evaluated server-side only (docs/project/prd.md, 3.1.5).
  */
 
-/** Name of the session cookie. Its value is an opaque token, never anything about the user. */
+/**
+ * Name of the session cookie. Its value is an opaque token, never anything about the user.
+ *
+ * This is the development spelling, over plain `http://localhost`. Everywhere the cookie is
+ * `Secure` it is set under {@link SECURE_SESSION_COOKIE_NAME} instead — the `__Host-` prefix, which
+ * a browser accepts only with `Secure`, `Path=/` and no `Domain`, and which therefore cannot be
+ * planted by a sibling host under the same parent domain (docs/security-audit-2026-10-29.md,
+ * finding 3). The server decides which of the two is in force (`sessionCookieName()`).
+ */
 export const SESSION_COOKIE_NAME = 'thp_session';
+export const SECURE_SESSION_COOKIE_NAME = `__Host-${SESSION_COOKIE_NAME}`;
 
 /** Paths of the auth resource. Sign-in, sign-out and "who am I" are one resource, three methods. */
 export const AUTH_SESSION_PATH = '/auth/session';

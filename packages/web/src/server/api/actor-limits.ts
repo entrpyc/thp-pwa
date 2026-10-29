@@ -41,6 +41,11 @@ export const ACTOR_BUDGET_KINDS = [
   'artwork-grant',
   'note-image-grant',
   'search',
+  'note-write',
+  'sos-write',
+  'report',
+  'block',
+  'self-delete',
 ] as const;
 
 export type ActorBudgetKind = (typeof ACTOR_BUDGET_KINDS)[number];
@@ -106,6 +111,45 @@ export const ACTOR_BUDGETS: Readonly<Record<ActorBudgetKind, ActorBudget>> = {
     limit: SEARCH_BUDGET_PER_HOUR,
     windowMs: HOUR_MS,
     refusal: 'You have searched many times in the last hour.',
+  },
+  // **The social writes** (docs/security-audit-2026-10-29.md, finding 8). Each one stores a row
+  // somebody else reads and most push a notification to somebody's phone, so a loop on any of them
+  // is a push storm the group feels. Spent after the body is accepted and before the row is
+  // written, so a refused body costs nothing — and spent inside the service, so a note written
+  // through the offline sync shares the bucket with one written live.
+  // - **Notes, 120 an hour.** Two a minute, every minute, for an hour is beyond any sermon's worth
+  //   of note-taking; a 200-entry outbox flushed after a week offline fits inside two windows.
+  'note-write': {
+    limit: 120,
+    windowMs: HOUR_MS,
+    refusal: 'You have written many notes in the last hour.',
+  },
+  // - **Prayer requests and replies, 40 an hour.** A raise reaches every member's phone.
+  'sos-write': {
+    limit: 40,
+    windowMs: HOUR_MS,
+    refusal: 'You have posted many prayer requests or replies in the last hour.',
+  },
+  // - **Reports, 20 an hour.** Each one lands in every admin's inbox.
+  report: {
+    limit: 20,
+    windowMs: HOUR_MS,
+    refusal: 'You have reported many posts in the last hour.',
+  },
+  // - **Blocks, 30 an hour.** Blocking is free and reversible, which is exactly what made it an
+  //   oracle (finding 2); the read paths no longer answer the question, and this keeps it slow too.
+  block: {
+    limit: 30,
+    windowMs: HOUR_MS,
+    refusal: 'You have changed your blocked list many times in the last hour.',
+  },
+  // - **Self-deletion attempts, 10 an hour.** Each one verifies the current password, which made
+  //   the route an unthrottled online guess at it for whoever holds the session; ten an hour is a
+  //   person mistyping, and an argon2 verification every six minutes is no oracle worth running.
+  'self-delete': {
+    limit: 10,
+    windowMs: HOUR_MS,
+    refusal: 'Too many attempts to confirm your password.',
   },
 };
 

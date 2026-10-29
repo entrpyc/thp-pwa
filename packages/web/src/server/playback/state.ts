@@ -171,8 +171,17 @@ function parsePosition(body: unknown): number {
   if (positionMs < MIN_STORED_POSITION_MS) {
     throw ApiError.invalidInput('That is too near the start to be worth resuming from.');
   }
+  if (positionMs > MAX_MEDIA_MS) throw ApiError.invalidInput(BEYOND_ANY_TEACHING);
   return positionMs;
 }
+
+/**
+ * A week, in milliseconds. No teaching is remotely as long, and an integer past this is either a
+ * client bug or a probe — the column is a 32-bit integer (about 596 hours), and a value past *its*
+ * range used to answer 500 (docs/security-audit-2026-10-29.md, finding 16).
+ */
+const MAX_MEDIA_MS = 7 * 24 * 60 * 60_000;
+const BEYOND_ANY_TEACHING = 'That is longer than any teaching in the library.';
 
 /**
  * What was heard, and how long the teaching is — both optional, because a client from before
@@ -193,6 +202,7 @@ function parseListening(body: unknown): { listenedDeltaMs?: number; durationMs?:
     if (typeof durationMs !== 'number' || !Number.isInteger(durationMs) || durationMs <= 0) {
       throw ApiError.invalidInput('Give the duration as whole, positive milliseconds.');
     }
+    if (durationMs > MAX_MEDIA_MS) throw ApiError.invalidInput(BEYOND_ANY_TEACHING);
     parsed.durationMs = durationMs;
   }
   return parsed;

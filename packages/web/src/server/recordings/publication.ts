@@ -17,6 +17,7 @@ import { queue } from '@/server/jobs/queue';
 import { notifyRecordingPublished } from '@/server/notifications/service';
 import { audit } from '@/server/observability/audit';
 import { logger } from '@/server/observability/logger';
+import { clearSearchCache } from '@/server/search/cache';
 
 /**
  * **Publishing — the only thing in this product that makes anything visible to a member**
@@ -71,6 +72,8 @@ export async function publishRecording(actor: Actor, id: string): Promise<Public
     return published;
   });
   if (row === null) throw notFound();
+  // A search answered while this was a draft must not keep answering without it (finding 7).
+  clearSearchCache();
 
   logger.info('recording.publish', {
     ...audit(actor, 'recording.publish', `recording:${id}`),
@@ -101,6 +104,8 @@ export async function unpublishRecording(actor: Actor, id: string): Promise<Publ
     return taken;
   });
   if (row === null) throw notFound();
+  // A kept search would keep serving this teaching's passages for a week otherwise (finding 7).
+  clearSearchCache();
 
   logger.info('recording.unpublish', audit(actor, 'recording.unpublish', `recording:${id}`));
 

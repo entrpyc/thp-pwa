@@ -35,6 +35,7 @@ import {
   onboardingPagePath,
   recordingPagePath,
   sosPagePath,
+  SOMEONE,
   sosRaisedNotificationTitle,
   sosReplyNotificationTitle,
   sosReportResolvedTitle,
@@ -378,19 +379,21 @@ export async function notifySosRaised(input: {
   readonly urgency: SosUrgency;
   readonly description: string;
   readonly author: Actor;
-  /** The name the title carries — the author's, or a stand-in for an anonymous signal. */
-  readonly authorName: string;
+  /** Whether the signal names its author. The audience and the title both follow it. */
+  readonly anonymous: boolean;
 }): Promise<void> {
   await raise('sos.raise', async () => {
+    // The notice names the member only when the signal does.
+    const authorName = input.anonymous ? SOMEONE : input.author.displayName;
     const written = await insertNotificationForSosAudience(
       {
         kind: 'sos_raised',
-        title: sosRaisedNotificationTitle(input.authorName, input.urgency),
+        title: sosRaisedNotificationTitle(authorName, input.urgency),
         body: excerptForNotification(input.description),
         href: sosPagePath(input.signalId),
         sosSignalId: input.signalId,
       },
-      input.author.id,
+      { id: input.author.id, anonymous: input.anonymous },
     );
     await deliverPush(written);
     return { signalId: input.signalId, urgency: input.urgency, recipients: written.length };
@@ -429,10 +432,16 @@ export async function notifySosReply(input: {
 /**
  * A reply inside a thread tells the thread's author too — unless they are the replier, or the
  * signal's author, who {@link notifySosReply} has already told. Same kind, same landing.
+ *
+ * **The title names the replier only when the signal would.** The author of an anonymous request
+ * answering in somebody's thread is "Someone" here, exactly as they are on the page
+ * (docs/security-audit-2026-10-29.md, finding 2); the row still carries their id as `actor_id`,
+ * which never reaches a client.
  */
 export async function notifySosThreadReply(input: {
   readonly signalId: string;
   readonly signalAuthorId: string;
+  readonly signalAnonymous: boolean;
   readonly threadAuthorId: string;
   readonly replier: Actor;
   readonly replyText: string;
@@ -443,9 +452,13 @@ export async function notifySosThreadReply(input: {
     if (await isBlockedEitherWay(input.threadAuthorId, input.replier.id)) {
       return { signalId: input.signalId, suppressed: 'blocked' };
     }
+    const replierName =
+      input.signalAnonymous && input.replier.id === input.signalAuthorId
+        ? SOMEONE
+        : input.replier.displayName;
     const row = await insertNotification(input.threadAuthorId, {
       kind: 'sos_reply',
-      title: sosThreadReplyNotificationTitle(input.replier.displayName),
+      title: sosThreadReplyNotificationTitle(replierName),
       body: excerptForNotification(input.replyText),
       href: sosPagePath(input.signalId),
       actorId: input.replier.id,

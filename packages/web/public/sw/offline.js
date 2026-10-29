@@ -37,10 +37,20 @@ const API_PREFIX = '/api/v1';
 const SIGN_OUT_PATH = `${API_PREFIX}/auth/session`;
 /** `POST` here is a sign-in (the same resource as the sign-out), and `POST` sign-up is one too. */
 const SIGN_IN_PATHS = [`${API_PREFIX}/auth/session`, `${API_PREFIX}/auth/sign-up`];
-const PAGE_CACHE = 'thp-pages-v1';
+const PAGE_CACHE = 'thp-pages-v2';
 const STATIC_CACHE = 'thp-static-v1';
-/** The member surface. Anything else — sign-in, admin, the public pages — is never cached. */
-const MEMBER_PAGE_PREFIXES = ['/', '/recordings', '/series', '/now-playing', '/notifications', '/profile', '/feedback'];
+/**
+ * The member surface. Anything else — sign-in, admin, the public pages — is never cached. Nor are
+ * `/profile` (it prints the member's email) and `/notifications` (the member's inbox): a page kept
+ * for a session that has since expired is readable by whoever holds the device, and those two are
+ * the ones that say who the device belonged to (docs/security-audit-2026-10-29.md, finding 11).
+ * The downloads section under `/profile` is kept — it is the one page a member offline most needs.
+ */
+const MEMBER_PAGE_PREFIXES = ['/', '/recordings', '/series', '/now-playing', '/profile/downloads', '/feedback'];
+/** The IndexedDB the page writes; the worker reads one key of it, to know whether anybody is signed in. */
+const OFFLINE_DB_NAME = 'thp-offline';
+const OFFLINE_META_STORE = 'meta';
+const ACTIVE_USER_KEY = 'activeUser';
 
 // ------------------------------------------------------------------------------------- decisions
 
@@ -80,12 +90,21 @@ function isMemberPage(path) {
   );
 }
 
-/** The cache key for a page: the path, with Next's per-request `_rsc` token dropped, and a marker for the RSC form. */
+/**
+ * The cache key for a page: the path, with Next's per-request `_rsc` token dropped, and a marker
+ * for the RSC form. The marker is a query parameter, not a fragment — the Cache API ignores
+ * fragments, so a `#rsc` key and the plain key were one entry and the document and the RSC payload
+ * overwrote each other (docs/security-audit-2026-10-29.md, finding 11).
+ */
+const RSC_MARKER = '__thp_rsc';
+
 function pageKey(url, isRsc) {
   const copy = new URL(url.href);
   copy.searchParams.delete('_rsc');
+  copy.searchParams.delete(RSC_MARKER);
   copy.hash = '';
-  return `${copy.origin}${copy.pathname}${copy.search}${isRsc ? '#rsc' : ''}`;
+  if (isRsc) copy.searchParams.set(RSC_MARKER, '1');
+  return `${copy.origin}${copy.pathname}${copy.search}`;
 }
 
 self.THP_OFFLINE = { decide, pageKey, isMemberPage };
@@ -134,11 +153,55 @@ async function handlePage(request, key) {
     }
     return response;
   } catch (caught) {
-    const held = await cache.match(key);
+    // A copy is served only while the page still says somebody is signed in on this device. The
+    // page clears that marker on sign-out, and the sign-in and sign-out requests above drop the
+    // whole cache; this is the third line, for a device whose session ended some other way.
+    const held = (await someoneIsSignedIn()) ? await cache.match(key) : undefined;
     if (held) return held;
     if (request.mode === 'navigate') return offlineResponse();
     throw caught;
   }
+}
+
+/** Whether the page's own store names an active account. `false` on any failure: no copy is served. */
+function someoneIsSignedIn() {
+  return new Promise((settle) => {
+    try {
+      const opening = indexedDB.open(OFFLINE_DB_NAME);
+      // Never create or upgrade the database from here: that is the page's schema to manage.
+      opening.onupgradeneeded = () => {
+        opening.transaction.abort();
+        settle(false);
+      };
+      opening.onerror = () => settle(false);
+      opening.onblocked = () => settle(false);
+      opening.onsuccess = () => {
+        const db = opening.result;
+        try {
+          if (!db.objectStoreNames.contains(OFFLINE_META_STORE)) {
+            db.close();
+            settle(false);
+            return;
+          }
+          const read = db.transaction(OFFLINE_META_STORE, 'readonly').objectStore(OFFLINE_META_STORE).get(ACTIVE_USER_KEY);
+          read.onsuccess = () => {
+            db.close();
+            const value = read.result;
+            settle(Boolean(value && typeof value === 'object' && typeof value.userId === 'string' && value.userId));
+          };
+          read.onerror = () => {
+            db.close();
+            settle(false);
+          };
+        } catch {
+          db.close();
+          settle(false);
+        }
+      };
+    } catch {
+      settle(false);
+    }
+  });
 }
 
 async function handleSignOut(request) {

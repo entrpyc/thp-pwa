@@ -1,4 +1,4 @@
-import { and, asc, count, desc, eq, inArray, isNull, sql } from 'drizzle-orm';
+import { and, asc, count, desc, eq, inArray, isNull, or, sql } from 'drizzle-orm';
 import {
   FLOW_ANSWERS,
   isGapAnswer,
@@ -16,7 +16,7 @@ import {
   series,
   tag,
 } from './schema';
-import { recordingWithIdIsPublished } from './visibility';
+import { recordingIsPublished, recordingWithIdIsPublished } from './visibility';
 
 /**
  * **Every statement against the Flow Tracker's three tables** ([3.14](docs/project/prd.md);
@@ -629,7 +629,16 @@ export async function listFlowSessionItems(
     .leftJoin(recording, eq(recording.id, flowSessionItem.recordingId))
     .leftJoin(series, eq(series.id, recording.seriesId))
     .leftJoin(tag, eq(tag.id, flowSessionItem.tagId))
-    .where(and(eq(flowSessionItem.sessionId, sessionId), liveItem))
+    // An item about a teaching since taken down is not served: its snapshot carries the chapter's
+    // title and summary, which an unpublish is meant to take out of every member's reach
+    // (docs/security-audit-2026-10-29.md, finding 18). An item about no teaching — a tag's — stays.
+    .where(
+      and(
+        eq(flowSessionItem.sessionId, sessionId),
+        liveItem,
+        or(isNull(flowSessionItem.recordingId), recordingIsPublished()),
+      ),
+    )
     .orderBy(asc(flowSessionItem.position));
   return rows as FlowSessionItemRow[];
 }
@@ -672,7 +681,8 @@ export async function listFlowSessionTeachings(
     .from(flowSessionItem)
     .innerJoin(recording, eq(recording.id, flowSessionItem.recordingId))
     .leftJoin(series, eq(series.id, recording.seriesId))
-    .where(inArray(flowSessionItem.sessionId, sessionIds))
+    // Still published, for the reason `listFlowSessionItems` gives.
+    .where(and(inArray(flowSessionItem.sessionId, sessionIds), recordingIsPublished()))
     .groupBy(flowSessionItem.sessionId, recording.id, series.id)
     .orderBy(asc(flowSessionItem.sessionId), first);
   for (const row of rows) {

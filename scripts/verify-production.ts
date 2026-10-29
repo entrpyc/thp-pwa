@@ -478,7 +478,10 @@ const CHECKS: readonly Check[] = [
 
       const firewall = parseUfwStatus(await run('sudo', ['ufw', 'status']));
       if (!firewall.active) return bad('ufw is not active');
-      const unexpected = firewall.ports.filter((port) => ![22, 80, 443, 7856].includes(port));
+      // 22, 80 and 443 and nothing else. 7856 was tolerated here while a listener used it; the
+      // listener is gone and the rule should be too (`sudo ufw delete allow 7856`), so it is
+      // reported until it is (security audits 2026-10-28 and 2026-10-29, finding 29).
+      const unexpected = firewall.ports.filter((port) => ![22, 80, 443].includes(port));
       return unexpected.length === 0
         ? ok(`ufw active, ${firewall.ports.join('/')} only; 5432 refused from ${address}`)
         : bad(`ufw also allows ${unexpected.join(', ')}`);
@@ -597,11 +600,58 @@ const CHECKS: readonly Check[] = [
     async run() {
       const journal = JSON.parse(
         readFileSync(resolve(REPO_ROOT, 'packages/db/drizzle/meta/_journal.json'), 'utf8'),
-      ) as { entries: unknown[] };
+      ) as { entries: { tag: string }[] };
       const applied = Number(await query('select count(*) from drizzle.__drizzle_migrations'));
-      return applied === journal.entries.length
-        ? ok(`${applied} of ${journal.entries.length} applied`)
-        : bad(`${applied} applied, ${journal.entries.length} in the journal — run \`npm run migrate\``);
+      if (applied !== journal.entries.length) {
+        return bad(`${applied} applied, ${journal.entries.length} in the journal — run \`npm run migrate\``);
+      }
+
+      // **The journal count cannot see drift between schema.ts and the SQL** — v1.7.0 passed this
+      // check while `sos_report` and the `sos_reported` enum value existed in the schema alone
+      // (docs/security-audit-2026-10-29.md, finding 1). So the latest snapshot — what drizzle-kit
+      // says the schema *is* — is compared with the database: every table it names must exist,
+      // and every enum label it names must be a label. Two statements, whatever the schema's size.
+      const last = journal.entries.at(-1);
+      if (last === undefined) return bad('the journal is empty');
+      const snapshotPath = resolve(
+        REPO_ROOT,
+        `packages/db/drizzle/meta/${last.tag.slice(0, 4)}_snapshot.json`,
+      );
+      const snapshot = JSON.parse(readFileSync(snapshotPath, 'utf8')) as {
+        tables: Record<string, { name: string; schema: string }>;
+        enums: Record<string, { name: string; values: string[] }>;
+      };
+      const tables = Object.values(snapshot.tables).map((table) => table.name);
+      const labels = Object.values(snapshot.enums).flatMap((one) =>
+        one.values.map((value) => `${one.name}:${value}`),
+      );
+      const literal = (value: string) => `'${value.replace(/'/g, "''")}'`;
+
+      const presentTables = Number(
+        await query(
+          `select count(*) from information_schema.tables where table_schema = 'public' and table_name in (${tables
+            .map(literal)
+            .join(',')})`,
+        ),
+      );
+      if (presentTables !== tables.length) {
+        return bad(
+          `${tables.length - presentTables} table(s) in the latest snapshot are missing from the database — the schema has drifted from the migrations`,
+        );
+      }
+      const presentLabels = Number(
+        await query(
+          `select count(*) from pg_enum e join pg_type t on t.oid = e.enumtypid where t.typname || ':' || e.enumlabel in (${labels
+            .map(literal)
+            .join(',')})`,
+        ),
+      );
+      if (presentLabels !== labels.length) {
+        return bad(
+          `${labels.length - presentLabels} enum value(s) in the latest snapshot are missing from the database — the schema has drifted from the migrations`,
+        );
+      }
+      return ok(`${applied} of ${journal.entries.length} applied; ${tables.length} tables and ${labels.length} enum values present`);
     },
   },
   {

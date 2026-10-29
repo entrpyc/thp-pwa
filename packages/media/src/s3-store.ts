@@ -38,18 +38,26 @@ export function buildMediaStore(): MediaStore {
   return {
     name: 's3',
 
-    async presignPut({ key, contentType, expiresInSeconds }) {
+    async presignPut({ key, contentType, expiresInSeconds, contentLength }) {
       return getSignedUrl(
         client,
-        new PutObjectCommand({ Bucket: settings.bucket, Key: key, ContentType: contentType }),
+        new PutObjectCommand({
+          Bucket: settings.bucket,
+          Key: key,
+          ContentType: contentType,
+          ...(contentLength === undefined ? {} : { ContentLength: contentLength }),
+        }),
         {
           expiresIn: expiresInSeconds,
           // **The content type has to be a signed header, not merely a parameter.** Without this
           // the signature covers only the host, and a browser is free to `PUT` anything it likes
           // under a grant issued for an mp3 — which would make "bound to the declared content type"
           // a sentence rather than a property. With it, a mismatched header fails the signature at
-          // the store before a byte of the body is read.
-          signableHeaders: new Set(['content-type']),
+          // the store before a byte of the body is read. The length, when the caller declared one,
+          // is bound the same way and for the same reason (store.ts, `contentLength`).
+          signableHeaders: new Set(
+            contentLength === undefined ? ['content-type'] : ['content-type', 'content-length'],
+          ),
         },
       );
     },

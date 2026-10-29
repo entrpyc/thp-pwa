@@ -1,7 +1,19 @@
+import { createHash } from 'node:crypto';
 import { ApiError } from '@/server/api/errors';
 import { logger } from '@/server/observability/logger';
 import { MailDeliveryError, type MailMessage, type MailTransport } from './message';
 import { buildTransport } from './transports';
+
+/**
+ * **What the log says about a recipient: a digest, not the address.** The log is read by an
+ * operator and shipped to wherever logs go; an address in it is personal data in a second place,
+ * and a member-written feedback subject beside it is their words in a second place
+ * (docs/security-audit-2026-10-29.md, finding 19). Twelve hex characters of SHA-256 are enough to
+ * correlate two lines about one person and nothing more.
+ */
+export function recipientDigest(address: string): string {
+  return createHash('sha256').update(address.trim().toLowerCase()).digest('hex').slice(0, 12);
+}
 
 /**
  * **Every outbound message goes through here.** One place that decides what is logged about a
@@ -55,14 +67,14 @@ export async function sendMail(
     await active.send(message);
     logger.info('mail.sent', {
       transport: active.name,
-      to: message.to,
-      subject: message.subject,
+      recipient: recipientDigest(message.to),
+      subjectLength: message.subject.length,
     });
   } catch (cause) {
     logger.error('mail.failed', {
       transport: active.name,
-      to: message.to,
-      subject: message.subject,
+      recipient: recipientDigest(message.to),
+      subjectLength: message.subject.length,
       errorMessage: cause instanceof Error ? cause.message : String(cause),
       // A transport wraps the provider's own error as `cause`; it can quote credentials, so it is
       // written to the server log and nowhere else.

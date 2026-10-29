@@ -106,6 +106,23 @@ jobs:
       - name: Typecheck (whole workspace, one program)
         run: npm run typecheck
 
+      # **Schema and migrations must agree.** `drizzle-kit generate` against a schema whose every
+      # change already has SQL writes nothing; against one that has drifted it writes a new
+      # migration, and that file appearing is the failure. v1.7.0 shipped a table, an enum value
+      # and two indexes that existed in schema.ts alone, and production answered 500 on reports,
+      # account deletion and every push (docs/security-audit-2026-10-29.md, finding 1). The
+      # migration test below sees the drift only once somebody wrote a test for the new table; this
+      # sees it for any table.
+      - name: Schema and migrations agree (no drizzle-kit diff)
+        run: |
+          npm run db:generate -- --name ci-drift-check
+          if [ -n "$(git status --porcelain -- packages/db/drizzle)" ]; then
+            echo "::error::packages/db/src/schema.ts has changes with no migration. Run 'npm run db:generate -- --name <what-changed>' and commit the result."
+            git status --porcelain -- packages/db/drizzle
+            git diff -- packages/db/drizzle/meta/_journal.json
+            exit 1
+          fi
+
       - name: Migrate
         run: npm run migrate
 

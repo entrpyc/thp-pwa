@@ -9,6 +9,7 @@ import { reassignBlocksAgainst } from './member-blocks';
 import { reassignNotesOfDeletedAuthor } from './notes';
 import { anonymiseNotificationsByActor } from './notifications';
 import { user } from './schema';
+import { reassignSosOfDeletedAuthor } from './sos';
 
 /**
  * **Deleting an account** (docs/project/prd.md 3.1.8–3.1.10) — the erasure itself. What it does
@@ -115,6 +116,9 @@ export async function deleteUserAccount(
 
       const notes = await reassignNotesOfDeletedAuthor(id, placeholder.id, tx);
       await deleteEmbeddingsForSources('note', notes.deletedPrivateNoteIds, tx);
+      // Prayer requests and replies move too, for the reason public notes do: other members wrote
+      // into those threads (docs/security-audit-2026-10-29.md, finding 6).
+      await reassignSosOfDeletedAuthor(id, placeholder.id, tx);
       const anonymisedNotifications = await anonymiseNotificationsByActor(
         id,
         REMOVED_MEMBER_DISPLAY_NAME,
