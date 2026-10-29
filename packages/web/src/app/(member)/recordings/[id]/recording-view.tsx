@@ -4,7 +4,7 @@ import Link from 'next/link';
 import { useSearchParams } from 'next/navigation';
 import { useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react';
 import {
-  MEMBER_LIBRARY_PAGE_PATH,
+  DASHBOARD_PAGE_PATH,
   memberRecordingPath,
   recordingProgressPath,
   seriesPagePath,
@@ -24,6 +24,16 @@ import { NotesPanel } from './notes-panel';
 import { RecordingContentProvider, toLoaded, useRecordingContentFor } from './recording-content';
 import { ReflectionCard, questionsOf } from './reflection';
 import { listOffsetLeftHere, tabFromAddress, writeTabToAddress } from './round-trip';
+import {
+  AboutIcon,
+  ChaptersIcon,
+  MindmapIcon,
+  ReflectionIcon,
+  RelatedIcon,
+  ScriptureIcon,
+  TranscriptIcon,
+} from './tab-icons';
+import { NotesIcon } from '../../notes/notes-icon';
 import { RelatedTeachings, useRelatedGroups } from './related-teachings';
 import { ScripturePanel } from './scripture-panel';
 import { TranscriptPanel } from './transcript-panel';
@@ -285,7 +295,8 @@ export function RecordingScreen({
   /**
    * `Related` is drawn only for a teaching with a related moment somewhere in it — the same line
    * `Scripture` and `Chapters` draw. The groups are fetched here, once per teaching, so the strip
-   * can decide before the tab is pressed; the panel filters them to the part playing.
+   * can decide before the tab is pressed; the panel lists every one of them, each anchored to the
+   * moment of this teaching it was found at.
    */
   const relatedGroups = useRelatedGroups(recordingId);
   const hasRelated = (relatedGroups?.length ?? 0) > 0;
@@ -352,21 +363,22 @@ export function RecordingScreen({
 
   /**
    * **Where back lands when there is no history to step through**: the study this teaching is part
-   * of, and the library only for a teaching that is in none.
+   * of, and the dashboard only for a teaching that is in none.
    *
    * It is the same destination the breadcrumb's parent segment points at, read off the same field of
    * the same payload — so the two controls that mean "up from here" cannot disagree. The label names
    * that fallback, because it is the one destination the control is sure of before it is pressed.
    *
-   * A teaching in no series keeps the library, because there is no study page to return to; that is
-   * the ordinary case rather than a degraded one, exactly as the missing cover above is. The same
-   * fallback covers the moment before the payload lands, when the band is already drawn and there is
-   * nothing yet to know — the breadcrumb draws its two segments in that window for the same reason.
+   * A teaching in no series goes to the dashboard, because there is no study page to return to and
+   * the library that used to stand in is gone (the operator's decision); that is the ordinary case
+   * rather than a degraded one, exactly as the missing cover above is. The same fallback covers the
+   * moment before the payload lands, when the band is already drawn and there is nothing yet to
+   * know — the breadcrumb draws its two segments in that window for the same reason.
    */
   const series = recording?.series ?? null;
   const back =
     series === null
-      ? { href: MEMBER_LIBRARY_PAGE_PATH, label: 'Back to recordings' }
+      ? { href: DASHBOARD_PAGE_PATH, label: 'Back to the dashboard' }
       : { href: seriesPagePath(series.id), label: `Back to ${series.title}` };
 
   return (
@@ -450,14 +462,17 @@ export function RecordingScreen({
             player over, and until it is pressed the other teaching keeps playing.
           */}
           <RecordingContentProvider value={content}>
-          <div className={styles.tabs} role="tablist" aria-label="Teaching contents">
+          <div className={styles.tabGrid} role="tablist" aria-label="Teaching contents">
             <button
-              className={styles.tab}
+              className={styles.tabTile}
               type="button"
               role="tab"
               aria-selected={openTab === 'notes'}
               onClick={() => chooseTab('notes')}
             >
+              <span className={styles.tabTileIcon}>
+                <NotesIcon size={22} />
+              </span>
               Notes
             </button>
             {/*
@@ -470,12 +485,15 @@ export function RecordingScreen({
             */}
             {hasAbout ? (
               <button
-                className={styles.tab}
+                className={styles.tabTile}
                 type="button"
                 role="tab"
                 aria-selected={openTab === 'about'}
                 onClick={() => chooseTab('about')}
               >
+                <span className={styles.tabTileIcon}>
+                  <AboutIcon size={22} />
+                </span>
                 About
               </button>
             ) : null}
@@ -489,12 +507,15 @@ export function RecordingScreen({
             */}
             {hasReflection ? (
               <button
-                className={styles.tab}
+                className={styles.tabTile}
                 type="button"
                 role="tab"
                 aria-selected={openTab === 'reflection'}
                 onClick={() => chooseTab('reflection')}
               >
+                <span className={styles.tabTileIcon}>
+                  <ReflectionIcon size={22} />
+                </span>
                 Reflection
               </button>
             ) : null}
@@ -511,23 +532,29 @@ export function RecordingScreen({
             */}
             {hasChapters ? (
               <button
-                className={styles.tab}
+                className={styles.tabTile}
                 type="button"
                 role="tab"
                 aria-selected={openTab === 'chapters'}
                 onClick={() => chooseTab('chapters')}
               >
+                <span className={styles.tabTileIcon}>
+                  <ChaptersIcon size={22} />
+                </span>
                 Chapters
               </button>
             ) : null}
             {recording.hasScripture ? (
               <button
-                className={styles.tab}
+                className={styles.tabTile}
                 type="button"
                 role="tab"
                 aria-selected={openTab === 'scripture'}
                 onClick={() => chooseTab('scripture')}
               >
+                <span className={styles.tabTileIcon}>
+                  <ScriptureIcon size={22} />
+                </span>
                 Scripture
               </button>
             ) : null}
@@ -540,12 +567,15 @@ export function RecordingScreen({
               skipped alongside — and bringing it back was this element and those two un-skips.
             */}
             <button
-              className={styles.tab}
+              className={styles.tabTile}
               type="button"
               role="tab"
               aria-selected={openTab === 'transcript'}
               onClick={() => chooseTab('transcript')}
             >
+              <span className={styles.tabTileIcon}>
+                <TranscriptIcon size={22} />
+              </span>
               Transcript
             </button>
             {/*
@@ -555,30 +585,37 @@ export function RecordingScreen({
             */}
             {recording.hasMindMap ? (
               <button
-                className={styles.tab}
+                className={styles.tabTile}
                 type="button"
                 role="tab"
                 aria-selected={openTab === 'mindmap'}
                 onClick={() => chooseTab('mindmap')}
               >
+                <span className={styles.tabTileIcon}>
+                  <MindmapIcon size={22} />
+                </span>
                 Mindmap
               </button>
             ) : null}
             {/*
-              `Related` — the moments in other teachings anchored to the part playing (3.9.2) —
-              last, and **drawn only for a teaching with a related moment somewhere in it**: the
-              strip decides off the groups fetched above, and the panel narrows them to the chapter
-              playing. It used to be a strip above the tabs that drew nothing until it had something
-              to say; as a tab, the empty part is stated inside the panel instead.
+              `Related` — the moments in other teachings this one touches (3.9.2), each anchored to
+              the moment here that triggered it — last, and **drawn only for a teaching with a
+              related moment somewhere in it**: the strip decides off the groups fetched above, and
+              the panel lists all of them. It used to narrow the list to the chapter playing, and
+              before that was a strip above the tabs; the whole list is what a member reading the
+              tab is asking for, and the chapter page is where the chapter's own slice lives.
             */}
             {hasRelated ? (
               <button
-                className={styles.tab}
+                className={styles.tabTile}
                 type="button"
                 role="tab"
                 aria-selected={openTab === 'related'}
                 onClick={() => chooseTab('related')}
               >
+                <span className={styles.tabTileIcon}>
+                  <RelatedIcon size={22} />
+                </span>
                 Related
               </button>
             ) : null}
@@ -642,7 +679,7 @@ export function RecordingScreen({
               ) : null}
 
               {openTab === 'related' && hasRelated && relatedGroups !== null ? (
-                <RelatedTeachings recordingId={recordingId} groups={relatedGroups} />
+                <RelatedTeachings groups={relatedGroups} />
               ) : null}
             </div>
           )}

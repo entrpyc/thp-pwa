@@ -65,7 +65,6 @@ const NOTIFICATION_CHANNELS = ['in_app', 'push'] as const;
  */
 export const ANALYTICS_ROUTES = [
   '/',
-  '/recordings',
   '/recordings/[id]',
   '/recordings/[id]/chapters/[chapterId]',
   '/series',

@@ -78,7 +78,7 @@ describe('routePattern', () => {
 
   it('leaves a static route alone, with or without a trailing slash', () => {
     expect(routePattern('/', {})).toBe('/');
-    expect(routePattern('/recordings/', {})).toBe('/recordings');
+    expect(routePattern('/series/', {})).toBe('/series');
     expect(routePattern('/now-playing', {})).toBe('/now-playing');
   });
 });

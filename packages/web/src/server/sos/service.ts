@@ -10,7 +10,7 @@ import {
   findSosSignalForViewer,
   insertSosReply,
   insertSosSignal,
-  listSosPrayingNames,
+  listSosPraying,
   listSosReplies,
   listSosSignals,
   setSosPraying,
@@ -23,6 +23,8 @@ import {
   MAX_SOS_DESCRIPTION_LENGTH,
   MAX_SOS_REPLY_LENGTH,
   SOS_LIMIT_MESSAGE,
+  ANONYMOUS_AUTHOR,
+  SOMEONE,
   TERMS_REQUIRED_MESSAGE,
   isSosStatus,
   isSosUrgency,
@@ -122,6 +124,7 @@ export async function raiseSignalFor(actor: Actor, body: unknown): Promise<SosSi
     field: 'description',
   });
   requireAllowedWords(actor, description, 'sos.raise', 'sos');
+  const anonymous = parseAnonymous(fields['anonymous']);
 
   if ((await countOpenSosSignalsByAuthor(actor.id)) >= MAX_OPEN_SOS_PER_MEMBER) {
     logger.warn('sos.refused', {
@@ -134,10 +137,17 @@ export async function raiseSignalFor(actor: Actor, body: unknown): Promise<SosSi
     throw ApiError.sosLimit(SOS_LIMIT_MESSAGE);
   }
 
-  const row = await insertSosSignal({ authorId: actor.id, urgency, description });
-  logger.info('sos.raise', { ...audit(actor, 'sos.raise', `sos:${row.id}`), urgency });
+  const row = await insertSosSignal({ authorId: actor.id, urgency, description, anonymous });
+  logger.info('sos.raise', { ...audit(actor, 'sos.raise', `sos:${row.id}`), urgency, anonymous });
 
-  await notifySosRaised({ signalId: row.id, urgency, description, author: actor });
+  // The notice names the member only when the signal does.
+  await notifySosRaised({
+    signalId: row.id,
+    urgency,
+    description,
+    author: actor,
+    authorName: anonymous ? SOMEONE : actor.displayName,
+  });
 
   return { signal: await detail(await requireVisible(actor, row.id), actor) };
 }
@@ -146,12 +156,18 @@ export async function raiseSignalFor(actor: Actor, body: unknown): Promise<SosSi
 // Responding
 // =================================================================================================
 
-/** Press Praying ([3.16.5](docs/project/prd.md)). Pressing again is the same state. */
-export async function setPrayingFor(actor: Actor, signalId: string): Promise<SosSignalPayload> {
+/**
+ * Press Praying ([3.16.5](docs/project/prd.md)), with or without one's name. Pressing again is the
+ * same state, except that the press's word on the name is taken each time.
+ */
+export async function setPrayingFor(actor: Actor, signalId: string, body: unknown): Promise<SosSignalPayload> {
   authorise(actor, 'sos.respond', `sos:${signalId}`);
+  const anonymous = parseAnonymous(
+    body === null || body === undefined || typeof body !== 'object' ? undefined : (body as Record<string, unknown>)['anonymous'],
+  );
   const signal = await requireVisible(actor, signalId);
   requireOpen(signal, 'This prayer request has been closed, so there is nothing more to pray for here.');
-  await setSosPraying({ signalId, userId: actor.id });
+  await setSosPraying({ signalId, userId: actor.id, anonymous });
   return { signal: await detail(await requireVisible(actor, signalId), actor) };
 }
 
@@ -346,17 +362,20 @@ function requireAllowedWords(actor: Actor, text: string, action: string, target:
 // =================================================================================================
 
 async function detail(row: SosSignalListRow, actor: Actor): Promise<SosSignalDetailView> {
-  const [replies, prayingNames] = await Promise.all([
+  const [replies, praying] = await Promise.all([
     listSosReplies(row.id, actor.id),
-    listSosPrayingNames(row.id, actor.id),
+    listSosPraying(row.id, actor.id),
   ]);
   const avatars = await signAvatars([
     row.authorAvatarKey,
     ...replies.map((reply) => reply.authorAvatarKey),
   ]);
+  // A member's own anonymous press is theirs to see by name; everybody else's is a count.
+  const named = praying.filter((one) => !one.anonymous || one.userId === actor.id);
   return {
     ...describeSignal(row, actor, avatars),
-    prayingNames,
+    prayingNames: named.map((one) => one.displayName),
+    prayingAnonymousCount: praying.length - named.length,
     replies: threaded(replies, actor, avatars),
   };
 }
@@ -397,13 +416,19 @@ function describeSignal(
     id: row.id,
     urgency: row.urgency,
     description: row.description,
-    author: author(row.authorId, row.authorDisplayName, row.authorAvatarKey, avatars),
+    // The author reads their own name on their own anonymous signal; nobody else does.
+    author:
+      row.anonymous && row.authorId !== reader.id
+        ? ANONYMOUS_AUTHOR
+        : author(row.authorId, row.authorDisplayName, row.authorAvatarKey, avatars),
+    anonymous: row.anonymous,
     mine: row.authorId === reader.id,
     raisedAt: row.raisedAt.toISOString(),
     closedAt: row.closedAt?.toISOString() ?? null,
     closingNote: row.closingNote,
     prayingCount: row.prayingCount,
     praying: row.praying,
+    prayingAnonymously: row.prayingAnonymously,
     replyCount: row.replyCount,
   };
 }
@@ -477,6 +502,13 @@ async function parseParent(value: unknown, signalId: string): Promise<SosReplyRo
   const top = await findSosReplyById(named.parentId);
   if (top === null) throw ApiError.invalidInput('The reply to answer is not on this prayer request.');
   return top;
+}
+
+/** `anonymous` on a raise or a press: absent is named; anything but a boolean is refused. */
+function parseAnonymous(value: unknown): boolean {
+  if (value === undefined || value === null) return false;
+  if (typeof value !== 'boolean') throw ApiError.invalidInput('anonymous must be true or false.');
+  return value;
 }
 
 function asObject(body: unknown, complaint: string): Record<string, unknown> {

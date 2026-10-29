@@ -325,6 +325,9 @@ const EMPTY_TRAIL: BreadcrumbTrail = { ancestors: NO_ANCESTORS, current: null, c
 const BreadcrumbContext = createContext<{
   readonly trail: BreadcrumbTrail;
   setTrail(trail: BreadcrumbTrail): void;
+  /** Whether the page on screen has asked for the transport to stay out of sight. */
+  readonly transportHidden: boolean;
+  setTransportHidden(hidden: boolean): void;
 } | null>(null);
 
 export function usePlayer(): PlayerApi {
@@ -369,6 +372,25 @@ export function useBreadcrumbTrail(
 
 export function useBreadcrumbTrailValue(): BreadcrumbTrail {
   return useContext(BreadcrumbContext)?.trail ?? EMPTY_TRAIL;
+}
+
+/**
+ * Keep the transport out of sight for as long as this page is mounted and `hidden` holds — the
+ * Flow Tracker's start screen and its question screen, where a bar of playback controls under a
+ * question about one's own life is a distraction rather than a tool. Playback is not touched: a
+ * teaching that was playing goes on playing and the bar is back the moment the page is left.
+ */
+export function useTransportHidden(hidden: boolean): void {
+  const setTransportHidden = useContext(BreadcrumbContext)?.setTransportHidden;
+  useEffect(() => {
+    if (!hidden) return undefined;
+    setTransportHidden?.(true);
+    return () => setTransportHidden?.(false);
+  }, [setTransportHidden, hidden]);
+}
+
+export function useTransportHiddenValue(): boolean {
+  return useContext(BreadcrumbContext)?.transportHidden ?? false;
 }
 
 /** How often the near-expiry check runs. Cheap — it compares two numbers. */
@@ -468,6 +490,7 @@ export function PlayerProvider({
   const [durationMs, setDurationMs] = useState(0);
   const [speed, setSpeed] = useState(initialSpeed);
   const [breadcrumb, setBreadcrumb] = useState<BreadcrumbTrail>(EMPTY_TRAIL);
+  const [transportHidden, setTransportHidden] = useState(false);
   const [transcript, setTranscript] = useState<LoadedTranscript | null>(null);
   const [captionsOn, setCaptionsOn] = useState(false);
   /** How many mounted surfaces are following the words without the pill (`attendCaptions`). */
@@ -1424,8 +1447,8 @@ export function PlayerProvider({
   );
 
   const crumb = useMemo(
-    () => ({ trail: breadcrumb, setTrail: setBreadcrumb }),
-    [breadcrumb],
+    () => ({ trail: breadcrumb, setTrail: setBreadcrumb, transportHidden, setTransportHidden }),
+    [breadcrumb, transportHidden],
   );
 
   return (

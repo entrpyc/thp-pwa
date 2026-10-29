@@ -2196,6 +2196,12 @@ export const sosSignal = pgTable(
       .references(() => user.id, { onDelete: 'cascade' }),
     urgency: sosUrgency('urgency').notNull(),
     description: text('description').notNull(),
+    /**
+     * Raised without a name ([3.16.13](docs/project/prd.md), as the operator amended it): the row
+     * still knows its author — the cap, Close and Remove need to — but every reader except the
+     * author is shown "Anonymous" in place of the name and the picture.
+     */
+    anonymous: boolean('anonymous').notNull().default(false),
     raisedAt: timestamp('raised_at', { withTimezone: true }).notNull().defaultNow(),
     /** Null while open ([3.16.10](docs/project/prd.md)). Set once; a closed signal is not reopened. */
     closedAt: timestamp('closed_at', { withTimezone: true }),
@@ -2251,6 +2257,8 @@ export const sosPraying = pgTable(
       .references(() => user.id, { onDelete: 'cascade' }),
     /** The order the names are listed in on the signal's page. */
     prayedAt: timestamp('prayed_at', { withTimezone: true }).notNull().defaultNow(),
+    /** Pressed without a name: counted, never listed ([3.16.5](docs/project/prd.md), as amended). */
+    anonymous: boolean('anonymous').notNull().default(false),
   },
   (table) => [primaryKey({ columns: [table.signalId, table.userId] })],
 );
@@ -2423,7 +2431,12 @@ export const flowSession = pgTable(
     userId: uuid('user_id')
       .notNull()
       .references(() => user.id, { onDelete: 'cascade' }),
-    /** The teaching the member fell behind at ([3.14.2](docs/project/prd.md)). */
+    /**
+     * The newest of the teachings the member picked ([3.14.2](docs/project/prd.md)) — the row's
+     * anchor, which it cascades with. The full pick is what the session's items name: a session
+     * was once a range "from this teaching to the latest", and the column keeps its name because
+     * renaming it is a migration for no gain.
+     */
     divergenceRecordingId: uuid('divergence_recording_id')
       .notNull()
       .references(() => recording.id, { onDelete: 'cascade' }),

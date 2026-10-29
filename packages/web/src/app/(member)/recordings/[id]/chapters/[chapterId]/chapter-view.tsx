@@ -25,16 +25,18 @@ import {
   useRecordingContentFor,
 } from '../../recording-content';
 import { ReflectionCard } from '../../reflection';
+import { RelatedTeachings, relatedGroupsInChapter, useRelatedGroups } from '../../related-teachings';
 import { recordingTabHref, tabFromAddress, writeTabToAddress } from '../../round-trip';
 import { ScripturePanel } from '../../scripture-panel';
 import { TranscriptPanel } from '../../transcript-panel';
 import styles from '../../../../screens.module.css';
 
 /**
- * The strip's tabs, by the name each takes in the address — the recording page's, minus `About`,
- * `Chapters` and `Related`, which are the teaching's and not a chapter's.
+ * The strip's tabs, by the name each takes in the address — the recording page's, minus `About`
+ * and `Chapters`, which are the teaching's and not a chapter's. `Related` is kept and scoped: the
+ * links anchored to this chapter's sentences are this chapter's.
  */
-const TABS = ['notes', 'reflection', 'scripture', 'transcript', 'mindmap'] as const;
+const TABS = ['notes', 'reflection', 'scripture', 'transcript', 'mindmap', 'related'] as const;
 
 /** The strip is single-select, as the recording page's is. `null` is all closed. */
 type OpenTab = (typeof TABS)[number] | null;
@@ -131,17 +133,29 @@ export function ChapterScreen({
    */
   const question = chapter?.question ?? null;
   const hasReflection = question !== null;
+  /**
+   * **This chapter's related moments, and no other's** — the teaching's groups, fetched once as
+   * the recording page fetches them, narrowed to those whose triggering sentence falls in this
+   * chapter. The tab is drawn only when that slice is non-empty, which is the recording page's
+   * rule read through one chapter.
+   */
+  const relatedGroups = useRelatedGroups(recordingId);
+  const hasRelated =
+    relatedGroups !== null && relatedGroupsInChapter(relatedGroups, chapterId).length > 0;
 
   /**
-   * An address naming `Reflection` for a chapter that has no question falls back to `Notes` — the
-   * recording page's rule for every tab it does not draw. It waits for the chapter: `null` is "not
-   * known yet", not "none".
+   * An address naming `Reflection` for a chapter that has no question, or `Related` for one with
+   * no related moment, falls back to `Notes` — the recording page's rule for every tab it does not
+   * draw. Each waits for its list: `null` is "not known yet", not "none".
    */
   useEffect(() => {
-    if (openTab !== 'reflection' || chapter === null || hasReflection) return;
+    const undrawn =
+      (openTab === 'reflection' && chapter !== null && !hasReflection) ||
+      (openTab === 'related' && relatedGroups !== null && !hasRelated);
+    if (!undrawn) return;
     setOpenTab('notes');
     writeTabToAddress('notes', 'notes');
-  }, [chapter, hasReflection, openTab]);
+  }, [chapter, hasReflection, hasRelated, openTab, relatedGroups]);
 
   /**
    * `home › series › recording › chapter` — **the whole path down to here**.
@@ -388,6 +402,22 @@ export function ChapterScreen({
                 Mindmap
               </button>
             ) : null}
+            {/*
+              `Related`, last as on the recording page, and **drawn only when a sentence of this
+              chapter triggered a link**: the panel shows the chapter's own groups and nothing of
+              the rest of the teaching, which is what every other tab here does with its content.
+            */}
+            {hasRelated ? (
+              <button
+                className={styles.tab}
+                type="button"
+                role="tab"
+                aria-selected={openTab === 'related'}
+                onClick={() => chooseTab('related')}
+              >
+                Related
+              </button>
+            ) : null}
           </div>
 
           {openTab === 'notes' ? (
@@ -419,6 +449,10 @@ export function ChapterScreen({
               recordingId={recordingId}
               chapter={{ startMs: chapter.startMs, title: chapter.title }}
             />
+          ) : null}
+
+          {openTab === 'related' && hasRelated && relatedGroups !== null ? (
+            <RelatedTeachings groups={relatedGroups} chapterId={chapterId} />
           ) : null}
           </RecordingContentProvider>
         </>

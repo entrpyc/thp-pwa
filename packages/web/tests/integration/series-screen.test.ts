@@ -2,7 +2,6 @@ import { afterAll, beforeAll, describe, expect, it, inject } from 'vitest';
 import { chromium, type Browser, type Locator, type Page } from 'playwright';
 import {
   DASHBOARD_PAGE_PATH,
-  MEMBER_LIBRARY_PAGE_PATH,
   MEMBER_SERIES_PAGE_PATH,
   ROLE,
   recordingPagePath,
@@ -280,108 +279,6 @@ describe('the series listing at /series', () => {
       await page.context().close();
     }
   }, 120_000);
-
-  /**
-   * **The library's rows carry the same cover, in the same slot and at the same size.**
-   *
-   * A recording has no artwork of its own, so what a library row shows is the study's — the same
-   * picture, the same signed object, and one stylesheet rule rather than two. The size assertion is
-   * the point of doing this against the series listing rather than in isolation: two listings
-   * drawing the same picture at two sizes is exactly the drift a shared rule exists to prevent.
-   */
-  it('draws that same cover on the library row for a teaching in that series', async () => {
-    const page = await signInAs(member);
-    try {
-      await page.goto(`${baseUrl}${MEMBER_SERIES_PAGE_PATH}`, { waitUntil: 'domcontentloaded' });
-      const onListing = rowFor(page, COVERED_SERIES_TITLE).locator('img');
-      await expect.poll(() => onListing.count(), { timeout: 30_000 }).toBe(1);
-      const listingBox = await onListing.boundingBox();
-
-      await page.goto(`${baseUrl}${MEMBER_LIBRARY_PAGE_PATH}`, { waitUntil: 'domcontentloaded' });
-      const row = page
-        .getByRole('list', { name: 'Recordings' })
-        .getByRole('listitem')
-        .filter({ hasText: COVERED_TITLE })
-        .first();
-      const cover = row.locator('img');
-      await expect.poll(() => cover.count(), { timeout: 30_000 }).toBe(1);
-
-      // One object, signed twice — the same picture rather than two URLs that both happen to work.
-      expect((await cover.getAttribute('src')) ?? '').toContain(COVER_KEY);
-      // Decorative here too: the study is named in the strip under the row, so announcing it on the
-      // image would read the study twice before the teaching's own title.
-      expect(await cover.getAttribute('alt')).toBe('');
-
-      const libraryBox = await cover.boundingBox();
-      expect(libraryBox).not.toBeNull();
-      expect(listingBox).not.toBeNull();
-      expect((libraryBox as { width: number }).width).toBe((listingBox as { width: number }).width);
-      expect((libraryBox as { height: number }).height).toBe(
-        (listingBox as { height: number }).height,
-      );
-
-      // At the left of the row, before the title, as it is on the listing.
-      const title = await row.getByText(COVERED_TITLE).first().boundingBox();
-      expect((libraryBox as { x: number }).x).toBeLessThan((title as { x: number }).x);
-    } finally {
-      await page.context().close();
-    }
-  }, 180_000);
-
-  /**
-   * **The strip naming the study is divided from the row above it, edge to edge, and answers the
-   * pointer.**
-   *
-   * Two claims that are really one: the strip fills the row's width, which is what lets the hairline
-   * read as a rule between the teaching and the study rather than as an underline whose length was
-   * decided by how long somebody's series title happens to be — and filling the width is also what
-   * makes it the size of a thing you press, which is what earns it a hover.
-   */
-  it('divides the series strip from its row full width, and washes it on hover', async () => {
-    const page = await signInAs(member);
-    try {
-      await page.goto(`${baseUrl}${MEMBER_LIBRARY_PAGE_PATH}`, { waitUntil: 'domcontentloaded' });
-      const list = page.getByRole('list', { name: 'Recordings' });
-      const row = list
-        .getByRole('listitem')
-        .filter({ hasText: COVERED_TITLE })
-        .first();
-      const strip = row.getByRole('link', { name: COVERED_SERIES_TITLE });
-      await expect.poll(() => strip.count(), { timeout: 30_000 }).toBe(1);
-
-      /*
-       * Full width: the strip fills the card it sits in.
-       *
-       * Against the card's `clientWidth` rather than its bounding box, because the box includes the
-       * card's own 1px border on each side and the strip — a block child — fills the content box
-       * inside it. Comparing box to box would be off by two pixels for a reason that has nothing to
-       * do with what is being asserted.
-       */
-      const stripBox = await strip.boundingBox();
-      expect(stripBox).not.toBeNull();
-      const cardContent = await row.evaluate((element) => element.clientWidth);
-      expect(Math.round((stripBox as { width: number }).width)).toBe(cardContent);
-
-      // And the divider is a real border on it rather than a shorter line drawn by the text.
-      const border = await strip.evaluate((element) => {
-        const style = getComputedStyle(element);
-        return { width: style.borderTopWidth, style: style.borderTopStyle };
-      });
-      expect(border.style).toBe('solid');
-      expect(Number.parseFloat(border.width)).toBeGreaterThan(0);
-
-      // The hover wash is the row's own, so a member moving down the list sees one behaviour.
-      const before = await strip.evaluate((element) => getComputedStyle(element).backgroundColor);
-      await strip.hover();
-      await expect
-        .poll(() => strip.evaluate((element) => getComputedStyle(element).backgroundColor), {
-          timeout: 30_000,
-        })
-        .not.toBe(before);
-    } finally {
-      await page.context().close();
-    }
-  }, 180_000);
 
   it('crops the thumbnail to its frame from the centre rather than stretching it', async () => {
     const page = await signInAs(member);
@@ -734,7 +631,7 @@ describe('a series with no cover shows nothing rather than an empty frame', () =
         .toBe(1);
 
       // No series at all, so no cover to inherit — the ordinary case, not a degraded one.
-      const band = heroBand(page, 'Back to recordings');
+      const band = heroBand(page, 'Back to the dashboard');
       expect(await band.locator('img').count()).toBe(0);
       const box = await band.boundingBox();
       expect((box as { height: number }).height).toBeGreaterThan(0);
@@ -764,14 +661,15 @@ describe('the ways in and the way through', () => {
     }
   }, 180_000);
 
-  it('offers a member All series first, ahead of All recordings and the rest', async () => {
+  it('offers a member All series first, ahead of the rest', async () => {
     const page = await signInAs(member);
     try {
-      // No *Dashboard* in the menu since the home icon on the bar took that over, and no
-      // *Highlights* or *Flow Tracker* since the dashboard's tiles did — the operator's decision.
+      // The member's own two places first. No *Dashboard* in the menu since the home icon on the
+      // bar took that over, and no *Flow Tracker* since the dashboard's tile did — the operator's decision.
       expect(await menuEntries(page)).toEqual([
+        'My notes',
+        'My highlights',
         'All series',
-        'All recordings',
         'App tour',
         'Report a bug',
         'My profile',
@@ -788,22 +686,6 @@ describe('the ways in and the way through', () => {
     }
   }, 120_000);
 
-  it('reaches a series from a library row`s series link', async () => {
-    const page = await signInAs(member);
-    try {
-      await page.goto(`${baseUrl}${MEMBER_LIBRARY_PAGE_PATH}`, { waitUntil: 'domcontentloaded' });
-      const rows = page.getByRole('list', { name: 'Recordings' }).getByRole('listitem');
-      await expect.poll(() => rows.count(), { timeout: 30_000 }).toBeGreaterThan(0);
-
-      const row = rows.filter({ hasText: FIRST_TITLE }).first();
-      const link = row.getByRole('link', { name: SERIES_TITLE });
-      expect(await link.count()).toBe(1);
-      await link.click();
-      await page.waitForURL(`${baseUrl}${seriesPagePath(seriesId)}`, { timeout: 30_000 });
-    } finally {
-      await page.context().close();
-    }
-  }, 180_000);
 });
 
 describe('the breadcrumb', () => {
@@ -873,17 +755,17 @@ describe('the breadcrumb', () => {
     }
   }, 180_000);
 
-  /** A teaching in no study has no study page to fall back to, so it keeps the library. */
-  it('falls back to the library from a teaching in no series', async () => {
+  /** A teaching in no study has no study page to fall back to, so it goes to the dashboard. */
+  it('falls back to the dashboard from a teaching in no series', async () => {
     const page = await signInAs(member);
     try {
       const fresh = await page.context().newPage();
       await fresh.goto(`${baseUrl}${recordingPagePath(looseId)}`, { waitUntil: 'domcontentloaded' });
 
-      const back = fresh.getByRole('link', { name: 'Back to recordings' });
+      const back = fresh.getByRole('link', { name: 'Back to the dashboard' });
       await expect.poll(() => back.count(), { timeout: 30_000 }).toBe(1);
       await back.click();
-      await fresh.waitForURL(`${baseUrl}${MEMBER_LIBRARY_PAGE_PATH}`, { timeout: 30_000 });
+      await fresh.waitForURL(`${baseUrl}${DASHBOARD_PAGE_PATH}`, { timeout: 30_000 });
     } finally {
       await page.context().close();
     }

@@ -1,13 +1,15 @@
 'use client';
 
 import Link from 'next/link';
+import { useRouter } from 'next/navigation';
 import { useEffect, useState } from 'react';
 import {
-  FLOW_ANSWERS,
-  FLOW_ANSWER_LABEL,
+  FLOW_RATINGS,
+  FLOW_RATING_ENDS,
   FLOW_TRACKER_PAGE_PATH,
   FLOW_TRACKER_START_PAGE_PATH,
   chapterPagePath,
+  flowSessionAbandonPath,
   flowSessionItemDonePath,
   flowSessionItemPath,
   flowSessionPath,
@@ -15,7 +17,7 @@ import {
   nextUnanswered,
   recordingPagePath,
   type AnswerFlowItemRequest,
-  type FlowAnswer,
+  type FlowRating,
   type FlowReadingGroup,
   type FlowReadingRow,
   type FlowSessionItemView,
@@ -25,24 +27,26 @@ import {
   type MarkFlowItemRequest,
 } from '@thp/shared';
 import { ApiClientError, apiFetch } from '@/client/api-client';
-import { useBreadcrumbTrail, usePlayer } from '../../../player-context';
-import { formatDay, plural } from '../../format';
+import { useBreadcrumbTrail, usePlayer, useTransportHidden } from '../../../player-context';
+import { formatDay, listTitles, plural } from '../../format';
 import styles from '../../flow-tracker.module.css';
 
 /**
  * **One session** ([3.14.5](docs/project/prd.md)–[3.14.10](docs/project/prd.md)).
  *
  * While it runs: **one question per screen**. The teaching's cover, title and date; the chapter's
- * title and summary; the question; the five answers; a progress line. Pressing an answer sends it
- * and moves on to the next unanswered question; *Back* steps to the question before, where the
- * answer given is shown pressed and can be changed. *Pause and come back later* is a link to the
- * Flow Tracker page — nothing is lost, because every answer was saved as it was pressed.
+ * title and summary; the question; the scale of 1 to 5 as a row of radio buttons with its two ends
+ * worded; a progress line. Choosing a rating sends it and moves on to the next unanswered question;
+ * *Back* steps to the question before, where the rating given is shown chosen and can be changed.
+ * *Pause and come back later* is a link to the Flow Tracker page — nothing is lost, because every
+ * rating was saved as it was chosen. The transport stays out of sight for as long as the session
+ * is asking.
  *
- * Once complete: **the reading list** ([3.14.9](docs/project/prd.md)), grouped by teaching from the
- * oldest in range forward. Each group's head opens the teaching's page; each row names the chapter
- * as a link to its page, shows the member's own answer as a quiet label, offers play-from-here
- * ([3.14.7](docs/project/prd.md)), nests the related chapters of other teachings beneath it, and
- * can be ticked off.
+ * Once complete: **the list of parts to focus on** ([3.14.9](docs/project/prd.md)), grouped by
+ * teaching from the oldest picked forward. Each group's head opens the teaching's page; each row
+ * names the chapter as a link to its page, shows the member's own rating as a quiet label, offers
+ * play-from-here ([3.14.7](docs/project/prd.md)), nests the related chapters of other teachings
+ * beneath it, and can be ticked off.
  *
  * **It reads what the API answers and decides nothing** — with one exception for feel. A tick is
  * shown as ticked the moment it is pressed, and only that row waits on the write; the session the
@@ -54,6 +58,7 @@ const LOAD_FAILED = 'Could not load this session. Reload the page to try again.'
 const WRITE_FAILED = 'Could not save that. Nothing has changed — try again in a moment.';
 
 export function SessionView({ sessionId }: { sessionId: string }) {
+  const router = useRouter();
   const [session, setSession] = useState<Session | null>(null);
   const [missing, setMissing] = useState(false);
   const [failure, setFailure] = useState<string | null>(null);
@@ -67,6 +72,7 @@ export function SessionView({ sessionId }: { sessionId: string }) {
     session === null ? 'Session' : session.status === 'complete' ? 'What to live out' : 'Session',
     [{ label: 'Flow Tracker', href: FLOW_TRACKER_PAGE_PATH }],
   );
+  useTransportHidden(session !== null && session.status === 'in_progress');
 
   useEffect(() => {
     let stale = false;
@@ -98,6 +104,25 @@ export function SessionView({ sessionId }: { sessionId: string }) {
     } catch (caught) {
       setFailure(caught instanceof ApiClientError ? caught.message : WRITE_FAILED);
     } finally {
+      setBusy(false);
+    }
+  }
+
+  /**
+   * Give the session up from its first screen ([3.14.10](docs/project/prd.md)) — the one place
+   * *Back* has nowhere to go — and return to the Flow Tracker page, which offers a fresh start.
+   */
+  async function cancel(): Promise<void> {
+    setBusy(true);
+    setFailure(null);
+    try {
+      await apiFetch<FlowSessionPayload>(flowSessionAbandonPath(sessionId), {
+        method: 'POST',
+        credentials: 'include',
+      });
+      router.push(FLOW_TRACKER_PAGE_PATH);
+    } catch (caught) {
+      setFailure(caught instanceof ApiClientError ? caught.message : WRITE_FAILED);
       setBusy(false);
     }
   }
@@ -225,8 +250,9 @@ export function SessionView({ sessionId }: { sessionId: string }) {
             const previous = items[index - 1];
             if (previous !== undefined) setShowing(previous.id);
           }}
-          onAnswer={(answer) => {
-            const body: AnswerFlowItemRequest = { answer };
+          onCancel={() => void cancel()}
+          onAnswer={(rating) => {
+            const body: AnswerFlowItemRequest = { rating };
             setShowing(null);
             void write(flowSessionItemPath(session.id, current.id), body);
           }}
@@ -262,20 +288,31 @@ function withDone(session: Session, itemId: string, done: boolean): Session {
 // The question screen (3.14.5, 3.14.6)
 // =================================================================================================
 
+/** What a rung of the scale is called to a screen reader: the ends carry their words. */
+function ratingLabel(rating: FlowRating): string {
+  if (rating === 1) return `1 — ${FLOW_RATING_ENDS.low}`;
+  if (rating === 5) return `5 — ${FLOW_RATING_ENDS.high}`;
+  return String(rating);
+}
+
 function QuestionScreen({
   item,
   busy,
   canGoBack,
   onBack,
+  onCancel,
   onAnswer,
 }: {
   item: FlowSessionItemView;
   busy: boolean;
   canGoBack: boolean;
   onBack: () => void;
-  onAnswer: (answer: FlowAnswer) => void;
+  /** The first screen's way out: there is no question before it to go back to. */
+  onCancel: () => void;
+  onAnswer: (rating: FlowRating) => void;
 }) {
   const kind = item.kind === 'chapter' ? 'Chapter' : item.kind === 'tag' ? 'Theme' : 'Teaching';
+  const [cancelling, setCancelling] = useState(false);
   return (
     <section className={styles.question} aria-label={`Question ${item.position}`}>
       {item.recording === null ? null : <Teaching teaching={item.recording} />}
@@ -299,30 +336,73 @@ function QuestionScreen({
         <p className={styles.subjectSummary}>{item.question}</p>
       </div>
 
-      <ul className={styles.answers} aria-label="Your answer">
-        {FLOW_ANSWERS.map((answer) => (
-          <li key={answer}>
-            <button
-              className={styles.answer}
-              type="button"
-              disabled={busy}
-              aria-pressed={item.answer === answer}
-              onClick={() => onAnswer(answer)}
-            >
-              {FLOW_ANSWER_LABEL[answer]}
-            </button>
-          </li>
-        ))}
-      </ul>
+      <fieldset className={styles.scale} disabled={busy}>
+        <legend className={styles.scaleLegend}>Your answer, from 1 to 5</legend>
+        <div className={styles.scaleRow} role="radiogroup" aria-label="Your answer">
+          {FLOW_RATINGS.map((rating) => {
+            const id = `rating-${item.id}-${rating}`;
+            return (
+              <label className={styles.scaleStep} key={rating} htmlFor={id}>
+                <input
+                  className={styles.scaleInput}
+                  id={id}
+                  type="radio"
+                  name={`rating-${item.id}`}
+                  value={rating}
+                  checked={item.rating === rating}
+                  aria-label={ratingLabel(rating)}
+                  /*
+                   * Answered on the press, not on the change: a rung that is already chosen —
+                   * the member stepped back to it — raises no change event, and pressing it has
+                   * to count as "keep this" and move on, exactly as pressing another rung would.
+                   */
+                  onClick={() => onAnswer(rating)}
+                  onChange={() => undefined}
+                />
+                <span className={styles.scaleNumber} aria-hidden="true">
+                  {rating}
+                </span>
+              </label>
+            );
+          })}
+        </div>
+        <div className={styles.scaleEnds} aria-hidden="true">
+          <span className={styles.scaleEnd}>{FLOW_RATING_ENDS.low}</span>
+          <span className={styles.scaleEnd}>{FLOW_RATING_ENDS.high}</span>
+        </div>
+      </fieldset>
 
       <div className={styles.questionFoot}>
-        <button className={styles.textLink} type="button" disabled={!canGoBack || busy} onClick={onBack}>
-          ‹ Back
-        </button>
+        {canGoBack ? (
+          <button className={styles.textLink} type="button" disabled={busy} onClick={onBack}>
+            ‹ Back
+          </button>
+        ) : (
+          <button className={styles.textLink} type="button" disabled={busy} onClick={() => setCancelling(true)}>
+            Cancel session
+          </button>
+        )}
         <Link className={styles.textLink} href={FLOW_TRACKER_PAGE_PATH}>
           Pause and come back later
         </Link>
       </div>
+
+      {cancelling ? (
+        <div className={styles.failure} role="alertdialog" aria-label="Cancel this session?">
+          <p className={styles.pageLead}>
+            Cancel this session? Anything you have answered is set aside and will not appear in your
+            past sessions.
+          </p>
+          <div className={styles.actions}>
+            <button className={styles.primary} type="button" disabled={busy} onClick={onCancel}>
+              {busy ? 'Cancelling…' : 'Yes, cancel it'}
+            </button>
+            <button className={styles.secondary} type="button" disabled={busy} onClick={() => setCancelling(false)}>
+              Keep going
+            </button>
+          </div>
+        </div>
+      ) : null}
     </section>
   );
 }
@@ -368,11 +448,11 @@ function ReadingList({
         <h1 className={styles.pageTitle}>What to live out</h1>
         <p className={styles.pageLead}>
           {rows === 0
-            ? 'Nothing to revisit — every part of the teaching since then is one you are living out. Well done.'
-            : `${plural(rows, 'chapter')} to revisit and live out, from the oldest teaching towards today. Tick each one off as you go.`}
+            ? 'Nothing to focus on — every part you reflected on is one you are living out. Well done.'
+            : `${plural(rows, 'part')} you might want to focus on, oldest teaching first. Tick each one off as you go.`}
         </p>
         <p className={styles.progress}>
-          From {session.divergence.title} ({formatDay(session.divergence.recordedAt)}) ·{' '}
+          {listTitles(session.teachings.map((one) => one.title))} ·{' '}
           {plural(session.teachingCount, 'teaching')} · {plural(session.questionCount, 'question')}
           {session.completedAt === null ? '' : ` · completed ${formatDay(session.completedAt)}`}
         </p>
@@ -513,8 +593,8 @@ function ReadingRowView({
             {title}
           </Link>
         )}
-        {item.answer === null ? null : (
-          <span className={styles.readingAnswer}>You said: {FLOW_ANSWER_LABEL[item.answer]}</span>
+        {item.rating === null ? null : (
+          <span className={styles.readingAnswer}>You rated this {item.rating} of 5</span>
         )}
       </div>
 

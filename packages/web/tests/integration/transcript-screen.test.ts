@@ -2,7 +2,7 @@ import { afterAll, beforeAll, describe, expect, it, inject } from 'vitest';
 import { chromium, type Browser, type Page, type Request } from 'playwright';
 import {
   API_PREFIX,
-  MEMBER_LIBRARY_PAGE_PATH,
+  MEMBER_SERIES_PAGE_PATH,
   DASHBOARD_PAGE_PATH,
   ROLE,
   recordingPagePath,
@@ -412,8 +412,8 @@ describe('captions float above the transport on any member screen', () => {
       // which lives in the member layout, so it survives. Through the menu's own link: the back
       // control steps back through history now, and this page was opened from the dashboard.
       await page.getByRole('button', { name: 'Menu' }).click();
-      await page.getByRole('link', { name: 'All recordings' }).click();
-      await page.waitForURL(`${baseUrl}${MEMBER_LIBRARY_PAGE_PATH}`, { timeout: 30_000 });
+      await page.getByRole('link', { name: 'All series' }).click();
+      await page.waitForURL(`${baseUrl}${MEMBER_SERIES_PAGE_PATH}`, { timeout: 30_000 });
 
       await expect
         .poll(async () => (await pill.textContent()) ?? '', { timeout: 30_000 })
@@ -477,9 +477,10 @@ describe('the transcript is fetched once per loaded recording, and only when nee
       // not re-fetch it. Through the menu's own link: the back control steps back through history
       // now, and this page was opened from the dashboard the sign-in landed on.
       await page.getByRole('button', { name: 'Menu' }).click();
-      await page.getByRole('link', { name: 'All recordings' }).click();
-      await page.waitForURL(`${baseUrl}${MEMBER_LIBRARY_PAGE_PATH}`, { timeout: 30_000 });
-      await page.getByRole('link', { name: TITLE }).first().click();
+      await page.getByRole('link', { name: 'All series' }).click();
+      await page.waitForURL(`${baseUrl}${MEMBER_SERIES_PAGE_PATH}`, { timeout: 30_000 });
+      // Back through history is a client-side step too, under the same provider.
+      await page.goBack();
       await page.waitForURL(`${baseUrl}${recordingPagePath(recordingId)}`, { timeout: 30_000 });
       await openTranscript(page);
 

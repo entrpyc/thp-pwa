@@ -16,7 +16,7 @@ import { NoteComposer } from './recordings/[id]/note-composer';
 import { momentEntry } from './highlights/highlights-lookup';
 import { useHighlights } from './highlights/highlights-store';
 import { PinMomentTool } from './highlights/pin-moment-tool';
-import { usePlayer } from './player-context';
+import { usePlayer, useTransportHiddenValue } from './player-context';
 import styles from './transport.module.css';
 
 /**
@@ -161,6 +161,8 @@ export function TransportBar() {
   const player = usePlayer();
   // Which member screen the bar is docked under — read for one thing only, the caption pill below.
   const pathname = usePathname();
+  // A page that asked for the bar to stay out of sight — the Flow Tracker's start and question screens.
+  const hidden = useTransportHiddenValue();
   const { highlights } = useHighlights();
   const [toolbarOpen, setToolbarOpen] = useState(false);
   const [sheetOpen, setSheetOpen] = useState(false);
@@ -270,7 +272,7 @@ export function TransportBar() {
     return () => document.removeEventListener('keydown', onKeyDown);
   }, [chaptersOpen]);
 
-  if (player.loaded === null) return null;
+  if (player.loaded === null || hidden) return null;
 
   // The teaching, as a value of its own: the closures below read it, and a narrowing of
   // `player.loaded` does not survive into a callback the way a `const` does.

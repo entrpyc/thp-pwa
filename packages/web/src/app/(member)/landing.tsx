@@ -34,12 +34,12 @@ import styles from './screens.module.css';
  *   highlights*, *View all series*, *View Flow Tracker* — which is what the word on each tile
  *   abbreviates and what every test calls them. Story 4 shipped the series way-in pointing at the
  *   library, because series did not exist yet; Story 6 gave it the destination the reference
- *   draws. *All recordings* did not disappear with it — it is an entry in the menu, beside *All
- *   series*. Highlights goes to the member's own playlist ([3.15.5](docs/project/prd.md)); its icon
+ *   draws. *All recordings* is gone altogether, by the operator's decision: the series pages are
+ *   the way to a teaching. Highlights goes to the member's own playlist ([3.15.5](docs/project/prd.md)); its icon
  *   is the highlighter every highlight control draws, so the tile is recognised rather than read.
  *   Notes goes to the member's own notes across every teaching, and Flow Tracker to
- *   [3.14](docs/project/prd.md)'s page — both reached from here and no longer from the menu, by
- *   the operator's decision: the menu keeps the destinations the tiles do not draw.
+ *   [3.14](docs/project/prd.md)'s page — the Flow Tracker reached from here and no longer from the menu, by
+ *   the operator's decision; Notes and Highlights are in the menu as well, first of its entries.
  * - **SOS** — the last row. Not in the reference, and added by the operator's decision when
  *   [§3.16](docs/project/prd.md) shipped: the prayer emergency channel's way in is a card here
  *   rather than a navigation entry, with the open counts, the most urgent signals and Raise SOS.

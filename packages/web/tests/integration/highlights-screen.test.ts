@@ -301,6 +301,27 @@ describe('/highlights', () => {
       expect(await rows.nth(1).textContent()).toContain(`Line 2 of Playlist ${RUN}.`);
       expect(await rows.nth(2).textContent()).toContain(`Playlist ${RUN}`);
 
+      // Opening the note's row lands on the teaching's Notes tab, scrolled to the note's card.
+      const openNote = rows.nth(0).getByRole('link', { name: `Open Playlist ${RUN} at 00:30` });
+      const noteHref = (await openNote.getAttribute('href')) ?? '';
+      expect(noteHref).toContain('tab=notes');
+      expect(noteHref).toContain(`${HIGHLIGHT_AT_PARAM}=30000`);
+      expect(noteHref).toContain(`#note-${note.id}`);
+      await openNote.click();
+      await page.waitForURL((url) => url.pathname === recordingPagePath(where) && url.hash === `#note-${note.id}`, { timeout: 30_000 });
+      const card = page.locator(`#note-${note.id}`);
+      await expect.poll(() => card.count(), { timeout: 60_000 }).toBe(1);
+      await expect
+        .poll(async () => {
+          const box = await card.boundingBox();
+          const height = await page.evaluate(() => window.innerHeight);
+          return box !== null && box.y >= 0 && box.y + box.height <= height;
+        }, { timeout: 30_000 })
+        .toBe(true);
+
+      await page.goto(`${baseUrl}${HIGHLIGHTS_PAGE_PATH}`, { waitUntil: 'domcontentloaded' });
+      await expect.poll(() => rows.count(), { timeout: 60_000 }).toBe(3);
+
       // Remove the note's row: the list is what the API answered back.
       await rows.nth(0).getByRole('button', { name: `Remove Playlist ${RUN} from Highlights` }).click();
       await expect.poll(() => rows.count(), { timeout: 30_000 }).toBe(2);

@@ -46,6 +46,8 @@ export function RaiseForm() {
 
   const [urgency, setUrgency] = useState<SosUrgency>('yellow');
   const [description, setDescription] = useState('');
+  const [anonymous, setAnonymous] = useState(false);
+  const anonymousId = useId();
   const [failure, setFailure] = useState<string | null>(null);
   const [sending, setSending] = useState(false);
   const [termsNeeded, setTermsNeeded] = useState(false);
@@ -58,7 +60,7 @@ export function RaiseForm() {
     if (sending || count === 0 || overLimit) return;
     setSending(true);
     setFailure(null);
-    const request: RaiseSosRequest = { urgency, description: description.trim() };
+    const request: RaiseSosRequest = { urgency, description: description.trim(), anonymous };
     try {
       const payload = await apiFetch<SosSignalPayload>(SOS_PATH, {
         method: 'POST',
@@ -127,6 +129,18 @@ export function RaiseForm() {
                 : `${count.toLocaleString('en-GB')} / ${CEILING_LABEL}`}
             </p>
           </div>
+
+          {/* Without a name: the group reads "Anonymous" where the name would be; admins can still act on it. */}
+          <label className={styles.checkRow} htmlFor={anonymousId}>
+            <input
+              className={styles.check}
+              id={anonymousId}
+              type="checkbox"
+              checked={anonymous}
+              onChange={(event) => setAnonymous(event.target.checked)}
+            />
+            <span>Raise this anonymously — the group will not see your name</span>
+          </label>
 
           {failure === null ? null : (
             <p className={styles.failure} id={errorId} role="alert">

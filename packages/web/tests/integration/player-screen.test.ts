@@ -3,7 +3,7 @@ import { chromium, type Browser, type Page, type Request } from 'playwright';
 import {
   API_PREFIX,
   DASHBOARD_PAGE_PATH,
-  MEMBER_LIBRARY_PAGE_PATH,
+  MEMBER_SERIES_PAGE_PATH,
   ROLE,
   nextPlaybackSpeed,
   recordingNotesPath,
@@ -547,8 +547,8 @@ describe('the transport is mounted app-wide', () => {
       // Through the menu's own link: the back control steps back through history now, and this
       // page was opened from the dashboard the sign-in landed on.
       await page.getByRole('button', { name: 'Menu' }).click();
-      await page.getByRole('link', { name: 'All recordings' }).click();
-      await page.waitForURL(`${baseUrl}${MEMBER_LIBRARY_PAGE_PATH}`, { timeout: 30_000 });
+      await page.getByRole('link', { name: 'All series' }).click();
+      await page.waitForURL(`${baseUrl}${MEMBER_SERIES_PAGE_PATH}`, { timeout: 30_000 });
 
       const bar = page.getByRole('region', { name: 'Player' });
       await expect.poll(() => bar.count(), { timeout: 30_000 }).toBe(1);
@@ -640,9 +640,9 @@ describe('the transport shows the cover of what is playing', () => {
       await page.getByRole('button', { name: 'Menu' }).click();
       await page
         .getByRole('list', { name: 'Navigation' })
-        .getByRole('link', { name: 'All recordings' })
+        .getByRole('link', { name: 'All series' })
         .click();
-      await page.waitForURL(`${baseUrl}${MEMBER_LIBRARY_PAGE_PATH}`, { timeout: 30_000 });
+      await page.waitForURL(`${baseUrl}${MEMBER_SERIES_PAGE_PATH}`, { timeout: 30_000 });
 
       // The bar is in the member layout and never remounts, so the cover it holds is the one it was
       // opened with — it is not re-fetched by the screen that happens to be under it.
@@ -759,9 +759,10 @@ describe('the notes the player now holds cannot reach the audio', () => {
       // Through the menu's own link: the back control steps back through history now, and this
       // page was opened from the dashboard the sign-in landed on.
       await page.getByRole('button', { name: 'Menu' }).click();
-      await page.getByRole('link', { name: 'All recordings' }).click();
-      await page.waitForURL(`${baseUrl}${MEMBER_LIBRARY_PAGE_PATH}`, { timeout: 30_000 });
-      await page.getByRole('link', { name: new RegExp(TITLE) }).click();
+      await page.getByRole('link', { name: 'All series' }).click();
+      await page.waitForURL(`${baseUrl}${MEMBER_SERIES_PAGE_PATH}`, { timeout: 30_000 });
+      // Back through history is a client-side step too, under the same provider.
+      await page.goBack();
       await page.waitForURL(`${baseUrl}${recordingPagePath(recordingId)}`, { timeout: 30_000 });
 
       // The page's own load — the recording and the position — has to finish before the state is

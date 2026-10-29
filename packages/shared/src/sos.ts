@@ -158,14 +158,25 @@ export function sosPagePath(signalId: string): string {
 // The views
 // =================================================================================================
 
-/** Who raised or replied — never anonymous ([3.16.13](docs/project/prd.md)). */
+/**
+ * Who raised or replied. A signal raised anonymously ([3.16.13](docs/project/prd.md), as the
+ * operator amended it) is shown to everybody but its author as {@link ANONYMOUS_AUTHOR}: no id, the
+ * stand-in name, no picture. The author reads their own name, because `mine` is theirs to see.
+ */
 export interface SosAuthorView {
-  readonly id: string;
+  /** `null` on an anonymised author: there is nobody to name. */
+  readonly id: string | null;
   /** The display name ([3.1.12](docs/project/prd.md)); a monogram is drawn from it. */
   readonly displayName: string;
   /** A signed grant to the avatar, or `null` for the monogram. Never the key. */
   readonly avatarUrl: string | null;
 }
+
+/** The name printed for an author who asked not to be named. */
+export const ANONYMOUS_DISPLAY_NAME = 'Anonymous';
+
+/** The author every reader but the author sees on an anonymous signal. */
+export const ANONYMOUS_AUTHOR: SosAuthorView = { id: null, displayName: ANONYMOUS_DISPLAY_NAME, avatarUrl: null };
 
 /** One signal as the board lists it. */
 export interface SosSignalView {
@@ -173,6 +184,8 @@ export interface SosSignalView {
   readonly urgency: SosUrgency;
   readonly description: string;
   readonly author: SosAuthorView;
+  /** Raised without a name: `author` is the stand-in for everybody but the author. */
+  readonly anonymous: boolean;
   /** Whether the reading member raised it — what shows the Close control. */
   readonly mine: boolean;
   /** ISO 8601. The sort key within one urgency. */
@@ -181,10 +194,12 @@ export interface SosSignalView {
   readonly closedAt: string | null;
   /** The author's closing note, when they left one ([3.16.8](docs/project/prd.md)). */
   readonly closingNote: string | null;
-  /** How many members have pressed Praying ([3.16.5](docs/project/prd.md)). */
+  /** How many members have pressed Praying ([3.16.5](docs/project/prd.md)), named or not. */
   readonly prayingCount: number;
   /** Whether the reading member is among them. */
   readonly praying: boolean;
+  /** Whether the reading member pressed it without their name. */
+  readonly prayingAnonymously: boolean;
   readonly replyCount: number;
 }
 
@@ -204,8 +219,10 @@ export interface SosReplyView {
 
 /** One signal in full — the signal page. */
 export interface SosSignalDetailView extends SosSignalView {
-  /** The display names of everybody praying, in the order they pressed. */
+  /** The display names of everybody praying with their name, in the order they pressed. */
   readonly prayingNames: readonly string[];
+  /** How many pressed Praying without their name — counted, never listed. */
+  readonly prayingAnonymousCount: number;
   /** The top-level replies, oldest first — a conversation reads downwards; each carries its thread. */
   readonly replies: readonly SosReplyView[];
 }
@@ -231,10 +248,16 @@ export interface SosSignalPayload {
   readonly signal: SosSignalDetailView;
 }
 
-/** Body of `POST /api/v1/sos`. */
+/** Body of `POST /api/v1/sos`. `anonymous` raises it without a name; absent, it is named. */
 export interface RaiseSosRequest {
   readonly urgency: SosUrgency;
   readonly description: string;
+  readonly anonymous?: boolean;
+}
+
+/** Body of `PUT /api/v1/sos/{id}/praying`, optional: press without a name. Absent, the name is listed. */
+export interface PrayingRequest {
+  readonly anonymous?: boolean;
 }
 
 /** Body of `POST /api/v1/sos/{id}/close`. The note is the author's and optional; an admin sends none. */
@@ -257,8 +280,11 @@ export interface ReplyToSosRequest {
 
 /**
  * The title every member reads when a signal is raised ([3.17.7](docs/project/prd.md)). Names the
- * member and the colour, because the colour is the one word that says how to read the rest.
+ * member and the colour, because the colour is the one word that says how to read the rest. An
+ * anonymous signal passes {@link SOMEONE} for the name, so the title says nothing the page would not.
  */
+export const SOMEONE = 'Someone';
+
 export function sosRaisedNotificationTitle(displayName: string, urgency: SosUrgency): string {
   return `${displayName} raised a ${SOS_URGENCY_LABEL[urgency].toLowerCase()} prayer request`;
 }

@@ -286,12 +286,14 @@ export async function notifySosRaised(input: {
   readonly urgency: SosUrgency;
   readonly description: string;
   readonly author: Actor;
+  /** The name the title carries — the author's, or a stand-in for an anonymous signal. */
+  readonly authorName: string;
 }): Promise<void> {
   await raise('sos.raise', async () => {
     const written = await insertNotificationForSosAudience(
       {
         kind: 'sos_raised',
-        title: sosRaisedNotificationTitle(input.author.displayName, input.urgency),
+        title: sosRaisedNotificationTitle(input.authorName, input.urgency),
         body: excerptForNotification(input.description),
         href: sosPagePath(input.signalId),
         sosSignalId: input.signalId,

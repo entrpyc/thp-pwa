@@ -548,9 +548,9 @@
 }
 
 /*
- * `pages/recording.png`'s tab strip, holding the one tab this epic has data for. The guide's
- * *Tab (pill)* recipe verbatim, including the selected state — so the four deferred tabs drop into
- * the same row later without restyling anything.
+ * `pages/recording.png`'s tab strip — the guide's *Tab (pill)* recipe verbatim, including the
+ * selected state. The chapter page and the SOS board draw it; the recording page moved to the
+ * `.tabTile` grid at the end of this file by the operator's decision.
  */
 .tabs {
   display: flex;
@@ -641,4 +641,50 @@
   font-size: var(--fs-meta);
   color: var(--color-text-muted);
   white-space: nowrap;
+}
+
+/* ------------------------------------------------------------ the recording page's tab tiles */
+
+/*
+ * The recording page's strip, redrawn as tiles by the operator's decision: two to a row, the same
+ * surface, border and radius as the landing's *Notes* / *Highlights* / *Series* / *Flow Tracker*
+ * tiles, but a row rather than a column — icon to the left of the label — and no minimum height,
+ * so a strip of up to eight entries stays short. The selected state is the one every `.tab` takes.
+ * `.tabs` / `.tab` stay as they are for the chapter page and the SOS board.
+ */
+.tabGrid {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: var(--space-3);
+}
+
+.tabTile {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: var(--space-3);
+  background: var(--color-surface);
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-md);
+  padding: var(--space-3) var(--space-4);
+  color: var(--color-text);
+  font-family: inherit;
+  font-size: var(--fs-body);
+  font-weight: 500;
+  cursor: pointer;
+}
+
+.tabTile:hover {
+  background: var(--color-surface-raised);
+}
+
+.tabTile[aria-selected='true'] {
+  border-color: var(--color-primary-strong);
+  background: var(--color-primary-soft);
+}
+
+.tabTileIcon {
+  display: flex;
+  flex-shrink: 0;
+  color: var(--color-primary-icon);
 }

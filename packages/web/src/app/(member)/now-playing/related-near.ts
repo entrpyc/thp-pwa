@@ -10,9 +10,9 @@ import { NOTE_LINGER_MS, NOTE_LOOKAHEAD_MS } from './notes-near';
  * one screen about one stretch of time, and two rows that disagreed about how long "now" lasts
  * would have a note scroll off while the related moment beside it stayed.
  *
- * The recording page's `Related` tab narrows by chapter instead, because that page is read with a
- * tab strip to keep still; here the rows under the hero turn over with the voice, which is what
- * the window is for.
+ * The recording page's `Related` tab lists every group instead, because a member reading that tab
+ * is surveying the whole teaching; here the rows under the hero turn over with the voice, which is
+ * what the window is for.
  */
 export function relatedNear(
   groups: readonly CrossReferenceGroupView[],

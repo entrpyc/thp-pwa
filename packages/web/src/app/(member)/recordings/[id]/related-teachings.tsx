@@ -3,7 +3,6 @@
 import { useRouter } from 'next/navigation';
 import { useEffect, useMemo, useState, type MouseEvent } from 'react';
 import {
-  chapterIdAt,
   formatTimecode,
   memberRecordingPath,
   recordingCrossReferencesPath,
@@ -20,13 +19,13 @@ import { isPlainPress } from './round-trip';
 import styles from './related.module.css';
 
 /**
- * **The teaching's related moments, fetched once per teaching** — what the recording page draws
- * its `Related` tab off, and what the panel behind that tab narrows to the part playing.
+ * **The teaching's related moments, fetched once per teaching** — what the recording page and the
+ * chapter page draw their `Related` tab off.
  *
  * Fetched by the page rather than by the panel, because the strip has to know whether there is
  * anything behind the tab before the tab is pressed — the same reason `hasScripture` rides on the
- * recording payload. The payload already carries the chapter each group falls in, so following the
- * position afterwards is arithmetic over a list of a few dozen entries rather than a request.
+ * recording payload. The payload already carries the chapter each group falls in, so the chapter
+ * page narrows the list with a filter rather than a second request.
  *
  * `null` until the answer lands, and `null` for good when the fetch failed: a member who was not
  * offered a related moment has lost an aside, not the teaching, so the failure state is silence.
@@ -97,84 +96,108 @@ export function useOpenRelated(): (
 }
 
 /**
- * **Related moments in other teachings, anchored to the part playing now**
- * ([3.9.2](docs/project/prd.md), [3.9.5](docs/project/prd.md)) — the `Related` tab of the
- * recording page.
+ * **The groups of one chapter** — those whose triggering sentence the API bucketed into it, by
+ * the same `chapterIdAt` the cap was applied with. What the chapter page's `Related` tab draws,
+ * and what decides whether that tab is drawn at all.
+ */
+export function relatedGroupsInChapter(
+  groups: readonly CrossReferenceGroupView[],
+  chapterId: string,
+): CrossReferenceGroupView[] {
+  return groups.filter((group) => group.chapterId === chapterId);
+}
+
+/**
+ * **Related moments in other teachings, each anchored to the moment of this one that triggered
+ * it** ([3.9.2](docs/project/prd.md), [3.9.5](docs/project/prd.md)) — the `Related` tab of the
+ * recording page and of the chapter page.
  *
  * Everything it needs it reads from what the page already provides — the groups the page fetched
- * ({@link useRelatedGroups}), the content source for *this* teaching's position and chapters, and
- * the player for opening another one. Four decisions:
+ * ({@link useRelatedGroups}), the content source for seeking *this* teaching, and the player for
+ * opening another one. Four decisions:
  *
- * - **Anchored to the chapter.** The links shown are those whose triggering sentence falls in the
- *   chapter that contains the position, by the same `chapterIdAt` the API bucketed them with — so
- *   the three the API chose for a chapter are the three shown for it, and a teaching with no
- *   chapters shows its three throughout. Sentences are a few seconds long; a list that changed
- *   with each one would flicker, and the chapter is the unit a member is listening to.
- * - **The empty part is stated.** The tab is drawn only for a teaching with a related moment
- *   somewhere in it, so a part with none is a fact about *this* part, and the panel says so rather
- *   than drawing an empty list — which is what the tab being open at all has asked for.
- * - **Opening goes to the moment, without sound, and without stopping sound**
- *   ([3.2.12](docs/project/prd.md); the operator's call for this surface) — {@link useOpenRelated}.
- *   A member who was hearing something else keeps hearing it and lands at their stored position,
- *   which is the quieter of the two wrongs.
+ * - **The whole list, in spoken order.** The recording page shows every related moment the
+ *   teaching has, not the ones near the playhead: a member reading the tab is surveying what else
+ *   the teaching touches, and a list that emptied and refilled as the audio moved hid most of it
+ *   most of the time. The chapter page narrows the same list to the chapter's own groups
+ *   (`chapterId`), which is the page's scope for every other tab too.
+ * - **Each group says where in this teaching it is anchored**, as a timecode and the sentence
+ *   spoken there, and the timecode is a press: it seeks this teaching to the moment, without
+ *   sound, through the same `seekToMs` the transcript's lines use — a member who wants to hear
+ *   what triggered the link is one press from it.
+ * - **Opening another teaching goes to the moment, without sound, and without stopping sound**
+ *   ([3.2.12](docs/project/prd.md); the operator's call for this surface) — {@link useOpenRelated},
+ *   which the now-playing view's row shares. A member who was hearing something else keeps hearing
+ *   it and lands at their stored position, which is the quieter of the two wrongs.
  * - **The card is a real link.** A modified press — new tab, middle button — is left to the
  *   browser, which opens the page at the stored position; only a plain press takes the route above.
  */
 export function RelatedTeachings({
-  recordingId,
   groups,
+  chapterId,
 }: {
-  recordingId: string;
   /** Every related group of this teaching, as {@link useRelatedGroups} answered it. */
   groups: readonly CrossReferenceGroupView[];
+  /** On the chapter page, the chapter whose groups alone are shown. */
+  chapterId?: string;
 }) {
   const content = useRecordingContent();
   const press = useOpenRelated();
 
-  // `undefined` while the chapters are not known yet; `null` is a teaching with no chapters, which
-  // is one bucket.
-  const chapters = content.chapters;
-  const currentChapterId =
-    chapters === null ? undefined : chapterIdAt(chapters, content.positionMs);
-
   const shown = useMemo(
-    () =>
-      currentChapterId === undefined
-        ? []
-        : groups.filter((group) => group.chapterId === currentChapterId),
-    [currentChapterId, groups],
+    () => (chapterId === undefined ? groups : relatedGroupsInChapter(groups, chapterId)),
+    [chapterId, groups],
   );
 
   return (
     <section className={styles.panel} aria-label="Related teachings">
-      <p className={styles.heading}>Related to this part</p>
+      <p className={styles.heading}>
+        {chapterId === undefined ? 'Related in other teachings' : 'Related to this chapter'}
+      </p>
       {shown.length === 0 ? (
         <p className={styles.quiet}>
-          {currentChapterId === undefined
-            ? 'Finding the part playing…'
-            : 'Nothing in another teaching is related to this part.'}
+          {chapterId === undefined
+            ? 'Nothing in another teaching is related to this one.'
+            : 'Nothing in another teaching is related to this chapter.'}
         </p>
       ) : (
-        <ul className={styles.list}>
-          {shown.flatMap((group) =>
-            group.links.map((link) => (
-              <li key={`${group.segmentId}:${link.segmentId}`}>
-                <a
-                  className={styles.card}
-                  href={recordingPagePath(link.recordingId)}
-                  onClick={(event) => press(event, link)}
-                >
-                  <span className={styles.title}>{link.title}</span>
-                  <span className={styles.meta}>
-                    {link.series === null ? '' : `${link.series.title} · `}
-                    at {formatTimecode(link.startMs)}
-                  </span>
-                  <span className={styles.excerpt}>“{link.text}”</span>
-                </a>
-              </li>
-            )),
-          )}
-        </ul>
+        <ol className={styles.groups}>
+          {shown.map((group) => (
+            <li key={group.segmentId} className={styles.group}>
+              {/*
+                The moment of *this* teaching the links hang off: a press seeks there, without
+                sound. The sentence beside it says what was said at that moment.
+              */}
+              <button
+                className={styles.anchor}
+                type="button"
+                aria-label={`Go to ${formatTimecode(group.startMs)}`}
+                onClick={() => content.seekToMs(group.startMs)}
+              >
+                <span className={styles.anchorTime}>{formatTimecode(group.startMs)}</span>
+                <span className={styles.anchorText}>“{group.text}”</span>
+              </button>
+              <ul className={styles.list}>
+                {group.links.map((link) => (
+                  <li key={link.segmentId}>
+                    <a
+                      className={styles.card}
+                      href={recordingPagePath(link.recordingId)}
+                      onClick={(event) => press(event, link)}
+                    >
+                      <span className={styles.title}>{link.title}</span>
+                      <span className={styles.meta}>
+                        {link.series === null ? '' : `${link.series.title} · `}
+                        at {formatTimecode(link.startMs)}
+                      </span>
+                      <span className={styles.excerpt}>“{link.text}”</span>
+                    </a>
+                  </li>
+                ))}
+              </ul>
+            </li>
+          ))}
+        </ol>
       )}
     </section>
   );
