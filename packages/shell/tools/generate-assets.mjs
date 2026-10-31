@@ -10,8 +10,11 @@
 //   entries, the first of which is also the browser tab's icon — `app-theme.ts`, `APP_ICON`),
 //   `public/icons/maskable-512.png` (the mark drawn smaller so Android's launcher crop keeps it
 //   whole), `src/app/apple-icon.png` (what Safari's *Add to Home Screen* uses) and
-//   `src/app/favicon.ico` (what a browser asks for before it has read the document). All on the
-//   document background, because a launcher tile and a home-screen icon are opaque squares.
+//   `src/app/favicon.ico` (what a browser asks for before it has read the document). The tab's
+//   icons — the two `any` entries and the `.ico` — are the mark on transparency, because a tab
+//   draws it over its own chrome and a dark square there reads as a block; the maskable icon,
+//   the Apple icon and the store icons are on the document background, because a launcher tile
+//   and a home-screen icon are opaque squares.
 // - **Android** launcher icons at the five densities (legacy square and round, and the adaptive
 //   foreground at 108 dp with the mark in the 66 dp safe zone), and the splash drawable at the
 //   portrait and landscape densities Capacitor's template names. Android 12+ draws its own splash
@@ -86,7 +89,7 @@ async function write(image, path) {
  */
 async function ico(sides) {
   const images = await Promise.all(
-    sides.map(async (side) => ({ side, png: await (await composed(side)).toBuffer() })),
+    sides.map(async (side) => ({ side, png: await (await tab(side)).toBuffer() })),
   );
   const header = Buffer.alloc(6);
   header.writeUInt16LE(0, 0); // reserved
@@ -109,10 +112,13 @@ async function ico(sides) {
   return Buffer.concat([header, directory, ...images.map(({ png }) => png)]);
 }
 
+/** The mark alone, filling a transparent square — what a browser tab draws. */
+const tab = (side) => markOn(side, 1, transparent);
+
 // --------------------------------------------------------------------------------------- web app
 
-await write(await composed(192), resolve(web, 'public/icons/icon-192.png'));
-await write(await composed(512), resolve(web, 'public/icons/icon-512.png'));
+await write(await tab(192), resolve(web, 'public/icons/icon-192.png'));
+await write(await tab(512), resolve(web, 'public/icons/icon-512.png'));
 // Maskable: Android may crop a circle out of the square, so the mark stays inside the inner 80 %.
 await write(await composed(512, 0.64), resolve(web, 'public/icons/maskable-512.png'));
 // iOS rounds the corners itself and wants no transparency under them.
