@@ -403,9 +403,11 @@ injected bridge script. It does not affect any item above and is not addressed h
   (the manifest's, the tab's, `favicon.ico` and `apple-icon.png`), the Android launcher icons at
   every density (legacy, round and the adaptive foreground over `ic_launcher_background`), the
   Android splash drawables, the 1024 px iOS icon and the three iOS launch images. The background
-  is `APP_BACKGROUND_COLOUR` read from `packages/web/src/app/app-theme.ts`. To change the art,
-  replace `packages/web/brand/mark.png` (the mark on transparency, square) and run the script;
-  nothing is drawn by hand here. Android 12+ draws its own splash — the launcher icon on `windowSplashScreenBackground`
+  of the splash screens is `APP_BACKGROUND_COLOUR` read from `packages/web/src/app/app-theme.ts`.
+  To change the art, replace the two files under `packages/web/brand/` — `mark.png`, the mark on
+  transparency (the browser tab and the splash screens), and `tile.png`, the finished opaque icon
+  (every launcher, home-screen and store icon) — and run the script; nothing is drawn by hand
+  here. Android 12+ draws its own splash — the launcher icon on `windowSplashScreenBackground`
   (styles.xml) — and the drawables serve Android 11 and earlier; iOS shows `Splash.imageset`
   through LaunchScreen.storyboard on a background of the same colour.
 - **System bars.** Android paints the status and navigation bars in the document background with

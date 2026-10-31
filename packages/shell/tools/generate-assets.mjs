@@ -3,8 +3,9 @@
 // Run from the repository root: `npm --workspace @thp/shell run assets`. It needs `sharp`, which
 // the root install already carries as a dependency of Next, so nothing is added for it.
 //
-// The source is `packages/web/brand/mark.png` — the mark on a transparent background, square, at
-// whatever size it was drawn. Nothing is served from there; this script derives every file that is:
+// Two sources under `packages/web/brand/`, neither served from there: `mark.png`, the mark on a
+// transparent background, and `tile.png`, the finished app icon — the mark on its own painted
+// background, square, edge to edge. This script derives every file that is served:
 //
 // - **The web app's icons.** `public/icons/icon-192.png` and `icon-512.png` (the manifest's `any`
 //   entries, the first of which is also the browser tab's icon — `app-theme.ts`, `APP_ICON`),
@@ -12,14 +13,16 @@
 //   whole), `src/app/apple-icon.png` (what Safari's *Add to Home Screen* uses) and
 //   `src/app/favicon.ico` (what a browser asks for before it has read the document). The tab's
 //   icons — the two `any` entries and the `.ico` — are the mark on transparency, because a tab
-//   draws it over its own chrome and a dark square there reads as a block; the maskable icon,
-//   the Apple icon and the store icons are on the document background, because a launcher tile
-//   and a home-screen icon are opaque squares.
-// - **Android** launcher icons at the five densities (legacy square and round, and the adaptive
-//   foreground at 108 dp with the mark in the 66 dp safe zone), and the splash drawable at the
+//   draws it over its own chrome and a dark square there reads as a block; the maskable icon
+//   and the Apple icon are the tile, because a launcher tile and a home-screen icon are opaque
+//   squares.
+// - **Android** launcher icons at the five densities from the tile (legacy square and round, and
+//   the adaptive foreground at 108 dp — the tile drawn at 96 dp, so it still covers the 72 dp the
+//   launcher shows while its subject stays inside the 66 dp safe zone), and the splash drawable
+//   — the mark on the document background, as the launch screen is — at the
 //   portrait and landscape densities Capacitor's template names. Android 12+ draws its own splash
 //   (the icon on `windowSplashScreenBackground`, styles.xml); the drawables are for 11 and earlier.
-// - **iOS** — the app icon at 1024 px, and the launch image at 2732 px in the three scales the
+// - **iOS** — the app icon at 1024 px from the tile, and the launch image at 2732 px in the three scales the
 //   asset catalogue lists: one square, the mark centred on the background, which `scaleAspectFill`
 //   in LaunchScreen.storyboard crops to any screen without the mark leaving the middle.
 //
@@ -37,6 +40,7 @@ const root = resolve(dirname(fileURLToPath(import.meta.url)), '../../..');
 const web = resolve(root, 'packages/web');
 const shell = resolve(root, 'packages/shell');
 const mark = resolve(web, 'brand/mark.png');
+const tile = resolve(web, 'brand/tile.png');
 
 const theme = readFileSync(resolve(web, 'src/app/app-theme.ts'), 'utf8');
 const background = /APP_BACKGROUND_COLOUR = '(#[0-9A-Fa-f]{6})'/.exec(theme)?.[1];
@@ -53,13 +57,6 @@ async function markOn(side, markRatio, canvasBackground) {
 
 const transparent = { r: 0, g: 0, b: 0, alpha: 0 };
 
-/**
- * A square of the background colour with the mark scaled to `markRatio` of the side, centred —
- * what every opaque icon is. The art has no straight edges, so it is drawn a little inside the
- * square rather than touching it: a mark that fills its tile to the edge reads as cropped.
- */
-const composed = (side, markRatio = 0.86) => markOn(side, markRatio, background);
-
 /** A rectangle of the background colour with the mark centred, for a splash drawable. */
 async function splash(width, height) {
   const markSide = Math.round(Math.min(width, height) * 0.3);
@@ -69,12 +66,22 @@ async function splash(width, height) {
     .png();
 }
 
+/** The tile, square, at `side` — opaque, for the surfaces that want a finished icon. */
+const tiled = (side) => sharp(tile).resize(side, side, { fit: 'cover' }).png();
+
 /**
- * The mark alone on transparency, inside the 66 dp safe zone of a 108 dp adaptive icon — the
- * foreground layer; the background layer (`ic_launcher_background`) shows through the launcher's
- * crop around it.
+ * The adaptive icon's foreground layer: the tile at 96 of the 108 dp, centred on transparency.
+ * The launcher shows the middle 72 dp (more with parallax), which the tile covers, and the mark
+ * inside the tile lands within the 66 dp safe zone. The background layer
+ * (`ic_launcher_background`) only shows in the corners the tile leaves, which no launcher draws.
  */
-const foreground = (side) => markOn(side, 66 / 108, transparent);
+async function foreground(side) {
+  const inner = Math.round(side * (96 / 108));
+  const resized = await tiled(inner).toBuffer();
+  return sharp({ create: { width: side, height: side, channels: 4, background: transparent } })
+    .composite([{ input: resized, gravity: 'centre' }])
+    .png();
+}
 
 async function write(image, path) {
   mkdirSync(dirname(path), { recursive: true });
@@ -119,13 +126,11 @@ const tab = (side) => markOn(side, 1, transparent);
 
 await write(await tab(192), resolve(web, 'public/icons/icon-192.png'));
 await write(await tab(512), resolve(web, 'public/icons/icon-512.png'));
-// Maskable: Android may crop a circle out of the square, so the mark stays inside the inner 80 %.
-await write(await composed(512, 0.64), resolve(web, 'public/icons/maskable-512.png'));
+// Maskable: Android may crop a circle out of the square; the tile's subject sits inside the inner
+// 80 %, and the gradient is what gets cropped.
+await write(await tiled(512), resolve(web, 'public/icons/maskable-512.png'));
 // iOS rounds the corners itself and wants no transparency under them.
-await write(
-  sharp(await (await composed(180)).toBuffer()).flatten({ background }).png(),
-  resolve(web, 'src/app/apple-icon.png'),
-);
+await write(sharp(await tiled(180).toBuffer()).flatten({ background }).png(), resolve(web, 'src/app/apple-icon.png'));
 {
   const path = resolve(web, 'src/app/favicon.ico');
   mkdirSync(dirname(path), { recursive: true });
@@ -141,13 +146,13 @@ const densities = { mdpi: 1, hdpi: 1.5, xhdpi: 2, xxhdpi: 3, xxxhdpi: 4 };
 
 for (const [density, scale] of Object.entries(densities)) {
   const legacy = Math.round(48 * scale);
-  // The legacy icon is the opaque square — what pre-adaptive launchers draw.
-  await write(await composed(legacy), resolve(res, `mipmap-${density}/ic_launcher.png`));
+  // The legacy icon is the tile — what pre-adaptive launchers draw.
+  await write(await tiled(legacy), resolve(res, `mipmap-${density}/ic_launcher.png`));
   const roundMask = Buffer.from(
     `<svg width="${legacy}" height="${legacy}"><circle cx="${legacy / 2}" cy="${legacy / 2}" r="${legacy / 2}"/></svg>`,
   );
   await write(
-    sharp(await (await composed(legacy, 0.78)).toBuffer()).composite([{ input: roundMask, blend: 'dest-in' }]).png(),
+    sharp(await tiled(legacy).toBuffer()).composite([{ input: roundMask, blend: 'dest-in' }]).png(),
     resolve(res, `mipmap-${density}/ic_launcher_round.png`),
   );
   await write(await foreground(Math.round(108 * scale)), resolve(res, `mipmap-${density}/ic_launcher_foreground.png`));
@@ -175,7 +180,7 @@ for (const [dir, [width, height]] of Object.entries(splashes)) {
 const assets = resolve(shell, 'ios/App/App/Assets.xcassets');
 // The store icon has no alpha channel: App Store Connect refuses one with transparency.
 await write(
-  sharp(await (await composed(1024)).toBuffer()).flatten({ background }).png(),
+  sharp(await tiled(1024).toBuffer()).flatten({ background }).png(),
   resolve(assets, 'AppIcon.appiconset/AppIcon-512@2x.png'),
 );
 for (const name of ['splash-2732x2732.png', 'splash-2732x2732-1.png', 'splash-2732x2732-2.png']) {
