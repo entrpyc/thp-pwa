@@ -65,7 +65,7 @@ export function RequestDeletionForm() {
           <p className={styles.subtitle}>The link lasts one hour.</p>
         </div>
         <p className={styles.prose}>
-          If {email.trim() === '' ? 'that address' : email.trim()} has a Teaching Hub account, a
+          If {email.trim() === '' ? 'that address' : email.trim()} has a Vinegard account, a
           link to delete it is on its way. It can take a minute — if it has not arrived, look in
           your spam folder before asking again.
         </p>

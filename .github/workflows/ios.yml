@@ -175,7 +175,7 @@ jobs:
         if: ${{ !inputs.upload }}
         uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4
         with:
-          name: TeachingHub-${{ inputs.version }}-${{ github.run_number }}.ipa
+          name: Vinegard-${{ inputs.version }}-${{ github.run_number }}.ipa
           path: ${{ env.EXPORT_DIR }}/*.ipa
           if-no-files-found: error
           retention-days: 14
@@ -186,7 +186,7 @@ jobs:
       - name: Keep the dSYMs
         uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4
         with:
-          name: TeachingHub-${{ inputs.version }}-${{ github.run_number }}-dSYMs
+          name: Vinegard-${{ inputs.version }}-${{ github.run_number }}-dSYMs
           path: ${{ env.ARCHIVE }}/dSYMs
           if-no-files-found: warn
           retention-days: 90
@@ -196,7 +196,7 @@ jobs:
           UPLOAD: ${{ inputs.upload }}
         run: |
           {
-            echo "## Teaching Hub iOS ${{ inputs.version }} (build $BUILD_NUMBER)"
+            echo "## Vinegard iOS ${{ inputs.version }} (build $BUILD_NUMBER)"
             echo
             echo "- commit: \`${{ github.sha }}\`"
             if [ "$UPLOAD" = "true" ]; then

@@ -10,6 +10,7 @@ import {
 } from '@thp/shared';
 import { ApiClientError, apiFetch } from '@/client/api-client';
 import {
+  disablePushOnThisDevice,
   enablePushOnThisDevice,
   pushPermission,
   pushSupport,
@@ -23,15 +24,17 @@ import styles from './notifications.module.css';
 
 /**
  * **The push card** ([3.17.13](docs/project/prd.md), [3.17.14](docs/project/prd.md),
- * [3.17.1](docs/project/prd.md)): this device's state, the one button that asks, and a switch
- * per category.
+ * [3.17.1](docs/project/prd.md)): this device's state, one button that turns the device on or
+ * off, and a switch per category.
  *
- * **The button is the only prompt.** *Turn on push on this device* is what raises the platform's
- * permission dialog, and it is raised from that press and nothing else — not on page load, not
- * when the section opens — which is what Apple guideline 5.1.2 asks and what Chrome and Safari
- * enforce anyway by ignoring a prompt that is not behind a gesture. Every category is on by
- * default (the operator's choice), so the switches below the button say what *will* arrive once
- * the device is on; nothing arrives before.
+ * **The button goes both ways.** *Turn on push on this device* is what raises the platform's
+ * permission dialog in a browser, and it is raised from that press and nothing else there — not
+ * on page load, not when the section opens — because Chrome and Safari ignore a prompt that is
+ * not behind a gesture. (The store shells ask at launch instead; `push-shell-listener.tsx`.) Once
+ * the device is on, the same place offers *Turn off push on this device*, which unregisters it
+ * and remembers the choice so the shell's launch does not turn it back on. Every category is on
+ * by default (the operator's choice), so the switches below say what *will* arrive once the
+ * device is on; nothing arrives before.
  *
  * **The switches are account-wide; the button is per device.** A switch turned off here is off on
  * every device the member registers, because it is a row on the account; the button registers
@@ -59,7 +62,8 @@ type DeviceState =
   | { readonly kind: 'denied' }
   | { readonly kind: 'off' }
   | { readonly kind: 'on' }
-  | { readonly kind: 'enabling' };
+  | { readonly kind: 'enabling' }
+  | { readonly kind: 'disabling' };
 
 function deviceStateFor(
   support: PushSupport,
@@ -124,6 +128,16 @@ export function PushSection() {
     setFailure('Could not turn on push on this device. Try again in a moment.');
   }
 
+  async function disable(): Promise<void> {
+    if (device.kind !== 'on') return;
+    setDevice({ kind: 'disabling' });
+    setFailure(null);
+    setDone(null);
+    await disablePushOnThisDevice({ deliberate: true });
+    setDevice({ kind: 'off' });
+    setDone('Push is off for this device.');
+  }
+
   async function toggle(entry: PushCategoryView): Promise<void> {
     if (busy !== null) return;
     setBusy(entry.category);
@@ -163,6 +177,18 @@ export function PushSection() {
             disabled={device.kind === 'enabling' || payload === null}
           >
             {device.kind === 'enabling' ? 'Turning on…' : 'Turn on push on this device'}
+          </button>
+        </div>
+      ) : null}
+      {device.kind === 'on' || device.kind === 'disabling' ? (
+        <div className={profile.actions}>
+          <button
+            className={profile.secondary}
+            type="button"
+            onClick={() => void disable()}
+            disabled={device.kind === 'disabling'}
+          >
+            {device.kind === 'disabling' ? 'Turning off…' : 'Turn off push on this device'}
           </button>
         </div>
       ) : null}
@@ -222,6 +248,7 @@ function describeDevice(device: DeviceState): string {
     case 'enabling':
       return 'Push is off for this device.';
     case 'on':
+    case 'disabling':
       return 'Push is on for this device.';
   }
 }

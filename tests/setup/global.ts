@@ -26,7 +26,7 @@ const UNREACHABLE_DATABASE_URL = 'postgres://nobody:nobody@127.0.0.1:1/nothing';
  * servers capture to a file the tests read, and `mail-down` refuses everything so that "a send
  * failure leaves the invitation in place" is a thing the suite can drive rather than a claim.
  */
-const MAIL_FROM = 'Teaching Hub <invitations@example.test>';
+const MAIL_FROM = 'Vinegard <invitations@example.test>';
 
 /**
  * **The `mail-down` server's transport, said in a way `.env` cannot overrule.**

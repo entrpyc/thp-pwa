@@ -1,4 +1,4 @@
-# Teaching Hub — Observability & analytics
+# Vinegard — Observability & analytics
 
 The plan for knowing two things about the product: **is it up** (observability) and **is it doing
 its job** (analytics). It stands beside `docs/project/prd.md` and `docs/project/tdd.md` and refines
@@ -295,7 +295,7 @@ correct.
 ### 5.4 Where the questions are answered
 
 Saved PostHog insights, created once and listed here so that a new operator knows what exists.
-All on one dashboard, *Teaching Hub*.
+All on one dashboard, *Vinegard*.
 
 1. **Streams per recording** — total `playback_started`, broken down by `recording_id`; the same
    by `series_id`.

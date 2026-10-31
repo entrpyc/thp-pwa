@@ -42,7 +42,7 @@ const SECTIONS: readonly PublicDocumentSection[] = [
     body: (
       <>
         <p>
-          Teaching Hub is run by {OPERATOR_NAME}. For anything about the app, your account or your
+          Vinegard is run by {OPERATOR_NAME}. For anything about the app, your account or your
           data, write to {contact}. We read every message and aim to answer within a few days;
           requests about your personal data are answered within a month at most.
         </p>

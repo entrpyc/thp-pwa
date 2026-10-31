@@ -8,11 +8,12 @@ import { ServiceWorkerRegistration } from './service-worker-registration';
 /**
  * **The tab draws the installed app's own icon**, because it is the same file: {@link APP_ICON} is
  * the manifest's 192px entry, named here rather than copied, so a tab and a home screen cannot show
- * two different marks. Without this the browser falls back to `/favicon.ico` — which this app does
- * not serve — and the tab is left with whatever the browser draws for a site that has no icon.
+ * two different marks. `favicon.ico` beside this file is the same mark again, for the browsers and
+ * crawlers that ask for that path before they have read the document; all of them are generated
+ * from one source by `packages/shell/tools/generate-assets.mjs`.
  */
 export const metadata = {
-  title: 'Teaching Hub',
+  title: 'Vinegard',
   icons: { icon: APP_ICON, apple: '/apple-icon.png' },
 };
 

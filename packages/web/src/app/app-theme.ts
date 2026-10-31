@@ -30,6 +30,8 @@ export const APP_BACKGROUND_COLOUR = '#01101F';
  *
  * The other two entries in the manifest are the same mark at other sizes and for the launcher's
  * crop, and iOS reads `apple-icon.png` beside this module instead — none of the three is what a
- * tab draws, which is why this one is named here.
+ * tab draws, which is why this one is named here. All of them, and the store shells' icons, are
+ * generated from `packages/web/brand/mark.png` by `packages/shell/tools/generate-assets.mjs`;
+ * replacing the art is replacing that file and running the script.
  */
 export const APP_ICON = '/icons/icon-192.png';

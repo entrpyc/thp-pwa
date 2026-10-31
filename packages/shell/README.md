@@ -1,4 +1,4 @@
-# Teaching Hub store shell
+# Vinegard store shell
 
 The Capacitor project that puts the web app in the Apple App Store and Google Play (project prd
 5.2.1–5.2.5; docs/project/tdd.md decision 4.3). It contains **no product logic**: the native
@@ -9,7 +9,7 @@ API routes, which is why nothing is bundled — `www/` holds one explanatory pag
 | Setting            | Value                                                                                   | Where                                                  |
 | :----------------- | :-------------------------------------------------------------------------------------- | :----------------------------------------------------- |
 | App id / bundle id | `com.indepthwebsolutions.teachinghub`                                                   | capacitor.config.ts, both native projects              |
-| Name               | Teaching Hub                                                                            | capacitor.config.ts, both native projects              |
+| Name               | Vinegard                                                                            | capacitor.config.ts, both native projects              |
 | Server origin      | `https://thp.indepthwebsolutions.com`                                                   | capacitor.config.ts (`THP_SHELL_SERVER_URL` overrides) |
 | Capacitor          | 8.5.3 (core, cli, android, ios — pinned exactly)                                        | package.json                                           |
 | Plugins            | `@capgo/capacitor-media-session` 8.1.5, `@capacitor/push-notifications` 8.1.3 (pinned exactly, here and in packages/web) | package.json, packages/web/package.json                |
@@ -67,8 +67,10 @@ The shell contributes the native half of push and nothing more: `@capacitor/push
 asks the OS for permission, registers with APNs or FCM, hands the token to the web app, and
 reports a press. Everything else — the switches, the registration with the server, where a press
 lands — is the web app's (`packages/web/src/client/push/push-device.ts`,
-`push-shell-listener.tsx`), and the sending is `packages/push`. The prompt is raised only from the
-*Turn on push on this device* button on `/profile/notifications`, never at launch (Apple 5.1.2).
+`push-shell-listener.tsx`), and the sending is `packages/push`. The shell raises the OS prompt
+**once, at the first launch with a member signed in** (`enableShellPushAtLaunch`); a denial is
+the platform's to remember, and a device turned off from `/profile/notifications` stays off. The
+button there turns a device on or off afterwards.
 
 What this package carries for it:
 
@@ -94,11 +96,13 @@ What this package carries for it:
    `npm --workspace @thp/shell run sync:android`, build and install. iOS: run `sync`, open in
    Xcode, confirm the Push Notifications capability, build to a real device — the simulator has
    no APNs.
-3. Sign in, open the member menu, *My profile*, *Notifications*. The line reads *Push is off for
-   this device*. Press **Turn on push on this device**. The OS prompt appears **now and not
-   before** — it must not have appeared at launch or at sign-in. Allow it. The line reads *Push
-   is on for this device*; the server log shows `account.push-subscription.registered` with the
-   platform.
+3. Sign in. The OS notification prompt appears **once, right after sign-in**, and not again on a
+   later launch. Allow it. Open the member menu, *My profile*, *Notifications*: the line reads
+   *Push is on for this device* and the server log shows `account.push-subscription.registered`
+   with the platform. Press **Turn off push on this device**: the line reads *off*, the log shows
+   the unregistration, and force-quitting and relaunching the app does **not** turn it back on or
+   prompt again. Press **Turn on push on this device**: on again, with no OS prompt (the platform
+   remembers the answer).
 4. Background the app (home button), then from another account reply to one of this member's
    public notes. A notification appears within seconds with the replier's name and the reply's
    first line. Tap it: the app opens on that teaching. The server log shows `push.delivered` with
@@ -274,7 +278,7 @@ Set up once, from a browser:
    the phone in, open its page, click the serial number until *UDID* appears, right-click, copy).
    The archive step signs with a development profile, and Apple refuses to make one for a team
    with no devices; the device never has to be the one that tests.
-4. App Store Connect, *Apps*, *+*: platform iOS, name Teaching Hub, bundle id
+4. App Store Connect, *Apps*, *+*: platform iOS, name Vinegard, bundle id
    `com.indepthwebsolutions.teachinghub`, any SKU. The app record must exist before the first
    upload, or Apple refuses it with "No suitable application records were found". If the bundle
    id is not offered in the list, run the workflow once with *upload* unticked first — the archive
@@ -394,13 +398,14 @@ injected bridge script. It does not affect any item above and is not addressed h
 
 ## Icons, splash screens, system bars and the offline screen
 
-- **Icons and splash screens** are generated from the web app's own mark by
-  `npm --workspace @thp/shell run assets` (`tools/generate-assets.mjs`): the Android launcher
-  icons at every density (legacy, round and the adaptive foreground over `ic_launcher_background`),
-  the Android splash drawables, the 1024 px iOS icon and the three iOS launch images. The
-  background is `APP_BACKGROUND_COLOUR` read from `packages/web/src/app/app-theme.ts`. To change
-  the art, replace `packages/web/public/icons/icon-512.png` and run the script; nothing is drawn by
-  hand here. Android 12+ draws its own splash — the launcher icon on `windowSplashScreenBackground`
+- **Icons and splash screens** are generated from the brand mark by
+  `npm --workspace @thp/shell run assets` (`tools/generate-assets.mjs`): the web app's own icons
+  (the manifest's, the tab's, `favicon.ico` and `apple-icon.png`), the Android launcher icons at
+  every density (legacy, round and the adaptive foreground over `ic_launcher_background`), the
+  Android splash drawables, the 1024 px iOS icon and the three iOS launch images. The background
+  is `APP_BACKGROUND_COLOUR` read from `packages/web/src/app/app-theme.ts`. To change the art,
+  replace `packages/web/brand/mark.png` (the mark on transparency, square) and run the script;
+  nothing is drawn by hand here. Android 12+ draws its own splash — the launcher icon on `windowSplashScreenBackground`
   (styles.xml) — and the drawables serve Android 11 and earlier; iOS shows `Splash.imageset`
   through LaunchScreen.storyboard on a background of the same colour.
 - **System bars.** Android paints the status and navigation bars in the document background with

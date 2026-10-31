@@ -25,7 +25,7 @@ export default function AccountDeletedPage() {
     <div className={styles.card}>
       <div>
         <h1 className={styles.title}>Your account has been deleted</h1>
-        <p className={styles.subtitle}>Teaching Hub — the private teaching library.</p>
+        <p className={styles.subtitle}>Vinegard — the private teaching library.</p>
       </div>
       <p className={styles.prose}>
         The account, every session, your private notes, your listening history and your picture are

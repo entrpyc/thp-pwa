@@ -82,7 +82,7 @@ describe('a push arriving', () => {
     const broken = { event: { data: { json: () => { throw new SyntaxError('not json'); } }, waitUntil: vi.fn() } };
     worker.listeners.get('push')?.(broken.event);
     await settle(broken.event.waitUntil);
-    expect(worker.showNotification).toHaveBeenCalledWith('Teaching Hub', expect.objectContaining({ body: '', data: { href: '/notifications', kind: null } }));
+    expect(worker.showNotification).toHaveBeenCalledWith('Vinegard', expect.objectContaining({ body: '', data: { href: '/notifications', kind: null } }));
 
     const empty = pushEvent(undefined);
     worker.listeners.get('push')?.(empty.event);

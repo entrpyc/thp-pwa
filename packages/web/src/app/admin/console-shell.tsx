@@ -57,7 +57,7 @@ export function ConsoleShell({
       <div className={styles.shell}>
         <header className={styles.header}>
           <div>
-            <p className={styles.eyebrow}>Teaching Hub</p>
+            <p className={styles.eyebrow}>Vinegard</p>
             <h1 className={styles.title}>Admin console</h1>
           </div>
           <div className={styles.identity}>

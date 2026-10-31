@@ -81,7 +81,7 @@ function DeadEnd({ code }: { code: ApiErrorCode | null }) {
         <h1 className={styles.title}>
           {expired ? 'This deletion link expired' : 'This link is not valid'}
         </h1>
-        <p className={styles.subtitle}>Teaching Hub — the private teaching library.</p>
+        <p className={styles.subtitle}>Vinegard — the private teaching library.</p>
       </div>
       <p className={styles.prose}>
         {expired

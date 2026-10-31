@@ -45,7 +45,7 @@ export interface FeedbackMessageInput {
   readonly productName?: string;
 }
 
-const DEFAULT_PRODUCT_NAME = 'Teaching Hub';
+const DEFAULT_PRODUCT_NAME = 'Vinegard';
 
 /** The same fixed rendering the reset message uses, so two messages in one inbox agree about time. */
 function formatSubmittedAt(submittedAt: Date): string {

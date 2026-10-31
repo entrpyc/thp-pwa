@@ -30,7 +30,7 @@ export interface InvitationMessageInput {
   readonly productName?: string;
 }
 
-const DEFAULT_PRODUCT_NAME = 'Teaching Hub';
+const DEFAULT_PRODUCT_NAME = 'Vinegard';
 
 function formatExpiry(expiresAt: Date): string {
   return expiresAt.toLocaleDateString('en-GB', {

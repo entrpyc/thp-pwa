@@ -50,12 +50,12 @@ const SECTIONS: readonly PublicDocumentSection[] = [
     body: (
       <>
         <p>
-          Teaching Hub is run by {OPERATOR_NAME}, a company registered in Bulgaria. We are the data
+          Vinegard is run by {OPERATOR_NAME}, a company registered in Bulgaria. We are the data
           controller for the personal data described on this page. You can reach us at {contact},
           or through the <Link href={SUPPORT_PAGE_PATH}>support page</Link>.
         </p>
         <p>
-          Teaching Hub is a private app for the members of one teaching group. Nothing in it is
+          Vinegard is a private app for the members of one teaching group. Nothing in it is
           visible to the public: every page but this one, the terms, the support page and the
           sign-in screens needs an account, and accounts exist by invitation or by registering with
           the group.
@@ -277,7 +277,7 @@ const SECTIONS: readonly PublicDocumentSection[] = [
     heading: 'Children',
     body: (
       <p>
-        Teaching Hub is for members aged 16 and over. We do not knowingly hold an account for anyone
+        Vinegard is for members aged 16 and over. We do not knowingly hold an account for anyone
         younger; if you believe we do, write to {contact} and we will delete it.
       </p>
     ),

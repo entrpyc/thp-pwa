@@ -60,7 +60,7 @@ export function SignInForm() {
     <div className={`${styles.card} ${error === null ? '' : styles.cardErrored}`}>
       <div>
         <h1 className={styles.title}>Sign in</h1>
-        <p className={styles.subtitle}>Welcome back to Teaching Hub.</p>
+        <p className={styles.subtitle}>Welcome back to Vinegard.</p>
       </div>
 
       {/*

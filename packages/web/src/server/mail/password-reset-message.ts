@@ -32,7 +32,7 @@ export interface PasswordResetMessageInput {
   readonly productName?: string;
 }
 
-const DEFAULT_PRODUCT_NAME = 'Teaching Hub';
+const DEFAULT_PRODUCT_NAME = 'Vinegard';
 
 function formatExpiry(expiresAt: Date): string {
   const time = expiresAt.toLocaleTimeString('en-GB', {

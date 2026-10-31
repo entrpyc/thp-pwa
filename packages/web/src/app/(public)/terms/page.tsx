@@ -42,13 +42,13 @@ const SECTIONS: readonly PublicDocumentSection[] = [
     body: (
       <>
         <p>
-          These are the terms between you and {OPERATOR_NAME}, which runs Teaching Hub for the
+          These are the terms between you and {OPERATOR_NAME}, which runs Vinegard for the
           members of one teaching group. By using the app you agree to them. How we handle your
           personal data is in the <Link href={PRIVACY_PAGE_PATH}>privacy policy</Link>, which is
           part of these terms.
         </p>
         <p>
-          Teaching Hub is private. It is not open to the public, and an account is for the one
+          Vinegard is private. It is not open to the public, and an account is for the one
           person it was issued to.
         </p>
       </>
@@ -170,7 +170,7 @@ const SECTIONS: readonly PublicDocumentSection[] = [
     body: (
       <>
         <p>
-          Teaching Hub is provided free of charge to the group&rsquo;s members, as it is and as it is
+          Vinegard is provided free of charge to the group&rsquo;s members, as it is and as it is
           available. We work to keep it running and to keep your data safe, but we cannot promise it
           will always be available or free of mistakes, and we are not liable for loss that comes
           from relying on it, except where the law does not let us exclude liability. Nothing in

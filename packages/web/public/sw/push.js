@@ -54,7 +54,7 @@ function readPayload(event) {
 
 self.addEventListener('push', (event) => {
   const payload = readPayload(event);
-  const title = payload ? payload.title : 'Teaching Hub';
+  const title = payload ? payload.title : 'Vinegard';
   const options = {
     body: payload && typeof payload.body === 'string' ? payload.body : '',
     icon: ICON,

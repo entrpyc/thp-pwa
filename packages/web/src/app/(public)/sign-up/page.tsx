@@ -34,7 +34,7 @@ export default async function SignUpPage() {
     <div className={styles.card}>
       <div>
         <h1 className={styles.title}>Registration is closed</h1>
-        <p className={styles.subtitle}>Teaching Hub is for the members of the group.</p>
+        <p className={styles.subtitle}>Vinegard is for the members of the group.</p>
       </div>
       <p className={styles.prose}>
         To get access, ask someone from the group to invite you, or write to{' '}

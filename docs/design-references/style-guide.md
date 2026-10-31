@@ -1,4 +1,4 @@
-# Teaching Hub — UI Style Guide
+# Vinegard — UI Style Guide
 
 Dark, calm, one purple accent. Surfaces separate by **tone and hairline borders**, not shadows or hard lines. Everything is rounded and outlined on a near-black navy.
 

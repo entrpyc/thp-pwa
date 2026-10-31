@@ -28,8 +28,8 @@ import { APP_BACKGROUND_COLOUR, APP_ICON } from './app-theme';
  */
 export default function manifest(): MetadataRoute.Manifest {
   return {
-    name: 'Teaching Hub',
-    short_name: 'Teaching Hub',
+    name: 'Vinegard',
+    short_name: 'Vinegard',
     description: 'Teachings, series and recordings.',
     start_url: '/',
     scope: '/',

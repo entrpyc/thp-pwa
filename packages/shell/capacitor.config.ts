@@ -17,7 +17,7 @@ const serverUrl = (process.env.THP_SHELL_SERVER_URL ?? '').trim() || PRODUCTION_
 
 const config: CapacitorConfig = {
   appId: 'com.indepthwebsolutions.teachinghub',
-  appName: 'Teaching Hub',
+  appName: 'Vinegard',
   webDir: 'www',
   server: {
     url: serverUrl,

@@ -1,4 +1,4 @@
-# Teaching Hub
+# Vinegard
 
 A TypeScript monorepo. Epic core-listening, ticket 2 — **a person can sign in, and can be refused.** On top of
 ticket 1's versioned `/api/v1` boundary (one JSON envelope, a correlation id on every request and log

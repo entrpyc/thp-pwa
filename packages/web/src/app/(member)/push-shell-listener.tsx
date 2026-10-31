@@ -6,7 +6,7 @@ import { PushNotifications } from '@capacitor/push-notifications';
 import { NOTIFICATIONS_PAGE_PATH, isNotificationKind } from '@thp/shared';
 import { track } from '@/client/observability/analytics';
 import { shellPlatform } from '@/client/platform';
-import { adoptShellToken } from '@/client/push/push-device';
+import { adoptShellToken, enableShellPushAtLaunch } from '@/client/push/push-device';
 import { useNotifications } from './notifications-context';
 
 /**
@@ -29,8 +29,12 @@ import { useNotifications } from './notifications-context';
  *   not know is a device that quietly stops receiving, so it is adopted here; one that matches
  *   the remembered endpoint costs no request.
  *
- * Renders nothing, mounts nothing outside a shell, and asks for no permission: the prompt is the
- * settings section's button and only that.
+ * **And it asks.** A store build raises the OS notification prompt on its first launch with a
+ * member signed in (`enableShellPushAtLaunch`): once per install, never after a denial, and never
+ * on a device the member turned off in the settings. The settings button remains the way to turn
+ * push on again afterwards, and the only prompt there is in a browser.
+ *
+ * Renders nothing and mounts nothing outside a shell.
  */
 /**
  * A path on this origin, or the centre — `public/sw/push.js`'s rule, decided the same way: the
@@ -59,6 +63,7 @@ export function PushShellListener() {
 
   useEffect(() => {
     if (shellPlatform() === null) return;
+    void enableShellPushAtLaunch().catch(() => undefined);
     const handles = [
       PushNotifications.addListener('pushNotificationActionPerformed', ({ notification }) => {
         const data = (notification.data ?? {}) as Record<string, unknown>;

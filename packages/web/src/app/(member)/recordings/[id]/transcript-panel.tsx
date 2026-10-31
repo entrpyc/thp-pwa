@@ -191,7 +191,7 @@ export function TranscriptPanel({
    * same plugin the offline downloads use, and the line below the header says where it went —
    * there is no save dialog to say it for us. On iOS the Documents folder is exposed to the Files
    * app (`UIFileSharingEnabled` and `LSSupportsOpeningDocumentsInPlace` in `Info.plist`), under
-   * On My iPhone → Teaching Hub; on Android it is the app's own documents folder.
+   * On My iPhone → Vinegard; on Android it is the app's own documents folder.
    */
   const download = useCallback(async (): Promise<void> => {
     if (segments === null) return;
@@ -208,7 +208,7 @@ export function TranscriptPanel({
           encoding: Encoding.UTF8,
           recursive: true,
         });
-        setSaved(`Saved as ${name} in the Files app, under On My iPhone → Teaching Hub (Android: the app's Documents folder).`);
+        setSaved(`Saved as ${name} in the Files app, under On My iPhone → Vinegard (Android: the app's Documents folder).`);
         return;
       }
       const url = URL.createObjectURL(new Blob([text], { type: 'text/plain;charset=utf-8' }));
