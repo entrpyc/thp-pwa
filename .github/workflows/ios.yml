@@ -123,6 +123,12 @@ jobs:
       # whatever the portal is missing — the App ID with the entitlements' capabilities, a
       # cloud-managed certificate, the profile — and signs with it. DEVELOPMENT_TEAM is passed here
       # rather than committed to the project so the project file stays as Capacitor generated it.
+      #
+      # CODE_SIGN_IDENTITY is forced to the distribution certificate. Left alone, an automatic
+      # archive signs with a *development* profile and re-signs at export — and a development
+      # profile needs at least one registered device, which a team that has never plugged a phone
+      # into Xcode does not have ("Your team has no devices from which to generate a provisioning
+      # profile"). An App Store profile needs none, and it is the one the export wants anyway.
       - name: Archive
         env:
           KEY_ID: ${{ secrets.APP_STORE_CONNECT_KEY_ID }}
@@ -136,6 +142,7 @@ jobs:
             -authenticationKeyID "$KEY_ID" \
             -authenticationKeyIssuerID "$ISSUER_ID" \
             DEVELOPMENT_TEAM=B2PZ326S78 \
+            CODE_SIGN_IDENTITY="Apple Distribution" \
             MARKETING_VERSION="${{ inputs.version }}" \
             CURRENT_PROJECT_VERSION="$BUILD_NUMBER" \
             archive
