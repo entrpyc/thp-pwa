@@ -269,7 +269,12 @@ Set up once, from a browser:
 2. GitHub, *Settings*, *Secrets and variables*, *Actions*, repository secrets:
    `APP_STORE_CONNECT_KEY_ID`, `APP_STORE_CONNECT_ISSUER_ID`, and
    `APP_STORE_CONNECT_PRIVATE_KEY` holding the whole `.p8` file, every line intact.
-3. App Store Connect, *Apps*, *+*: platform iOS, name Teaching Hub, bundle id
+3. Developer portal, *Certificates, Identifiers & Profiles*, *Devices*, *+*: register one iPhone
+   by UDID (on Windows, the *Apple Devices* app from the Microsoft Store or iTunes shows it: plug
+   the phone in, open its page, click the serial number until *UDID* appears, right-click, copy).
+   The archive step signs with a development profile, and Apple refuses to make one for a team
+   with no devices; the device never has to be the one that tests.
+4. App Store Connect, *Apps*, *+*: platform iOS, name Teaching Hub, bundle id
    `com.indepthwebsolutions.teachinghub`, any SKU. The app record must exist before the first
    upload, or Apple refuses it with "No suitable application records were found". If the bundle
    id is not offered in the list, run the workflow once with *upload* unticked first — the archive
