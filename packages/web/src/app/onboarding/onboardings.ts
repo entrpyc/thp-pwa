@@ -95,12 +95,6 @@ export const ONBOARDINGS: Record<OnboardingId, OnboardingDefinition> = {
       description:
         'Anything feels off or you have ideas for the app? Click on the top-right button and select the "Report a bug" link. You can fill out the form and submit it, that would be greatly appreciated.',
     },
-    {
-      title: 'Install the app',
-      description:
-        'Want quick access from your home screen? Click on the top-right button and select the "Install app". Follow the instructions to add the app to your home screen. You can also install the app from your browser\'s menu.',
-      extension: 'webp',
-    },
   ]),
   'release-0.3.0': onboarding('release-0.3.0', [
     {

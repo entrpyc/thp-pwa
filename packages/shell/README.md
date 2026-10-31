@@ -26,12 +26,8 @@ API routes, which is why nothing is bundled — `www/` holds one explanatory pag
   the product's own — see *Icons, splash screens, system bars and the offline screen* below.
 - **The web app can tell it is inside the shell** through `shellPlatform()` in
   `packages/web/src/client/platform.ts`, which reads the `Capacitor` bridge the shell injects.
-  No custom user agent is set; the server sees an ordinary mobile browser. Two things read it:
-  - the member menu's *Install app* row (`install-app.tsx`), which treats either shell as already
-    installed and offers nothing — the shell's WebView is neither standalone nor
-    `navigator.standalone`, so without that reading the store app told a member to install the
-    app they were in;
-  - the player's media session (`packages/web/src/client/playback/shell-media-session.ts`), below.
+  No custom user agent is set; the server sees an ordinary mobile browser. The player's media
+  session (`packages/web/src/client/playback/shell-media-session.ts`, below) reads it.
 - **Background audio and the lock screen** (project prd 3.2.6, 5.1.3; tdd § 2.1).
   - *Android.* Playback itself needs nothing: Capacitor never calls `WebView.onPause()`, so the
     page's `<audio>` keeps running when the app is backgrounded or the screen locks, and Chromium
@@ -283,27 +279,24 @@ member would notice; the automated suites cannot see any of them.
 
 **Both platforms**
 
-1. **No install prompt.** Sign in, open the member menu. There must be no *Install app* row —
-   not the Android prompt, not the iOS "tap Share" steps. (In a browser tab on the same phone the
-   row is still there.)
-2. **Background play.** Open a teaching, press play, press the home button. Sound continues.
+1. **Background play.** Open a teaching, press play, press the home button. Sound continues.
    Lock the phone. Sound continues for at least five minutes.
-3. **Lock-screen controls.** With the phone locked, the lock screen (Android: also the
+2. **Lock-screen controls.** With the phone locked, the lock screen (Android: also the
    notification shade) names the teaching and its series and shows the series cover. Pause from
    there, then play; skip back and forward move ten seconds, the same as the bar. Scrub on the
    lock screen where it offers a scrubber. Unlock: the bar agrees with what the lock screen did.
-4. **Stop from the lock screen** (Android: swipe the notification away; iOS: there is no stop)
+3. **Stop from the lock screen** (Android: swipe the notification away; iOS: there is no stop)
    leaves the teaching loaded in the bar, paused, at its position.
-5. **Link opening.** From the phone's mail app or a notes app, tap an invitation link and a
+4. **Link opening.** From the phone's mail app or a notes app, tap an invitation link and a
    reset link. Each opens the shell, not the browser, on that page. Tap one while a teaching is
    playing: the page is replaced and playback stops, which is the documented behaviour.
-6. **Other origins stay out.** A link to any other host from inside the app opens the system
+5. **Other origins stay out.** A link to any other host from inside the app opens the system
    browser.
-7. **Offline screen.** Turn on aeroplane mode, force-quit the app and open it. The product's own
+6. **Offline screen.** Turn on aeroplane mode, force-quit the app and open it. The product's own
    "You're offline" page shows, not a browser error. Turn aeroplane mode off: the page loads the
    app on its own within a few seconds. With the network on but the server stopped (a build
    pointed at a local dev server), the page says the server could not be reached.
-8. **Icon, splash and system bars.** The launcher and home screen show the purple play mark on
+7. **Icon, splash and system bars.** The launcher and home screen show the purple play mark on
    the dark background, not Capacitor's logo. The launch window is the same dark colour with the
    mark. Once loaded, the status bar icons are light and the top bar sits below them; the
    transport bar clears the gesture area or home indicator with no dark band between.

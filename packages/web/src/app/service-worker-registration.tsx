@@ -6,17 +6,21 @@ import { serviceWorkerUpdates, serviceWorkerUrl } from './service-worker-update'
 /**
  * Registers `public/sw.js`, watches for a newer worker taking over, and renders nothing.
  *
- * It is mounted in the root layout rather than the member one because Chrome decides whether to
- * offer the install prompt on whichever page the member happens to be looking at — including
- * sign-in, which is where someone arriving at the hub for the first time actually stands.
+ * It is mounted in the root layout rather than the member one so the worker controls every page,
+ * including sign-in, which is where someone arriving at the hub for the first time actually
+ * stands.
+ *
+ * **The hub never asks to be installed.** A registered worker plus the manifest is what makes
+ * Chrome eligible to show its own install banner; `beforeinstallprompt` is cancelled here so that
+ * banner never appears. Installing stays possible by hand from the browser's own menu.
  *
  * The script URL carries the release (`serviceWorkerUrl`), which is what makes every deploy a new
  * worker — see the header of `public/sw.js`. `updateViaCache: 'none'` keeps the browser from
  * serving the worker or its imported modules out of the HTTP cache, so the fresh URL fetches fresh
  * code. Registration is best-effort: it throws where the page is not a secure context — plain
- * `http://` on a phone on the LAN, say — and the only consequence is that Chrome withholds the
- * install prompt, so the failure is swallowed rather than surfaced to a member who can do nothing
- * about it.
+ * `http://` on a phone on the LAN, say — and the only consequence is that the page runs without
+ * a worker, so the failure is swallowed rather than surfaced to a member who can do nothing about
+ * it.
  *
  * **Learning about an update.** Two events, because they answer different questions:
  *
@@ -34,7 +38,11 @@ import { serviceWorkerUpdates, serviceWorkerUrl } from './service-worker-update'
  */
 export function ServiceWorkerRegistration() {
   useEffect(() => {
-    if (!('serviceWorker' in navigator)) return;
+    const suppressInstallBanner = (event: Event) => event.preventDefault();
+    window.addEventListener('beforeinstallprompt', suppressInstallBanner);
+    if (!('serviceWorker' in navigator)) {
+      return () => window.removeEventListener('beforeinstallprompt', suppressInstallBanner);
+    }
     const container = navigator.serviceWorker;
     // Mutable on purpose: a tab that opened uncontrolled and was claimed by the first install is
     // controlled from then on, so a second deploy during the same visit is an update for it too.
@@ -63,6 +71,7 @@ export function ServiceWorkerRegistration() {
       .catch(() => undefined);
 
     return () => {
+      window.removeEventListener('beforeinstallprompt', suppressInstallBanner);
       container.removeEventListener('controllerchange', onControllerChange);
     };
   }, []);

@@ -288,10 +288,9 @@
 
 /*
  * `top-navigation/menu-opened.png`: a panel below the bar, rows divided by a hairline rather than
- * by gaps. Dashboard, All series, All recordings, Admin console, Install app, Sign out — *All
- * chapters* has no destination in this epic and is dropped rather than rendered dead, and the two
- * conditional rows render only where they lead somewhere: the console for an actor the policy
- * allows, and Install app on a device that can actually install.
+ * by gaps. Dashboard, All series, All recordings, Admin console, Sign out — *All chapters* has no
+ * destination in this epic and is dropped rather than rendered dead, and the one conditional row
+ * renders only where it leads somewhere: the console for an actor the policy allows.
  */
 /*
  * It **overlays** the page rather than sitting in the column above it. Opening a menu is a question
@@ -347,19 +346,6 @@
 .menuSignOut .menuLink {
   border-bottom: none;
   color: var(--color-text-muted);
-}
-
-/*
- * The line under *Install app* on iOS, where the share sheet has to be described because Safari
- * offers no prompt to fire. A row that is read rather than pressed, so it takes the muted, smaller
- * voice the guide gives meta text instead of the .menuLink shape beside it.
- */
-.menuHint {
-  padding: var(--space-3) var(--space-5);
-  border-bottom: 1px solid var(--color-border);
-  color: var(--color-text-muted);
-  font-size: var(--fs-meta);
-  line-height: 1.5;
 }
 
 /* ------------------------------------------------------------------------------------ the bell */

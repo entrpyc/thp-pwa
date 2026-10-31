@@ -70,7 +70,7 @@ import { DownloadCancelled, type DownloadDraft, type DownloadStore } from './sto
  * **The download manager** — the one object the controls, the indicator, the downloads section
  * and the player read ([3.18](docs/project/prd.md); project tdd 2.1).
  *
- * A module-level store with `subscribe`/`getSnapshot` in the manner of `install-app.tsx`, not
+ * A module-level store with `subscribe`/`getSnapshot`, not
  * React state: the queue runs while the member walks between pages (3.18.7), a control mounts
  * long after the queue started, and the player asks it for a local source from outside React.
  *

@@ -16,7 +16,6 @@ import {
   onboardingPagePath,
 } from '@thp/shared';
 import { SignOutButton } from '../sign-out-button';
-import { InstallApp } from './install-app';
 import { useNotifications } from './notifications-context';
 import { useBreadcrumbTrailValue, type BreadcrumbKind } from './player-context';
 import styles from './member.module.css';
@@ -341,7 +340,6 @@ export function TopNavigation({ canSeeConsole }: { canSeeConsole: boolean }) {
                 Report a bug
               </Link>
             </li>
-            <InstallApp className={styles.menuLink} hintClassName={styles.menuHint} />
             {/*
               The two things about an account that are its owner's to change
               ([3.1.12](docs/project/prd.md)) — the name others see and the picture beside it. After
