@@ -6,6 +6,7 @@
   "scripts": {
     "sync": "node tools/write-offline-origin.mjs && cap sync",
     "sync:android": "node tools/write-offline-origin.mjs && cap sync android",
+    "sync:ios": "node tools/write-offline-origin.mjs && cap sync ios",
     "assets": "node tools/generate-assets.mjs",
     "open:android": "cap open android",
     "open:ios": "cap open ios"

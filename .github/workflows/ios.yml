@@ -1,0 +1,200 @@
+# iOS — **build the store shell on a GitHub Mac and send it to App Store Connect.**
+#
+# Started by hand from the Actions tab. There is no Mac in this project, so this is the Xcode in
+# the room: a hosted macOS runner with Xcode 26 syncs the Capacitor project, archives it, signs it
+# through Apple's cloud and uploads it. What a person would click in Xcode's Signing & Capabilities
+# tab happens through `-allowProvisioningUpdates` with an App Store Connect API key: the bundle id,
+# the Push Notifications and Associated Domains capabilities (read off App/App.entitlements), the
+# App Store provisioning profile and a cloud-managed distribution certificate are all created or
+# reused on the developer portal. No certificate, key or profile is stored anywhere but there.
+#
+# What the run needs (Settings → Secrets and variables → Actions, repository level):
+#
+#   APP_STORE_CONNECT_KEY_ID       the API key's Key ID
+#   APP_STORE_CONNECT_ISSUER_ID    the Issuer ID shown above the key list
+#   APP_STORE_CONNECT_PRIVATE_KEY  the whole AuthKey_<KEY_ID>.p8 file, every line intact
+#
+# The key must have the Admin role on the first run, which creates the App ID, the certificate and
+# the profile; App Manager is enough afterwards. The app record (bundle id
+# com.indepthwebsolutions.teachinghub) must already exist in App Store Connect before `upload` is
+# ticked, or the upload is refused with "No suitable application records were found".
+#
+# The marketing version is an input; the build number is the run number, so every run that reaches
+# App Store Connect is a new build without anybody editing the project. The shell is a window onto
+# the live site (packages/shell/capacitor.config.ts), so a new build is only needed when something
+# native changes — a plugin, an entitlement, the offline page.
+
+name: iOS
+
+on:
+  workflow_dispatch:
+    inputs:
+      version:
+        description: Marketing version for the build (the App Store's version string, e.g. 1.0.0)
+        type: string
+        required: true
+        default: '1.0.0'
+      upload:
+        description: Upload to App Store Connect (TestFlight). Untick to only build and keep the .ipa as a run artifact.
+        type: boolean
+        required: false
+        default: true
+
+# One iOS build at a time: two runs uploading the same build number would collide at Apple.
+concurrency:
+  group: ios-build
+  cancel-in-progress: false
+
+permissions:
+  contents: read
+
+jobs:
+  build:
+    name: Archive ${{ inputs.version }} (${{ github.run_number }})${{ inputs.upload && ' and upload' || '' }}
+    runs-on: macos-26
+    # Package resolution, a Release archive and the upload. Cloud signing adds a few round trips.
+    timeout-minutes: 60
+    env:
+      SCHEME: App
+      PROJECT: packages/shell/ios/App/App.xcodeproj
+      ARCHIVE: ${{ github.workspace }}/packages/shell/ios/App/build/App.xcarchive
+      EXPORT_DIR: ${{ github.workspace }}/packages/shell/ios/App/build/export
+      BUILD_NUMBER: ${{ github.run_number }}
+    steps:
+      - name: App Store Connect key is present
+        env:
+          KEY_ID: ${{ secrets.APP_STORE_CONNECT_KEY_ID }}
+          ISSUER_ID: ${{ secrets.APP_STORE_CONNECT_ISSUER_ID }}
+          PRIVATE_KEY: ${{ secrets.APP_STORE_CONNECT_PRIVATE_KEY }}
+        run: |
+          missing=""
+          [ -z "$KEY_ID" ] && missing="$missing APP_STORE_CONNECT_KEY_ID"
+          [ -z "$ISSUER_ID" ] && missing="$missing APP_STORE_CONNECT_ISSUER_ID"
+          [ -z "$PRIVATE_KEY" ] && missing="$missing APP_STORE_CONNECT_PRIVATE_KEY"
+          if [ -n "$missing" ]; then
+            echo "::error::Not set as repository secrets (Settings → Secrets and variables → Actions):$missing. See the header of .github/workflows/ios.yml."
+            exit 1
+          fi
+          case "${{ inputs.version }}" in
+            [0-9]*.[0-9]*.[0-9]*|[0-9]*.[0-9]*) ;;
+            *) echo "::error::version must look like 1.0.0, got '${{ inputs.version }}'."; exit 1 ;;
+          esac
+
+      - uses: actions/checkout@fbc6f3992d24b796d5a048ff273f7fcc4a7b6c09 # v5
+
+      - uses: actions/setup-node@a0853c24544627f65ddf259abe73b1d18a591444 # v5
+        with:
+          node-version-file: .nvmrc
+          cache: npm
+
+      # The Swift package points at the media-session plugin inside node_modules
+      # (ios/App/CapApp-SPM/Package.swift), so the dependencies have to be installed before Xcode
+      # can resolve anything.
+      - name: Install dependencies
+        run: npm ci
+
+      # Writes capacitor.config.json and the www/ folder into the iOS project. With
+      # THP_SHELL_SERVER_URL unset the shell points at the production origin, which is the only
+      # origin a store build may carry (packages/shell/README.md, "Pointing the shell at a local server").
+      - name: Sync the Capacitor project
+        run: npm --workspace @thp/shell run sync:ios
+
+      # The .p8 must be on disk for xcodebuild. $RUNNER_TEMP is wiped with the runner.
+      - name: App Store Connect API key
+        env:
+          PRIVATE_KEY: ${{ secrets.APP_STORE_CONNECT_PRIVATE_KEY }}
+        run: |
+          printf '%s\n' "$PRIVATE_KEY" > "$RUNNER_TEMP/AuthKey.p8"
+          chmod 600 "$RUNNER_TEMP/AuthKey.p8"
+          # A key pasted with its lines joined or cut fails deep inside xcodebuild with a message that
+          # names nothing. Prove it parses first.
+          if ! openssl pkey -in "$RUNNER_TEMP/AuthKey.p8" -noout 2> /dev/null; then
+            echo "::error::APP_STORE_CONNECT_PRIVATE_KEY is not a valid .p8 key. It must be the whole file: '-----BEGIN PRIVATE KEY-----', the base64 lines, '-----END PRIVATE KEY-----'. Lines seen: $(wc -l < "$RUNNER_TEMP/AuthKey.p8")."
+            exit 1
+          fi
+
+      - name: Xcode version
+        run: xcodebuild -version
+
+      - name: Resolve Swift packages
+        run: xcodebuild -resolvePackageDependencies -project "$PROJECT" -scheme "$SCHEME"
+
+      # Automatic signing, authenticated with the API key rather than an Apple ID. Xcode registers
+      # whatever the portal is missing — the App ID with the entitlements' capabilities, a
+      # cloud-managed certificate, the profile — and signs with it. DEVELOPMENT_TEAM is passed here
+      # rather than committed to the project so the project file stays as Capacitor generated it.
+      - name: Archive
+        env:
+          KEY_ID: ${{ secrets.APP_STORE_CONNECT_KEY_ID }}
+          ISSUER_ID: ${{ secrets.APP_STORE_CONNECT_ISSUER_ID }}
+        run: |
+          xcodebuild -project "$PROJECT" -scheme "$SCHEME" -configuration Release \
+            -destination "generic/platform=iOS" \
+            -archivePath "$ARCHIVE" \
+            -allowProvisioningUpdates \
+            -authenticationKeyPath "$RUNNER_TEMP/AuthKey.p8" \
+            -authenticationKeyID "$KEY_ID" \
+            -authenticationKeyIssuerID "$ISSUER_ID" \
+            DEVELOPMENT_TEAM=B2PZ326S78 \
+            MARKETING_VERSION="${{ inputs.version }}" \
+            CURRENT_PROJECT_VERSION="$BUILD_NUMBER" \
+            archive
+
+      # ExportOptions.plist says `export`; an upload run rewrites that to `upload`, which makes
+      # xcodebuild hand the signed build to App Store Connect itself — no second tool, no .ipa
+      # to keep. The export run writes the .ipa instead, for a build somebody wants to inspect.
+      - name: Export${{ inputs.upload && ' and upload' || '' }}
+        env:
+          KEY_ID: ${{ secrets.APP_STORE_CONNECT_KEY_ID }}
+          ISSUER_ID: ${{ secrets.APP_STORE_CONNECT_ISSUER_ID }}
+          UPLOAD: ${{ inputs.upload }}
+        run: |
+          options="$RUNNER_TEMP/ExportOptions.plist"
+          cp packages/shell/ios/App/ExportOptions.plist "$options"
+          if [ "$UPLOAD" = "true" ]; then
+            plutil -replace destination -string upload "$options"
+          fi
+          xcodebuild -exportArchive \
+            -archivePath "$ARCHIVE" \
+            -exportPath "$EXPORT_DIR" \
+            -exportOptionsPlist "$options" \
+            -allowProvisioningUpdates \
+            -authenticationKeyPath "$RUNNER_TEMP/AuthKey.p8" \
+            -authenticationKeyID "$KEY_ID" \
+            -authenticationKeyIssuerID "$ISSUER_ID"
+
+      - name: Keep the .ipa
+        if: ${{ !inputs.upload }}
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4
+        with:
+          name: TeachingHub-${{ inputs.version }}-${{ github.run_number }}.ipa
+          path: ${{ env.EXPORT_DIR }}/*.ipa
+          if-no-files-found: error
+          retention-days: 14
+
+      # The debug symbols, whichever way the run went: an upload also sends them to Apple
+      # (uploadSymbols in ExportOptions.plist), but a crash log from a TestFlight phone is easier
+      # to read against a copy that is one click away.
+      - name: Keep the dSYMs
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4
+        with:
+          name: TeachingHub-${{ inputs.version }}-${{ github.run_number }}-dSYMs
+          path: ${{ env.ARCHIVE }}/dSYMs
+          if-no-files-found: warn
+          retention-days: 90
+
+      - name: Summary
+        env:
+          UPLOAD: ${{ inputs.upload }}
+        run: |
+          {
+            echo "## Teaching Hub iOS ${{ inputs.version }} (build $BUILD_NUMBER)"
+            echo
+            echo "- commit: \`${{ github.sha }}\`"
+            if [ "$UPLOAD" = "true" ]; then
+              echo "- uploaded to App Store Connect; it appears under TestFlight once Apple has processed it (usually within half an hour)"
+              echo "- https://appstoreconnect.apple.com/apps"
+            else
+              echo "- not uploaded; the .ipa is attached to this run as an artifact"
+            fi
+          } >> "$GITHUB_STEP_SUMMARY"

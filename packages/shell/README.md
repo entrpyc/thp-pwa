@@ -243,6 +243,41 @@ Universal links also need the Team ID in the association file (next section). iO
 from the site when the app is installed, so deploy the web app with the real value before testing
 a link.
 
+## iOS: building without a Mac
+
+`.github/workflows/ios.yml` does everything the section above does, on a GitHub-hosted Mac with
+Xcode 26. It is the route when there is no Mac that can run Xcode 26 — the repository is public,
+so the macOS runners are free. Started by hand from the Actions tab with a marketing version;
+the build number is the run number. The run syncs the Capacitor project, archives the Release
+configuration, signs it and, when *upload* is ticked (the default), hands the build to App Store
+Connect, where it appears under TestFlight once processed. Untick *upload* to keep the `.ipa` as a
+run artifact instead.
+
+**Signing happens on Apple's side.** The archive and export steps pass
+`-allowProvisioningUpdates` with an App Store Connect API key, which is the command-line
+equivalent of picking the team in Signing & Capabilities: Xcode registers the bundle id with the
+capabilities in `App/App.entitlements` (Push Notifications, Associated Domains), creates a
+cloud-managed distribution certificate whose private key never leaves Apple, and makes the App
+Store profile. Nothing is stored in the repository or in GitHub beyond the API key.
+
+Set up once, from a browser:
+
+1. App Store Connect, *Users and Access*, *Integrations*, *App Store Connect API*, *Team Keys*:
+   generate a key with the **Admin** role (the first run creates the App ID, certificate and
+   profile; App Manager is enough afterwards). Download the `.p8` — it is offered once — and
+   note the **Key ID** and the **Issuer ID** above the list.
+2. GitHub, *Settings*, *Secrets and variables*, *Actions*, repository secrets:
+   `APP_STORE_CONNECT_KEY_ID`, `APP_STORE_CONNECT_ISSUER_ID`, and
+   `APP_STORE_CONNECT_PRIVATE_KEY` holding the whole `.p8` file, every line intact.
+3. App Store Connect, *Apps*, *+*: platform iOS, name Teaching Hub, bundle id
+   `com.indepthwebsolutions.teachinghub`, any SKU. The app record must exist before the first
+   upload, or Apple refuses it with "No suitable application records were found". If the bundle
+   id is not offered in the list, run the workflow once with *upload* unticked first — the archive
+   step registers it — then create the record and run again.
+
+`ExportOptions.plist` beside the project carries the team and the export method and is also what
+the command-line steps above read.
+
 ## Deep-link values (operator action)
 
 Two files under `packages/web/public/.well-known/` name the apps allowed to open the site's

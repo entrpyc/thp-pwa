@@ -1,0 +1,28 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+<plist version="1.0">
+<dict>
+	<!-- How `xcodebuild -exportArchive` turns the archive into an App Store build — read by
+	     .github/workflows/ios.yml and by the command-line steps in the README. `destination` is
+	     `export` here (the .ipa is written to the export path); the workflow rewrites it to
+	     `upload` with plutil when it is sending the build to App Store Connect. -->
+	<key>method</key>
+	<string>app-store-connect</string>
+	<key>destination</key>
+	<string>export</string>
+	<!-- The Team ID — the same value the association file carries (README, Team ID table). -->
+	<key>teamID</key>
+	<string>B2PZ326S78</string>
+	<!-- Automatic: the distribution certificate and the App Store profile come from the developer
+	     portal through the App Store Connect API key the workflow passes, so no certificate or
+	     profile is kept anywhere. -->
+	<key>signingStyle</key>
+	<string>automatic</string>
+	<key>uploadSymbols</key>
+	<true/>
+	<!-- The version and build number are the workflow's to set (its inputs and run number);
+	     App Store Connect must not rewrite them, or the number in the summary would not match. -->
+	<key>manageAppVersionAndBuildNumber</key>
+	<false/>
+</dict>
+</plist>
