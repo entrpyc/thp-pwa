@@ -330,6 +330,53 @@ describe('the console shell and its gate', () => {
     }
   }, 120_000);
 
+  it('is a side menu on a desktop and a top bar with a burger on a phone', async () => {
+    const desktop = await openConsole(admin);
+    try {
+      // Always open: the panel list is on screen without a press, and there is no burger to press.
+      expect(await consoleNav(desktop).count()).toBe(1);
+      expect(await desktop.getByRole('button', { name: 'Menu' }).isVisible()).toBe(false);
+      expect(await desktop.getByRole('button', { name: 'Sign out' }).isVisible()).toBe(true);
+    } finally {
+      await desktop.context().close();
+    }
+
+    const phone = await openConsole(admin, { width: 390, height: 844 });
+    try {
+      // Folded: the title is there, the burger is there, and the panels are not until it is pressed.
+      expect(await phone.getByRole('heading', { level: 1, name: 'Admin console' }).isVisible()).toBe(true);
+      const burger = phone.getByRole('button', { name: 'Menu' });
+      expect(await burger.isVisible()).toBe(true);
+      expect(await burger.getAttribute('aria-expanded')).toBe('false');
+      expect(await consoleNav(phone).count()).toBe(0);
+      expect(await phone.getByRole('button', { name: 'Sign out' }).count()).toBe(0);
+
+      await burger.click();
+      await expect.poll(() => consoleNav(phone).count(), { timeout: 30_000 }).toBe(1);
+      expect(await burger.getAttribute('aria-expanded')).toBe('true');
+      expect(await phone.getByRole('button', { name: 'Sign out' }).isVisible()).toBe(true);
+      expect(await phone.getByRole('link', { name: 'Dashboard' }).isVisible()).toBe(true);
+
+      // Choosing a panel goes there, and the next page opens folded again.
+      await consoleNav(phone).getByRole('link', { name: 'Recordings' }).click();
+      await phone.waitForURL(`${baseUrl}/admin/recordings`, { timeout: 30_000 });
+      await expect
+        .poll(() => phone.getByRole('button', { name: 'Menu' }).getAttribute('aria-expanded'), {
+          timeout: 30_000,
+        })
+        .toBe('false');
+      expect(await consoleNav(phone).count()).toBe(0);
+
+      // Escape closes it too.
+      await phone.getByRole('button', { name: 'Menu' }).click();
+      await expect.poll(() => consoleNav(phone).count(), { timeout: 30_000 }).toBe(1);
+      await phone.keyboard.press('Escape');
+      await expect.poll(() => consoleNav(phone).count(), { timeout: 30_000 }).toBe(0);
+    } finally {
+      await phone.context().close();
+    }
+  }, 180_000);
+
   it.each(VIEWPORTS)('fits a $label viewport with no horizontal scroll', async (viewport) => {
     const page = await openConsole(admin, { width: viewport.width, height: viewport.height });
     try {
@@ -1053,4 +1100,9 @@ async function withOnlyTheseAdmins<T>(keep: readonly string[], body: () => Promi
       await sql`update "user" set deactivated_at = null where id = ${id}`;
     }
   }
+}
+
+/** The panel list, which Playwright counts only when it is on screen — folded away is zero. */
+function consoleNav(page: Page): Locator {
+  return page.getByRole('navigation', { name: 'Console panels' });
 }

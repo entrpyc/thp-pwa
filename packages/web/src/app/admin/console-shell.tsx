@@ -9,18 +9,19 @@ import {
   ADMIN_SERIES_PAGE_PATH,
   ADMIN_SOUND_PROFILE_PAGE_PATH,
   ADMIN_TAGS_PAGE_PATH,
-  DASHBOARD_PAGE_PATH,
 } from '@thp/shared';
 import type { Actor } from '@/server/auth/policy';
-import { SignOutButton } from '../sign-out-button';
+import { ConsoleNavigation } from './console-navigation';
 import styles from './admin.module.css';
 
 /**
- * The console's chrome: who is signed in, the ways out, and the list of panels.
+ * The console's chrome: who is signed in, the ways out, and the list of panels — a side menu on a
+ * desktop, a top bar with a burger on a phone (`console-navigation.tsx`), and the panel beside or
+ * under it.
  *
  * Extracted when the second panel arrived (Story 2 Ticket 01). The shell was always described as
  * "a layout and a panel list, not a registry" — one entry today, a later panel is a file and a line
- * in the list. This is that line, and lifting the header out is what stops the two pages having two
+ * in the list. This is that line, and lifting the chrome out is what stops the pages having
  * headers that can drift.
  *
  * **It is not a gate.** Each page decides what it renders by asking the policy module before it
@@ -55,48 +56,13 @@ export function ConsoleShell({
   return (
     <main className={styles.screen}>
       <div className={styles.shell}>
-        <header className={styles.header}>
-          <div>
-            <p className={styles.eyebrow}>Vinegard</p>
-            <h1 className={styles.title}>Admin console</h1>
-          </div>
-          <div className={styles.identity}>
-            <p className={styles.identityName}>{actor.displayName}</p>
-            <p className={styles.identityEmail}>{actor.email}</p>
-            {/*
-              **The way back.** The member navigation offers the console; nothing offered the
-              member surface in return, so an operator who came here to publish a teaching had to
-              type the root to go and listen to it. It sits beside sign-out rather than among the
-              panels: the panel list is a tab strip of things this console *is*, and the dashboard
-              is not one of them — a sixth entry there would read as a panel that never takes the
-              current mark.
-            */}
-            <div className={styles.identityLinks}>
-              <a className={styles.identityLink} href={DASHBOARD_PAGE_PATH}>
-                Dashboard
-              </a>
-              <SignOutButton />
-            </div>
-          </div>
-        </header>
-
-        <nav className={styles.panels} aria-label="Console panels">
-          <ul className={styles.panelList}>
-            {PANELS.map((panel) => (
-              <li key={panel.id}>
-                <a
-                  className={styles.panelLink}
-                  href={panel.href}
-                  {...(panel.id === current ? { 'aria-current': 'page' as const } : {})}
-                >
-                  {panel.label}
-                </a>
-              </li>
-            ))}
-          </ul>
-        </nav>
-
-        {children}
+        <ConsoleNavigation
+          panels={PANELS}
+          current={current}
+          displayName={actor.displayName}
+          email={actor.email}
+        />
+        <div className={styles.content}>{children}</div>
       </div>
     </main>
   );
