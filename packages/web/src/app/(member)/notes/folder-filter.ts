@@ -2,7 +2,7 @@ import { foldersOfNote, type NoteFolderView } from '@thp/shared';
 
 /**
  * **Which folder the *My notes* list is narrowed to** — pure, so the page and a unit test answer
- * it the same way. `all` is every thread; `unfiled` is every thread whose root is in none of the
+ * it the same way. `all` is every thread; `unfiled` — shown as **Default** — is every thread whose root is in none of the
  * member's folders (a thread the member only replied to is never filed, so it is unfiled); a
  * folder id is the threads whose root is filed there.
  *

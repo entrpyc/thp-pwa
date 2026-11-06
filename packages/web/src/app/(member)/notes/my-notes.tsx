@@ -50,7 +50,7 @@ import styles from './my-notes.module.css';
  *
  * **Public / Private narrows what is listed** out of what the API answered — the recording
  * page's own rule — and the **folder row** under it narrows again: all folders, one folder, or
- * the notes in none. Both are component state, deliberately not remembered across a reload.
+ * **Default**, the notes in none. Both are component state, deliberately not remembered across a reload.
  */
 
 /** Which threads are listed. Component state, and deliberately not remembered across a reload. */
@@ -69,7 +69,7 @@ const EMPTY_STATE: Record<Filter, string> = {
 };
 
 const EMPTY_IN_FOLDER = 'No notes here yet. Press the folder on a note to file it.';
-const EMPTY_UNFILED = 'Every note is in a folder.';
+const EMPTY_UNFILED = 'Nothing here: every note is in a folder.';
 
 const LOAD_FAILED = "Couldn't load your notes.";
 
@@ -119,7 +119,7 @@ export function MyNotes() {
   const folderRow: readonly { readonly key: FolderFilter; readonly label: string }[] = [
     { key: 'all', label: 'All folders' },
     ...(folders ?? []).map((one) => ({ key: { folderId: one.id }, label: one.name })),
-    { key: 'unfiled', label: 'Unfiled' },
+    { key: 'unfiled', label: 'Default' },
   ];
 
   const emptyMessage =
