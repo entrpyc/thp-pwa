@@ -34,7 +34,7 @@ import type {
  * meaning of the instruction changes with the model behind it. The value is meaningless as anything
  * but a label an operator compares two drafts with, and deriving it would make it lie.
  */
-export const PROMPT_VERSION = 'draft-5';
+export const PROMPT_VERSION = 'draft-6';
 
 /** The tool the model is forced to call. The name is arbitrary and is part of the contract. */
 export const DRAFT_TOOL_NAME = 'record_draft';
@@ -58,14 +58,18 @@ export const DRAFT_FIELD_INSTRUCTIONS: Record<ReviewKind, string> = {
     'under a title in a list. It should say what the teaching is about clearly enough that ' +
     'somebody scanning a list can tell it apart from the one above it.',
   scripture:
-    'Every passage of the Bible the teaching is built on — one entry per passage, with the book ' +
-    'spelled in full, the chapter, and the first and last verse of the range. A passage taught ' +
-    'from a whole chapter may leave the verses out. Include only what the transcript actually ' +
-    'quotes or works through; do not add passages that merely say something similar, and answer ' +
-    'with an empty list if the teaching works from no passage at all. Where the transcript shows ' +
-    'clearly where a passage is read out or worked through, give the offset of that line as ' +
-    'anchorMs; leave anchorMs out where the passage is only mentioned in passing or where you ' +
-    'cannot place it, and never guess at one.',
+    'Every passage of the Bible the speaker explicitly cites in this transcript — one entry per ' +
+    'passage, with the book spelled in full, the chapter, and the first and last verse of the ' +
+    'range. A passage taught from a whole chapter may leave the verses out. A passage counts only ' +
+    'when the transcript names it (book and chapter, even if the speaker mis-pronounces them), ' +
+    'reads it aloud, or quotes its words closely enough that the passage is unmistakable. Do not ' +
+    'add passages that are merely thematically related, that say something similar, or that you ' +
+    'know the topic is usually taught from; answer with an empty list if the speaker cites no ' +
+    'passage at all. For every entry give anchorMs, the offset of the one transcript line where ' +
+    'the passage is named or its words first begin, copied exactly from the brackets at the ' +
+    'start of that line, and give evidence, the exact words of that line that name or quote it, ' +
+    'copied verbatim. An entry you cannot anchor to a line and quote from is not a citation — ' +
+    'leave it out rather than guess.',
   mind_map:
     'A mind map of the transcript you are given: its main themes, and under each theme the ' +
     'concepts taught about it. Give between two and ' +
@@ -144,19 +148,30 @@ const CITATION_SCHEMA = {
     verseStart: { type: 'integer', description: 'The first verse of the range. Omit for a whole chapter.' },
     verseEnd: { type: 'integer', description: 'The last verse of the range, or the first for a single verse.' },
     /**
-     * [3.7.10](docs/project/prd.md)'s anchor. **Not required**, and that is the requirement rather
-     * than leniency: a passage the transcript gave no position for carries none and belongs to the
-     * recording rather than to any chapter.
+     * [3.7.10](docs/project/prd.md)'s anchor, and **required of the model**: a passage it cannot
+     * place on a line of the transcript is one it has no evidence for, and the worker drops it.
+     * A stored reference may still carry no anchor — an admin adding one by hand gives none — but
+     * that is the approve path's business, not the model's.
      */
     anchorMs: {
       type: 'integer',
       description:
-        'The offset of the transcript line where this passage is read out or worked through, ' +
-        'copied exactly from the brackets at the start of that line. Omit it where the passage ' +
-        'cannot be placed.',
+        'The offset of the transcript line where this passage is named, read out or first quoted, ' +
+        'copied exactly from the brackets at the start of that line.',
+    },
+    /**
+     * **The words that prove it.** Checked against the transcript around the anchor by the worker;
+     * a proposal whose evidence is not in the transcript is a proposal about a passage the speaker
+     * did not cite, and it is dropped and counted.
+     */
+    evidence: {
+      type: 'string',
+      description:
+        'The exact words from that line that name or quote the passage, copied verbatim from the ' +
+        'transcript.',
     },
   },
-  required: ['book', 'chapter'],
+  required: ['book', 'chapter', 'anchorMs', 'evidence'],
 } as const;
 
 /** A node's offset, in the words the citation's anchor uses, so the two cannot be described apart. */

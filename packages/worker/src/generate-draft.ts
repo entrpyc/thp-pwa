@@ -32,7 +32,7 @@ import {
   type TranscriptLine,
 } from './generate';
 import { resolveChapteredMindMap, resolveProposedMindMap } from './mind-map-draft';
-import { readProposedCitations, resolveProposedCitations } from './scripture-draft';
+import { indexTranscript, readProposedCitations, resolveProposedCitations } from './scripture-draft';
 import type { JobHandler } from './handlers';
 import { withSpend } from './paid-failure';
 
@@ -230,6 +230,13 @@ export function createGenerateDraftHandler(deps: GenerateDraftDependencies = {})
     // number is read as "how much of this run's answer was not usable".
     let dropped = 0;
     let duplicates = 0;
+    // And what was a real citation the transcript did not bear out — no line to anchor it to, or
+    // evidence the speaker never said there. The number that says the model is proposing passages
+    // it associates with the topic rather than ones it heard.
+    let unsupported = 0;
+    // What the model was shown, indexed so every proposal's anchor and evidence are checked against
+    // the same lines the offsets came from.
+    const transcriptIndex = indexTranscript(lines);
     // The same count for the tree: themes past the eighth, concepts past the sixth, anything under
     // a concept, and nodes with no words on them ([3.8.1](docs/project/prd.md)).
     let nodesDropped = 0;
@@ -277,8 +284,9 @@ export function createGenerateDraftHandler(deps: GenerateDraftDependencies = {})
         );
       }
 
-      const resolved = resolveProposedCitations(readProposedCitations(value));
+      const resolved = resolveProposedCitations(readProposedCitations(value), transcriptIndex);
       dropped += resolved.dropped;
+      unsupported += resolved.unsupported;
       duplicates += resolved.duplicates;
       return resolved.citations;
     };
@@ -316,6 +324,7 @@ export function createGenerateDraftHandler(deps: GenerateDraftDependencies = {})
       // scope prd 3.1.3: what the machine proposed and could not be stored is a
       // number on the run that proposed it, so a prompt going wrong is visible rather than quiet.
       citationsDropped: dropped,
+      citationsUnsupported: unsupported,
       citationsDuplicated: duplicates,
       // The tree's own number, read the same way: how much of the map the model proposed did not
       // fit the three levels and the caps a map has ([3.8.1](docs/project/prd.md)).
@@ -335,10 +344,15 @@ export function createGenerateDraftHandler(deps: GenerateDraftDependencies = {})
       ...providerMeta,
     });
 
-    if (dropped > 0 || duplicates > 0) {
+    if (dropped > 0 || unsupported > 0 || duplicates > 0) {
       // Its own line, at warn, because it is the one thing about a *successful* run that somebody
       // should look at: the step worked and part of what the model said was not usable.
-      logger.warn('generate_draft.citations_discarded', { ...fields, dropped, duplicates });
+      logger.warn('generate_draft.citations_discarded', {
+        ...fields,
+        dropped,
+        unsupported,
+        duplicates,
+      });
     }
     if (nodesDropped > 0) {
       logger.warn('generate_draft.mind_map_nodes_discarded', { ...fields, dropped: nodesDropped });
