@@ -1,6 +1,15 @@
 'use client';
 
-import { useCallback, useEffect, useId, useRef, useState, type ChangeEvent, type FormEvent } from 'react';
+import {
+  useCallback,
+  useEffect,
+  useId,
+  useRef,
+  useState,
+  type ChangeEvent,
+  type DragEvent,
+  type FormEvent,
+} from 'react';
 import {
   ACCEPTED_AUDIO_EXTENSIONS,
   ACCEPTED_AUDIO_LABEL,
@@ -93,6 +102,8 @@ export function RecordingsPanel() {
   const fileErrorId = useId();
 
   const fileInput = useRef<HTMLInputElement>(null);
+  /** Whether a file is being held over the drop zone, for the zone to say so. */
+  const [dragging, setDragging] = useState(false);
 
   const [file, setFile] = useState<File | null>(null);
   const [fileError, setFileError] = useState<string | null>(null);
@@ -169,9 +180,49 @@ export function RecordingsPanel() {
    * applies — so the sentence here and the sentence the API would have sent are the same sentence.
    */
   function onChooseFile(event: ChangeEvent<HTMLInputElement>): void {
+    acceptFile(event.target.files?.[0] ?? null);
+  }
+
+  /**
+   * **Drag and drop onto the field.** The dropped file goes through exactly the check the chooser's
+   * does, and is also handed to the native input so what the control prints ("No file chosen")
+   * agrees with what is about to be sent. The first file only: one upload is one teaching.
+   */
+  function onDrop(event: DragEvent<HTMLDivElement>): void {
+    event.preventDefault();
+    setDragging(false);
+    if (busy) return;
+    const dropped = event.dataTransfer.files[0] ?? null;
+    if (dropped === null) return;
+    if (fileInput.current) {
+      try {
+        const transfer = new DataTransfer();
+        transfer.items.add(dropped);
+        fileInput.current.files = transfer.files;
+      } catch {
+        // A browser without a constructible DataTransfer still gets the file: the submit sends
+        // what is in state, not what the input holds.
+      }
+    }
+    acceptFile(dropped);
+  }
+
+  function onDragOver(event: DragEvent<HTMLDivElement>): void {
+    // Required, or the browser opens the file instead of dropping it here.
+    event.preventDefault();
+    if (!busy && !dragging) setDragging(true);
+  }
+
+  function onDragLeave(event: DragEvent<HTMLDivElement>): void {
+    // Leaving for a child of the zone is not leaving the zone.
+    const next = event.relatedTarget;
+    if (next instanceof Node && event.currentTarget.contains(next)) return;
+    setDragging(false);
+  }
+
+  function acceptFile(chosen: File | null): void {
     setFailure(null);
     setDone(null);
-    const chosen = event.target.files?.[0] ?? null;
 
     if (chosen === null) {
       setFile(null);
@@ -289,17 +340,34 @@ export function RecordingsPanel() {
             <label className={styles.label} htmlFor={fileId}>
               Audio file
             </label>
-            <input
-              className={styles.file}
-              id={fileId}
-              ref={fileInput}
-              name="file"
-              type="file"
-              accept={ACCEPT_ATTRIBUTE}
-              disabled={busy}
-              onChange={onChooseFile}
-              {...(fileError === null ? {} : { 'aria-describedby': fileErrorId })}
-            />
+            {/*
+              The drop zone wraps the native control rather than replacing it: the chooser stays
+              the accessible way in, and the zone is the second way — a file dragged from a folder
+              lands on the same input, and gets the same answer.
+            */}
+            <div
+              className={dragging ? `${styles.dropZone} ${styles.dropZoneActive}` : styles.dropZone}
+              data-dragging={dragging ? 'true' : 'false'}
+              onDrop={onDrop}
+              onDragOver={onDragOver}
+              onDragEnter={onDragOver}
+              onDragLeave={onDragLeave}
+            >
+              <input
+                className={styles.file}
+                id={fileId}
+                ref={fileInput}
+                name="file"
+                type="file"
+                accept={ACCEPT_ATTRIBUTE}
+                disabled={busy}
+                onChange={onChooseFile}
+                {...(fileError === null ? {} : { 'aria-describedby': fileErrorId })}
+              />
+              <p className={styles.dropHint} aria-hidden="true">
+                {dragging ? 'Drop to choose this file' : 'or drag a file here'}
+              </p>
+            </div>
             {file === null ? null : (
               <p className={styles.chosen}>
                 {file.name} · {describeBytes(file.size)}

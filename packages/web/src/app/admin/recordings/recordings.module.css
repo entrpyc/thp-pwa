@@ -131,6 +131,40 @@
   color: var(--color-text-dim);
 }
 
+/*
+ * The drop zone around the native control: the field recipe's hairline, dashed, so it reads as a
+ * place to put something; and the one accent while a file is held over it, because that is the
+ * moment the whole panel is about one question.
+ */
+.dropZone {
+  align-self: stretch;
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-2);
+  padding: var(--space-3);
+  border: 1px dashed var(--color-border);
+  border-radius: var(--radius-md);
+  transition: border-color 120ms ease, background-color 120ms ease;
+}
+
+.dropZoneActive {
+  border-color: var(--color-primary-strong);
+  border-style: solid;
+  background: var(--color-primary-soft);
+}
+
+.dropHint {
+  margin: 0;
+  font-size: var(--fs-meta);
+  color: var(--color-text-dim);
+  text-align: center;
+  pointer-events: none;
+}
+
+.dropZoneActive .dropHint {
+  color: var(--color-text);
+}
+
 /* What is about to be sent, confirmed back in the words the limit is stated in. */
 .chosen {
   margin: 0;
