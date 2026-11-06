@@ -119,15 +119,17 @@ describe('the request the adapter builds', () => {
     };
     expect(citations.type).toBe('array');
     expect(Object.keys(citations.items.properties).sort()).toEqual([
-      // Where the passage is cited ([3.7.10](docs/project/prd.md)) — optional, and asked for on
-      // the same entry as the passage so a model answers both about one citation or neither.
+      // Where the passage is cited ([3.7.10](docs/project/prd.md)) and the words that cite it —
+      // required of the model, on the same entry as the passage, so a passage comes with its proof
+      // or not at all. The worker drops an entry whose proof the transcript does not bear out.
       'anchorMs',
       'book',
       'chapter',
+      'evidence',
       'verseEnd',
       'verseStart',
     ]);
-    expect(citations.items.required.sort()).toEqual(['book', 'chapter']);
+    expect(citations.items.required.sort()).toEqual(['anchorMs', 'book', 'chapter', 'evidence']);
   });
 
   it('asks only for the fields the kinds name, so a regeneration pays for one', () => {

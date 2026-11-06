@@ -158,6 +158,15 @@ export interface ProposedCitation {
    * 3.7.10 says a reference without a position is.
    */
   readonly anchorMs?: number | null;
+  /**
+   * **The words the proposer points at** — the transcript text that names or quotes the passage.
+   *
+   * Only a model's proposal carries one, and only the worker reads it: it is the evidence that the
+   * speaker actually cited the passage, checked against the transcript around the anchor before the
+   * draft is written, and it is not stored. A form submission leaves it out, because an admin is
+   * not asked to prove a reference they added themselves.
+   */
+  readonly evidence?: string | null;
 }
 
 /**

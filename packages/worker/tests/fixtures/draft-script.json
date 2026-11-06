@@ -6,17 +6,23 @@
       "book": "Romans",
       "chapter": 8,
       "verseStart": 1,
-      "verseEnd": 4
+      "verseEnd": 4,
+      "anchorMs": 5600,
+      "evidence": "where we left off last week, in the second chapter"
     },
     {
       "book": "John",
       "chapter": 3,
       "verseStart": 16,
-      "verseEnd": 16
+      "verseEnd": 16,
+      "anchorMs": 11200,
+      "evidence": "notice how short it is"
     },
     {
       "book": "Psalm",
-      "chapter": 23
+      "chapter": 23,
+      "anchorMs": 16800,
+      "evidence": "the kind of passage you pass over"
     }
   ],
   "mindMap": {

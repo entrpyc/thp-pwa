@@ -47,13 +47,16 @@ const databaseUrl = inject('databaseUrl');
 const DRAFT = {
   summary: 'The teaching stays with the second chapter of the letter throughout.',
   description: 'A close reading of the second chapter.',
-  // The book comes as words, because that is what a model has. One out-of-canon proposal and one
-  // repeat, so a run's ordinary answer exercises the dropping and the collapsing.
+  // The book comes as words, because that is what a model has. Each entry points at the line that
+  // cites it and copies the words that do. One out-of-canon proposal, one repeat, and one real
+  // passage the transcript never mentions, so a run's ordinary answer exercises the dropping, the
+  // collapsing, and the check that the speaker actually cited it.
   citations: [
-    { book: 'Romans', chapter: 8, verseStart: 1, verseEnd: 4 },
-    { book: 'John', chapter: 3, verseStart: 16, verseEnd: 16 },
-    { book: 'Romans', chapter: 8, verseStart: 1, verseEnd: 4 },
-    { book: 'Hezekiah', chapter: 2, verseStart: 1, verseEnd: 1 },
+    { book: 'Romans', chapter: 8, verseStart: 1, verseEnd: 4, anchorMs: 8000, evidence: 'Romans chapter eight, verses one to four' },
+    { book: 'John', chapter: 3, verseStart: 16, verseEnd: 16, anchorMs: 12_000, evidence: 'John three sixteen' },
+    { book: 'Romans', chapter: 8, verseStart: 1, verseEnd: 4, anchorMs: 8000, evidence: 'Romans chapter eight' },
+    { book: 'Hezekiah', chapter: 2, verseStart: 1, verseEnd: 1, anchorMs: 0, evidence: 'Good morning' },
+    { book: 'Psalm', chapter: 23, anchorMs: 4000, evidence: 'the Lord is my shepherd' },
   ],
   // The tree as a model proposes it: themes with points, offsets copied from the lines. One blank
   // point and one point nested under a point, so a run's ordinary answer exercises the dropping.
@@ -112,6 +115,8 @@ async function claimedJob(
     const texts = options.segments ?? [
       'Good morning, and welcome to this teaching.',
       'We are picking up in the second chapter.',
+      'Turn with me to Romans chapter eight, verses one to four.',
+      'Jesus said it plainly in John three sixteen.',
     ];
     await replaceTranscript(
       {
@@ -357,10 +362,10 @@ describe('one call, two drafts', () => {
     const scripture = written.find((one) => one.kind === 'scripture');
     expect(scripture?.fields).toEqual({
       citations: [
-        // `anchorMs` is null because this script's proposals carry none — 3.7.10's ordinary case,
-        // and the one that says the reference belongs to the recording rather than to a chapter.
-        { book: 'john', chapter: 3, verseStart: 16, verseEnd: 16, anchorMs: null },
-        { book: 'romans', chapter: 8, verseStart: 1, verseEnd: 4, anchorMs: null },
+        // Each carries the offset of the line that cited it ([3.7.10](docs/project/prd.md)), which
+        // is what lets a chapter's scripture tab show the passages read in that chapter.
+        { book: 'john', chapter: 3, verseStart: 16, verseEnd: 16, anchorMs: 12_000 },
+        { book: 'romans', chapter: 8, verseStart: 1, verseEnd: 4, anchorMs: 8000 },
       ],
     });
   });
@@ -372,10 +377,45 @@ describe('one call, two drafts', () => {
 
     const row = await run(job);
 
-    expect(row.providerMeta).toMatchObject({ citationsDropped: 1, citationsDuplicated: 1 });
+    expect(row.providerMeta).toMatchObject({
+      citationsDropped: 1,
+      citationsUnsupported: 1,
+      citationsDuplicated: 1,
+    });
     expect(captured.filter((line) => line.message === 'generate_draft.citations_discarded')).toEqual(
-      [expect.objectContaining({ dropped: 1, duplicates: 1 })],
+      [expect.objectContaining({ dropped: 1, unsupported: 1, duplicates: 1 })],
     );
+  });
+
+  // A passage the speaker never cited is not a citation of this teaching, however real the
+  // passage. The model has to point at the line and copy the words; a proposal that cannot is
+  // dropped before an admin sees it, and counted apart from the ones that were not citations at all.
+  it('drops a real passage the transcript does not bear out, and counts it as unsupported', async () => {
+    const job = await claimedJob();
+
+    const row = await run(
+      job,
+      fakeGenerator({
+        ...DRAFT,
+        citations: [
+          // No anchor at all.
+          { book: 'Psalm', chapter: 23, evidence: 'the second chapter' },
+          // An anchor that is not a line of the transcript.
+          { book: 'Genesis', chapter: 1, verseStart: 1, verseEnd: 1, anchorMs: 4001, evidence: 'second chapter' },
+          // A line, but words that are not said there.
+          { book: 'Isaiah', chapter: 53, anchorMs: 4000, evidence: 'he was wounded for our transgressions' },
+          // Said, and said there — the one that stands. Punctuation and case are not held against it.
+          { book: 'Romans', chapter: 8, verseStart: 1, verseEnd: 4, anchorMs: 8000, evidence: 'romans chapter eight verses one to four.' },
+        ],
+      }),
+    );
+
+    expect(row.status).toBe('succeeded');
+    const scripture = (await items(job.recordingId)).find((one) => one.kind === 'scripture');
+    expect(scripture?.fields).toEqual({
+      citations: [{ book: 'romans', chapter: 8, verseStart: 1, verseEnd: 4, anchorMs: 8000 }],
+    });
+    expect(row.providerMeta).toMatchObject({ citationsDropped: 0, citationsUnsupported: 3 });
   });
 
   // 1.3.5 — the item still arrives, so an admin confirms "none" rather than the draft never
@@ -770,10 +810,10 @@ describe('the verses of what it drafted', () => {
     const scripture = (await items(job.recordingId)).find((one) => one.kind === 'scripture');
     expect(scripture?.fields).toEqual({
       citations: [
-        // `anchorMs` is null because this script's proposals carry none — 3.7.10's ordinary case,
-        // and the one that says the reference belongs to the recording rather than to a chapter.
-        { book: 'john', chapter: 3, verseStart: 16, verseEnd: 16, anchorMs: null },
-        { book: 'romans', chapter: 8, verseStart: 1, verseEnd: 4, anchorMs: null },
+        // Each carries the offset of the line that cited it ([3.7.10](docs/project/prd.md)), which
+        // is what lets a chapter's scripture tab show the passages read in that chapter.
+        { book: 'john', chapter: 3, verseStart: 16, verseEnd: 16, anchorMs: 12_000 },
+        { book: 'romans', chapter: 8, verseStart: 1, verseEnd: 4, anchorMs: 8000 },
       ],
     });
     // The reference is marked as having no text yet by there being none — which is the same state
