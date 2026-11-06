@@ -974,3 +974,29 @@
   border-color: var(--color-primary-strong);
   box-shadow: 0 0 0 1px var(--color-primary-strong);
 }
+
+/* ---- folders --------------------------------------------------------------------------------- */
+
+/*
+ * 12. The folder control is the same 40px round control as the marker and the `···` beside it.
+ *     Filed reads in the accent's soft tint — not the highlights orange, because a folder is not a
+ *     highlight — and the pill in the head names the folder in the same tint.
+ */
+.overflowControl[data-filed='true'] {
+  border-color: var(--color-primary-strong);
+  background: var(--color-primary-soft);
+}
+
+.folderPill {
+  border: 1px solid var(--color-border-strong);
+  border-radius: var(--radius-pill);
+  padding: 0 var(--space-3);
+  color: var(--color-text-muted);
+  font-size: var(--fs-meta);
+  overflow-wrap: anywhere;
+}
+
+/* The head wraps once it holds pills — a filed, pinned, private note on a phone is four of them. */
+.noteHead {
+  flex-wrap: wrap;
+}

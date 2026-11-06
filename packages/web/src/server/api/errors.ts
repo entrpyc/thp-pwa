@@ -289,6 +289,23 @@ export class ApiError extends Error {
   }
 
   /**
+   * A folder that would take a member's note folders past `MAX_NOTE_FOLDERS`. `409` for the
+   * reason `highlights_full` is: permitted, well-formed, and refused by a state the member can
+   * change in one press by removing a folder.
+   */
+  static noteFoldersFull(message: string): ApiError {
+    return new ApiError('note_folders_full', 409, message);
+  }
+
+  /**
+   * A folder name the member already uses, on the argument `tag_exists` was made on: the name
+   * was fine, the fix is to choose another, and `invalid_input` would say the wrong thing.
+   */
+  static noteFolderExists(message: string): ApiError {
+    return new ApiError('note_folder_exists', 409, message);
+  }
+
+  /**
    * A signal that would take a member past `MAX_OPEN_SOS_PER_MEMBER` open ones
    * ([3.16.12](docs/project/prd.md)). `409` for the reason `highlights_full` is: permitted,
    * well-formed, and refused by a state the member can change in one press by closing a signal.

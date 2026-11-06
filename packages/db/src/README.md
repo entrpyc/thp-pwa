@@ -76,6 +76,11 @@ against the schema, not a second copy of it.
   nothing else, and 3.1.9 names it among what goes with the account. `highlight.note_id` cascades
   with the note — never fired by a public note's re-pointing, and a private note's hard delete
   takes its entry with it.
+- `note_folder.user_id` — cascade: a member's note folders are their way of arranging what they
+  wrote, a fact about the person as the Highlights playlist is. `note_folder_note.folder_id`
+  cascades with the folder, so the filings go with it and the notes never do;
+  `note_folder_note.note_id` cascades with the note — never fired by a public note's re-pointing,
+  and removed by the notes service inside a soft delete, which fires no cascade.
 - `sos_signal.author_id`, `sos_reply.author_id` — re-pointed at the placeholder
   (`reassignSosOfDeletedAuthor`) before the row goes, exactly as public notes are: a prayer
   request is a thread other members prayed and wrote into, and the cascade that used to take it

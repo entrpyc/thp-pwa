@@ -15,6 +15,7 @@ export * from './jobs';
 export * from './legal';
 export * from './mind-maps';
 export * from './notes';
+export * from './note-folders';
 export * from './note-images';
 export * from './notifications';
 export * from './observability/analytics';
