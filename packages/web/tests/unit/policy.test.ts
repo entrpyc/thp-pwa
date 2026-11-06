@@ -195,6 +195,7 @@ describe('the admin account actions are the API’s refusal, not the console’s
     'account.list',
     'account.deactivate',
     'account.reactivate',
+    'account.delete',
     'role.assign',
   ] as const)('permits %s for an admin and refuses it for a member', (action) => {
     expect(can(actorWith(ROLE.admin), action)).toBe(true);

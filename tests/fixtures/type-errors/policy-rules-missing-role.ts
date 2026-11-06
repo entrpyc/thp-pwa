@@ -21,6 +21,7 @@ export const rules: PolicyRules = {
   'account.list': { roles: { admin: true, member: false } },
   'account.deactivate': { roles: { admin: true, member: false } },
   'account.reactivate': { roles: { admin: true, member: false } },
+  'account.delete': { roles: { admin: true, member: false } },
   'role.assign': { roles: { admin: true, member: false } },
   'profile.update': { roles: { admin: true, member: true }, requiresOwnership: true },
 };

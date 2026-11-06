@@ -59,6 +59,14 @@ export const POLICY_ACTIONS = [
   'account.reactivate',
   'role.assign',
   /**
+   * **An admin permanently deletes somebody else's account** from the console — the same erasure a
+   * member performs on their own account ([3.1.8](docs/project/prd.md)), behind the same last-admin
+   * guard. Its own action rather than a widening of `account.deactivate`, because deactivation keeps
+   * everything and is reversible and this is neither; a role that may end access without being able
+   * to erase a person is an easy one to imagine.
+   */
+  'account.delete',
+  /**
    * **The first owned action in the product** (ticket 4). Editing a display name is permitted on your
    * own account and on nobody else's — including, deliberately, to an admin. Every later owned
    * thing (a note, a highlight, a progress row) is this same shape.
@@ -483,6 +491,7 @@ const RULES: PolicyRules = {
   'account.list': { roles: { admin: true, member: false } },
   'account.deactivate': { roles: { admin: true, member: false } },
   'account.reactivate': { roles: { admin: true, member: false } },
+  'account.delete': { roles: { admin: true, member: false } },
   'role.assign': { roles: { admin: true, member: false } },
   // Both roles, and only over themselves. An admin may end an account; an admin may not rename its
   // owner, because a display name is not an operator control.

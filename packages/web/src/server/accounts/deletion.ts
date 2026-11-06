@@ -1,5 +1,6 @@
 import {
   deleteUserAccount,
+  findUserById,
   listPrivateNoteImageKeysOfAuthor,
   type AccountDeletion,
   type UserRow,
@@ -64,6 +65,40 @@ export async function deleteOwnAccount(
   return eraseAccount(current, 'session');
 }
 
+/**
+ * **The third door: an admin deletes somebody else's account** from the console, behind
+ * `DELETE /api/v1/users/:id` and the `account.delete` policy action.
+ *
+ * No password is asked for — the admin does not know it, and the policy module has already said
+ * this caller may act — and so the one account this door refuses is the admin's **own**. Deleting
+ * yourself is the one erasure that must be confirmed by the person it erases, and the self-service
+ * door exists for exactly that; an admin wanting it goes there. The last-admin guard still applies
+ * to everybody else, as it does to deactivation.
+ *
+ * The audit line names the *admin* as the actor and the deleted account as the target, which is
+ * the one way this door differs in the log: on the self-service doors the two are the same person.
+ */
+export async function deleteAccountAsAdmin(
+  actor: Actor,
+  id: string,
+): Promise<AccountDeletedPayload> {
+  if (id === actor.id) {
+    logger.warn('account.delete.refused', {
+      ...audit(actor, 'account.delete', `account:${id}`),
+      reason: 'own-account',
+      code: 'invalid_input',
+    });
+    throw ApiError.invalidInput(
+      'You cannot delete your own account from here. Delete it from your account settings, where it is confirmed with your password.',
+    );
+  }
+  const current = await findUserById(id);
+  if (current === null || current.deletedAt !== null) {
+    throw ApiError.notFound('No such account.');
+  }
+  return eraseAccount(current, 'admin', actor);
+}
+
 /** The body of either door: the password, read before anything else is looked at. */
 export function parsePassword(body: unknown): string {
   if (typeof body !== 'object' || body === null) {
@@ -96,13 +131,17 @@ export async function requireCurrentPassword(
 }
 
 /**
- * The erasure, once the person has proved it is them. `via` says which door, for the log.
+ * The erasure, once the person has proved it is them — or, through the admin door, once the policy
+ * module has permitted somebody else to do it. `via` says which door, for the log; `by` is who
+ * pressed, and defaults to the person being deleted, because on two of the three doors it is.
  */
 export async function eraseAccount(
   current: UserRow,
-  via: 'session' | 'token',
+  via: 'session' | 'token' | 'admin',
+  by?: Actor,
 ): Promise<AccountDeletedPayload> {
-  const actor = toActor(current);
+  const subject = toActor(current);
+  const actor = by ?? subject;
   // Read before the erasure hard-deletes the private notes: afterwards there is nothing to find
   // the objects by. Public notes keep their pictures, as they keep their words (3.1.10).
   const privateImageKeys = await listPrivateNoteImageKeysOfAuthor(current.id).catch(() => [] as string[]);
@@ -114,7 +153,7 @@ export async function eraseAccount(
   }
   if (result.outcome === 'last-admin') {
     logger.warn('account.delete.refused', {
-      ...audit(actor, 'account.delete', `account:${actor.id}`),
+      ...audit(actor, 'account.delete', `account:${subject.id}`),
       reason: 'last-active-admin',
       code: 'last_admin',
       via,
@@ -131,7 +170,7 @@ export async function eraseAccount(
 
   const deletion: AccountDeletion = result.value;
   logger.info('account.delete', {
-    ...audit(actor, 'account.delete', `account:${actor.id}`),
+    ...audit(actor, 'account.delete', `account:${subject.id}`),
     via,
     placeholderId: deletion.placeholderId,
     retainedPublicNotes: deletion.retainedPublicNotes,
@@ -143,7 +182,7 @@ export async function eraseAccount(
     avatarKey: current.avatarKey,
   });
 
-  await deleteAvatarObject(actor, current.avatarKey);
+  await deleteAvatarObject(actor, subject.id, current.avatarKey);
   await deleteNoteImageObjects(actor, privateImageKeys);
 
   return {
@@ -160,17 +199,21 @@ export async function eraseAccount(
  * After the commit, best effort, loud on failure. The key is in the line so the object can be
  * removed by hand; nothing else in the product will ever reference it again.
  */
-async function deleteAvatarObject(actor: Actor, avatarKey: string | null): Promise<void> {
+async function deleteAvatarObject(
+  actor: Actor,
+  subjectId: string,
+  avatarKey: string | null,
+): Promise<void> {
   if (avatarKey === null) return;
   try {
     await mediaStore().deleteAvatar(avatarKey);
     logger.info('account.delete.avatar', {
-      ...audit(actor, 'account.delete', `account:${actor.id}`),
+      ...audit(actor, 'account.delete', `account:${subjectId}`),
       mediaKey: avatarKey,
     });
   } catch (cause) {
     logger.error('account.delete.avatar-orphaned', {
-      ...audit(actor, 'account.delete', `account:${actor.id}`),
+      ...audit(actor, 'account.delete', `account:${subjectId}`),
       mediaKey: avatarKey,
       errorMessage: cause instanceof Error ? cause.message : String(cause),
     });
