@@ -96,7 +96,7 @@ export async function deleteAccountAsAdmin(
   if (current === null || current.deletedAt !== null) {
     throw ApiError.notFound('No such account.');
   }
-  return eraseAccount(current, 'admin', actor);
+  return eraseAccount(current, 'console', actor);
 }
 
 /** The body of either door: the password, read before anything else is looked at. */
@@ -137,7 +137,7 @@ export async function requireCurrentPassword(
  */
 export async function eraseAccount(
   current: UserRow,
-  via: 'session' | 'token' | 'admin',
+  via: 'session' | 'token' | 'console',
   by?: Actor,
 ): Promise<AccountDeletedPayload> {
   const subject = toActor(current);
