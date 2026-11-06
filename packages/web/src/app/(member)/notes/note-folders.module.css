@@ -57,29 +57,28 @@
 
 /* ---- the picker's checkboxes ----------------------------------------------------------------- */
 
+/*
+ * The search page's own chips and boxes, composed rather than redrawn: one choice is one chip, the
+ * whole chip the target, the product's box inside it — so a member who has ticked a content type
+ * on Search has already learned this control.
+ */
 .options {
   list-style: none;
   margin: 0;
   padding: 0;
   display: flex;
-  flex-direction: column;
+  flex-wrap: wrap;
+  gap: var(--space-2);
   max-height: 40vh;
   overflow-y: auto;
 }
 
 .option {
-  display: flex;
-  align-items: center;
-  gap: var(--space-3);
-  padding: var(--space-2) 0;
-  border-top: 1px solid var(--color-border);
-  color: var(--color-text);
-  font-size: var(--fs-body);
-  cursor: pointer;
+  composes: chip from '../search/search.module.css';
 }
 
-.options li:first-child .option {
-  border-top: none;
+.box {
+  composes: box from '../search/search.module.css';
 }
 
 .optionName {

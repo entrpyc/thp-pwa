@@ -138,6 +138,7 @@ function NoteFolderPicker({
                 <label className={styles.option}>
                   <input
                     ref={index === 0 ? first : undefined}
+                    className={styles.box}
                     type="checkbox"
                     checked={chosen.has(one.id)}
                     onChange={() => toggle(one.id)}
