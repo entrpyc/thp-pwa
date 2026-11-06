@@ -70,6 +70,15 @@
   composes: field from '../admin.module.css';
 }
 
+/*
+ * The console's field carries a 16rem basis meant for a row. The file field sits directly in the
+ * column form, where that basis is a height — so it is dropped there, and only there: the title and
+ * date fields live in `.row`, where the basis is the width it was written for.
+ */
+.form > .field {
+  flex: 0 0 auto;
+}
+
 .fieldTight {
   composes: fieldTight from '../admin.module.css';
 }
