@@ -42,6 +42,7 @@ import {
 } from '@thp/shared';
 import { ApiClientError, apiFetch } from '@/client/api-client';
 import { TagEditor } from '../tag-editor';
+import { DateField } from '../date-field';
 import styles from './recordings.module.css';
 
 /**
@@ -401,14 +402,13 @@ export function RecordingsPanel() {
               <label className={styles.label} htmlFor={dateId}>
                 Date recorded
               </label>
-              <input
-                className={styles.input}
+              <DateField
                 id={dateId}
                 name="recordedAt"
-                type="date"
+                label="Date recorded"
                 disabled={busy}
                 value={recordedAt}
-                onChange={(event) => setRecordedAt(event.target.value)}
+                onChange={setRecordedAt}
               />
             </div>
 
@@ -725,14 +725,13 @@ function RecordingRow({
             <label className={styles.label} htmlFor={`recorded-at-${entry.id}`}>
               Date recorded
             </label>
-            <input
-              className={styles.input}
+            <DateField
               id={`recorded-at-${entry.id}`}
               name="recordedAt"
-              type="date"
+              label="Date recorded"
               disabled={busy !== null}
               value={dateDraft}
-              onChange={(event) => setDateDraft(event.target.value)}
+              onChange={setDateDraft}
             />
           </div>
 
