@@ -223,6 +223,19 @@ export {
   type ReassignedNotes,
 } from './notes';
 export {
+  countNoteFoldersForMember,
+  deleteFilingsOfNote,
+  deleteNoteFolderForMember,
+  findNoteFoldersForMember,
+  insertNoteFolder,
+  listNoteFolderFilingsForMember,
+  listNoteFoldersForMember,
+  renameNoteFolderForMember,
+  replaceNoteFilings,
+  type NoteFolderFilingRow,
+  type NoteFolderRow,
+} from './note-folders';
+export {
   deleteImagesOfNote,
   deleteNoteImage,
   findNoteImageById,

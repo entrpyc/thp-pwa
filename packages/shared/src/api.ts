@@ -113,6 +113,14 @@ export const CORRELATION_ID_HEADER = 'x-correlation-id';
  *   `Grace` when `grace` exists. Its own code rather than `invalid_input` because the name was
  *   fine and the fix is different: pick the tag that is already there, or choose another name.
  *
+ * Note folders add two, on the arguments `highlights_full` and `tag_exists` were made on:
+ *
+ * - `note_folders_full` — the member already keeps `MAX_NOTE_FOLDERS` folders. `409`: permitted,
+ *   well-formed, and refused by a state the member can change in one press by removing a folder.
+ * - `note_folder_exists` — the member already has a folder with that name, compared
+ *   case-insensitively after trimming, so it cannot be created again or renamed onto. `409`, and
+ *   its own code because the name was fine and the fix is different: choose another.
+ *
  * The SOS channel ([3.16.12](docs/project/prd.md)) adds one, on the same argument `highlights_full`
  * was made on:
  *
@@ -170,6 +178,8 @@ export const API_ERROR_CODES = [
   'blocked',
   'terms_required',
   'highlights_full',
+  'note_folders_full',
+  'note_folder_exists',
   'sos_limit',
   'flow_session_in_progress',
   'not_found',

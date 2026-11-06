@@ -1,6 +1,7 @@
 import {
   clearNoteReaction,
   deleteEmbeddingsForSources,
+  deleteFilingsOfNote,
   deleteHighlightsOfNote,
   deleteImagesOfNote,
   deleteNoteImage,
@@ -372,6 +373,9 @@ export async function deleteNote(actor: Actor, noteId: string): Promise<NotePayl
     // ([3.15.3](docs/project/prd.md)): a soft delete fires no cascade, and an entry whose note
     // now reads "removed" has nothing left to show.
     await deleteHighlightsOfNote(noteId, tx);
+    // And its filings in the author's folders, for the same reason: a folder lists standing
+    // notes, and a tombstone is not one.
+    await deleteFilingsOfNote(noteId, tx);
     return { row: deleted, imageKeys };
   });
   if (row === null) throw ApiError.noteRemoved(NOTE_ALREADY_REMOVED_MESSAGE);

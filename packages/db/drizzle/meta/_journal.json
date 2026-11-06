@@ -330,6 +330,13 @@
       "when": 1793297804989,
       "tag": "0046_sos_removal_and_report_guards",
       "breakpoints": true
+    },
+    {
+      "idx": 47,
+      "version": "7",
+      "when": 1794005782120,
+      "tag": "0047_note_folders",
+      "breakpoints": true
     }
   ]
 }

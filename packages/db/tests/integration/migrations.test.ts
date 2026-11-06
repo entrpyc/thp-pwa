@@ -190,7 +190,8 @@ describe('migrations apply to an empty database by one command', () => {
       // `notification_preference` and `push_subscription`, Highlights adds `highlight`, offline
       // sync adds `sync_receipt`, and the Flow Tracker ([3.14](docs/project/prd.md)) adds
       // `flow_question`, `flow_session` and `flow_session_item`. Reporting on the SOS channel
-      // adds `sos_report` — `note_report`'s twin for a prayer request or a reply on one.
+      // adds `sos_report` — `note_report`'s twin for a prayer request or a reply on one. Note
+      // folders add `note_folder` and `note_folder_note` — a member's own grouping of their notes.
       expect(tables.map((row) => row.tablename)).toEqual([
         'account_deletion_request',
         'announcement',
@@ -206,6 +207,8 @@ describe('migrations apply to an empty database by one command', () => {
         'member_block',
         'mind_map',
         'note',
+        'note_folder',
+        'note_folder_note',
         'note_image',
         'note_pin',
         'note_reaction',

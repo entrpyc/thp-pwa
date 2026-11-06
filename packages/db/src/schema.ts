@@ -37,6 +37,7 @@ import {
   MAX_FLOW_QUESTION_LENGTH,
   MAX_NOTE_IMAGES,
   MAX_NOTE_IMAGE_ALT_LENGTH,
+  MAX_NOTE_FOLDER_NAME_LENGTH,
   MAX_NOTE_LENGTH,
   MAX_REPORT_DETAIL_LENGTH,
   MAX_SOS_CLOSING_NOTE_LENGTH,
@@ -2123,6 +2124,73 @@ export const highlight = pgTable(
         and (${table.segmentId} is null or ${table.kind} = 'segment')
         and (${table.positionMs} is null or ${table.positionMs} >= 0)`,
     ),
+  ],
+);
+
+/**
+ * **One of a member's note folders** — a name the member sorts their own notes under, one level
+ * deep, any number of their notes in it and any note in any number of them.
+ *
+ * **A fact about the member, not about the note.** `user_id` cascades: the folders are the
+ * person's way of arranging what they wrote, and go with the account as Highlights do. No
+ * `parent_id` and no `position`, and both absences are the design: the product allows one level,
+ * and a table with no parent column cannot hold a second by accident; folders are listed by
+ * name, so an order column would be a second answer to one question.
+ *
+ * **One name per member**, compared case-insensitively — `Sermons` and `sermons` are one folder
+ * to a person reading pills — which is why the unique index is over `lower(name)` rather than the
+ * column. The check beneath derives the ceiling from the shared constant the picker counts down
+ * from, the arrangement `note_text_length` already makes.
+ */
+export const noteFolder = pgTable(
+  'note_folder',
+  {
+    id: uuid('id').primaryKey().defaultRandom(),
+    userId: uuid('user_id')
+      .notNull()
+      .references(() => user.id, { onDelete: 'cascade' }),
+    name: text('name').notNull(),
+    createdAt: timestamp('created_at', { withTimezone: true }).notNull().defaultNow(),
+  },
+  (table) => [
+    /** The list's own scan: a member's folders, which the read then orders by name. */
+    index('note_folder_user_idx').on(table.userId),
+    uniqueIndex('note_folder_user_name_unique').on(table.userId, sql`lower(${table.name})`),
+    check(
+      'note_folder_name_length',
+      sql`char_length(${table.name}) between 1 and ${sql.raw(String(MAX_NOTE_FOLDER_NAME_LENGTH))}`,
+    ),
+  ],
+);
+
+/**
+ * **A note filed in a folder** — one row per (folder, note), the primary key saying so.
+ *
+ * Both keys cascade: a folder removed takes its filings and never its notes, which is what
+ * "delete a folder" means to a member; a note hard-deleted takes its filings. A **soft** delete
+ * fires no cascade, so the notes service removes a tombstoned note's filings itself in the
+ * delete's transaction, and the folder read leaves tombstones out besides — the arrangement
+ * `highlight.note_id` already keeps.
+ *
+ * Whose note may be filed where — the folder's owner's own top-level notes, and nothing else — is
+ * the service's gate, stated once before the write. The row carries no `user_id` of its own
+ * because the folder already says whose it is, and a second copy could only disagree.
+ */
+export const noteFolderNote = pgTable(
+  'note_folder_note',
+  {
+    folderId: uuid('folder_id')
+      .notNull()
+      .references(() => noteFolder.id, { onDelete: 'cascade' }),
+    noteId: uuid('note_id')
+      .notNull()
+      .references(() => note.id, { onDelete: 'cascade' }),
+    createdAt: timestamp('created_at', { withTimezone: true }).notNull().defaultNow(),
+  },
+  (table) => [
+    primaryKey({ columns: [table.folderId, table.noteId] }),
+    /** "Which folders is this note in" and "unfile this note" — both by the note. */
+    index('note_folder_note_note_idx').on(table.noteId),
   ],
 );
 

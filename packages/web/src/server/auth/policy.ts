@@ -346,6 +346,18 @@ export const POLICY_ACTIONS = [
   'highlight.remove',
   'highlight.list',
   /**
+   * **The five note-folder actions**: listing your own folders, creating, renaming and removing
+   * one, and filing a note of your own into them. Both roles and no ownership flag on any, for
+   * the reason the highlight actions have none: every folder is the caller's own by construction
+   * — the route is `/users/me/note-folders` — and which notes may be filed is the service's gate
+   * over the note's author, stated once. No admin route lists anybody's folders.
+   */
+  'note-folder.list',
+  'note-folder.create',
+  'note-folder.rename',
+  'note-folder.remove',
+  'note-folder.file',
+  /**
    * **The Flow Tracker** ([3.14](docs/project/prd.md)). A member reads the teachings a session can
    * start from and their own sessions, starts one, answers its questions, abandons it, and ticks
    * the reading list — five actions, the split every group above takes. Both roles and no
@@ -598,6 +610,12 @@ const RULES: PolicyRules = {
   'highlight.create': { roles: { admin: true, member: true } },
   'highlight.remove': { roles: { admin: true, member: true } },
   'highlight.list': { roles: { admin: true, member: true } },
+  // Both roles, over their own folders only — a folder is a fact about the member.
+  'note-folder.list': { roles: { admin: true, member: true } },
+  'note-folder.create': { roles: { admin: true, member: true } },
+  'note-folder.rename': { roles: { admin: true, member: true } },
+  'note-folder.remove': { roles: { admin: true, member: true } },
+  'note-folder.file': { roles: { admin: true, member: true } },
   // Both roles, over their own sessions only ([3.14.8](docs/project/prd.md)).
   'flow.read': { roles: { admin: true, member: true } },
   'flow.start': { roles: { admin: true, member: true } },

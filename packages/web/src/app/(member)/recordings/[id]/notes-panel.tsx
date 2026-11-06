@@ -28,6 +28,8 @@ import { NoteImages } from './note-images';
 import { BlockConfirm, ReportForm } from './note-moderation';
 import { TermsPrompt, isTermsRequired } from './terms-prompt';
 import { PinNoteControl } from '../../highlights/pin-note-control';
+import { NoteFolderControl } from '../../notes/note-folder-control';
+import { NoteFolderPills } from '../../notes/note-folder-pills';
 import styles from './notes.module.css';
 
 /**
@@ -314,6 +316,7 @@ function NoteCard({ note, canModerate }: CardProps) {
               <span className={styles.privatePill}>Private</span>
             ) : null}
             {note.pinned ? <span className={styles.pinnedPill}>Pinned</span> : null}
+            {note.mine ? <NoteFolderPills noteId={note.id} /> : null}
             <Overflow
               note={note}
               canModerate={canModerate}
@@ -647,6 +650,10 @@ function Overflow({
       {/* Any standing note can go to Highlights (3.12.17, widened to replies too); a reply opens at its thread's moment. */}
       {!note.deleted ? (
         <PinNoteControl noteId={note.id} recordingId={content.recordingId} className={styles.overflowControl} />
+      ) : null}
+      {/* Filing is the author's, on a top-level note: a reply belongs to its thread's moment and is filed nowhere of its own. */}
+      {!note.deleted && note.mine && note.timestampMs !== null && !note.id.startsWith('pending:') ? (
+        <NoteFolderControl noteId={note.id} className={styles.overflowControl} />
       ) : null}
       <button
         className={styles.overflowControl}

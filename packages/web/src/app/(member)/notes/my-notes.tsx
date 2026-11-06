@@ -16,10 +16,16 @@ import {
   type NoteVisibility,
 } from '@thp/shared';
 import { ApiClientError, apiFetch } from '@/client/api-client';
+import { PinNoteControl } from '../highlights/pin-note-control';
 import { useBreadcrumbTrail } from '../player-context';
 import { NoteImages } from '../recordings/[id]/note-images';
 import { noteCardId, recordingTabHref } from '../recordings/[id]/round-trip';
 import noteStyles from '../recordings/[id]/notes.module.css';
+import { passesFolderFilter, sameFolderFilter, type FolderFilter } from './folder-filter';
+import { ManageFoldersDialog } from './manage-folders-dialog';
+import { NoteFolderControl } from './note-folder-control';
+import { NoteFolderPills } from './note-folder-pills';
+import { useNoteFolders } from './note-folders-store';
 import styles from './my-notes.module.css';
 
 /**
@@ -27,19 +33,24 @@ import styles from './my-notes.module.css';
  * belongs to, newest written first.
  *
  * **Each card is the recording page's note card**, drawn from the same stylesheet, with one line
- * added above it: the teaching's title, a link to its page, and its series beside it. The
+ * added inside it, above a hairline: the teaching's title, a link to its page, and its series. The
  * timestamp is the same green mark the recording page draws, and here it is a **link** rather
  * than a seek: it opens the teaching at that moment with the Notes tab open and the card scrolled
- * into view, which is where every control on a note — reply, edit, react, delete — already is.
- * Nothing is written from this page; it is the place to find a note, not to act on it.
+ * into view, which is where reply, edit, react and delete already are.
+ *
+ * **Two controls are drawn here, on the member's own notes**: the highlighter and the folder,
+ * the same pair the recording page puts beside the `···` — because filing and highlighting are
+ * how a member *arranges* what they wrote, and this page is where they look at all of it at once.
+ * Nothing else is written from this page.
  *
  * **Replies by other members are shown**, under the note, exactly as on the teaching — and a
  * note the member *replied to* is shown whole: the other member's note first, then every reply
  * including the member's own. Which cards are theirs is said by `mine`, which marks nothing here
- * but is what the filter reads.
+ * but is what the filter and the controls read.
  *
  * **Public / Private narrows what is listed** out of what the API answered — the recording
- * page's own rule. The payload never carried anybody else's private note to begin with.
+ * page's own rule — and the **folder row** under it narrows again: all folders, one folder, or
+ * **Default**, the notes in none. Both are component state, deliberately not remembered across a reload.
  */
 
 /** Which threads are listed. Component state, and deliberately not remembered across a reload. */
@@ -57,6 +68,9 @@ const EMPTY_STATE: Record<Filter, string> = {
   private: "You haven't written a private note yet.",
 };
 
+const EMPTY_IN_FOLDER = 'No notes here yet. Press the folder on a note to file it.';
+const EMPTY_UNFILED = 'Nothing here: every note is in a folder.';
+
 const LOAD_FAILED = "Couldn't load your notes.";
 
 export function MyNotes() {
@@ -64,7 +78,10 @@ export function MyNotes() {
   const [entries, setEntries] = useState<readonly MyNoteEntry[] | null>(null);
   const [failure, setFailure] = useState<string | null>(null);
   const [filter, setFilter] = useState<Filter>('all');
+  const [folderFilter, setFolderFilter] = useState<FolderFilter>('all');
+  const [managing, setManaging] = useState(false);
   const [attempt, setAttempt] = useState(0);
+  const { folders, failure: foldersFailure } = useNoteFolders();
 
   useEffect(() => {
     let cancelled = false;
@@ -83,7 +100,34 @@ export function MyNotes() {
     };
   }, [attempt]);
 
-  const listed = entries === null ? null : entries.filter((one) => filter === 'all' || one.visibility === filter);
+  // The folder being viewed was removed — in the manage dialog, or elsewhere — so show everything
+  // rather than a list narrowed to a folder that no longer exists.
+  useEffect(() => {
+    if (typeof folderFilter === 'string' || folders === null) return;
+    if (!folders.some((one) => one.id === folderFilter.folderId)) setFolderFilter('all');
+  }, [folders, folderFilter]);
+
+  const listed =
+    entries === null
+      ? null
+      : entries.filter(
+          (one) =>
+            (filter === 'all' || one.visibility === filter) &&
+            passesFolderFilter(folders, folderFilter, one.note.id),
+        );
+
+  const folderRow: readonly { readonly key: FolderFilter; readonly label: string }[] = [
+    { key: 'all', label: 'All folders' },
+    ...(folders ?? []).map((one) => ({ key: { folderId: one.id }, label: one.name })),
+    { key: 'unfiled', label: 'Default' },
+  ];
+
+  const emptyMessage =
+    entries !== null && entries.length > 0 && folderFilter !== 'all'
+      ? folderFilter === 'unfiled'
+        ? EMPTY_UNFILED
+        : EMPTY_IN_FOLDER
+      : EMPTY_STATE[filter];
 
   return (
     <>
@@ -110,6 +154,42 @@ export function MyNotes() {
         ))}
       </div>
 
+      {/* The folders, as a second row of the same pills, with the one control that edits them at the end. */}
+      <div className={styles.folderRow}>
+        <div className={noteStyles.filters} role="tablist" aria-label="Which folder to show">
+          {folderRow.map((one) => (
+            <button
+              key={typeof one.key === 'string' ? one.key : one.key.folderId}
+              className={noteStyles.filter}
+              type="button"
+              role="tab"
+              aria-selected={sameFolderFilter(folderFilter, one.key)}
+              onClick={() => setFolderFilter(one.key)}
+            >
+              {one.label}
+            </button>
+          ))}
+        </div>
+        <button
+          className={styles.manage}
+          type="button"
+          aria-haspopup="dialog"
+          disabled={folders === null}
+          onClick={() => setManaging(true)}
+        >
+          Manage folders
+        </button>
+      </div>
+      {foldersFailure === null ? null : (
+        <p className={styles.quiet} role="status">
+          {foldersFailure}
+        </p>
+      )}
+
+      {managing && folders !== null ? (
+        <ManageFoldersDialog folders={folders} onDone={() => setManaging(false)} />
+      ) : null}
+
       {failure !== null ? (
         <div className={styles.failed}>
           <p className={styles.failure}>{failure}</p>
@@ -123,7 +203,7 @@ export function MyNotes() {
         </p>
       ) : listed.length === 0 ? (
         <p className={styles.quiet} role="status">
-          {EMPTY_STATE[filter]}
+          {emptyMessage}
         </p>
       ) : (
         <ol className={styles.entries} aria-label="Your notes">
@@ -136,11 +216,22 @@ export function MyNotes() {
   );
 }
 
-/** One thread: the teaching it is on, then the note card with its replies under it. */
+/** One thread: the note card, with the teaching it is on as the card's first line. */
 function Entry({ entry }: { entry: MyNoteEntry }) {
-  const { recording, note } = entry;
   return (
     <li className={styles.entry}>
+      <NoteCard note={entry.note} recording={entry.recording} />
+    </li>
+  );
+}
+
+/**
+ * The teaching a note is on — its title, a link to its page, and its series beside it — drawn
+ * inside the card above a hairline, so a card read on its own says where it came from.
+ */
+function Teaching({ recording }: { recording: MyNoteEntry['recording'] }) {
+  return (
+    <>
       <div className={styles.teaching}>
         <Link className={styles.teachingLink} href={recordingPagePath(recording.id)}>
           {recording.title}
@@ -151,8 +242,8 @@ function Entry({ entry }: { entry: MyNoteEntry }) {
           </Link>
         )}
       </div>
-      <NoteCard note={note} recordingId={recording.id} />
-    </li>
+      <hr className={styles.divider} />
+    </>
   );
 }
 
@@ -166,14 +257,17 @@ function momentHref(recordingId: string, note: NoteView): string {
 }
 
 /**
- * One note as the recording page draws it — the same classes, minus every control: no overflow,
- * no reply field, no picker. The timestamp is a link to the moment rather than a seek, because
- * there is no player holding this teaching here.
+ * One note as the recording page draws it — the same classes, with the highlighter and the folder
+ * on the member's own note and nothing else: no overflow, no reply field, no picker. The timestamp
+ * is a link to the moment rather than a seek, because there is no player holding this teaching
+ * here.
  */
-function NoteCard({ note, recordingId }: { note: NoteView; recordingId: string }) {
+function NoteCard({ note, recording }: { note: NoteView; recording: MyNoteEntry['recording'] }) {
+  const recordingId = recording.id;
   const className = [noteStyles.note, note.pinned ? noteStyles.pinnedNote : ''].filter(Boolean).join(' ');
   return (
     <article className={className} id={noteCardId(note.id)} aria-label={note.mine ? 'Your note' : 'A note you replied to'}>
+      <Teaching recording={recording} />
       {note.deleted ? (
         <>
           <TimeLink note={note} recordingId={recordingId} />
@@ -185,6 +279,14 @@ function NoteCard({ note, recordingId }: { note: NoteView; recordingId: string }
             <TimeLink note={note} recordingId={recordingId} />
             {note.visibility === 'private' ? <span className={noteStyles.privatePill}>Private</span> : null}
             {note.pinned ? <span className={noteStyles.pinnedPill}>Pinned</span> : null}
+            {note.mine ? <NoteFolderPills noteId={note.id} /> : null}
+            {/* The root here is always top-level, so a note of the member's own is always filable. */}
+            {note.mine ? (
+              <div className={noteStyles.overflow}>
+                <PinNoteControl noteId={note.id} recordingId={recordingId} className={noteStyles.overflowControl} />
+                <NoteFolderControl noteId={note.id} className={noteStyles.overflowControl} />
+              </div>
+            ) : null}
           </div>
           <Body note={note} recordingId={recordingId} />
         </>
