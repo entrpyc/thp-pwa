@@ -33,7 +33,7 @@ import styles from './my-notes.module.css';
  * belongs to, newest written first.
  *
  * **Each card is the recording page's note card**, drawn from the same stylesheet, with one line
- * added above it: the teaching's title, a link to its page, and its series beside it. The
+ * added inside it, above a hairline: the teaching's title, a link to its page, and its series. The
  * timestamp is the same green mark the recording page draws, and here it is a **link** rather
  * than a seek: it opens the teaching at that moment with the Notes tab open and the card scrolled
  * into view, which is where reply, edit, react and delete already are.
@@ -216,11 +216,22 @@ export function MyNotes() {
   );
 }
 
-/** One thread: the teaching it is on, then the note card with its replies under it. */
+/** One thread: the note card, with the teaching it is on as the card's first line. */
 function Entry({ entry }: { entry: MyNoteEntry }) {
-  const { recording, note } = entry;
   return (
     <li className={styles.entry}>
+      <NoteCard note={entry.note} recording={entry.recording} />
+    </li>
+  );
+}
+
+/**
+ * The teaching a note is on — its title, a link to its page, and its series beside it — drawn
+ * inside the card above a hairline, so a card read on its own says where it came from.
+ */
+function Teaching({ recording }: { recording: MyNoteEntry['recording'] }) {
+  return (
+    <>
       <div className={styles.teaching}>
         <Link className={styles.teachingLink} href={recordingPagePath(recording.id)}>
           {recording.title}
@@ -231,8 +242,8 @@ function Entry({ entry }: { entry: MyNoteEntry }) {
           </Link>
         )}
       </div>
-      <NoteCard note={note} recordingId={recording.id} />
-    </li>
+      <hr className={styles.divider} />
+    </>
   );
 }
 
@@ -251,10 +262,12 @@ function momentHref(recordingId: string, note: NoteView): string {
  * is a link to the moment rather than a seek, because there is no player holding this teaching
  * here.
  */
-function NoteCard({ note, recordingId }: { note: NoteView; recordingId: string }) {
+function NoteCard({ note, recording }: { note: NoteView; recording: MyNoteEntry['recording'] }) {
+  const recordingId = recording.id;
   const className = [noteStyles.note, note.pinned ? noteStyles.pinnedNote : ''].filter(Boolean).join(' ');
   return (
     <article className={className} id={noteCardId(note.id)} aria-label={note.mine ? 'Your note' : 'A note you replied to'}>
+      <Teaching recording={recording} />
       {note.deleted ? (
         <>
           <TimeLink note={note} recordingId={recordingId} />
