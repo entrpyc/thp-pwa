@@ -48,6 +48,8 @@
 
 .field {
   composes: field from '../admin.module.css';
+  /* The console's field carries a 16rem basis for a row; down this column that basis is a height. */
+  flex: 0 0 auto;
 }
 
 .label {
