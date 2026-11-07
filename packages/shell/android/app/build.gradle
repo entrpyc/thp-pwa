@@ -22,8 +22,11 @@ android {
         applicationId "com.indepthwebsolutions.teachinghub"
         minSdkVersion rootProject.ext.minSdkVersion
         targetSdkVersion rootProject.ext.targetSdkVersion
-        versionCode 1
-        versionName "1.0"
+        // The Mobile workflow (.github/workflows/mobile.yml) sets these to the run number and the
+        // release tag's number, so every upload is a new build without anybody editing this file.
+        // A build without them — a local one — keeps the defaults, which Play never sees.
+        versionCode = (System.getenv('THP_VERSION_CODE') ?: '1').toInteger()
+        versionName = System.getenv('THP_VERSION_NAME') ?: '1.0'
         testInstrumentationRunner "androidx.test.runner.AndroidJUnitRunner"
         aaptOptions {
              // Files and dirs to omit from the packaged assets dir, modified to accommodate modern web apps.
