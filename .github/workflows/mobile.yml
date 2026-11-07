@@ -1,0 +1,425 @@
+# Mobile — **build the store shells for the latest release and send them to the stores.**
+#
+# Started by hand from the Actions tab. Three jobs:
+#
+#   version   Works out which release to build: the newest GitHub Release unless `tag` names one.
+#             The tag's number (v1.11.0 → 1.11.0) is the marketing version / versionName of both
+#             apps, and the tag's commit is what both builds check out, so a store build is always
+#             a release the web app has already shipped (deploy.yml cuts the tags).
+#   ios       A hosted Mac with Xcode 26 syncs the Capacitor project, archives it, signs it through
+#             Apple's cloud and uploads it to App Store Connect (TestFlight).
+#   android   An Ubuntu runner syncs the Capacitor project, builds the release bundle signed with
+#             the Play upload key and uploads it to the Play Console's internal testing track.
+#
+# The build number (iOS) and versionCode (Android) are the run number, so every run that reaches a
+# store is a new build without anybody editing the projects. Play insists versionCode only ever
+# goes up, so a bundle uploaded by hand must never carry a versionCode above the next run number.
+# The shell is a window onto the live site (packages/shell/capacitor.config.ts), so a new build is
+# only needed when something native changes — a plugin, an entitlement, the offline page.
+#
+# What the run needs (Settings → Secrets and variables → Actions, repository level):
+#
+#   iOS — signing happens on Apple's side with an App Store Connect API key; nothing else is stored.
+#   APP_STORE_CONNECT_KEY_ID         the API key's Key ID
+#   APP_STORE_CONNECT_ISSUER_ID      the Issuer ID shown above the key list
+#   APP_STORE_CONNECT_PRIVATE_KEY    the whole AuthKey_<KEY_ID>.p8 file, every line intact
+#
+#   The key must have the Admin role on the first run, which creates the App ID, the certificate
+#   and the profile; App Manager is enough afterwards. The app record (bundle id
+#   com.indepthwebsolutions.teachinghub) must already exist in App Store Connect before `upload`
+#   is ticked, or the upload is refused with "No suitable application records were found".
+#
+#   Android — the upload key signs the bundle here, Play App Signing re-signs it for members.
+#   ANDROID_UPLOAD_KEYSTORE_BASE64   the upload keystore, base64 on one line
+#   ANDROID_UPLOAD_STORE_PASSWORD    its store password
+#   ANDROID_UPLOAD_KEY_PASSWORD      the key's password
+#   ANDROID_UPLOAD_KEY_ALIAS         optional; the key alias, `upload` when unset
+#   ANDROID_GOOGLE_SERVICES_JSON     the Firebase google-services.json, whole (FCM push)
+#   PLAY_SERVICE_ACCOUNT_JSON        a Google Cloud service account key, whole; the account is
+#                                    invited in Play Console → Users and permissions with
+#                                    "Release to testing tracks" on the app
+#
+#   Play's API cannot create an app's first release: one bundle has to be uploaded through the
+#   Play Console by hand before `upload` is ticked. packages/shell/README.md, "Building the
+#   Android bundle", says how.
+
+name: Mobile
+
+on:
+  workflow_dispatch:
+    inputs:
+      tag:
+        description: Release tag to build (e.g. v1.11.0). Leave empty for the latest GitHub Release.
+        type: string
+        required: false
+        default: ''
+      platforms:
+        description: Which apps to build
+        type: choice
+        required: true
+        default: both
+        options: [both, ios, android]
+      upload:
+        description: Upload to App Store Connect (TestFlight) and the Play internal track. Untick to only build and keep the .ipa / .aab as run artifacts.
+        type: boolean
+        required: false
+        default: true
+
+# One mobile build at a time: two runs uploading the same build number would collide at the stores.
+concurrency:
+  group: mobile-build
+  cancel-in-progress: false
+
+permissions:
+  contents: read
+
+jobs:
+  version:
+    name: Resolve release
+    runs-on: ubuntu-24.04
+    timeout-minutes: 5
+    outputs:
+      tag: ${{ steps.release.outputs.tag }}
+      version: ${{ steps.release.outputs.version }}
+    steps:
+      - name: Find the release
+        id: release
+        env:
+          GH_TOKEN: ${{ github.token }}
+          GH_REPO: ${{ github.repository }}
+          TAG: ${{ inputs.tag }}
+        run: |
+          if [ -n "$TAG" ]; then
+            if ! gh release view "$TAG" --json tagName > /dev/null 2>&1; then
+              echo "::error::No GitHub Release is tagged '$TAG'. Releases are cut by the Deploy workflow."
+              exit 1
+            fi
+          else
+            TAG=$(gh release view --json tagName -q .tagName)
+            if [ -z "$TAG" ]; then
+              echo "::error::No GitHub Release exists yet. Run the Deploy workflow first, or pass a tag."
+              exit 1
+            fi
+          fi
+          case "$TAG" in
+            v[0-9]*.[0-9]*.[0-9]*) ;;
+            *) echo "::error::Release tags look like v1.2.3, got '$TAG'."; exit 1 ;;
+          esac
+          {
+            echo "tag=$TAG"
+            echo "version=${TAG#v}"
+          } >> "$GITHUB_OUTPUT"
+          echo "Building $TAG as version ${TAG#v}, build ${{ github.run_number }}."
+
+  ios:
+    name: iOS ${{ needs.version.outputs.version }} (${{ github.run_number }})${{ inputs.upload && ' and upload' || '' }}
+    needs: version
+    if: ${{ inputs.platforms == 'both' || inputs.platforms == 'ios' }}
+    runs-on: macos-26
+    # Package resolution, a Release archive and the upload. Cloud signing adds a few round trips.
+    timeout-minutes: 60
+    env:
+      SCHEME: App
+      PROJECT: packages/shell/ios/App/App.xcodeproj
+      ARCHIVE: ${{ github.workspace }}/packages/shell/ios/App/build/App.xcarchive
+      EXPORT_DIR: ${{ github.workspace }}/packages/shell/ios/App/build/export
+      VERSION: ${{ needs.version.outputs.version }}
+      BUILD_NUMBER: ${{ github.run_number }}
+    steps:
+      - name: App Store Connect key is present
+        env:
+          KEY_ID: ${{ secrets.APP_STORE_CONNECT_KEY_ID }}
+          ISSUER_ID: ${{ secrets.APP_STORE_CONNECT_ISSUER_ID }}
+          PRIVATE_KEY: ${{ secrets.APP_STORE_CONNECT_PRIVATE_KEY }}
+        run: |
+          missing=""
+          [ -z "$KEY_ID" ] && missing="$missing APP_STORE_CONNECT_KEY_ID"
+          [ -z "$ISSUER_ID" ] && missing="$missing APP_STORE_CONNECT_ISSUER_ID"
+          [ -z "$PRIVATE_KEY" ] && missing="$missing APP_STORE_CONNECT_PRIVATE_KEY"
+          if [ -n "$missing" ]; then
+            echo "::error::Not set as repository secrets (Settings → Secrets and variables → Actions):$missing. See the header of .github/workflows/mobile.yml."
+            exit 1
+          fi
+
+      - uses: actions/checkout@fbc6f3992d24b796d5a048ff273f7fcc4a7b6c09 # v5
+        with:
+          ref: ${{ needs.version.outputs.tag }}
+
+      - uses: actions/setup-node@a0853c24544627f65ddf259abe73b1d18a591444 # v5
+        with:
+          node-version-file: .nvmrc
+          cache: npm
+
+      # The Swift package points at the media-session plugin inside node_modules
+      # (ios/App/CapApp-SPM/Package.swift), so the dependencies have to be installed before Xcode
+      # can resolve anything.
+      - name: Install dependencies
+        run: npm ci
+
+      # Writes capacitor.config.json and the www/ folder into the iOS project. With
+      # THP_SHELL_SERVER_URL unset the shell points at the production origin, which is the only
+      # origin a store build may carry (packages/shell/README.md, "Pointing the shell at a local server").
+      - name: Sync the Capacitor project
+        run: npm --workspace @thp/shell run sync:ios
+
+      # The .p8 must be on disk for xcodebuild. $RUNNER_TEMP is wiped with the runner.
+      - name: App Store Connect API key
+        env:
+          PRIVATE_KEY: ${{ secrets.APP_STORE_CONNECT_PRIVATE_KEY }}
+        run: |
+          printf '%s\n' "$PRIVATE_KEY" > "$RUNNER_TEMP/AuthKey.p8"
+          chmod 600 "$RUNNER_TEMP/AuthKey.p8"
+          # A key pasted with its lines joined or cut fails deep inside xcodebuild with a message that
+          # names nothing. Prove it parses first.
+          if ! openssl pkey -in "$RUNNER_TEMP/AuthKey.p8" -noout 2> /dev/null; then
+            echo "::error::APP_STORE_CONNECT_PRIVATE_KEY is not a valid .p8 key. It must be the whole file: '-----BEGIN PRIVATE KEY-----', the base64 lines, '-----END PRIVATE KEY-----'. Lines seen: $(wc -l < "$RUNNER_TEMP/AuthKey.p8")."
+            exit 1
+          fi
+
+      - name: Xcode version
+        run: xcodebuild -version
+
+      - name: Resolve Swift packages
+        run: xcodebuild -resolvePackageDependencies -project "$PROJECT" -scheme "$SCHEME"
+
+      # Automatic signing, authenticated with the API key rather than an Apple ID. Xcode registers
+      # whatever the portal is missing — the App ID with the entitlements' capabilities, a
+      # cloud-managed certificate, the profile — and signs with it. DEVELOPMENT_TEAM is passed here
+      # rather than committed to the project so the project file stays as Capacitor generated it.
+      #
+      # The archive is signed with a *development* profile and re-signed for the App Store at
+      # export; that is how automatic signing works, and an identity override is refused
+      # ("conflicting provisioning settings"). A development profile needs at least one device
+      # registered on the team — a team that has never plugged a phone into Xcode has none, and
+      # the archive fails with "Your team has no devices from which to generate a provisioning
+      # profile". Register one by UDID under Devices on the developer portal (README, "iOS:
+      # building without a Mac").
+      - name: Archive
+        env:
+          KEY_ID: ${{ secrets.APP_STORE_CONNECT_KEY_ID }}
+          ISSUER_ID: ${{ secrets.APP_STORE_CONNECT_ISSUER_ID }}
+        run: |
+          xcodebuild -project "$PROJECT" -scheme "$SCHEME" -configuration Release \
+            -destination "generic/platform=iOS" \
+            -archivePath "$ARCHIVE" \
+            -allowProvisioningUpdates \
+            -authenticationKeyPath "$RUNNER_TEMP/AuthKey.p8" \
+            -authenticationKeyID "$KEY_ID" \
+            -authenticationKeyIssuerID "$ISSUER_ID" \
+            DEVELOPMENT_TEAM=B2PZ326S78 \
+            MARKETING_VERSION="$VERSION" \
+            CURRENT_PROJECT_VERSION="$BUILD_NUMBER" \
+            archive
+
+      # ExportOptions.plist says `export`; an upload run rewrites that to `upload`, which makes
+      # xcodebuild hand the signed build to App Store Connect itself — no second tool, no .ipa
+      # to keep. The export run writes the .ipa instead, for a build somebody wants to inspect.
+      - name: Export${{ inputs.upload && ' and upload' || '' }}
+        env:
+          KEY_ID: ${{ secrets.APP_STORE_CONNECT_KEY_ID }}
+          ISSUER_ID: ${{ secrets.APP_STORE_CONNECT_ISSUER_ID }}
+          UPLOAD: ${{ inputs.upload }}
+        run: |
+          options="$RUNNER_TEMP/ExportOptions.plist"
+          cp packages/shell/ios/App/ExportOptions.plist "$options"
+          if [ "$UPLOAD" = "true" ]; then
+            plutil -replace destination -string upload "$options"
+          fi
+          xcodebuild -exportArchive \
+            -archivePath "$ARCHIVE" \
+            -exportPath "$EXPORT_DIR" \
+            -exportOptionsPlist "$options" \
+            -allowProvisioningUpdates \
+            -authenticationKeyPath "$RUNNER_TEMP/AuthKey.p8" \
+            -authenticationKeyID "$KEY_ID" \
+            -authenticationKeyIssuerID "$ISSUER_ID"
+
+      - name: Keep the .ipa
+        if: ${{ !inputs.upload }}
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4
+        with:
+          name: Vinegard-${{ env.VERSION }}-${{ github.run_number }}.ipa
+          path: ${{ env.EXPORT_DIR }}/*.ipa
+          if-no-files-found: error
+          retention-days: 14
+
+      # The debug symbols, whichever way the run went: an upload also sends them to Apple
+      # (uploadSymbols in ExportOptions.plist), but a crash log from a TestFlight phone is easier
+      # to read against a copy that is one click away.
+      - name: Keep the dSYMs
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4
+        with:
+          name: Vinegard-${{ env.VERSION }}-${{ github.run_number }}-dSYMs
+          path: ${{ env.ARCHIVE }}/dSYMs
+          if-no-files-found: warn
+          retention-days: 90
+
+      - name: Summary
+        env:
+          UPLOAD: ${{ inputs.upload }}
+          TAG: ${{ needs.version.outputs.tag }}
+        run: |
+          {
+            echo "## Vinegard iOS $VERSION (build $BUILD_NUMBER)"
+            echo
+            echo "- release: \`$TAG\`"
+            if [ "$UPLOAD" = "true" ]; then
+              echo "- uploaded to App Store Connect; it appears under TestFlight once Apple has processed it (usually within half an hour)"
+              echo "- https://appstoreconnect.apple.com/apps"
+            else
+              echo "- not uploaded; the .ipa is attached to this run as an artifact"
+            fi
+          } >> "$GITHUB_STEP_SUMMARY"
+
+  android:
+    name: Android ${{ needs.version.outputs.version }} (${{ github.run_number }})${{ inputs.upload && ' and upload' || '' }}
+    needs: version
+    if: ${{ inputs.platforms == 'both' || inputs.platforms == 'android' }}
+    runs-on: ubuntu-24.04
+    # npm ci, a cold Gradle run that also downloads platform 36, the bundle and the upload.
+    timeout-minutes: 40
+    env:
+      ANDROID_DIR: packages/shell/android
+      BUNDLE: packages/shell/android/app/build/outputs/bundle/release/app-release.aab
+      PACKAGE_NAME: com.indepthwebsolutions.teachinghub
+      # Read by android/app/build.gradle: the tag's number and the run number.
+      THP_VERSION_NAME: ${{ needs.version.outputs.version }}
+      THP_VERSION_CODE: ${{ github.run_number }}
+    steps:
+      - name: Android secrets are present
+        env:
+          KEYSTORE: ${{ secrets.ANDROID_UPLOAD_KEYSTORE_BASE64 }}
+          STORE_PASSWORD: ${{ secrets.ANDROID_UPLOAD_STORE_PASSWORD }}
+          KEY_PASSWORD: ${{ secrets.ANDROID_UPLOAD_KEY_PASSWORD }}
+          GOOGLE_SERVICES: ${{ secrets.ANDROID_GOOGLE_SERVICES_JSON }}
+          SERVICE_ACCOUNT: ${{ secrets.PLAY_SERVICE_ACCOUNT_JSON }}
+          UPLOAD: ${{ inputs.upload }}
+        run: |
+          missing=""
+          [ -z "$KEYSTORE" ] && missing="$missing ANDROID_UPLOAD_KEYSTORE_BASE64"
+          [ -z "$STORE_PASSWORD" ] && missing="$missing ANDROID_UPLOAD_STORE_PASSWORD"
+          [ -z "$KEY_PASSWORD" ] && missing="$missing ANDROID_UPLOAD_KEY_PASSWORD"
+          [ -z "$GOOGLE_SERVICES" ] && missing="$missing ANDROID_GOOGLE_SERVICES_JSON"
+          [ "$UPLOAD" = "true" ] && [ -z "$SERVICE_ACCOUNT" ] && missing="$missing PLAY_SERVICE_ACCOUNT_JSON"
+          if [ -n "$missing" ]; then
+            echo "::error::Not set as repository secrets (Settings → Secrets and variables → Actions):$missing. See the header of .github/workflows/mobile.yml."
+            exit 1
+          fi
+
+      - uses: actions/checkout@fbc6f3992d24b796d5a048ff273f7fcc4a7b6c09 # v5
+        with:
+          ref: ${{ needs.version.outputs.tag }}
+
+      - uses: actions/setup-node@a0853c24544627f65ddf259abe73b1d18a591444 # v5
+        with:
+          node-version-file: .nvmrc
+          cache: npm
+
+      # Gradle 8.14 wants exactly Java 21 (README, "Building the Android bundle"). The Android SDK
+      # and its accepted licences are on the hosted runner; the Android Gradle plugin downloads
+      # platform 36 and build-tools 36 itself when they are missing.
+      - uses: actions/setup-java@77dd5b2ce225ea11469928ac317850245a74ae78 # v6.2.0
+        with:
+          distribution: temurin
+          java-version: '21'
+          cache: gradle
+
+      - name: Install dependencies
+        run: npm ci
+
+      # Writes capacitor.config.json and the web assets into the Android project. Same rule as
+      # iOS: THP_SHELL_SERVER_URL stays unset, so the shell points at the production origin.
+      - name: Sync the Capacitor project
+        run: npm --workspace @thp/shell run sync:android
+
+      # FCM push needs the Firebase project file; build.gradle applies the Google services plugin
+      # only when it is there, so a missing file would build a shell that silently never registers
+      # for push. It is gitignored for the same reason the keystore is: per deployment, not source.
+      - name: Firebase project file
+        env:
+          GOOGLE_SERVICES: ${{ secrets.ANDROID_GOOGLE_SERVICES_JSON }}
+        run: |
+          printf '%s\n' "$GOOGLE_SERVICES" > "$ANDROID_DIR/app/google-services.json"
+          if ! node -e "const j=require(process.argv[1]); if(!j.client?.some(c=>c.client_info?.android_client_info?.package_name==='$PACKAGE_NAME')) process.exit(1)" "$ANDROID_DIR/app/google-services.json"; then
+            echo "::error::ANDROID_GOOGLE_SERVICES_JSON is not a google-services.json for $PACKAGE_NAME. Download it from the Firebase console (Project settings → Your apps → the Android app)."
+            exit 1
+          fi
+
+      # The keystore must be on disk for Gradle. $RUNNER_TEMP is wiped with the runner. A keystore
+      # pasted with a wrong password fails late in the bundle task, so prove it opens first.
+      - name: Upload keystore
+        env:
+          KEYSTORE: ${{ secrets.ANDROID_UPLOAD_KEYSTORE_BASE64 }}
+          STORE_PASSWORD: ${{ secrets.ANDROID_UPLOAD_STORE_PASSWORD }}
+          KEY_ALIAS: ${{ secrets.ANDROID_UPLOAD_KEY_ALIAS || 'upload' }}
+        run: |
+          printf '%s' "$KEYSTORE" | tr -d '\n\r ' | base64 -d > "$RUNNER_TEMP/upload.keystore"
+          chmod 600 "$RUNNER_TEMP/upload.keystore"
+          if ! keytool -list -keystore "$RUNNER_TEMP/upload.keystore" -storepass "$STORE_PASSWORD" -alias "$KEY_ALIAS" > /dev/null 2>&1; then
+            echo "::error::The upload keystore could not be opened with ANDROID_UPLOAD_STORE_PASSWORD, or it has no key named '$KEY_ALIAS'. ANDROID_UPLOAD_KEYSTORE_BASE64 must be the whole file, base64-encoded."
+            exit 1
+          fi
+
+      # build.gradle reads the THP_UPLOAD_* variables when android/local.properties does not name
+      # the keystore, and signs the release build type with it.
+      - name: Build the release bundle
+        env:
+          THP_UPLOAD_STORE_FILE: ${{ runner.temp }}/upload.keystore
+          THP_UPLOAD_STORE_PASSWORD: ${{ secrets.ANDROID_UPLOAD_STORE_PASSWORD }}
+          THP_UPLOAD_KEY_ALIAS: ${{ secrets.ANDROID_UPLOAD_KEY_ALIAS || 'upload' }}
+          THP_UPLOAD_KEY_PASSWORD: ${{ secrets.ANDROID_UPLOAD_KEY_PASSWORD }}
+        working-directory: ${{ env.ANDROID_DIR }}
+        run: |
+          chmod +x gradlew
+          ./gradlew bundleRelease --no-daemon --console=plain
+
+      # An unsigned bundle is what Gradle produces when the signing config did not apply (README,
+      # "Building the Android bundle"); Play would refuse it with a message that names nothing.
+      - name: Bundle is signed
+        run: |
+          # jarsigner exits 0 for an unsigned file too ("jar is unsigned."), so read its verdict.
+          if ! jarsigner -verify "$BUNDLE" 2>&1 | grep -q '^jar verified'; then
+            echo "::error::$BUNDLE is not signed. build.gradle did not pick up the THP_UPLOAD_* variables."
+            exit 1
+          fi
+          ls -l "$BUNDLE"
+
+      # The Play equivalent of the TestFlight upload: the bundle goes to the internal testing
+      # track, where it is installable by the testers list within minutes and can be promoted to
+      # closed, open or production testing from the Play Console without another build.
+      - name: Upload to Play (internal testing)
+        if: ${{ inputs.upload }}
+        uses: r0adkll/upload-google-play@e738b9dd8f2476ea806d921b64aacd24f34515a5 # v1.1.5
+        with:
+          serviceAccountJsonPlainText: ${{ secrets.PLAY_SERVICE_ACCOUNT_JSON }}
+          packageName: ${{ env.PACKAGE_NAME }}
+          releaseFiles: ${{ env.BUNDLE }}
+          track: internal
+          status: completed
+          releaseName: ${{ needs.version.outputs.version }} (${{ github.run_number }})
+
+      - name: Keep the .aab
+        if: ${{ !inputs.upload }}
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4
+        with:
+          name: Vinegard-${{ needs.version.outputs.version }}-${{ github.run_number }}.aab
+          path: ${{ env.BUNDLE }}
+          if-no-files-found: error
+          retention-days: 14
+
+      - name: Summary
+        env:
+          UPLOAD: ${{ inputs.upload }}
+          TAG: ${{ needs.version.outputs.tag }}
+        run: |
+          {
+            echo "## Vinegard Android $THP_VERSION_NAME (versionCode $THP_VERSION_CODE)"
+            echo
+            echo "- release: \`$TAG\`"
+            if [ "$UPLOAD" = "true" ]; then
+              echo "- uploaded to the Play internal testing track; testers see it within a few minutes"
+              echo "- https://play.google.com/console/"
+            else
+              echo "- not uploaded; the .aab is attached to this run as an artifact"
+            fi
+          } >> "$GITHUB_STEP_SUMMARY"

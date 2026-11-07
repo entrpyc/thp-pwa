@@ -13,7 +13,7 @@ API routes, which is why nothing is bundled — `www/` holds one explanatory pag
 | Server origin      | `https://thp.indepthwebsolutions.com`                                                   | capacitor.config.ts (`THP_SHELL_SERVER_URL` overrides) |
 | Capacitor          | 8.5.3 (core, cli, android, ios — pinned exactly)                                        | package.json                                           |
 | Plugins            | `@capgo/capacitor-media-session` 8.1.5, `@capacitor/push-notifications` 8.1.3 (pinned exactly, here and in packages/web) | package.json, packages/web/package.json                |
-| Android            | targetSdk 36, compileSdk 36, minSdk 24, versionCode 1, AGP 8.13, Gradle 8.14.3, Java 21 | android/variables.gradle, android/app/build.gradle     |
+| Android            | targetSdk 36, compileSdk 36, minSdk 24, version from `THP_VERSION_NAME`/`THP_VERSION_CODE` (1.0 (1) locally), AGP 8.13, Gradle 8.14.3, Java 21 | android/variables.gradle, android/app/build.gradle     |
 | iOS                | deployment target 15.0, Swift Package Manager, version 1.0 (1)                          | ios/App/App.xcodeproj                                  |
 
 ## How the shell behaves
@@ -166,7 +166,44 @@ password, and if it is ever lost ask Play for an upload-key reset rather than ma
 `./gradlew assembleDebug` produces an installable debug APK for a device
 or an emulator; `npm --workspace @thp/shell run open:android` opens the project in Android Studio.
 
-`versionCode` in `android/app/build.gradle` must go up by one for every Play upload.
+`android/app/build.gradle` reads `versionName` and `versionCode` from `THP_VERSION_NAME` and
+`THP_VERSION_CODE`, which the Mobile workflow below sets to the release tag's number and the run
+number. A local build keeps the defaults, 1.0 (1); set both variables when a local bundle is going
+to Play, and keep its `versionCode` below the workflow's next run number — Play refuses a
+`versionCode` it has already seen, and every one it accepts must be higher than the last.
+
+## Android: building without Android Studio
+
+`.github/workflows/mobile.yml` does everything the section above does on a GitHub-hosted Ubuntu
+runner, beside the iOS build (next section). Started by hand from the Actions tab; it builds the
+newest GitHub Release (or the `tag` given) with the tag's number as the version and the run number
+as `versionCode`, signs the bundle with the upload key and, when *upload* is ticked (the default),
+sends it to the Play Console's internal testing track. Untick *upload* to keep the `.aab` as a
+run artifact instead. *platforms* picks `both`, `ios` or `android`.
+
+Set up once, from a browser:
+
+1. GitHub, *Settings*, *Secrets and variables*, *Actions*, repository secrets:
+   `ANDROID_UPLOAD_KEYSTORE_BASE64` (the upload keystore as one base64 line — in PowerShell,
+   `[Convert]::ToBase64String([IO.File]::ReadAllBytes("...\upload.keystore")) | Set-Clipboard`),
+   `ANDROID_UPLOAD_STORE_PASSWORD`, `ANDROID_UPLOAD_KEY_PASSWORD` (the `thp.upload.*` values from
+   `local.properties`), optionally `ANDROID_UPLOAD_KEY_ALIAS` (`upload` when unset), and
+   `ANDROID_GOOGLE_SERVICES_JSON` holding the whole `google-services.json`.
+2. Google Cloud console, any project: *APIs and Services*, *Library*, enable the **Google Play
+   Android Developer API**. *IAM and Admin*, *Service Accounts*, create one with no roles, then
+   *Keys*, *Add key*, JSON. The downloaded file is the `PLAY_SERVICE_ACCOUNT_JSON` secret.
+3. Play Console, *Users and permissions*, *Invite new users*: the service account's email
+   (`client_email` in the key file, `...@<project>.iam.gserviceaccount.com`), app permission on
+   Vinegard. Granted to `play-publisher@indepth-399605.iam.gserviceaccount.com`: *View app
+   information (read only)*, *Release to production, exclude devices and use Play app signing*,
+   *Release apps to testing tracks*, *Manage testing tracks and edit tester lists*, *Manage store
+   presence*. The workflow only needs *Release apps to testing tracks* — it uploads to internal
+   testing and never promotes — the rest are there so the same account can move a build to
+   production or edit the listing from a script later. Service accounts are active immediately;
+   nothing has to be accepted.
+4. One bundle uploaded by hand, under *Testing*, *Internal testing*: Play's API cannot create an
+   app's first release or enrol it in Play App Signing. Build it as above with
+   `THP_VERSION_CODE=1`; the workflow's run numbers continue from there.
 
 ## Pointing the shell at a local server
 
@@ -249,10 +286,10 @@ a link.
 
 ## iOS: building without a Mac
 
-`.github/workflows/ios.yml` does everything the section above does, on a GitHub-hosted Mac with
-Xcode 26. It is the route when there is no Mac that can run Xcode 26 — the repository is public,
-so the macOS runners are free. Started by hand from the Actions tab with a marketing version;
-the build number is the run number. The run syncs the Capacitor project, archives the Release
+The `ios` job of `.github/workflows/mobile.yml` does everything the section above does, on a
+GitHub-hosted Mac with Xcode 26. It is the route when there is no Mac that can run Xcode 26 — the
+repository is public, so the macOS runners are free. Started by hand from the Actions tab; the
+marketing version is the release tag's number and the build number is the run number. The run syncs the Capacitor project, archives the Release
 configuration, signs it and, when *upload* is ticked (the default), hands the build to App Store
 Connect, where it appears under TestFlight once processed. Untick *upload* to keep the `.ipa` as a
 run artifact instead.
@@ -431,5 +468,5 @@ injected bridge script. It does not affect any item above and is not addressed h
   plugin here and reads `shellPlatform()` in the web app, as push did.
 - Push has not been exercised on a device from this machine: there is no Mac for iOS, and the
   Android build needs a Firebase project's `google-services.json` that is not in the repository.
-  The checklist above is what to run once both exist.
-- Nothing under `ios/` has been compiled: there is no Mac in the loop yet.
+  The Mobile workflow builds both with the secrets it names; the checklist above is what to run
+  on a device.
