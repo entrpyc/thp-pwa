@@ -445,8 +445,14 @@ describe('correcting a recording’s title and date is its own action', () => {
     for (const role of ROLES) {
       expect(can(actorWith(role), 'recording.rename'), role).toBe(false);
       expect(can(actorWith(role), 'recording.update'), role).toBe(false);
-      expect(can(actorWith(role), 'recording.delete'), role).toBe(false);
+      expect(can(actorWith(role), 'recording.remove'), role).toBe(false);
     }
+  });
+
+  it('permits recording.delete for an admin and refuses it for a member and a stranger', () => {
+    expect(can(actorWith(ROLE.admin), 'recording.delete')).toBe(true);
+    expect(can(actorWith(ROLE.member), 'recording.delete')).toBe(false);
+    expect(can(null, 'recording.delete')).toBe(false);
   });
 });
 

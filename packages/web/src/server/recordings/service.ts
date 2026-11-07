@@ -1,4 +1,5 @@
 import {
+  deleteRecording,
   findRecordingById,
   findVisibleRecording,
   insertRecording,
@@ -12,6 +13,7 @@ import {
 } from '@thp/db';
 import {
   FIRST_PIPELINE_STEP,
+  MAX_RECORDING_DESCRIPTION_LENGTH,
   MAX_UPLOAD_BYTES,
   MAX_UPLOAD_LABEL,
   ACCEPTED_AUDIO_LABEL,
@@ -37,6 +39,7 @@ import { tagRefsForRecordings } from '@/server/tags/service';
 import { queue } from '@/server/jobs/queue';
 import { UPLOAD_GRANT_SECONDS, mediaStore, mintOriginalKey } from '@thp/media';
 import { logger } from '@/server/observability/logger';
+import { clearSearchCache } from '@/server/search/cache';
 
 /**
  * Uploading a teaching, in two requests and one `PUT` that never touches this process.
@@ -550,16 +553,54 @@ function parseDetails(fields: { title: unknown; recordedAt: unknown }): Recordin
 }
 
 /**
- * The edit body: the same two fields, and **nothing else is read**.
+ * The edit body: the same two fields, the description when the editor carries it, and **nothing
+ * else is read**.
  *
  * A request that also carries a key, a `publishedAt` or a `seriesId` is not refused for carrying
  * them — it simply does not get them written, because this parser never looks. Refusing would
  * invent a rule nobody asked for; reading them would give a second way to publish a teaching.
+ *
+ * The description is the exception, since the console's editor is the one place an admin rewrites
+ * it: absent leaves the column alone, blank or `null` clears it, and anything longer than
+ * {@link MAX_RECORDING_DESCRIPTION_LENGTH} is refused before it is read.
  */
 function parseUpdateRequest(body: unknown): RecordingDetails {
   if (typeof body !== 'object' || body === null) {
     throw ApiError.invalidInput('Send a JSON object with a title and the date recorded.');
   }
-  const { title, recordedAt } = body as Partial<UpdateRecordingRequest>;
-  return parseDetails({ title, recordedAt });
+  const { title, recordedAt, description } = body as Partial<UpdateRecordingRequest>;
+  const details = parseDetails({ title, recordedAt });
+  if (description === undefined) return details;
+  if (description === null) return { ...details, description: null };
+  if (typeof description !== 'string' || description.length > MAX_RECORDING_DESCRIPTION_LENGTH) {
+    throw ApiError.invalidInput(
+      `A description is text of at most ${MAX_RECORDING_DESCRIPTION_LENGTH} characters.`,
+    );
+  }
+  const trimmed = description.trim();
+  return { ...details, description: trimmed === '' ? null : trimmed };
+}
+
+/**
+ * **Delete a recording** ([the console's editor](../../app/admin/recordings/recording-editor.tsx)).
+ *
+ * One `DELETE` of the row; the schema cascades the rest — see `deleteRecording` in `@thp/db` for
+ * what that covers, and note that it includes members' notes and positions on the teaching, which
+ * is why the console asks twice. The media objects stay in the store, and their keys are in the
+ * audit line so an operator can remove them by hand: there is no delete on the media port for
+ * recordings, and adding one for this would be the first.
+ *
+ * A search answered while the teaching existed must not keep answering with it.
+ */
+export async function removeRecording(actor: Actor, id: string): Promise<void> {
+  const row = await deleteRecording(id);
+  if (row === null) throw notFound();
+  clearSearchCache();
+  logger.info('recording.delete', {
+    ...audit(actor, 'recording.delete', `recording:${id}`),
+    title: row.title,
+    wasPublished: row.publishedAt !== null,
+    originalMediaKey: row.originalMediaKey,
+    playbackMediaKey: row.playbackMediaKey,
+  });
 }

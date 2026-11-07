@@ -1,0 +1,239 @@
+/*
+ * The recording editor (`recording-editor.tsx`): a sheet over the list, in the console's clothes.
+ *
+ * Everything in it is composed from `admin.module.css` and the recordings panel's own sheet — the
+ * field, the label, the pill, the solid submit, the confirmation block — so the modal cannot drift
+ * from the panel it opens over. What is new is only the sheet itself: a raised panel on a scrim,
+ * bounded to the viewport and scrolling inside, with its sections divided by hairlines.
+ *
+ * One departure the guide does not have a rule for: `.actionDanger`, the delete. Emphasis rather
+ * than hue, as every confirming press in the console is — it reads as the strong outline, and the
+ * red the product does not have is still not used.
+ */
+
+.scrim {
+  position: fixed;
+  inset: 0;
+  z-index: 20;
+  display: flex;
+  align-items: flex-start;
+  justify-content: center;
+  padding: var(--space-4);
+  overflow-y: auto;
+  background: color-mix(in srgb, var(--color-bg) 85%, transparent);
+}
+
+.sheet {
+  width: 100%;
+  max-width: 56rem;
+  margin: var(--space-4) auto;
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-5);
+  padding: var(--space-5);
+  background: var(--color-surface);
+  border: 1px solid var(--color-border-strong);
+  border-radius: var(--radius-lg);
+  box-shadow: 0 24px 64px color-mix(in srgb, var(--color-bg-deep) 75%, transparent);
+  min-width: 0;
+}
+
+.head {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: var(--space-3);
+}
+
+.headText {
+  min-width: 0;
+}
+
+.heading {
+  margin: 0 0 var(--space-1);
+  font-size: var(--fs-card-title);
+  font-weight: 600;
+  color: var(--color-text);
+  overflow-wrap: anywhere;
+}
+
+.headMeta {
+  margin: 0;
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: var(--space-1);
+  font-size: var(--fs-meta);
+  color: var(--color-text-dim);
+}
+
+.chip {
+  composes: chip from '../admin.module.css';
+}
+
+.chipLive {
+  composes: chip;
+  border-color: var(--color-primary-strong);
+  background: var(--color-primary-soft);
+  color: var(--color-text);
+}
+
+.close {
+  flex: 0 0 auto;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: calc(var(--space-8) + var(--space-3));
+  height: calc(var(--space-8) + var(--space-3));
+  background: transparent;
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-pill);
+  color: var(--color-text-muted);
+  font-size: 1.25rem;
+  line-height: 1;
+  cursor: pointer;
+}
+
+.close:hover {
+  border-color: var(--color-border-strong);
+  color: var(--color-text);
+}
+
+.block {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-3);
+  padding-top: var(--space-5);
+  border-top: 1px solid var(--color-border);
+  min-width: 0;
+}
+
+.blockTitle {
+  margin: 0;
+  font-size: var(--fs-body);
+  font-weight: 600;
+  color: var(--color-text);
+}
+
+.detailsRow {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: flex-end;
+  gap: var(--space-3);
+}
+
+.field {
+  composes: field from '../admin.module.css';
+}
+
+.fieldTight {
+  composes: fieldTight from '../admin.module.css';
+}
+
+/* Down the sheet's column, the row basis is a height; the fields here keep their own. */
+.block > .field {
+  flex: 0 0 auto;
+}
+
+.label {
+  composes: label from '../admin.module.css';
+}
+
+.input {
+  composes: input from '../admin.module.css';
+  align-self: stretch;
+}
+
+.textarea {
+  composes: textarea from './recordings.module.css';
+}
+
+.select {
+  composes: select from './recordings.module.css';
+}
+
+.hint {
+  margin: 0;
+  font-size: var(--fs-meta);
+  color: var(--color-text-dim);
+}
+
+.link {
+  color: var(--color-primary-icon);
+}
+
+.actions {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: var(--space-2);
+}
+
+.submit {
+  composes: submit from '../admin.module.css';
+}
+
+.action {
+  composes: action from '../admin.module.css';
+}
+
+.actionStrong {
+  composes: actionStrong from '../admin.module.css';
+}
+
+.actionDanger {
+  composes: action from '../admin.module.css';
+  border-color: var(--color-border-strong);
+  color: var(--color-text);
+}
+
+.confirm {
+  composes: confirm from '../admin.module.css';
+}
+
+.confirmText {
+  composes: confirmText from '../admin.module.css';
+}
+
+.confirmActions {
+  composes: confirmActions from '../admin.module.css';
+}
+
+.refusal {
+  composes: rowRefusal from '../admin.module.css';
+}
+
+.done {
+  composes: rowDone from '../admin.module.css';
+}
+
+.questions {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-4);
+}
+
+.question {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-2);
+  min-width: 0;
+}
+
+@media (max-width: 48rem) {
+  .scrim {
+    padding: 0;
+  }
+
+  .sheet {
+    margin: 0;
+    min-height: 100vh;
+    border-radius: 0;
+    border-left: none;
+    border-right: none;
+    padding: var(--space-4);
+  }
+}

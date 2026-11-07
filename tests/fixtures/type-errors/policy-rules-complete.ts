@@ -48,6 +48,7 @@ export const rules: PolicyRules = {
   'review.regenerate': { roles: { admin: true, member: false } },
   'recording.publish': { roles: { admin: true, member: false } },
   'recording.unpublish': { roles: { admin: true, member: false } },
+  'recording.delete': { roles: { admin: true, member: false } },
   'summary.edit': { roles: { admin: true, member: false } },
   'summary.unpublish': { roles: { admin: true, member: false } },
   'recording.browse': { roles: { admin: true, member: true } },

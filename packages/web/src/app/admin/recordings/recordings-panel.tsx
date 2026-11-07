@@ -13,11 +13,9 @@ import {
 import {
   ACCEPTED_AUDIO_EXTENSIONS,
   ACCEPTED_AUDIO_LABEL,
-  ADMIN_REVIEWS_PAGE_PATH,
   MAX_UPLOAD_LABEL,
   RECORDINGS_PATH,
   RECORDING_UPLOADS_PATH,
-  REVIEW_RECORDING_PARAM,
   SERIES_PATH,
   TAGS_PATH,
   checkChosenFile,
@@ -25,12 +23,7 @@ import {
   describeBytes,
   extensionOf,
   isAcceptedAudioExtension,
-  recordingPath,
   recordingPublishPath,
-  recordingSeriesPath,
-  recordingSummaryPath,
-  recordingSummaryUnpublishPath,
-  recordingTagsPath,
   recordingUnpublishPath,
   type AdminRecordingListPayload,
   type RecordingSummary,
@@ -41,7 +34,7 @@ import {
   type UploadGrantPayload,
 } from '@thp/shared';
 import { ApiClientError, apiFetch } from '@/client/api-client';
-import { TagEditor } from '../tag-editor';
+import { RecordingEditor } from './recording-editor';
 import { DateField } from '../date-field';
 import styles from './recordings.module.css';
 
@@ -96,7 +89,9 @@ const STAGE_LABEL: Record<Stage, string> = {
   finalising: 'Finishing…',
 };
 
-export function RecordingsPanel() {
+export function RecordingsPanel({ translation }: { translation: string }) {
+  /** The recording whose editor is open over the list, if any. */
+  const [editingId, setEditingId] = useState<string | null>(null);
   const fileId = useId();
   const titleId = useId();
   const dateId = useId();
@@ -318,6 +313,10 @@ export function RecordingsPanel() {
 
   const busy = stage !== 'idle';
 
+  // The editor reads the row as the list last loaded it, so a save there is reflected here.
+  const editing = recordings?.find((entry) => entry.id === editingId) ?? null;
+  const closeEditor = useCallback(() => setEditingId(null), []);
+
   return (
     <div className={styles.panel}>
       <section className={styles.section} aria-labelledby="upload-heading">
@@ -457,98 +456,77 @@ export function RecordingsPanel() {
               <RecordingRow
                 key={entry.id}
                 entry={entry}
-                series={series}
-                tags={tags}
                 onChanged={onRowChanged}
+                onEdit={() => setEditingId(entry.id)}
               />
             ))}
           </ul>
         )}
       </section>
+
+      {editing === null ? null : (
+        <RecordingEditor
+          key={editing.id}
+          entry={editing}
+          series={series}
+          tags={tags}
+          translation={translation}
+          onChanged={onRowChanged}
+          onClose={closeEditor}
+          onDeleted={async () => {
+            setEditingId(null);
+            await onRowChanged();
+          }}
+        />
+      )}
     </div>
   );
 }
 
-/** What a row is doing, so the buttons can say it and two presses cannot overlap. */
-type RowBusy = 'publish' | 'unpublish' | 'summary' | 'summaryDown' | 'series' | 'details' | null;
+/** What a row is doing, so the two presses on it cannot overlap. */
+type RowBusy = 'publish' | 'unpublish' | null;
 
 /**
- * One recording, and everything an admin does to it after the pipeline has finished.
+ * One recording: what it is called, when it was recorded, whether it is live, and two presses —
+ * the gate, and the way into everything else.
  *
- * **The row is where publication lives** (Story 3 Ticket 04). No per-recording admin page exists —
- * docs/project/prd.md 3.6.4's "from the recording page" is served by the Review link below, because
- * the recording page itself is Story 4 — so this row carries the whole of it: whether the teaching
- * is live, the press that changes that, the summary's own gate, and the way into the queue.
+ * Everything that used to sit on the row — the series picker, the tags, the summary controls, the
+ * title-and-date form, the review link, the media key — moved into `recording-editor.tsx`, which
+ * *Edit* opens over the list. The row keeps the one press an admin scanning the list reaches for
+ * without opening anything: publish, and its confirming inverse.
  *
- * Three things worth stating:
- *
- * 1. **Unpublish takes a confirming press and publish does not.** The same line every other panel
- *    draws: taking a teaching away from people who may be part-way through it is the direction that
- *    costs something.
- * 2. **The summary controls only appear when there is one.** A recording whose draft was discarded
- *    has no summary, is still publishable (3.6.10), and should not be offered a control that would
- *    answer `not_found`.
- * 3. **The chip says live, not published.** "Published" is what the column is called; *live* is
- *    what an admin is actually asking about when they scan the list.
+ * **The chip says live, not published.** "Published" is what the column is called; *live* is what
+ * an admin is actually asking about when they scan the list.
  */
 function RecordingRow({
   entry,
-  series,
-  tags,
   onChanged,
+  onEdit,
 }: {
   entry: RecordingSummary;
-  /** Every series, for the picker. The same list for every row — there is only one. */
-  series: readonly SeriesView[];
-  /** Every tag, for the type-to-add suggestions. Likewise one list for every row. */
-  tags: readonly TagView[];
   onChanged: () => Promise<void>;
+  onEdit: () => void;
 }) {
   const [busy, setBusy] = useState<RowBusy>(null);
   const [note, setNote] = useState<string | null>(null);
   const [confirming, setConfirming] = useState(false);
-  const [editing, setEditing] = useState(false);
-  const [draft, setDraft] = useState(entry.summary ?? '');
-  /**
-   * The title-and-date form, and the two fields it holds ([3.2.16](docs/project/prd.md)).
-   *
-   * Closed until asked for, and seeded from the row **at the moment it is opened** rather than held
-   * in step with `entry`: a reload that arrives while somebody is typing must not overwrite what
-   * they typed. Cancelling discards the drafts and leaves the row exactly as the API last said it
-   * is, which is why there is no third state for "edited but not saved".
-   */
-  const [editingDetails, setEditingDetails] = useState(false);
-  const [titleDraft, setTitleDraft] = useState(entry.title);
-  const [dateDraft, setDateDraft] = useState(entry.recordedAt);
 
   const live = entry.publishedAt !== null;
-  // The payload only ever carries a summary that is published *and* on a published recording, so
-  // this is the honest question the row can ask: is there one a member can read right now.
-  const summaryVisible = entry.summary !== null;
 
-  async function send(what: RowBusy, path: string, init: RequestInit): Promise<void> {
+  async function send(what: RowBusy, path: string): Promise<void> {
     if (busy !== null) return;
     setBusy(what);
     setNote(null);
     setConfirming(false);
     try {
-      await apiFetch(path, { credentials: 'include', ...init });
-      setEditing(false);
-      // Only the form that was saved closes. A press on *Publish* while the details form is open
-      // leaves it open with what was typed still in it — the press was about the gate, not about
-      // the title.
-      if (what === 'details') setEditingDetails(false);
+      await apiFetch(path, { method: 'POST', credentials: 'include' });
       await onChanged();
     } catch (caught) {
-      // Refused: the press cost nothing else, and what was typed stays where it is.
       setNote(describeFailure(caught));
     } finally {
       setBusy(null);
     }
   }
-
-  /** Four of the five controls are a bare `POST` to a named sub-resource and carry no body. */
-  const POST = { method: 'POST' as const };
 
   return (
     <li className={styles.listRow}>
@@ -557,78 +535,10 @@ function RecordingRow({
         <p className={styles.rowMeta}>
           Recorded <time dateTime={entry.recordedAt}>{formatDay(entry.recordedAt)}</time>
         </p>
-        {/* The key, because the one property the suite cannot prove against the real
-            bucket is proven by an operator pasting this into a browser. */}
-        <p className={styles.rowKey}>{entry.originalMediaKey}</p>
       </div>
 
       <div className={styles.rowControls}>
         <span className={styles.chip}>{live ? 'Live' : 'Not published'}</span>
-
-        {/*
-          **Assignment lives here, not on the Series panel** — the epic's flow B assigns a series
-          while reviewing a teaching, immediately before publishing it, and this is the screen the
-          admin is already on. One press on change: there is no separate save, because a picker with
-          a save button beside it is two presses for one decision.
-        */}
-        <label className={styles.seriesPicker}>
-          <span className={styles.seriesLabel}>Series</span>
-          <select
-            className={styles.select}
-            name="seriesId"
-            aria-label={`Series for ${entry.title}`}
-            disabled={busy !== null}
-            value={entry.series?.id ?? ''}
-            onChange={(event) =>
-              void send('series', recordingSeriesPath(entry.id), {
-                method: 'PUT',
-                headers: { 'content-type': 'application/json' },
-                body: JSON.stringify({ seriesId: event.target.value === '' ? null : event.target.value }),
-              })
-            }
-          >
-            {/* The empty value is a real choice, not a placeholder: a recording in no series is the
-                ordinary case (3.3.9), and this is how it is put back into it. */}
-            <option value="">No series</option>
-            {series.map((one) => (
-              <option key={one.id} value={one.id}>
-                {one.title}
-              </option>
-            ))}
-          </select>
-        </label>
-
-        {/*
-          **Correcting the title and the date recorded** (3.2.16). Offered on every row rather than
-          only on unpublished ones: a title misheard from a service is discovered *after* people
-          start listening as often as before, and taking the teaching down to fix a spelling would
-          be an outage in exchange for a typo.
-        */}
-        <button
-          className={styles.action}
-          type="button"
-          disabled={busy !== null}
-          onClick={() => {
-            // Seeded from the row at the moment of opening, so a reload mid-typing cannot
-            // overwrite what is in the fields.
-            setTitleDraft(entry.title);
-            setDateDraft(entry.recordedAt);
-            setEditingDetails(!editingDetails);
-          }}
-        >
-          {editingDetails ? 'Cancel edit' : 'Edit details'}
-        </button>
-
-        {/*
-          Into the queue, filtered to this recording — 3.6.4's second entry point, and the reason no
-          per-recording admin page had to exist for it.
-        */}
-        <a
-          className={styles.action}
-          href={`${ADMIN_REVIEWS_PAGE_PATH}?${REVIEW_RECORDING_PARAM}=${entry.id}`}
-        >
-          Review drafts
-        </a>
 
         {live ? (
           <button
@@ -644,144 +554,22 @@ function RecordingRow({
             className={styles.submit}
             type="button"
             disabled={busy !== null}
-            onClick={() => void send('publish', recordingPublishPath(entry.id), POST)}
+            onClick={() => void send('publish', recordingPublishPath(entry.id))}
           >
             {busy === 'publish' ? 'Publishing…' : 'Publish'}
           </button>
         )}
 
-        {summaryVisible ? (
-          <>
-            <button
-              className={styles.action}
-              type="button"
-              disabled={busy !== null}
-              onClick={() => {
-                setDraft(entry.summary ?? '');
-                setEditing(!editing);
-              }}
-            >
-              {editing ? 'Cancel edit' : 'Edit summary'}
-            </button>
-            <button
-              className={styles.action}
-              type="button"
-              disabled={busy !== null}
-              onClick={() =>
-                void send('summaryDown', recordingSummaryUnpublishPath(entry.id), POST)
-              }
-            >
-              {busy === 'summaryDown' ? 'Taking down…' : 'Summary to draft'}
-            </button>
-          </>
-        ) : null}
+        <button
+          className={styles.action}
+          type="button"
+          disabled={busy !== null}
+          aria-label={`Edit ${entry.title}`}
+          onClick={onEdit}
+        >
+          Edit
+        </button>
       </div>
-
-      {/*
-        **The tags on this teaching, and the field that adds one** ([4.7](docs/project/prd.md)).
-        Always drawn rather than behind a press, because what a teaching is about is something an
-        admin scanning the list wants to see, and it is added by hand here and nowhere else — no
-        draft ever proposes one (4.17.1). Offered on live and unpublished rows alike: tagging
-        writes the join table and nothing on the recording, so a live teaching stays live.
-      */}
-      <TagEditor
-        tags={entry.tags}
-        suggestions={tags}
-        path={recordingTagsPath(entry.id)}
-        subject={entry.title}
-        disabled={busy !== null}
-        onChanged={onChanged}
-      />
-
-      {/*
-        The two fields the upload form asked for, asked again in the same order and with the same
-        labels — a console that calls it *Date recorded* when uploading and *Recorded on* when
-        correcting has two names for one column.
-
-        One save for both, because the API takes both together: "which of these did you mean to
-        change" is a question a two-field form does not raise. What is **not** here is as
-        deliberate: no key, no publish state, no series — each of those has its own control on this
-        row, and a form that quietly carried them would be a second way to press them.
-      */}
-      {editingDetails ? (
-        <div className={styles.detailsEditor}>
-          <div className={styles.field}>
-            <label className={styles.label} htmlFor={`title-${entry.id}`}>
-              Title
-            </label>
-            <input
-              className={styles.input}
-              id={`title-${entry.id}`}
-              name="title"
-              type="text"
-              autoComplete="off"
-              disabled={busy !== null}
-              value={titleDraft}
-              onChange={(event) => setTitleDraft(event.target.value)}
-            />
-          </div>
-
-          <div className={styles.fieldTight}>
-            <label className={styles.label} htmlFor={`recorded-at-${entry.id}`}>
-              Date recorded
-            </label>
-            <DateField
-              id={`recorded-at-${entry.id}`}
-              name="recordedAt"
-              label="Date recorded"
-              disabled={busy !== null}
-              value={dateDraft}
-              onChange={setDateDraft}
-            />
-          </div>
-
-          <button
-            className={styles.submit}
-            type="button"
-            disabled={busy !== null}
-            onClick={() =>
-              void send('details', recordingPath(entry.id), {
-                method: 'PATCH',
-                headers: { 'content-type': 'application/json' },
-                body: JSON.stringify({ title: titleDraft, recordedAt: dateDraft }),
-              })
-            }
-          >
-            {busy === 'details' ? 'Saving…' : 'Save details'}
-          </button>
-        </div>
-      ) : null}
-
-      {editing ? (
-        <div className={styles.summaryEditor}>
-          <label className={styles.label} htmlFor={`summary-${entry.id}`}>
-            Summary
-          </label>
-          <textarea
-            className={styles.textarea}
-            id={`summary-${entry.id}`}
-            name="content"
-            rows={10}
-            disabled={busy !== null}
-            value={draft}
-            onChange={(event) => setDraft(event.target.value)}
-          />
-          <button
-            className={styles.submit}
-            type="button"
-            disabled={busy !== null}
-            onClick={() =>
-              void send('summary', recordingSummaryPath(entry.id), {
-                method: 'PUT',
-                headers: { 'content-type': 'application/json' },
-                body: JSON.stringify({ content: draft }),
-              })
-            }
-          >
-            {busy === 'summary' ? 'Saving…' : 'Save summary'}
-          </button>
-        </div>
-      ) : null}
 
       {/*
         The confirming press, and only for the direction that takes something away from people who
@@ -799,7 +587,7 @@ function RecordingRow({
               className={styles.actionStrong}
               type="button"
               disabled={busy !== null}
-              onClick={() => void send('unpublish', recordingUnpublishPath(entry.id), POST)}
+              onClick={() => void send('unpublish', recordingUnpublishPath(entry.id))}
             >
               Yes, unpublish it
             </button>

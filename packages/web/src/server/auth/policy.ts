@@ -137,6 +137,13 @@ export const POLICY_ACTIONS = [
    */
   'recording.publish',
   'recording.unpublish',
+  /**
+   * **Deleting a teaching outright**, from the console's editor. Its own action rather than a
+   * widening of `recording.unpublish`, for the reason `account.delete` is not `account.deactivate`:
+   * taking a teaching down is reversible and this is not, and the role that may do one without the
+   * other is easy to imagine.
+   */
+  'recording.delete',
   'summary.edit',
   'summary.unpublish',
   /**
@@ -521,6 +528,7 @@ const RULES: PolicyRules = {
   // Deciding what is live, and deciding what the summary of a live teaching says.
   'recording.publish': { roles: { admin: true, member: false } },
   'recording.unpublish': { roles: { admin: true, member: false } },
+  'recording.delete': { roles: { admin: true, member: false } },
   'summary.edit': { roles: { admin: true, member: false } },
   'summary.unpublish': { roles: { admin: true, member: false } },
   // Both roles. What a member sees through it is decided by the visibility condition, not here —

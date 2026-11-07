@@ -16,6 +16,7 @@ import {
 import {
   createDatabase,
   findPlaybackProgress,
+  findRecordingById,
   findSummaryByRecording,
   findTranscriptByRecording,
   insertRecording,
@@ -419,9 +420,11 @@ describe('what a correction does not touch', () => {
     expect((await findPlaybackProgress(member.id, id, handle))?.positionMs).toBe(214_000);
   });
 
-  it('ignores fields the body has no business carrying', async () => {
+  it('ignores fields the body has no business carrying, and writes the description it may', async () => {
     // Not refused — refusing would invent a rule nobody asked for — but never read. Publication,
-    // the media key and the series each have a control of their own, and this is not it.
+    // the media key and the series each have a control of their own, and this is not it. The
+    // description is the one extra field it does read: the console's editor is where an admin
+    // rewrites it.
     const { id, key } = await newRecording();
     const series = await insertSeries({ title: unique('Not this one'), description: null }, handle);
 
@@ -439,7 +442,41 @@ describe('what a correction does not touch', () => {
     expect(answer.body.recording.publishedAt).toBeNull();
     expect(answer.body.recording.originalMediaKey).toBe(key);
     expect(answer.body.recording.series).toBeNull();
-    expect(answer.body.recording.description).toBeNull();
+    expect(answer.body.recording.description).toBe('A description nobody approved.');
+  });
+
+  it('clears the description with null or blank, leaves it alone when absent, and caps its length', async () => {
+    const { id } = await newRecording();
+    expect((await edit(id, { title: 'Described', recordedAt: '2027-01-01', description: '  Kept.  ' })).body.recording.description).toBe('Kept.');
+    expect((await edit(id, { title: 'Described', recordedAt: '2027-01-01' })).body.recording.description).toBe('Kept.');
+    expect((await edit(id, { title: 'Described', recordedAt: '2027-01-01', description: '   ' })).body.recording.description).toBeNull();
+    expect((await edit(id, { title: 'Described', recordedAt: '2027-01-01', description: 'Again.' })).body.recording.description).toBe('Again.');
+    expect((await edit(id, { title: 'Described', recordedAt: '2027-01-01', description: null })).body.recording.description).toBeNull();
+    const tooLong = await edit(id, { title: 'Described', recordedAt: '2027-01-01', description: 'x'.repeat(4_001) });
+    expect(tooLong.status).toBe(400);
+    expect(tooLong.code).toBe('invalid_input');
+  });
+});
+
+describe('deleting a recording', () => {
+  it('removes the row for an admin, answers not_found afterwards, and refuses everybody else', async () => {
+    const { id } = await newRecording();
+
+    const asMember = await call(recordingPath(id), { method: 'DELETE', cookie: memberCookie });
+    expect(asMember.status).toBe(403);
+    expect(asMember.code).toBe('forbidden');
+    const anonymous = await call(recordingPath(id), { method: 'DELETE' });
+    expect(anonymous.status).toBe(401);
+    expect(await findRecordingById(id, handle)).not.toBeNull();
+
+    const deleted = await call<{ deleted: boolean }>(recordingPath(id), { method: 'DELETE', cookie: adminCookie });
+    expect(deleted.status).toBe(200);
+    expect(deleted.body.deleted).toBe(true);
+    expect(await findRecordingById(id, handle)).toBeNull();
+
+    const again = await call(recordingPath(id), { method: 'DELETE', cookie: adminCookie });
+    expect(again.status).toBe(404);
+    expect(again.code).toBe('not_found');
   });
 });
 

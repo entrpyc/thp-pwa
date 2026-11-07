@@ -283,7 +283,16 @@ export interface UpdateRecordingRequest {
   readonly title: string;
   /** `YYYY-MM-DD`. The date recorded, not a timestamp — it is the list's sort key. */
   readonly recordedAt: string;
+  /**
+   * The description, when the console's editor carries it. Absent leaves the column alone; `null`
+   * or blank clears it. The machine's draft still arrives through the review queue — this is the
+   * admin rewriting what is there, in the one editor the recording has.
+   */
+  readonly description?: string | null;
 }
+
+/** The most a description may hold, in characters. A paragraph under the title, not an essay. */
+export const MAX_RECORDING_DESCRIPTION_LENGTH = 4_000;
 
 /** Payload of `PATCH /api/v1/recordings/{id}`, as the console reads the row back. */
 export interface UpdateRecordingPayload {

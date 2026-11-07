@@ -1,8 +1,8 @@
 import type { RecordingPayload, RecordingSummary, UpdateRecordingPayload } from '@thp/shared';
 import { permits } from '@/server/api/access';
 import { routeParam } from '@/server/api/params';
-import { apiRoute } from '@/server/api/route';
-import { editRecording, readRecordingFor, surfaceOf } from '@/server/recordings/service';
+import { ApiSuccess, apiRoute } from '@/server/api/route';
+import { editRecording, readRecordingFor, removeRecording, surfaceOf } from '@/server/recordings/service';
 
 export const runtime = 'nodejs';
 export const dynamic = 'force-dynamic';
@@ -54,4 +54,17 @@ export const PATCH = apiRoute(permits('recording.edit'), async (request, context
   );
   const payload: UpdateRecordingPayload = { recording };
   return payload;
+});
+
+/**
+ * `DELETE /api/v1/recordings/:id` — **delete a teaching outright**, from the console's editor.
+ *
+ * On the recording itself, as the edit is, because it is a write of the row — the one write that
+ * removes it. Unpublish stays a sub-resource for the reason it always was: taking a teaching down
+ * is reversible and this is not, which is also why the console asks twice and the policy action is
+ * its own (`recording.delete`, admin-only, refused to a member before this handler runs).
+ */
+export const DELETE = apiRoute(permits('recording.delete'), async (_request, context) => {
+  await removeRecording(context.actor, await routeParam(context.params, 'id'));
+  return new ApiSuccess({ deleted: true }, 200);
 });

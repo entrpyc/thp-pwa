@@ -175,8 +175,22 @@ function toSubmitted(row: DraftRow): SubmittedReference {
   };
 }
 
-export function ReviewsPanel({ translation }: { translation: string }) {
-  const [reviews, setReviews] = useState<readonly ReviewItemView[] | null>(null);
+export function ReviewsPanel({
+  translation,
+  recordingId,
+  embedded = false,
+}: {
+  translation: string;
+  /** Only this recording's drafts — the console's recording editor shows them beside the teaching. */
+  recordingId?: string;
+  /** Inside another surface: no heading, just the rows and what they say. */
+  embedded?: boolean;
+}) {
+  const [allReviews, setReviews] = useState<readonly ReviewItemView[] | null>(null);
+  const reviews =
+    allReviews === null || recordingId === undefined
+      ? allReviews
+      : allReviews.filter((one) => one.recordingId === recordingId);
   const [listError, setListError] = useState<string | null>(null);
   const [openId, setOpenId] = useState<string | null>(null);
   /** The recording named in the URL, until the first load has had a chance to honour it. */
@@ -209,6 +223,39 @@ export function ReviewsPanel({ translation }: { translation: string }) {
     setWantedRecording(null);
   }, [wantedRecording, reviews]);
 
+  const body =
+    listError !== null ? (
+      <p className={styles.failure} role="alert">
+        {listError}
+      </p>
+    ) : reviews === null ? (
+      <p className={styles.sectionNote}>Loading reviews…</p>
+    ) : reviews.length === 0 ? (
+      <p className={styles.empty}>
+        {embedded
+          ? 'No drafts are waiting for this recording.'
+          : 'Nothing is waiting. Drafts appear here once a recording has been transcribed.'}
+      </p>
+    ) : (
+      <ul className={styles.list} aria-label={embedded ? 'Pending reviews' : undefined}>
+        {reviews.map((item) => (
+          <ReviewRow
+            key={item.id}
+            item={item}
+            translation={translation}
+            open={openId === item.id}
+            onOpen={() => setOpenId(openId === item.id ? null : item.id)}
+            onDone={async () => {
+              setOpenId(null);
+              await load();
+            }}
+          />
+        ))}
+      </ul>
+    );
+
+  if (embedded) return <div className={styles.embedded}>{body}</div>;
+
   return (
     <div className={styles.panel}>
       <section className={styles.section} aria-labelledby="reviews-heading">
@@ -223,33 +270,7 @@ export function ReviewsPanel({ translation }: { translation: string }) {
           </p>
         </div>
 
-        {listError !== null ? (
-          <p className={styles.failure} role="alert">
-            {listError}
-          </p>
-        ) : reviews === null ? (
-          <p className={styles.sectionNote}>Loading reviews…</p>
-        ) : reviews.length === 0 ? (
-          <p className={styles.empty}>
-            Nothing is waiting. Drafts appear here once a recording has been transcribed.
-          </p>
-        ) : (
-          <ul className={styles.list}>
-            {reviews.map((item) => (
-              <ReviewRow
-                key={item.id}
-                item={item}
-                translation={translation}
-                open={openId === item.id}
-                onOpen={() => setOpenId(openId === item.id ? null : item.id)}
-                onDone={async () => {
-                  setOpenId(null);
-                  await load();
-                }}
-              />
-            ))}
-          </ul>
-        )}
+        {body}
       </section>
     </div>
   );

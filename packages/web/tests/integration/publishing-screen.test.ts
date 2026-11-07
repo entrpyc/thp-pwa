@@ -99,6 +99,15 @@ function rowFor(page: Page, title: string): Locator {
   return page.getByRole('listitem').filter({ hasText: title });
 }
 
+/** The editor *Edit* opens over the list, which is where the summary controls live. */
+async function openEditor(page: Page, title: string): Promise<Locator> {
+  await rowFor(page, title).getByRole('button', { name: `Edit ${title}` }).click();
+  await expect
+    .poll(() => page.getByRole('dialog', { name: title }).count(), { timeout: 30_000 })
+    .toBe(1);
+  return page.getByRole('dialog').first();
+}
+
 async function publishedAt(recordingId: string): Promise<Date | null> {
   return (await findRecordingById(recordingId, handle))?.publishedAt ?? null;
 }
@@ -169,12 +178,11 @@ describe('the summary controls', () => {
       await expect.poll(() => publishedAt(recordingId), { timeout: 30_000 }).not.toBeNull();
 
       // A recording whose draft was discarded is still publishable and has no summary — offering a
-      // control that would answer `not_found` would be the screen promising something.
-      await expect
-        .poll(async () => row.getByRole('button', { name: 'Edit summary' }).count(), {
-          timeout: 30_000,
-        })
-        .toBe(0);
+      // field that would answer `not_found` would be the screen promising something. The editor
+      // says where a summary comes from instead.
+      const editor = await openEditor(page, title);
+      expect(await editor.getByRole('textbox', { name: 'Summary', exact: true }).count()).toBe(0);
+      expect(await editor.getByRole('link', { name: 'Review drafts' }).count()).toBe(1);
     } finally {
       await page.context().close();
     }
@@ -192,16 +200,18 @@ describe('the summary controls', () => {
       await row.getByRole('button', { name: 'Publish' }).click();
       await expect.poll(() => publishedAt(recordingId), { timeout: 30_000 }).not.toBeNull();
 
-      // Both gates open, so the controls appear.
+      // Both gates open, so the editor carries the summary as a field.
       await expect
-        .poll(() => row.getByRole('button', { name: 'Edit summary' }).count(), { timeout: 30_000 })
-        .toBe(1);
-
-      await row.getByRole('button', { name: 'Edit summary' }).click();
-      // Exact, because the row's series picker is labelled *Series for <title>* and this run's
+        .poll(async () => ((await row.textContent()) ?? '').includes('Live'), { timeout: 30_000 })
+        .toBe(true);
+      const editor = await openEditor(page, title);
+      // Exact, because the editor's series picker is labelled *Series for <title>* and this run's
       // title happens to contain the word "Summary" — a substring match would find two controls.
-      await row.getByLabel('Summary', { exact: true }).fill('The wording an admin preferred.');
-      await row.getByRole('button', { name: 'Save summary' }).click();
+      const summaryField = editor.getByRole('textbox', { name: 'Summary', exact: true });
+      await expect.poll(() => summaryField.count(), { timeout: 30_000 }).toBe(1);
+      expect(await summaryField.inputValue()).toBe('The first wording.');
+      await summaryField.fill('The wording an admin preferred.');
+      await editor.getByRole('button', { name: 'Save summary' }).click();
 
       await expect
         .poll(async () => (await findSummaryByRecording(recordingId, handle))?.content, {
@@ -211,7 +221,7 @@ describe('the summary controls', () => {
       // Editing is not re-publishing: the summary is still live and so is the teaching.
       expect((await findSummaryByRecording(recordingId, handle))?.publishedAt).not.toBeNull();
 
-      await row.getByRole('button', { name: 'Summary to draft' }).click();
+      await editor.getByRole('button', { name: 'Summary to draft' }).click();
 
       await expect
         .poll(async () => (await findSummaryByRecording(recordingId, handle))?.publishedAt, {
@@ -247,15 +257,15 @@ describe('at every width', () => {
         );
         expect(overflow, `${viewport.label} overflows horizontally`).toBe(false);
 
-        const publish = row.getByRole('button', { name: 'Publish' });
+        const publish = row.getByRole('button', { name: 'Publish', exact: true });
         await publish.scrollIntoViewIfNeeded();
         const box = await publish.boundingBox();
         expect(box, `${viewport.label} has no publish button`).not.toBeNull();
         expect(box!.x).toBeGreaterThanOrEqual(0);
         expect(box!.x + box!.width).toBeLessThanOrEqual(viewport.width + 1);
 
-        // And the way into the queue, which is this row's other job.
-        expect(await row.getByRole('link', { name: 'Review drafts' }).count()).toBe(1);
+        // And the way into everything else, which is this row's other job.
+        expect(await row.getByRole('button', { name: `Edit ${title}` }).count()).toBe(1);
       } finally {
         await page.context().close();
       }

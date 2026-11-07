@@ -429,13 +429,22 @@ describe('the second way in', () => {
         })
         .toBe(1);
 
-      // docs/project/prd.md 3.6.4's "from the recording page", served by a control on the row —
+      // docs/project/prd.md 3.6.4's "from the recording page", served by the editor the row opens —
       // which is why no per-recording admin page had to exist for it.
       await page
         .getByRole('listitem')
         .filter({ hasText: title })
-        .getByRole('link', { name: 'Review drafts' })
+        .getByRole('button', { name: `Edit ${title}` })
         .click();
+      const editor = page.getByRole('dialog', { name: title });
+      await expect.poll(() => editor.count(), { timeout: 30_000 }).toBe(1);
+      // The draft is already here, in the editor's own reviews block, before the link is pressed.
+      await expect
+        .poll(() => editor.getByRole('list', { name: 'Pending reviews' }).getByRole('listitem').count(), {
+          timeout: 30_000,
+        })
+        .toBe(1);
+      await editor.getByRole('link', { name: 'Review drafts' }).click();
 
       await page.waitForURL(`${PANEL_URL}?${REVIEW_RECORDING_PARAM}=${recordingId}`, {
         timeout: 30_000,
