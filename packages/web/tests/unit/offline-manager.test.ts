@@ -281,6 +281,102 @@ describe('the flush', () => {
   });
 });
 
+describe('what analytics is told', () => {
+  it('counts a finished download and a removal, with the series', async () => {
+    const track = vi.fn();
+    const manager = createOfflineManager({
+      store: createMemoryDownloadStore(),
+      fetchJson: fakeApi({ [memberRecordingPath('r1')]: recordingPayload('r1', 's1') }),
+      outbox: fakeOutbox([]),
+      rememberActiveUser: async () => undefined,
+      warm: vi.fn(),
+      isOnline: () => true,
+      track,
+    });
+    await manager.activate('u1');
+    manager.download('r1', 'Teaching r1');
+    await settled();
+    expect(track).toHaveBeenCalledWith('download_acted', { action: 'completed', recording_id: 'r1', series_id: 's1' });
+    track.mockClear();
+    await manager.remove('r1');
+    expect(track).toHaveBeenCalledWith('download_acted', { action: 'removed', recording_id: 'r1', series_id: 's1' });
+    // Removing what is not held counts nothing.
+    track.mockClear();
+    await manager.remove('r1');
+    expect(track).not.toHaveBeenCalledWith('download_acted', expect.anything());
+  });
+
+  it('counts nothing for a download that failed', async () => {
+    const track = vi.fn();
+    const manager = createOfflineManager({
+      store: createMemoryDownloadStore(),
+      fetchJson: fakeApi({ [recordingDownloadPath('r1')]: new Error('No grant for you.') }),
+      outbox: fakeOutbox([]),
+      rememberActiveUser: async () => undefined,
+      warm: vi.fn(),
+      isOnline: () => true,
+      track,
+    });
+    await manager.activate('u1');
+    manager.download('r1', 'Teaching r1');
+    await settled();
+    expect(track).not.toHaveBeenCalled();
+  });
+
+  it('counts a sync round the server answered, by what was sent and settled', async () => {
+    const track = vi.fn();
+    const records: OutboxRecord[] = [];
+    const manager = createOfflineManager({
+      store: createMemoryDownloadStore(),
+      fetchJson: fakeApi({
+        [SYNC_PATH]: () => {
+          const payload: SyncPayload = {
+            results: [
+              { clientId: 'p-0', status: 'applied', code: null, message: null, note: null },
+              { clientId: 'p-1', status: 'refused', code: 'invalid_input', message: 'No.', note: null },
+            ],
+            revoked: [],
+            syncedAt: '2026-11-07T10:05:00.000Z',
+          };
+          return payload;
+        },
+      }),
+      outbox: fakeOutbox(records),
+      rememberActiveUser: async () => undefined,
+      warm: vi.fn(),
+      isOnline: () => true,
+      track,
+    });
+    await manager.activate('u1');
+    manager.download('r1', 'One');
+    await settled();
+    await manager.keepProgress('r1', { positionMs: 1_000 });
+    await manager.keepProgress('r1', { positionMs: 2_000 });
+    track.mockClear();
+    await manager.flush();
+    expect(track).toHaveBeenCalledWith('sync_completed', { entries: 2, settled: 2, downloads: 1 });
+  });
+
+  it('counts nothing for a sync the server did not answer', async () => {
+    const track = vi.fn();
+    const records: OutboxRecord[] = [
+      { clientId: 'p1', userId: 'u1', kind: 'progress', recordingId: 'r1', at: '2026-11-07T10:00:00.000Z', body: { positionMs: 9_000 } },
+    ];
+    const manager = createOfflineManager({
+      store: createMemoryDownloadStore(),
+      fetchJson: fakeApi({ [SYNC_PATH]: new TypeError('Failed to fetch') }),
+      outbox: fakeOutbox(records),
+      rememberActiveUser: async () => undefined,
+      warm: vi.fn(),
+      isOnline: () => true,
+      track,
+    });
+    await manager.activate('u1');
+    await manager.flush();
+    expect(track).not.toHaveBeenCalled();
+  });
+});
+
 describe('leaving the device', () => {
   it('forgets who was signed in and drops every note draft, but keeps the downloads', async () => {
     const store = createMemoryDownloadStore();

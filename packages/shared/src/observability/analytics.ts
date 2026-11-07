@@ -99,7 +99,10 @@ export const FLOW_TRACKER_ACTIONS = [
   'play_clicked',
   'related_chapter_opened',
   'related_play_clicked',
+  'session_deleted',
 ] as const;
+/** A teaching kept on the device: the download finished, or the member removed it. */
+export const DOWNLOAD_ACTIONS = ['completed', 'removed'] as const;
 export const TRANSCRIPT_ACTIONS = ['follow_on', 'follow_off', 'jump_to_current', 'downloaded', 'row_clicked'] as const;
 export const MIND_MAP_ACTIONS = ['full_screen_on', 'full_screen_off', 'collapsed', 'expanded', 'seek', 'play'] as const;
 /** The `···` menu on the transport bar and the tools inside it. */
@@ -254,6 +257,39 @@ export const ANALYTICS_EVENTS = {
   notification_opened: {
     kind: NOTIFICATION_KINDS,
     channel: NOTIFICATION_CHANNELS,
+  },
+  /**
+   * A note folder made, from the picker on a note or the Manage folders dialog. Sent once the
+   * API has it, so a refused name counts nothing. `folder_count` is how many the member has now.
+   */
+  note_folder_created: {
+    folder_count: 'number',
+  },
+  /**
+   * The picker on a note saved with a change: `added` is how many folders the note went into,
+   * `removed` how many it left, `folder_count` how many it is in now. A save that changed nothing
+   * sends nothing. The sum of `added` is "notes filed into folders".
+   */
+  note_filed: {
+    added: 'number',
+    removed: 'number',
+    folder_count: 'number',
+  },
+  /** A download that finished, or one the member removed from the device. Failures are not counted. */
+  download_acted: {
+    action: DOWNLOAD_ACTIONS,
+    recording_id: 'id',
+    series_id: 'id?',
+  },
+  /**
+   * One sync round the server answered: `entries` is how many outbox entries (notes, positions)
+   * were sent, `settled` how many the server took, `downloads` how many downloads were checked
+   * for revocation. A round with nothing to send and nothing downloaded never runs.
+   */
+  sync_completed: {
+    entries: 'number',
+    settled: 'number',
+    downloads: 'number',
   },
   $pageview: {
     route: ANALYTICS_ROUTES,

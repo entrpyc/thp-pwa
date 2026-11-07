@@ -10,8 +10,10 @@ import {
   type NoteFoldersPayload,
   type RenameNoteFolderRequest,
   type SetNoteFoldersRequest,
+  foldersOfNote,
 } from '@thp/shared';
 import { ApiClientError, apiFetch } from '@/client/api-client';
+import { track } from '@/client/observability/analytics';
 
 /**
  * **The member's note folders, held once per page load** — what every folder control, every
@@ -111,6 +113,8 @@ async function write(path: string, method: 'POST' | 'PATCH' | 'PUT' | 'DELETE', 
 async function create(name: string): Promise<NoteFolderView | null> {
   const request: CreateNoteFolderRequest = { name };
   const folders = await write(NOTE_FOLDERS_PATH, 'POST', request);
+  // Counted once the API holds it, so a refused name (a duplicate, the cap) counts nothing.
+  track('note_folder_created', { folder_count: folders.length });
   const wanted = name.trim().replace(/\s+/g, ' ').toLowerCase();
   return folders.find((one) => one.name.toLowerCase() === wanted) ?? null;
 }
@@ -126,7 +130,15 @@ async function remove(folderId: string): Promise<void> {
 
 async function setFolders(noteId: string, folderIds: readonly string[]): Promise<void> {
   const request: SetNoteFoldersRequest = { folderIds };
+  const before = new Set(foldersOfNote(snapshot.folders ?? [], noteId).map((one) => one.id));
+  const after = new Set(folderIds);
   await write(noteFoldersPath(noteId), 'PUT', request);
+  // What changed, as the member saw it: the folders ticked that were not, and the reverse. A save
+  // with nothing changed is a dismissal, not a filing, and sends nothing.
+  const added = [...after].filter((id) => !before.has(id)).length;
+  const removed = [...before].filter((id) => !after.has(id)).length;
+  if (added === 0 && removed === 0) return;
+  track('note_filed', { added, removed, folder_count: after.size });
 }
 
 export interface NoteFoldersApi extends NoteFoldersSnapshot {
@@ -137,7 +149,10 @@ export interface NoteFoldersApi extends NoteFoldersSnapshot {
   setFolders(noteId: string, folderIds: readonly string[]): Promise<void>;
 }
 
+/** The four writes, callable without React: what the hook hands out, and what a test drives. */
+export const noteFolderWrites = { create, rename, remove, setFolders } as const;
+
 export function useNoteFolders(): NoteFoldersApi {
   const state = useSyncExternalStore(subscribe, read, readOnServer);
-  return { ...state, create, rename, remove, setFolders };
+  return { ...state, ...noteFolderWrites };
 }

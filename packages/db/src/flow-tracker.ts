@@ -764,6 +764,29 @@ export async function abandonFlowSession(
   return rows.length > 0;
 }
 
+/**
+ * **Delete a past session of this member's** ([3.14.10](docs/project/prd.md)): complete or
+ * abandoned, never the one in progress - that is abandoned first. Its items go with it (the
+ * foreign key cascades). Answers whether a row went.
+ */
+export async function deleteFlowSessionForMember(
+  sessionId: string,
+  userId: string,
+  executor: Executor = getDatabase(),
+): Promise<boolean> {
+  const rows = await queryable(executor)
+    .delete(flowSession)
+    .where(
+      and(
+        eq(flowSession.id, sessionId),
+        eq(flowSession.userId, userId),
+        inArray(flowSession.status, ['complete', 'abandoned']),
+      ),
+    )
+    .returning({ id: flowSession.id });
+  return rows.length > 0;
+}
+
 /** Tick a reading-list row off, or un-tick it ([3.14.9](docs/project/prd.md)). */
 export async function setFlowSessionItemDone(
   sessionId: string,

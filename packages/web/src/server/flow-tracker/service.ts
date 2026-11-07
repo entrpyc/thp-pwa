@@ -5,6 +5,7 @@ import {
   countQuestionsByRecording,
   countQuestionsByTag,
   countUnansweredFlowItems,
+  deleteFlowSessionForMember,
   findActiveFlowSessionForMember,
   findFlowSessionForMember,
   insertFlowSession,
@@ -304,6 +305,27 @@ export async function abandonFlowSessionFor(actor: Actor, sessionId: string): Pr
     abandoned,
   });
   return { session: await readSession(actor, id) };
+}
+
+/**
+ * **Delete a past session** ([3.14.10](docs/project/prd.md)). The one in progress is refused:
+ * *Start over* abandons it, which is the gesture that loses answers and asks first. The answer is
+ * the member's sessions as they now stand, which is what the page shows next.
+ */
+export async function deleteFlowSessionFor(actor: Actor, sessionId: string): Promise<FlowSessionsPayload> {
+  const id = parseId(sessionId, 'That is not a session id.');
+  const session = await requireSession(actor, id);
+  if (session.status === 'in_progress') {
+    throw ApiError.invalidInput('This session is still in progress. Abandon it first.');
+  }
+  const deleted = await deleteFlowSessionForMember(id, actor.id);
+  logger.info('flow.session.delete', {
+    actorId: actor.id,
+    action: 'flow.delete',
+    target: `flow_session:${id}`,
+    deleted,
+  });
+  return listFlowSessionsFor(actor);
 }
 
 /** Tick a reading-list row off, or un-tick it ([3.14.9](docs/project/prd.md)). */
