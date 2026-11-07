@@ -1,3 +1,4 @@
+import { readBibleTranslation } from '@thp/bible';
 import { redirect } from 'next/navigation';
 import { currentActor } from '@/server/auth/current-actor';
 import { can } from '@/server/auth/policy';
@@ -27,7 +28,9 @@ export default async function AdminRecordingsPage() {
 
   return (
     <ConsoleShell actor={actor} current="recordings">
-      <RecordingsPanel />
+      {/* The translation names the Bible the review drafts' passages are quoted from; it reaches
+          the editor's embedded review rows the way it reaches the Pending Reviews page. */}
+      <RecordingsPanel translation={readBibleTranslation()} />
     </ConsoleShell>
   );
 }

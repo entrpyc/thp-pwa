@@ -216,8 +216,20 @@ function describeTimeLeft(untilIso: string, now: number = Date.now()): string {
   return hours > 0 ? `${hours} h ${minutes} m` : `${minutes} m`;
 }
 
-export function PipelinePanel() {
-  const [recordings, setRecordings] = useState<readonly RecordingPipeline[] | null>(null);
+export function PipelinePanel({
+  recordingId,
+  embedded = false,
+}: {
+  /** Only this recording's steps — the console's recording editor shows them beside the teaching. */
+  recordingId?: string;
+  /** Inside another surface: no heading, no spend card, just the rows and what they say. */
+  embedded?: boolean;
+} = {}) {
+  const [allRecordings, setRecordings] = useState<readonly RecordingPipeline[] | null>(null);
+  const recordings =
+    allRecordings === null || recordingId === undefined
+      ? allRecordings
+      : allRecordings.filter((entry) => entry.recordingId === recordingId);
   const [spend, setSpend] = useState<SpendView | null>(null);
   const [listError, setListError] = useState<string | null>(null);
   const [busy, setBusy] = useState<string | null>(null);
@@ -306,6 +318,57 @@ export function PipelinePanel() {
     setBusy(null);
   }
 
+  const body =
+    listError !== null ? (
+      <p className={styles.failure} role="alert">
+        {listError}
+      </p>
+    ) : recordings === null ? (
+      <p className={styles.sectionNote}>Loading pipeline…</p>
+    ) : recordings.length === 0 ? (
+      <p className={styles.empty}>
+        {embedded
+          ? 'Nothing has run for this recording yet.'
+          : 'No recordings yet. Upload one from the Recordings panel and its pipeline appears here.'}
+      </p>
+    ) : (
+      <ul className={styles.list} aria-label={embedded ? 'Pipeline steps' : undefined}>
+        {recordings.map((entry) => (
+          <li key={entry.recordingId} className={styles.listRow}>
+            {/* Inside the editor the teaching is already named above; naming it again is noise. */}
+            {embedded ? null : (
+              <div className={styles.rowIdentity}>
+                <p className={styles.rowName}>{entry.title}</p>
+                <p className={styles.rowMeta}>
+                  Recorded <time dateTime={entry.recordedAt}>{formatDay(entry.recordedAt)}</time>
+                </p>
+              </div>
+            )}
+
+            <div className={styles.steps}>
+              {entry.steps.map((step) => (
+                <StepCell
+                  key={step.step}
+                  step={step}
+                  title={entry.title}
+                  editedChapters={entry.editedChapters}
+                  busy={busy === `${entry.recordingId}:${step.step}`}
+                  disabled={busy !== null}
+                  confirming={confirming === `${entry.recordingId}:${step.step}`}
+                  note={notes[`${entry.recordingId}:${step.step}`] ?? ''}
+                  onAsk={() => setConfirming(`${entry.recordingId}:${step.step}`)}
+                  onCancel={() => setConfirming(null)}
+                  onRerun={() => void rerun(entry.recordingId, step.step)}
+                />
+              ))}
+            </div>
+          </li>
+        ))}
+      </ul>
+    );
+
+  if (embedded) return <div className={styles.embedded}>{body}</div>;
+
   return (
     <div className={styles.panel}>
       <section className={styles.section} aria-labelledby="pipeline-heading">
@@ -323,48 +386,7 @@ export function PipelinePanel() {
 
         {spend === null ? null : <SpendCard spend={spend} onRaised={setSpend} />}
 
-        {listError !== null ? (
-          <p className={styles.failure} role="alert">
-            {listError}
-          </p>
-        ) : recordings === null ? (
-          <p className={styles.sectionNote}>Loading pipeline…</p>
-        ) : recordings.length === 0 ? (
-          <p className={styles.empty}>
-            No recordings yet. Upload one from the Recordings panel and its pipeline appears here.
-          </p>
-        ) : (
-          <ul className={styles.list}>
-            {recordings.map((entry) => (
-              <li key={entry.recordingId} className={styles.listRow}>
-                <div className={styles.rowIdentity}>
-                  <p className={styles.rowName}>{entry.title}</p>
-                  <p className={styles.rowMeta}>
-                    Recorded <time dateTime={entry.recordedAt}>{formatDay(entry.recordedAt)}</time>
-                  </p>
-                </div>
-
-                <div className={styles.steps}>
-                  {entry.steps.map((step) => (
-                    <StepCell
-                      key={step.step}
-                      step={step}
-                      title={entry.title}
-                      editedChapters={entry.editedChapters}
-                      busy={busy === `${entry.recordingId}:${step.step}`}
-                      disabled={busy !== null}
-                      confirming={confirming === `${entry.recordingId}:${step.step}`}
-                      note={notes[`${entry.recordingId}:${step.step}`] ?? ''}
-                      onAsk={() => setConfirming(`${entry.recordingId}:${step.step}`)}
-                      onCancel={() => setConfirming(null)}
-                      onRerun={() => void rerun(entry.recordingId, step.step)}
-                    />
-                  ))}
-                </div>
-              </li>
-            ))}
-          </ul>
-        )}
+        {body}
       </section>
     </div>
   );

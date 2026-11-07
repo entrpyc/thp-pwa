@@ -205,15 +205,44 @@ export async function updateRecordingDetails(
 ): Promise<RecordingRow | null> {
   const rows = await queryable(executor)
     .update(recording)
-    .set({ title: input.title, recordedAt: input.recordedAt })
+    .set({
+      title: input.title,
+      recordedAt: input.recordedAt,
+      // Only when the editor carried it: a body without a description leaves the column alone.
+      ...(input.description === undefined ? {} : { description: input.description }),
+    })
     .where(eq(recording.id, id))
     .returning();
   return (rows[0] as RecordingRow | undefined) ?? null;
 }
 
-/** What an admin may correct after the upload: the two fields they typed at it. */
+/**
+ * What an admin may correct after the upload: the two fields they typed at it, and — from the
+ * console's editor — the description.
+ */
 export interface RecordingDetails {
   readonly title: string;
   /** `YYYY-MM-DD`. */
   readonly recordedAt: string;
+  /** Absent: untouched. `null`: cleared. */
+  readonly description?: string | null;
+}
+
+/**
+ * **Delete a recording** — the row, and by the schema's `onDelete: 'cascade'` on every key to it,
+ * everything that was ever made from it or written about it: jobs, transcript segments, chapters
+ * and their questions, the summary, scripture, the mind map, cross-references, vectors, members'
+ * notes and positions. Nothing in this function names those tables, which is the convention the
+ * account erasure set: a later table joins it by declaring its clause.
+ *
+ * The row comes back so the caller can log the media keys. The objects behind them are not
+ * deleted here — the store holds no delete for recordings, and the keys in the log are how an
+ * operator finishes by hand.
+ */
+export async function deleteRecording(
+  id: string,
+  executor: Executor = getDatabase(),
+): Promise<RecordingRow | null> {
+  const rows = await queryable(executor).delete(recording).where(eq(recording.id, id)).returning();
+  return (rows[0] as RecordingRow | undefined) ?? null;
 }

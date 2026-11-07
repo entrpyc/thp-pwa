@@ -195,6 +195,7 @@ describe('the admin account actions are the API’s refusal, not the console’s
     'account.list',
     'account.deactivate',
     'account.reactivate',
+    'account.delete',
     'role.assign',
   ] as const)('permits %s for an admin and refuses it for a member', (action) => {
     expect(can(actorWith(ROLE.admin), action)).toBe(true);
@@ -444,8 +445,14 @@ describe('correcting a recording’s title and date is its own action', () => {
     for (const role of ROLES) {
       expect(can(actorWith(role), 'recording.rename'), role).toBe(false);
       expect(can(actorWith(role), 'recording.update'), role).toBe(false);
-      expect(can(actorWith(role), 'recording.delete'), role).toBe(false);
+      expect(can(actorWith(role), 'recording.remove'), role).toBe(false);
     }
+  });
+
+  it('permits recording.delete for an admin and refuses it for a member and a stranger', () => {
+    expect(can(actorWith(ROLE.admin), 'recording.delete')).toBe(true);
+    expect(can(actorWith(ROLE.member), 'recording.delete')).toBe(false);
+    expect(can(null, 'recording.delete')).toBe(false);
   });
 });
 

@@ -317,3 +317,11 @@
   font-size: var(--fs-meta);
   color: var(--color-text-dim);
 }
+
+/* Inside the recording editor: the rows alone, with no section of their own around them. */
+.embedded {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-3);
+  min-width: 0;
+}

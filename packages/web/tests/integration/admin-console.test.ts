@@ -330,6 +330,53 @@ describe('the console shell and its gate', () => {
     }
   }, 120_000);
 
+  it('is a side menu on a desktop and a top bar with a burger on a phone', async () => {
+    const desktop = await openConsole(admin);
+    try {
+      // Always open: the panel list is on screen without a press, and there is no burger to press.
+      expect(await consoleNav(desktop).count()).toBe(1);
+      expect(await desktop.getByRole('button', { name: 'Menu' }).isVisible()).toBe(false);
+      expect(await desktop.getByRole('button', { name: 'Sign out' }).isVisible()).toBe(true);
+    } finally {
+      await desktop.context().close();
+    }
+
+    const phone = await openConsole(admin, { width: 390, height: 844 });
+    try {
+      // Folded: the title is there, the burger is there, and the panels are not until it is pressed.
+      expect(await phone.getByRole('heading', { level: 1, name: 'Admin console' }).isVisible()).toBe(true);
+      const burger = phone.getByRole('button', { name: 'Menu' });
+      expect(await burger.isVisible()).toBe(true);
+      expect(await burger.getAttribute('aria-expanded')).toBe('false');
+      expect(await consoleNav(phone).count()).toBe(0);
+      expect(await phone.getByRole('button', { name: 'Sign out' }).count()).toBe(0);
+
+      await burger.click();
+      await expect.poll(() => consoleNav(phone).count(), { timeout: 30_000 }).toBe(1);
+      expect(await burger.getAttribute('aria-expanded')).toBe('true');
+      expect(await phone.getByRole('button', { name: 'Sign out' }).isVisible()).toBe(true);
+      expect(await phone.getByRole('link', { name: 'Dashboard' }).isVisible()).toBe(true);
+
+      // Choosing a panel goes there, and the next page opens folded again.
+      await consoleNav(phone).getByRole('link', { name: 'Recordings' }).click();
+      await phone.waitForURL(`${baseUrl}/admin/recordings`, { timeout: 30_000 });
+      await expect
+        .poll(() => phone.getByRole('button', { name: 'Menu' }).getAttribute('aria-expanded'), {
+          timeout: 30_000,
+        })
+        .toBe('false');
+      expect(await consoleNav(phone).count()).toBe(0);
+
+      // Escape closes it too.
+      await phone.getByRole('button', { name: 'Menu' }).click();
+      await expect.poll(() => consoleNav(phone).count(), { timeout: 30_000 }).toBe(1);
+      await phone.keyboard.press('Escape');
+      await expect.poll(() => consoleNav(phone).count(), { timeout: 30_000 }).toBe(0);
+    } finally {
+      await phone.context().close();
+    }
+  }, 180_000);
+
   it.each(VIEWPORTS)('fits a $label viewport with no horizontal scroll', async (viewport) => {
     const page = await openConsole(admin, { width: viewport.width, height: viewport.height });
     try {
@@ -661,6 +708,109 @@ describe('deactivating and reactivating', () => {
 
 // =================================================================================================
 
+describe('deleting an account', () => {
+  it('takes a confirming press that names the account, then the row and the account are gone', async () => {
+    const target = await createAccount(databaseUrl, ROLE.member, 'console-deleted');
+    const page = await openConsole(admin);
+    try {
+      let deleteCalls = 0;
+      page.on('request', (request) => {
+        if (request.method() === 'DELETE' && request.url().endsWith(`/${target.id}`)) {
+          deleteCalls += 1;
+        }
+      });
+
+      const row = rowFor(page, target.email);
+      await expect.poll(() => row.count(), { timeout: 30_000 }).toBe(1);
+      await row.getByRole('button', { name: 'Delete', exact: true }).click();
+
+      await expect
+        .poll(() => row.getByText(`Permanently delete ${target.displayName}`).count(), {
+          timeout: 30_000,
+        })
+        .toBe(1);
+      expect(deleteCalls).toBe(0);
+      expect(await exists(target.id)).toBe(true);
+
+      // Cancel changes nothing either.
+      await row.getByRole('button', { name: 'Cancel' }).click();
+      expect(await row.getByRole('button', { name: 'Yes, delete permanently' }).count()).toBe(0);
+
+      await row.getByRole('button', { name: 'Delete', exact: true }).click();
+      await row.getByRole('button', { name: 'Yes, delete permanently' }).click();
+
+      await expect.poll(() => rowFor(page, target.email).count(), { timeout: 30_000 }).toBe(0);
+      expect(deleteCalls).toBe(1);
+      expect(await exists(target.id)).toBe(false);
+      // The list says what happened, since there is no row left to say it under.
+      const said = await waitForNote(membersRegion(page), 'status');
+      expect(said).toContain(target.displayName);
+      expect(said).toContain('deleted');
+      // And the address is free again: the listing does not carry it anywhere.
+      expect((await listAccounts()).accounts.some((entry) => entry.email === target.email)).toBe(false);
+    } finally {
+      await page.context().close();
+    }
+  }, 180_000);
+
+  it('offers no delete on your own row, and the API refuses it there anyway', async () => {
+    const page = await openConsole(admin);
+    try {
+      const row = rowFor(page, admin.email);
+      await expect.poll(() => row.count(), { timeout: 30_000 }).toBe(1);
+      expect(await row.getByRole('button', { name: 'Delete', exact: true }).count()).toBe(0);
+      // The other row still has one, so this is the row and not the control that is missing.
+      expect(
+        await rowFor(page, member.email).getByRole('button', { name: 'Delete', exact: true }).count(),
+      ).toBe(1);
+    } finally {
+      await page.context().close();
+    }
+
+    const self = await call(`${USERS_URL}/${admin.id}`, { method: 'DELETE', cookie: adminCookie });
+    expect(self.status).toBe(400);
+    expect(self.code).toBe('invalid_input');
+    expect(await exists(admin.id)).toBe(true);
+  }, 180_000);
+
+  it('is refused to a member by the API, not by the screen', async () => {
+    const target = await createAccount(databaseUrl, ROLE.member, 'member-cannot-delete');
+    const refused = await call(`${USERS_URL}/${target.id}`, { method: 'DELETE', cookie: memberCookie });
+    expect(refused.status).toBe(403);
+    expect(refused.code).toBe('forbidden');
+    expect(await exists(target.id)).toBe(true);
+
+    const anonymous = await call(`${USERS_URL}/${target.id}`, { method: 'DELETE' });
+    expect(anonymous.status).toBe(401);
+    expect(await exists(target.id)).toBe(true);
+  }, 60_000);
+
+  it('answers not_found for an account that is already gone, and the row settles', async () => {
+    const target = await createAccount(databaseUrl, ROLE.member, 'console-gone');
+    const page = await openConsole(admin);
+    try {
+      const row = rowFor(page, target.email);
+      await expect.poll(() => row.count(), { timeout: 30_000 }).toBe(1);
+
+      // Gone underneath the open page.
+      expect((await call(`${USERS_URL}/${target.id}`, { method: 'DELETE', cookie: adminCookie })).status).toBe(200);
+      const again = await call(`${USERS_URL}/${target.id}`, { method: 'DELETE', cookie: adminCookie });
+      expect(again.status).toBe(404);
+      expect(again.code).toBe('not_found');
+
+      await row.getByRole('button', { name: 'Delete', exact: true }).click();
+      await row.getByRole('button', { name: 'Yes, delete permanently' }).click();
+      // The reload finds no row, so the refusal is printed on the list instead of under a row.
+      await expect.poll(() => rowFor(page, target.email).count(), { timeout: 30_000 }).toBe(0);
+      expect(await waitForNote(membersRegion(page), 'alert')).toBe(again.message);
+    } finally {
+      await page.context().close();
+    }
+  }, 180_000);
+});
+
+// =================================================================================================
+
 describe('invitations', () => {
   it('issues one from the console, and it appears in the list and over the API', async () => {
     const email = freshEmail('console-invited');
@@ -915,6 +1065,12 @@ async function signInFor(account: TestAccount): Promise<{ cookie: string }> {
   return { cookie: result.cookie };
 }
 
+/** Whether the row is still there at all — a deletion removes it, where a deactivation marks it. */
+async function exists(id: string): Promise<boolean> {
+  const rows = await sql<{ id: string }[]>`select id from "user" where id = ${id}`;
+  return rows.length === 1;
+}
+
 async function isActive(id: string): Promise<boolean> {
   const rows = await sql<{ deactivated_at: Date | null }[]>`
     select deactivated_at from "user" where id = ${id}
@@ -944,4 +1100,9 @@ async function withOnlyTheseAdmins<T>(keep: readonly string[], body: () => Promi
       await sql`update "user" set deactivated_at = null where id = ${id}`;
     }
   }
+}
+
+/** The panel list, which Playwright counts only when it is on screen — folded away is zero. */
+function consoleNav(page: Page): Locator {
+  return page.getByRole('navigation', { name: 'Console panels' });
 }

@@ -38,23 +38,48 @@
   padding: var(--space-6) var(--space-4) var(--space-8);
 }
 
-.shell {
-  width: 100%;
-  max-width: 64rem;
-  margin: 0 auto;
-  display: flex;
-  flex-direction: column;
-  gap: var(--space-6);
-}
-
 /* ---------------------------------------------------------------------------------- the shell */
 
-.header {
+/*
+ * A side menu and a panel. Two columns from `64rem` up — the menu is a fixed `15rem` so the panel
+ * takes every remaining pixel — and one column below it, where the menu folds into a top bar
+ * (`.brand`) with a burger and the rest of it (`.drawer`) opens under the bar on demand. One
+ * block of markup serves both; nothing is rendered twice, so there is one `h1`, one `nav` and one
+ * *Sign out* at every width.
+ */
+.shell {
+  width: 100%;
+  max-width: 88rem;
+  margin: 0 auto;
+  display: grid;
+  grid-template-columns: 15rem minmax(0, 1fr);
+  gap: var(--space-6);
+  align-items: start;
+}
+
+.content {
+  min-width: 0;
+}
+
+.sidebar {
+  position: sticky;
+  top: var(--space-6);
   display: flex;
-  flex-wrap: wrap;
-  align-items: flex-start;
+  flex-direction: column;
+  gap: var(--space-5);
+  min-width: 0;
+}
+
+.brand {
+  display: flex;
+  align-items: center;
   justify-content: space-between;
-  gap: var(--space-4);
+  gap: var(--space-3);
+  min-width: 0;
+}
+
+.brandText {
+  min-width: 0;
 }
 
 .eyebrow {
@@ -67,18 +92,90 @@
 
 .title {
   margin: 0;
-  font-size: var(--fs-title);
+  font-size: var(--fs-card-title);
   font-weight: 700;
   line-height: 1.2;
   color: var(--color-text);
 }
 
+/* The burger. On a desktop the menu is always open, so there is nothing for it to do. */
+.menuButton {
+  display: none;
+  align-items: center;
+  justify-content: center;
+  flex: 0 0 auto;
+  min-width: calc(var(--space-8) + var(--space-3));
+  min-height: calc(var(--space-8) + var(--space-3));
+  background: var(--color-surface-raised);
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-md);
+  color: var(--color-primary-icon);
+  cursor: pointer;
+}
+
+.menuButton:hover {
+  border-color: var(--color-border-strong);
+}
+
+.drawer {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-5);
+  min-width: 0;
+}
+
+.panels {
+  min-width: 0;
+}
+
+.panelList {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-1);
+}
+
+/*
+ * A menu entry: the guide's tab recipe laid out as a row rather than a pill. Transparent until
+ * current, and current is `--color-primary-soft` behind a `--color-primary-strong` edge on the
+ * left — the same two tokens the pill tab used, read down a column instead of along a strip.
+ */
+.panelLink {
+  display: flex;
+  align-items: center;
+  min-height: calc(var(--space-8) + var(--space-3));
+  padding: var(--space-2) var(--space-4);
+  border: 1px solid transparent;
+  border-left: 3px solid transparent;
+  border-radius: var(--radius-md);
+  color: var(--color-text-muted);
+  font-size: var(--fs-body);
+  text-decoration: none;
+}
+
+.panelLink:hover {
+  background: var(--color-surface);
+  color: var(--color-text);
+}
+
+.panelLink[aria-current='page'] {
+  border-left-color: var(--color-primary-strong);
+  background: var(--color-primary-soft);
+  color: var(--color-text);
+  font-weight: 600;
+}
+
+/* Who is signed in, and the ways out, at the foot of the menu, above a hairline. */
 .identity {
   display: flex;
   flex-direction: column;
   align-items: flex-start;
   gap: var(--space-1);
   min-width: 0;
+  padding-top: var(--space-4);
+  border-top: 1px solid var(--color-border);
 }
 
 .identityName {
@@ -97,9 +194,9 @@
 }
 
 /*
- * The header's two ways out of the console, side by side: back to the member dashboard, and out of
- * the session. A row rather than another step of the identity column, because they are one pair of
- * choices and stacking them would push the panels down a control's height to say nothing.
+ * The two ways out of the console, side by side: back to the member dashboard, and out of the
+ * session. A row rather than another step of the identity column, because they are one pair of
+ * choices.
  */
 .identityLinks {
   display: flex;
@@ -128,37 +225,45 @@
   color: var(--color-text);
 }
 
-.panels {
-  min-width: 0;
-}
+/*
+ * Below `64rem`: one column. The brand line is the top bar, sticky so the burger is reachable from
+ * anywhere down a long panel, on the page colour so the panel scrolls under it. The drawer is
+ * closed until the burger opens it, and then it is the menu, in a surface under the bar.
+ */
+@media (max-width: 64rem) {
+  .shell {
+    grid-template-columns: minmax(0, 1fr);
+    gap: var(--space-4);
+  }
 
-.panelList {
-  list-style: none;
-  margin: 0;
-  padding: 0;
-  display: flex;
-  flex-wrap: wrap;
-  gap: var(--space-2);
-}
+  .sidebar {
+    position: sticky;
+    top: 0;
+    z-index: 2;
+    gap: 0;
+    margin: calc(-1 * var(--space-5)) calc(-1 * var(--space-4)) 0;
+    padding: var(--space-3) var(--space-4);
+    background: var(--color-bg);
+    border-bottom: 1px solid var(--color-border);
+  }
 
-/* The guide's pill tab. One entry today; a later panel is one more `li`. */
-.panelLink {
-  display: inline-flex;
-  align-items: center;
-  min-height: calc(var(--space-8) + var(--space-3));
-  background: transparent;
-  border: 1px solid var(--color-border);
-  border-radius: var(--radius-pill);
-  padding: var(--space-2) var(--space-5);
-  color: var(--color-text-muted);
-  font-size: var(--fs-body);
-  text-decoration: none;
-}
+  .menuButton {
+    display: inline-flex;
+  }
 
-.panelLink[aria-current='page'] {
-  border-color: var(--color-primary-strong);
-  background: var(--color-primary-soft);
-  color: var(--color-text);
+  .drawer {
+    display: none;
+    margin-top: var(--space-3);
+    padding: var(--space-3);
+    background: var(--color-surface);
+    border: 1px solid var(--color-border);
+    border-radius: var(--radius-lg);
+    gap: var(--space-4);
+  }
+
+  .sidebar[data-open='true'] .drawer {
+    display: flex;
+  }
 }
 
 /* -------------------------------------------------------------------------------- the sections */

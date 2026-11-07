@@ -96,7 +96,15 @@ export function UserManagementPanel({
 
   const [notes, setNotes] = useState<Record<string, Note>>({});
   const [busyId, setBusyId] = useState<string | null>(null);
-  const [confirming, setConfirming] = useState<string | null>(null);
+  /** Which row is asking "are you sure", and for which of the two irreversible-feeling presses. */
+  const [confirming, setConfirming] = useState<{ id: string; act: 'deactivate' | 'delete' } | null>(
+    null,
+  );
+  /**
+   * What happened to a row that is no longer there. A deleted account has no row to print its
+   * note under, so the members list carries one note of its own for exactly that case.
+   */
+  const [membersNote, setMembersNote] = useState<Note | null>(null);
 
   const [inviteEmail, setInviteEmail] = useState('');
   const [inviteRole, setInviteRole] = useState<Role>(ROLE.member);
@@ -104,16 +112,18 @@ export function UserManagementPanel({
   const [inviteDone, setInviteDone] = useState<string | null>(null);
   const [inviting, setInviting] = useState(false);
 
-  const loadAccounts = useCallback(async (): Promise<void> => {
+  const loadAccounts = useCallback(async (): Promise<readonly AccountSummary[] | null> => {
     try {
       const payload = await apiFetch<AccountListPayload>(USERS_PATH, { credentials: 'include' });
       // Rendered in the order the API sent, never re-sorted here: `listUsers` orders by creation
       // and a second ordering in the client is a second answer to "who joined when".
       setAccounts(payload.accounts);
       setAccountsError(null);
+      return payload.accounts;
     } catch (caught) {
       setAccounts(null);
       setAccountsError(describeFailure(caught));
+      return null;
     }
   }, []);
 
@@ -153,7 +163,7 @@ export function UserManagementPanel({
   async function act(
     id: string,
     request: () => Promise<unknown>,
-    reload: () => Promise<void>,
+    reload: () => Promise<unknown>,
     done: string,
   ): Promise<void> {
     if (busyId !== null) return;
@@ -200,6 +210,42 @@ export function UserManagementPanel({
       loadAccounts,
       `${displayName} can no longer sign in.`,
     );
+  }
+
+  /**
+   * Permanent. The row is gone after the reload, so success is reported on the list rather than
+   * on the row; a refusal (`last_admin`, or the account already gone) still has a row to sit under,
+   * so it goes where every other refusal goes.
+   */
+  async function remove(account: AccountSummary): Promise<void> {
+    const { id, displayName, email } = account;
+    if (busyId !== null) return;
+    setBusyId(id);
+    setNote(id, null);
+    setMembersNote(null);
+    setConfirming(null);
+
+    let failure: string | null = null;
+    try {
+      await apiFetch(`${USERS_PATH}/${id}`, { method: 'DELETE', credentials: 'include' });
+    } catch (caught) {
+      failure = describeFailure(caught);
+    }
+
+    const after = await loadAccounts();
+    if (failure === null) {
+      setMembersNote({
+        tone: 'done',
+        text: `${displayName} (${email}) has been deleted. Their public notes stay, under a placeholder name.`,
+      });
+    } else if (after?.some((entry) => entry.id === id)) {
+      setNote(id, { tone: 'refused', text: failure });
+    } else {
+      // Refused *and* the row is gone — somebody else deleted it first. There is no row to print
+      // under, so the list says so.
+      setMembersNote({ tone: 'refused', text: failure });
+    }
+    setBusyId(null);
   }
 
   function reactivate(account: AccountSummary): void {
@@ -327,6 +373,8 @@ export function UserManagementPanel({
           <p className={styles.sectionNote}>Everyone with an account, oldest first.</p>
         </div>
 
+        {membersNote === null ? null : <RowNote note={membersNote} />}
+
         <ListState
           failure={accountsError}
           loading={accounts === null}
@@ -377,7 +425,7 @@ export function UserManagementPanel({
                         className={styles.action}
                         type="button"
                         disabled={busy}
-                        onClick={() => setConfirming(id)}
+                        onClick={() => setConfirming({ id, act: 'deactivate' })}
                       >
                         Deactivate
                       </button>
@@ -391,9 +439,25 @@ export function UserManagementPanel({
                         Restore
                       </button>
                     )}
+
+                    {/*
+                      Absent on your own row rather than labelled, unlike the controls above: the
+                      API refuses it there too, but the reason is not a guardrail worth showing —
+                      deleting yourself is the self-service screen's job, confirmed by password.
+                    */}
+                    {isSelf ? null : (
+                      <button
+                        className={styles.action}
+                        type="button"
+                        disabled={busy}
+                        onClick={() => setConfirming({ id, act: 'delete' })}
+                      >
+                        Delete
+                      </button>
+                    )}
                   </div>
 
-                  {confirming === id ? (
+                  {confirming?.id === id && confirming.act === 'deactivate' ? (
                     <div className={styles.confirm}>
                       <p className={styles.confirmText}>
                         End access for {displayName} ({email})?
@@ -409,6 +473,33 @@ export function UserManagementPanel({
                           onClick={() => deactivate(account)}
                         >
                           Yes, end access
+                        </button>
+                        <button
+                          className={styles.action}
+                          type="button"
+                          onClick={() => setConfirming(null)}
+                        >
+                          Cancel
+                        </button>
+                      </div>
+                    </div>
+                  ) : null}
+
+                  {confirming?.id === id && confirming.act === 'delete' ? (
+                    <div className={styles.confirm}>
+                      <p className={styles.confirmText}>
+                        Permanently delete {displayName} ({email})? This cannot be undone. Their
+                        private notes, highlights and sessions are erased; their public notes stay
+                        under a placeholder name. Deactivate instead if they may need to come back.
+                      </p>
+                      <div className={styles.confirmActions}>
+                        <button
+                          className={styles.actionStrong}
+                          type="button"
+                          disabled={busy}
+                          onClick={() => void remove(account)}
+                        >
+                          Yes, delete permanently
                         </button>
                         <button
                           className={styles.action}

@@ -366,6 +366,7 @@ export {
   type PasswordResetRow,
 } from './password-resets';
 export {
+  deleteRecording,
   findRecordingById,
   insertRecording,
   listRecordingsMissingPlayback,
