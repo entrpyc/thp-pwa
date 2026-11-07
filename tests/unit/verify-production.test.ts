@@ -99,19 +99,34 @@ To                         Action      From
 describe('sshd -T', () => {
   it('reads the effective configuration, not the file', () => {
     const captured = 'port 22\npasswordauthentication no\npermitrootlogin prohibit-password\n';
-    expect(parseSshdConfig(captured)).toEqual({ passwordAuthentication: false, permitRootLogin: true });
+    expect(parseSshdConfig(captured)).toEqual({
+      passwordAuthentication: false,
+      permitRootLogin: true,
+      ports: [22],
+    });
   });
 
   it('treats a hardened box as hardened', () => {
     const captured = 'passwordauthentication no\npermitrootlogin no\n';
-    expect(parseSshdConfig(captured)).toEqual({ passwordAuthentication: false, permitRootLogin: false });
+    expect(parseSshdConfig(captured)).toEqual({
+      passwordAuthentication: false,
+      permitRootLogin: false,
+      ports: [22],
+    });
   });
 
   it('treats a missing PermitRootLogin as no, which is the sshd default on Ubuntu images we harden', () => {
     expect(parseSshdConfig('passwordauthentication yes\n')).toEqual({
       passwordAuthentication: true,
       permitRootLogin: false,
+      ports: [22],
     });
+  });
+
+  it('reads the port sshd listens on, so the firewall check allows that one rather than 22', () => {
+    // The production box moved SSH off 22; `sshd -T` prints one `port` line per listener.
+    const captured = 'port 7856\nport 2222\npasswordauthentication no\npermitrootlogin no\n';
+    expect(parseSshdConfig(captured).ports).toEqual([2222, 7856]);
   });
 });
 

@@ -628,8 +628,12 @@ sudo adduser --disabled-password thp
 sudo sed -i 's/^#\?PasswordAuthentication.*/PasswordAuthentication no/' /etc/ssh/sshd_config
 sudo sed -i 's/^#\?PermitRootLogin.*/PermitRootLogin no/' /etc/ssh/sshd_config
 sudo systemctl reload ssh          # keep this session open until a second one logs in
-sudo ufw allow 22,80,443/tcp && sudo ufw enable
+sudo ufw allow 22,80,443/tcp && sudo ufw enable   # 22 = whatever port sshd listens on, if you moved it
 ```
+
+`verify:production`'s `network` check reads the SSH port from `sshd -T` and expects the firewall
+to allow exactly that port plus 80 and 443, so a box that moved SSH off 22 should not keep a rule
+for 22.
 
 Contabo images commonly ship with root password login enabled, so both `sed` lines are changes
 rather than confirmations. Check `/etc/ssh/sshd_config.d/` too — a cloud image often sets

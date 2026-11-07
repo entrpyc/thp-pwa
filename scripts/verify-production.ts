@@ -120,15 +120,21 @@ export function parseUfwStatus(text: string): { active: boolean; ports: number[]
 export function parseSshdConfig(text: string): {
   passwordAuthentication: boolean;
   permitRootLogin: boolean;
+  /** Every `port` line — sshd prints one per port it listens on. 22 when it prints none. */
+  ports: number[];
 } {
   const settings = new Map<string, string>();
+  const ports = new Set<number>();
   for (const line of text.split('\n')) {
     const [key, ...rest] = line.trim().split(/\s+/);
-    if (key) settings.set(key.toLowerCase(), rest.join(' ').toLowerCase());
+    if (!key) continue;
+    settings.set(key.toLowerCase(), rest.join(' ').toLowerCase());
+    if (key.toLowerCase() === 'port' && /^\d{1,5}$/.test(rest[0] ?? '')) ports.add(Number(rest[0]));
   }
   return {
     passwordAuthentication: settings.get('passwordauthentication') === 'yes',
     permitRootLogin: (settings.get('permitrootlogin') ?? 'no') !== 'no',
+    ports: ports.size === 0 ? [22] : [...ports].sort((a, b) => a - b),
   };
 }
 
@@ -478,13 +484,17 @@ const CHECKS: readonly Check[] = [
 
       const firewall = parseUfwStatus(await run('sudo', ['ufw', 'status']));
       if (!firewall.active) return bad('ufw is not active');
-      // 22, 80 and 443 and nothing else. 7856 was tolerated here while a listener used it; the
-      // listener is gone and the rule should be too (`sudo ufw delete allow 7856`), so it is
-      // reported until it is (security audits 2026-10-28 and 2026-10-29, finding 29).
-      const unexpected = firewall.ports.filter((port) => ![22, 80, 443].includes(port));
+      // SSH, 80 and 443 and nothing else — where "SSH" is whatever port sshd actually listens on,
+      // read from `sshd -T` rather than assumed to be 22. The box moved SSH to a non-default port,
+      // which the audits of 2026-10-28 and 2026-10-29 (finding 29) recorded as an unexplained
+      // open port until that was established; a rule for 22 with nothing listening there is now
+      // the unexpected one.
+      const sshd = parseSshdConfig(await run('sudo', ['sshd', '-T']));
+      const allowed = [...sshd.ports, 80, 443];
+      const unexpected = firewall.ports.filter((port) => !allowed.includes(port));
       return unexpected.length === 0
-        ? ok(`ufw active, ${firewall.ports.join('/')} only; 5432 refused from ${address}`)
-        : bad(`ufw also allows ${unexpected.join(', ')}`);
+        ? ok(`ufw active, ${firewall.ports.join('/')} only (SSH on ${sshd.ports.join('/')}); 5432 refused from ${address}`)
+        : bad(`ufw also allows ${unexpected.join(', ')} (SSH listens on ${sshd.ports.join('/')})`);
     },
   },
   {
