@@ -24,8 +24,10 @@ import {
   type SeriesDownloadPayload,
   type SyncPayload,
   type SyncRequest,
+  type TrackFunction,
 } from '@thp/shared';
 import { ApiClientError, apiFetch, installOfflineHooks } from '@/client/api-client';
+import { track as trackAnalytics } from '@/client/observability/analytics';
 import { clearAllNoteDrafts, readNoteDraft, writeNoteDraft } from '@/client/notes/draft';
 import { shellPlatform } from '@/client/platform';
 import { createBrowserDownloadStore } from './browser-store';
@@ -145,6 +147,8 @@ export interface OfflineManagerOptions {
   readonly forgetActiveUser?: () => Promise<void>;
   readonly warm?: (urls: readonly string[]) => void;
   readonly isOnline?: () => boolean;
+  /** Where a finished download, a removal and a sync round are counted; a test hands in a spy. */
+  readonly track?: TrackFunction;
 }
 
 export interface OfflineManager {
@@ -191,6 +195,7 @@ export function createOfflineManager(options: OfflineManagerOptions): OfflineMan
       await idbPut(OFFLINE_STORES.meta, { userId }, ACTIVE_USER_KEY);
     });
   const forgetActiveUser = options.forgetActiveUser ?? forgetActiveAccount;
+  const track = options.track ?? trackAnalytics;
   /** Drop every `session:<id>` entry in `meta` that is not this account's. */
   async function forgetForeignSessions(userId: string): Promise<void> {
     if (typeof indexedDB === 'undefined') return;
@@ -313,6 +318,7 @@ export function createOfflineManager(options: OfflineManagerOptions): OfflineMan
         controller.signal,
       );
       set({ queue: finish(snapshot.queue, recordingId) });
+      track('download_acted', { action: 'completed', recording_id: recordingId, series_id: record.seriesId });
       warm(pagesFor(record));
     } catch (caught) {
       if (caught instanceof DownloadCancelled) {
@@ -367,6 +373,7 @@ export function createOfflineManager(options: OfflineManagerOptions): OfflineMan
           body: JSON.stringify(request),
         });
         const outcome = applySyncResults(sent, payload.results);
+        track('sync_completed', { entries: sent.length, settled: outcome.settled.length, downloads: downloaded.length });
         await outbox.remove(outcome.settled);
         await forgetPendingImages(prepared.pendingIds);
 
@@ -481,7 +488,11 @@ export function createOfflineManager(options: OfflineManagerOptions): OfflineMan
     async remove(recordingId) {
       const userId = snapshot.userId;
       if (userId === null) return;
+      const held = snapshot.downloads.find((one) => one.recordingId === recordingId);
       await store.remove(userId, recordingId);
+      if (held !== undefined) {
+        track('download_acted', { action: 'removed', recording_id: recordingId, series_id: held.seriesId });
+      }
       await reload();
     },
 

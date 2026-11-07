@@ -182,6 +182,7 @@ export {
   setChapterQuestion,
   setFlowSessionItemDone,
   updateTagQuestion,
+  deleteFlowSessionForMember,
   type FlowQuestionRow,
   type FlowQuestionSourceRow,
   type FlowSessionItemRow,

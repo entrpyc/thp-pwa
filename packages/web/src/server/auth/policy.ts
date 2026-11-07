@@ -375,7 +375,7 @@ export const POLICY_ACTIONS = [
   /**
    * **The Flow Tracker** ([3.14](docs/project/prd.md)). A member reads the teachings a session can
    * start from and their own sessions, starts one, answers its questions, abandons it, and ticks
-   * the reading list — five actions, the split every group above takes. Both roles and no
+   * the reading list, and deletes a past one — six actions, the split every group above takes. Both roles and no
    * ownership flag on any, for the reason the highlight actions have none: every session is the
    * caller's own by construction — the route is `/users/me/flow-sessions` — and 3.14.8's "no
    * result is visible to admins" is the absence of any route that could list another account's.
@@ -389,6 +389,7 @@ export const POLICY_ACTIONS = [
   'flow.start',
   'flow.answer',
   'flow.abandon',
+  'flow.delete',
   'flow.mark',
   'flow.question.edit',
   'flow.bank.manage',
@@ -638,6 +639,7 @@ const RULES: PolicyRules = {
   'flow.start': { roles: { admin: true, member: true } },
   'flow.answer': { roles: { admin: true, member: true } },
   'flow.abandon': { roles: { admin: true, member: true } },
+  'flow.delete': { roles: { admin: true, member: true } },
   'flow.mark': { roles: { admin: true, member: true } },
   // Curating questions is operator work ([3.14.11](docs/project/prd.md), [3.19.7](docs/project/prd.md)).
   'flow.question.edit': { roles: { admin: true, member: false } },

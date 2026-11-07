@@ -66,6 +66,8 @@ import { closeTestDatabase, createAccount, signIn, type TestAccount } from '../s
  *    session is `401`.
  * 7. **Admins curate** ([3.14.11](docs/project/prd.md)): a chapter's question is rewritten in place
  *    and rides the chapter list; a tag's bank is added to and removed from; a member is refused.
+ * 8. **A past session can be deleted** ([3.14.10](docs/project/prd.md)): complete or abandoned,
+ *    the member's own only; the one in progress is refused, and the answer is the list as it stands.
  */
 
 const baseUrl = inject('apiBaseUrl');
@@ -333,6 +335,30 @@ describe('starting a session (3.14.2, 3.14.3, 3.14.5, 3.14.10)', () => {
     expect((await start(alice, [shown.id, hidden.id])).code).toBe('not_found');
     expect((await call<FlowSessionsPayload>(FLOW_SESSIONS_PATH, { cookie: alice.cookie })).body.active).toBeNull();
     expect((await call(FLOW_SESSIONS_PATH, { method: 'POST', body: { recordingIds: [shown.id] } })).status).toBe(401);
+  });
+
+  it('deletes a past session of the member\'s own, and refuses the one in progress', async () => {
+    const y = nextYear();
+    const one = await teaching(`Deleted ${RUN} ${y}`, `${y}-01-01`, 2);
+    const session = await started(alice, [one.id]);
+    // In progress: refused, and still there.
+    const early = await call(flowSessionPath(session.id), { method: 'DELETE', cookie: alice.cookie });
+    expect(early.status).toBe(400);
+    expect(early.code).toBe('invalid_input');
+    expect((await call<FlowSessionPayload>(flowSessionPath(session.id), { cookie: alice.cookie })).status).toBe(200);
+    await abandon(alice, session.id);
+    // Somebody else's: nothing to find.
+    expect((await call(flowSessionPath(session.id), { method: 'DELETE', cookie: bob.cookie })).code).toBe('not_found');
+    // No session: refused at the door.
+    expect((await call(flowSessionPath(session.id), { method: 'DELETE' })).status).toBe(401);
+    // The member's own, once abandoned: gone, with the list as it stands in the answer.
+    const gone = await call<FlowSessionsPayload>(flowSessionPath(session.id), { method: 'DELETE', cookie: alice.cookie });
+    expect(gone.status).toBe(200);
+    expect(gone.body.active).toBeNull();
+    expect(gone.body.completed.some((entry) => entry.id === session.id)).toBe(false);
+    expect((await call(flowSessionPath(session.id), { cookie: alice.cookie })).code).toBe('not_found');
+    // A second delete finds nothing.
+    expect((await call(flowSessionPath(session.id), { method: 'DELETE', cookie: alice.cookie })).code).toBe('not_found');
   });
 
   it('abandons a session, after which another can start', async () => {

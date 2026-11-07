@@ -104,6 +104,7 @@ export const rules: PolicyRules = {
   'flow.start': { roles: { admin: true, member: true } },
   'flow.answer': { roles: { admin: true, member: true } },
   'flow.abandon': { roles: { admin: true, member: true } },
+  'flow.delete': { roles: { admin: true, member: true } },
   'flow.mark': { roles: { admin: true, member: true } },
   'flow.question.edit': { roles: { admin: true, member: false } },
   'flow.bank.manage': { roles: { admin: true, member: false } },

@@ -7,6 +7,7 @@ import {
   FLOW_TRACKER_START_PAGE_PATH,
   flowSessionAbandonPath,
   flowSessionPagePath,
+  flowSessionPath,
   type FlowSessionPayload,
   type FlowSessionSummary,
   type FlowSessionsPayload,
@@ -38,6 +39,8 @@ export function FlowHome() {
   const [failure, setFailure] = useState<string | null>(null);
   const [confirming, setConfirming] = useState(false);
   const [busy, setBusy] = useState(false);
+  /** The past session whose row is asking "delete?", or none. One at a time, like *Start over*. */
+  const [deleting, setDeleting] = useState<string | null>(null);
 
   const load = useCallback(async () => {
     try {
@@ -63,6 +66,25 @@ export function FlowHome() {
       });
       setConfirming(false);
       await load();
+    } catch (caught) {
+      setFailure(caught instanceof ApiClientError ? caught.message : LOAD_FAILED);
+    } finally {
+      setBusy(false);
+    }
+  }
+
+  /** A past session goes, with its answers. The list the API answers with is what shows next. */
+  async function remove(past: FlowSessionSummary): Promise<void> {
+    setBusy(true);
+    setFailure(null);
+    try {
+      const next = await apiFetch<FlowSessionsPayload>(flowSessionPath(past.id), {
+        method: 'DELETE',
+        credentials: 'include',
+      });
+      track('flow_tracker_acted', { action: 'session_deleted', session_id: past.id, recording_id: null });
+      setDeleting(null);
+      setSessions(next);
     } catch (caught) {
       setFailure(caught instanceof ApiClientError ? caught.message : LOAD_FAILED);
     } finally {
@@ -190,6 +212,43 @@ export function FlowHome() {
                     ›
                   </span>
                 </Link>
+                {deleting === one.id ? (
+                  <div className={styles.failure} role="alertdialog" aria-label="Delete this session?">
+                    <p className={styles.pageLead}>
+                      Delete this session? Its answers and its reading list are gone for good.
+                    </p>
+                    <div className={styles.actions}>
+                      <button
+                        className={styles.primary}
+                        type="button"
+                        disabled={busy}
+                        onClick={() => void remove(one)}
+                      >
+                        {busy ? 'Deleting…' : 'Yes, delete it'}
+                      </button>
+                      <button
+                        className={styles.secondary}
+                        type="button"
+                        disabled={busy}
+                        onClick={() => setDeleting(null)}
+                      >
+                        Keep it
+                      </button>
+                    </div>
+                  </div>
+                ) : (
+                  <div className={styles.actions}>
+                    <button
+                      className={styles.secondary}
+                      type="button"
+                      disabled={busy}
+                      aria-label={`Delete the session from ${one.completedAt === null ? 'before' : formatDay(one.completedAt)}`}
+                      onClick={() => setDeleting(one.id)}
+                    >
+                      Delete
+                    </button>
+                  </div>
+                )}
               </li>
             ))}
           </ol>

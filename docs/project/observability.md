@@ -245,10 +245,14 @@ sign-out.
 | Searches | `search_submitted` | `blend` (0 words only … 1 meaning only), `per_teaching` (`one`, `three`, `all`), one boolean per searchable kind (`kind_segment` …), `result_count`, `meaning_available` | A search answers. A control changed with words in the box is a new search and counts. Never the words. |
 | Search follow-through | `search_result_opened` | `action` (`link`, `play`), `kind` (the hit's), `recording_id`, `rank` | A hit's link or its play control. |
 | Search paging | `search_expanded` | `offset` | *Show more*. |
-| Flow Tracker | `flow_tracker_acted` | `action` (`session_started`, `past_session_opened`, `recording_opened`, `chapter_opened`, `chapter_checked`, `chapter_unchecked`, `play_clicked`, `related_chapter_opened`, `related_play_clicked`), `session_id`, `recording_id` (either may be null) | The home, start and session screens. Never an answer or a rating. |
+| Flow Tracker | `flow_tracker_acted` | `action` (`session_started`, `past_session_opened`, `recording_opened`, `chapter_opened`, `chapter_checked`, `chapter_unchecked`, `play_clicked`, `related_chapter_opened`, `related_play_clicked`, `session_deleted`), `session_id`, `recording_id` (either may be null) | The home, start and session screens; `session_deleted` once the API confirms a past session is gone. Never an answer or a rating. |
 | Transcript | `transcript_acted` | `action` (`follow_on`, `follow_off`, `jump_to_current`, `downloaded`, `row_clicked`), `recording_id` | The transcript panel's header and rows. |
 | Mind map | `mind_map_acted` | `action` (`full_screen_on`, `full_screen_off`, `collapsed`, `expanded`, `seek`, `play`), `recording_id` | The panel's control and the canvas's `onFold`, `onSeek`, `onPlay`. |
 | Player menu | `player_menu_acted` | `action` (`opened`, `chapters_opened`, `note_opened`, `captions_on`, `captions_off`), `recording_id` | The transport's `···` and the three tools inside it. Opening is counted; closing is not. |
+| Note folders | `note_folder_created` | `folder_count` (the member's folders after) | A folder is made, from the picker on a note or *Manage folders*, once the API holds it (added 7 November 2026). |
+| Notes filed | `note_filed` | `added`, `removed` (folders the note joined and left in this save), `folder_count` (folders it is in after) | The picker on a note is saved with a change; a save that changed nothing sends nothing. The sum of `added` is "notes filed into folders". |
+| Downloads | `download_acted` | `action` (`completed`, `removed`), `recording_id`, `series_id` | The offline manager: a download's bytes are stored, or the member removes one. A failed or cancelled download counts nothing (added 7 November 2026). |
+| Syncs | `sync_completed` | `entries` (outbox entries sent), `settled` (the server took), `downloads` (checked for revocation) | The sync `POST` answers. A round that fails sends nothing; the next reconnect tries again. |
 
 The `route` patterns are the member-area page files as they stand: `/`, `/recordings`,
 `/recordings/[id]`, `/recordings/[id]/chapters/[chapterId]`, `/series`, `/series/[id]`,
@@ -335,7 +339,9 @@ day; every chart is a trend, a pie or a total unless it says otherwise.
   `added`, by `target`; `search_submitted` (trend, total, by each `kind_*`, by `blend`, by
   `per_teaching`) against `search_result_opened` (trend, total, and as a pie beside queries) and
   the total of `search_expanded`; `flow_tracker_acted`, `transcript_acted`, `mind_map_acted` and
-  `player_menu_acted` each as a trend and by `action`; `tab_opened` by `tab`.
+  `player_menu_acted` each as a trend and by `action`; `tab_opened` by `tab`; `note_folder_created`
+  (trend, total) and `note_filed` (trend, sum of `added`, sum of `removed`); `download_acted` by
+  `action` and by `recording_id`; `sync_completed` as a trend with the sum of `settled`.
 
 **Cross-checks.** Two numbers must agree with the database or the instrumentation is wrong:
 completions against `count(completed_at)` on `playback_progress`, and notes created against the
