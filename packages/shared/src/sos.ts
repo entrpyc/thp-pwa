@@ -48,7 +48,7 @@ export const SOS_URGENCY_LABEL: Record<SosUrgency, string> = {
  * has to hear that before they type.
  */
 export const SOS_URGENCY_MEANING: Record<SosUrgency, string> = {
-  red: 'Immediate crisis — acute danger or medical emergency. If you are in immediate danger, call your local emergency services (112 in Europe) before posting here.',
+  red: 'Immediate crisis — acute danger or emergency.',
   orange: 'Serious situation needing prompt prayer',
   yellow: 'Difficult but not urgent — an ongoing struggle',
   green: 'General prayer request, no urgency',
