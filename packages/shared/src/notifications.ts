@@ -259,6 +259,22 @@ export interface AnnouncementListPayload {
  * How long of a note's text a reply or reaction notification quotes. A line, not the note: the
  * centre is a list, and the whole text is one press away on the teaching.
  */
+/**
+ * Accounts whose acts never raise a notice for anybody else. The app-store reviewer walks the
+ * product end to end — replies in threads, reacts, raises prayer requests, reports — and none of
+ * it is news the group should hear; a bell that rings for a review pass is noise in every
+ * member's inbox. Compared case-insensitively, since an address is.
+ */
+export const SILENT_NOTIFIER_EMAILS: readonly string[] = [
+  'asen.angelov+review@indepthwebsolutions.com',
+];
+
+/** Whether an act by the account with this address is one nobody is told about. */
+export function isSilentNotifier(email: string): boolean {
+  const needle = email.trim().toLowerCase();
+  return SILENT_NOTIFIER_EMAILS.some((silent) => silent.toLowerCase() === needle);
+}
+
 export const NOTIFICATION_EXCERPT_LENGTH = 120;
 
 /**

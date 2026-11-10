@@ -29,6 +29,7 @@ import {
   excerptForNotification,
   isAnnouncementKind,
   isOnboardingId,
+  isSilentNotifier,
   noteReactionNotificationTitle,
   noteReplyNotificationTitle,
   noteReportedNotificationTitle,
@@ -100,6 +101,18 @@ import { logger } from '@/server/observability/logger';
 // Raising
 // =================================================================================================
 
+/**
+ * Whether the member whose act this is raises no notice for anybody — the reviewer account
+ * ({@link isSilentNotifier}). Checked before the block predicate and before any row is written,
+ * so nothing reaches a store or a device. Only the raisers whose cause is a member's act consult
+ * it; a recording going live or an admin's announcement has no actor to be silent.
+ */
+function silent(actor: Actor): boolean {
+  if (!isSilentNotifier(actor.email)) return false;
+  logger.info('notification.suppressed', { actorId: actor.id, reason: 'silent_actor' });
+  return true;
+}
+
 /** A teaching went live ([3.17.4](docs/project/prd.md)). Everybody active is told. */
 export async function notifyRecordingPublished(input: {
   readonly recordingId: string;
@@ -130,6 +143,7 @@ export async function notifyNoteReply(input: {
   readonly replyText: string;
 }): Promise<void> {
   if (input.authorId === input.replier.id) return;
+  if (silent(input.replier)) return;
   await raise('note.reply', async () => {
     if (await isBlockedEitherWay(input.authorId, input.replier.id)) {
       return { noteId: input.noteId, suppressed: 'blocked' };
@@ -161,6 +175,7 @@ export async function notifyNoteReaction(input: {
   readonly noteText: string;
 }): Promise<void> {
   if (input.authorId === input.reactor.id) return;
+  if (silent(input.reactor)) return;
   await raise('note.react', async () => {
     if (await isBlockedEitherWay(input.authorId, input.reactor.id)) {
       return { noteId: input.noteId, suppressed: 'blocked' };
@@ -212,6 +227,7 @@ export async function notifyNoteReported(input: {
   readonly noteText: string;
   readonly reporter: Actor;
 }): Promise<void> {
+  if (silent(input.reporter)) return;
   await raise('note.report', async () => {
     const admins = (await listActiveAdminIds()).filter((id) => id !== input.reporter.id);
     const body = `${REPORT_REASON_LABEL[input.reason]}: ${excerptForNotification(input.noteText)}`;
@@ -294,6 +310,7 @@ export async function notifySosReported(input: {
   readonly text: string;
   readonly reporter: Actor;
 }): Promise<void> {
+  if (silent(input.reporter)) return;
   await raise('sos.report', async () => {
     const admins = (await listActiveAdminIds()).filter((id) => id !== input.reporter.id);
     const body = `${REPORT_REASON_LABEL[input.reason]}: ${excerptForNotification(input.text)}`;
@@ -382,6 +399,7 @@ export async function notifySosRaised(input: {
   /** Whether the signal names its author. The audience and the title both follow it. */
   readonly anonymous: boolean;
 }): Promise<void> {
+  if (silent(input.author)) return;
   await raise('sos.raise', async () => {
     // The notice names the member only when the signal does.
     const authorName = input.anonymous ? SOMEONE : input.author.displayName;
@@ -412,6 +430,7 @@ export async function notifySosReply(input: {
   readonly replyText: string;
 }): Promise<void> {
   if (input.authorId === input.replier.id) return;
+  if (silent(input.replier)) return;
   await raise('sos.reply', async () => {
     if (await isBlockedEitherWay(input.authorId, input.replier.id)) {
       return { signalId: input.signalId, suppressed: 'blocked' };
@@ -448,6 +467,7 @@ export async function notifySosThreadReply(input: {
 }): Promise<void> {
   if (input.threadAuthorId === input.replier.id) return;
   if (input.threadAuthorId === input.signalAuthorId) return;
+  if (silent(input.replier)) return;
   await raise('sos.thread_reply', async () => {
     if (await isBlockedEitherWay(input.threadAuthorId, input.replier.id)) {
       return { signalId: input.signalId, suppressed: 'blocked' };
