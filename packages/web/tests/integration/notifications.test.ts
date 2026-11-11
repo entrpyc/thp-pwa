@@ -11,7 +11,8 @@ import {
   isApiErrorBody,
   noteReactionPath,
   notificationReadPath,
-  onboardingPagePath,
+  RELEASE_NOTES_PATH,
+  releaseNotePagePath,
   recordingNotesPath,
   recordingPagePath,
   recordingPublishPath,
@@ -21,6 +22,7 @@ import {
   type NotificationReadPayload,
   type NotificationView,
   type NotificationsReadAllPayload,
+  type SaveReleaseNotePayload,
   type SendAnnouncementPayload,
 } from '@thp/shared';
 import {
@@ -48,7 +50,7 @@ import { readWholeInbox } from '../support/inbox';
  * 4. **A member reads their own and marks their own.** Another member's id is `not_found`, not
  *    `forbidden` — the route does not report which ids exist.
  * 5. **An admin sends; a member cannot** ([3.17.15](docs/project/prd.md)). A new feature lands on
- *    its onboarding, an announcement lands nowhere, and both are refused when malformed.
+ *    its release note, an announcement lands nowhere, and both are refused when malformed.
  */
 
 const baseUrl = inject('apiBaseUrl');
@@ -324,7 +326,7 @@ describe('what an admin sends', () => {
     expect(sent.status).toBe(201);
     expect(sent.body.announcement.kind).toBe('announcement');
     expect(sent.body.announcement.body).toBe('Service moves to 10am.');
-    expect(sent.body.announcement.onboardingId).toBeNull();
+    expect(sent.body.announcement.releaseNoteId).toBeNull();
     expect(sent.body.announcement.sentByDisplayName).toBe(admin.displayName);
     expect(sent.body.announcement.recipientCount).toBeGreaterThanOrEqual(3);
 
@@ -339,24 +341,36 @@ describe('what an admin sends', () => {
     expect(listed.body.announcements[0]?.id).toBe(sent.body.announcement.id);
   });
 
-  it('sends a new feature that lands on its onboarding, and refuses one it does not have', async () => {
+  it('sends a new feature that lands on its release note, and refuses one that does not exist', async () => {
     const title = `Feature ${RUN}`;
+    const posted = await call<SaveReleaseNotePayload>(RELEASE_NOTES_PATH, {
+      method: 'POST',
+      cookie: admin.cookie,
+      body: {
+        title: `Post for ${title}`,
+        body: { type: 'doc', content: [{ type: 'paragraph', content: [{ type: 'text', text: 'What is new.' }] }] },
+      },
+    });
+    expect(posted.status).toBe(201);
+    const releaseNoteId = posted.body.releaseNote.id;
+
     const sent = await call<SendAnnouncementPayload>(ANNOUNCEMENTS_PATH, {
       method: 'POST',
       cookie: admin.cookie,
-      body: { kind: 'new_feature', title, body: 'Try the tour again.', onboardingId: 'new-user' },
+      body: { kind: 'new_feature', title, body: 'Read what is new.', releaseNoteId },
     });
     expect(sent.status).toBe(201);
-    expect(sent.body.announcement.onboardingId).toBe('new-user');
+    expect(sent.body.announcement.releaseNoteId).toBe(releaseNoteId);
+    expect(sent.body.announcement.releaseNoteTitle).toBe(`Post for ${title}`);
 
     const mine = ours(await inbox(author), title);
     expect(mine[0]?.kind).toBe('new_feature');
-    expect(mine[0]?.href).toBe(onboardingPagePath('new-user'));
+    expect(mine[0]?.href).toBe(releaseNotePagePath(releaseNoteId));
 
     const unknown = await call(ANNOUNCEMENTS_PATH, {
       method: 'POST',
       cookie: admin.cookie,
-      body: { kind: 'new_feature', title, body: 'x', onboardingId: `nope-${RUN}` },
+      body: { kind: 'new_feature', title, body: 'x', releaseNoteId: '00000000-0000-4000-8000-000000000000' },
     });
     expect(unknown.status).toBe(400);
     expect(unknown.code).toBe('invalid_input');
@@ -371,7 +385,7 @@ describe('what an admin sends', () => {
     const linked = await call(ANNOUNCEMENTS_PATH, {
       method: 'POST',
       cookie: admin.cookie,
-      body: { kind: 'announcement', title, body: 'x', onboardingId: 'new-user' },
+      body: { kind: 'announcement', title, body: 'x', releaseNoteId },
     });
     expect(linked.code).toBe('invalid_input');
 

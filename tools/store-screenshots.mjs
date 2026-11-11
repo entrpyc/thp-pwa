@@ -49,11 +49,6 @@ await page.fill('input[name="password"]', password);
 await page.click('button[type="submit"]');
 await page.waitForURL((u) => !u.pathname.startsWith('/sign-in'), { timeout: 20000 });
 
-// Skip onboarding if it appears.
-if (page.url().includes('/onboarding')) {
-  await page.goto(`${origin}/`);
-}
-
 await page.goto(`${origin}/`);
 await shot('01-home');
 

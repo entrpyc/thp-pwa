@@ -40,6 +40,7 @@ export const ACTOR_BUDGET_KINDS = [
   'recording-grant',
   'artwork-grant',
   'note-image-grant',
+  'release-note-image-grant',
   'search',
   'note-write',
   'sos-write',
@@ -104,6 +105,12 @@ export const ACTOR_BUDGETS: Readonly<Record<ActorBudgetKind, ActorBudget>> = {
   // person does not reach and a runaway client does.
   'note-image-grant': {
     limit: 60,
+    windowMs: HOUR_MS,
+    refusal: 'Too many picture uploads in the last hour.',
+  },
+  // An admin composing a post: a few dozen pictures in a sitting is a long post, hundreds is a loop.
+  'release-note-image-grant': {
+    limit: 120,
     windowMs: HOUR_MS,
     refusal: 'Too many picture uploads in the last hour.',
   },

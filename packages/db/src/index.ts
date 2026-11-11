@@ -279,10 +279,14 @@ export {
   type NotificationRow,
 } from './notifications';
 export {
-  completeOnboarding,
-  findOnboardingCompletion,
-  type UserOnboardingRow,
-} from './onboarding';
+  deleteReleaseNote,
+  findReleaseNoteById,
+  insertReleaseNote,
+  listReleaseNotes,
+  updateReleaseNote,
+  type NewReleaseNote,
+  type ReleaseNoteRow,
+} from './release-notes';
 export {
   clearSosPraying,
   closeSosSignal,

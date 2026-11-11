@@ -432,7 +432,8 @@ Seven rows reach the in-app centre today — 3.17.4, 3.17.6, 3.17.7, 3.17.8, 3.1
 - 📝 **3.17.13** Members can turn push delivery on or off per event category, while the in-app centre continues to receive everything.
 - 📝 **3.17.14** Admin announcements and SOS signals can be muted by a member like any other category — the group does not override individual choice.
 - ✅ **3.17.15** Admins compose and send announcements from the admin dashboard (3.19.8), choosing between the two kinds the console offers: an admin announcement (3.17.9) and a new-feature announcement (3.17.17). Both take a title and a message and go to every active account at once; a send cannot be recalled, so the console asks for a confirming press.
-- ✅ **3.17.18** A new-feature announcement is the product speaking rather than the admin: it is labelled as a new feature, not as a message from a person, and opening it takes the member into the onboarding that shows the feature (the same kind of walkthrough as the new-user tour). The admin names the onboarding by its id when sending, and the product refuses an id it does not have — so adding a feature is: add its onboarding, then announce it.
+- ✅ **3.17.18** A new-feature announcement is the product speaking rather than the admin: it is labelled as a new feature, not as a message from a person, and opening it takes the member to the release note that shows the feature (3.17.19). The admin picks the release note from a dropdown of the posts that exist when sending, and the product refuses a post that no longer exists — so announcing a feature is: write its release note, then announce it. Not every release note has to be announced, and deleting a post moves the notifications that opened it to the release notes list rather than leaving them on a missing page.
+- ✅ **3.17.19** A release notes page, reached from the menu, lists every release note an admin has posted, newest first, each with its title, the first of its words and the day it was published; pressing one opens the post on its own page. A post is rich text — headings, bold, italic, underline, strikethrough, lists, quotes, code, links — and can carry pictures (GIFs included) and YouTube videos. Release notes replace the onboarding system: there is no first-sign-in tour and no per-feature walkthrough.
 
 ### 📝 3.18 Offline support & downloads
 
@@ -491,6 +492,8 @@ Seven rows reach the in-app centre today — 3.17.4, 3.17.6, 3.17.7, 3.17.8, 3.1
 - ✅ **3.19.16** The processing view shows what paid work has cost today against the day's ceiling (3.21.2.8), split by the step that spent it, and an admin can raise the ceiling for the rest of that day, with the raise recorded against them and shown to the next admin who looks. The raise is the whole ceiling for the day rather than an increment, cannot go below the configured default, and is capped so a mistyped amount cannot become an open budget. A re-run or a regenerate that the ceiling would refuse is refused at the press, with the same numbers, rather than a minute later as a failed row.
 
 - ✅ **3.19.17** A sound profile panel (3.4.5–3.4.7): the version in force with who saved it and why, the three knobs as sliders with Save disabled while nothing has changed, a preview of any recording under the knobs as they stand (3.4.6) heard as two players side by side, and every recording with the version that processed it and a control to re-process that one recording's rendition alone. It refreshes itself while a preview or a re-process is running and stops asking once nothing is. Admin only, at every route behind it as well as at the panel.
+
+- ✅ **3.19.18** Release notes management (3.17.19): every post with when it was published and last edited, and the controls to add, edit and delete one. A post is written in a rich text editor with a toolbar for formatting, links, pictures and GIFs (uploaded from the device, up to 10 MB each) and YouTube videos (added by link). A post is live as soon as it is saved; nobody is notified until an admin sends a new-feature announcement that points at it (3.17.18). Deleting asks for a confirming press.
 
 ### 📝 3.20 External distribution
 
@@ -785,7 +788,7 @@ Mind maps carry no title: the source recording or video title labels them in the
 | Read state         | User-set     | Set once by the recipient, drives the unread count                                      |
 | Delivered channels | Auto-set     | Push, in-app, or both per preferences (3.17.13). In-app only today                      |
 
-An announcement (3.17.9, 3.17.17) is kept once as a record of the send — kind, title, message, the onboarding it opens, who sent it, when, and how many accounts it reached — with one notification per recipient hanging off it.
+An announcement (3.17.9, 3.17.17) is kept once as a record of the send — kind, title, message, the release note it opens (3.17.18), who sent it, when, and how many accounts it reached — with one notification per recipient hanging off it.
 
 ### 🔨 4.17 Metadata population workflow
 
@@ -840,6 +843,19 @@ A chapter carries no publication status of its own, for the reason 3.22.6 gives:
 | Saved by / saved at  | Auto-set   | Null author for the seeded version and for an account since removed                                                                                            |
 
 A version is never edited or deleted: saving is appending, so the number on every recording keeps meaning what it meant (3.4.7). The version in force is the highest one, a fact of the table rather than a flag two writers could disagree about.
+
+### ✅ 4.21 Release note
+
+*One row per post an admin has written to say what is new (3.17.19).*
+
+| Field                     | Set by    | Notes                                                                                                                                              |
+| :------------------------ | :-------- | :------------------------------------------------------------------------------------------------------------------------------------------------- |
+| Title                     | Admin-set | Required, at most 120 characters                                                                                                                   |
+| Body                      | Admin-set | A rich-text document — a tree of a fixed set of node types, never markup. A picture is stored as its upload key and signed into a URL on each read |
+| Written by                | Auto-set  | Null for an account since removed — the post survives its author                                                                                   |
+| Published at / updated at | Auto-set  | Published at is when the post was first saved; updated at moves with every edit                                                                    |
+
+A new-feature announcement (4.16) may point at one release note. Deleting the post clears that pointer and moves the notifications that opened it to the release notes list.
 
 ## 5. Platform & distribution
 

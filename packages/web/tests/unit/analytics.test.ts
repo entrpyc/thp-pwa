@@ -104,7 +104,7 @@ describe('pageviewProperties', () => {
 
   it('says nothing for a page the vocabulary does not name', () => {
     expect(pageviewProperties('/admin/pipeline', {})).toBeNull();
-    expect(pageviewProperties(`/onboarding/${RECORDING}`, { id: RECORDING })).toBeNull();
+    expect(pageviewProperties(`/release-notes/${RECORDING}`, { id: RECORDING })).toBeNull();
   });
 });
 

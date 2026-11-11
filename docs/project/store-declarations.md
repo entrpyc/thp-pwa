@@ -66,7 +66,7 @@ For every type below: *Linked to the user* = **Yes**; *Used for tracking* = **No
 | User Content | Emails or Text Messages, Gameplay Content, Customer Support | No | — | Bug reports are sent *to* us as email and not stored in the app; declared under Other User Content above |
 | Identifiers | User ID | Yes | App Functionality, Analytics | The account's opaque UUID, which is also the analytics `distinct_id` |
 | Identifiers | Device ID | No | — | No device identifier is read; `install_source` is an enum, not an id. The push token (APNs) is a routing handle Apple does not count as a device identifier, and it is not entered here |
-| Usage Data | Product Interaction | Yes | App Functionality, Analytics | Playback position, speed, listening completion, notification read state, onboarding completion; the PostHog events (plays, completions, tabs, notes, chapter jumps, speed changes, notification opens, page views by route pattern) |
+| Usage Data | Product Interaction | Yes | App Functionality, Analytics | Playback position, speed, listening completion, notification read state; the PostHog events (plays, completions, tabs, notes, chapter jumps, speed changes, notification opens, page views by route pattern) |
 | Usage Data | Advertising Data, Other Usage Data | No | — | |
 | Diagnostics | Crash Data, Performance Data, Other Diagnostic Data | No | — | No crash or performance reporting from the client; server logs are not sent from the device |
 | Location, Health & Fitness, Financial Info, Sensitive Info, Contacts, Browsing History, Search History, Purchases | — | No | — | Not collected. Search is not built; when it is, query text is a privacy-rules exclusion in `docs/project/observability.md` § 5.5 |

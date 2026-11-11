@@ -1,0 +1,322 @@
+/*
+ * The release notes panel.
+ *
+ * The carve-out every admin screen has: composed from docs/design-references/style-guide.md and
+ * the token layer, and almost every class `composes` from `admin.module.css`. What is declared
+ * here is what the console did not have before: a rich-text field — a toolbar over an editing
+ * surface — and the look of a post's content while it is being written, which mirrors the member
+ * page's (`(member)/release-notes/release-notes.module.css`) so what is typed reads as it will.
+ */
+
+.panel {
+  composes: panel from '../admin.module.css';
+}
+
+.section {
+  composes: section from '../admin.module.css';
+}
+
+.sectionTitle {
+  composes: sectionTitle from '../admin.module.css';
+}
+
+.sectionNote {
+  composes: sectionNote from '../admin.module.css';
+}
+
+/* The heading on the left, the one solid press on the right; they stack on a phone. */
+.sectionHead {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: var(--space-3);
+}
+
+.empty {
+  composes: empty from '../admin.module.css';
+}
+
+.failure {
+  composes: failure from '../admin.module.css';
+}
+
+.done {
+  composes: done from '../admin.module.css';
+}
+
+.field {
+  composes: field from '../admin.module.css';
+  flex: 0 0 auto;
+  align-self: stretch;
+}
+
+.label {
+  composes: label from '../admin.module.css';
+}
+
+.input {
+  composes: input from '../admin.module.css';
+}
+
+.submit {
+  composes: submit from '../admin.module.css';
+  align-self: flex-start;
+}
+
+.list {
+  composes: list from '../admin.module.css';
+}
+
+.listRow {
+  composes: row from '../admin.module.css';
+}
+
+.rowIdentity {
+  composes: rowIdentity from '../admin.module.css';
+}
+
+.rowName {
+  composes: rowName from '../admin.module.css';
+}
+
+.rowMeta {
+  composes: rowMeta from '../admin.module.css';
+}
+
+.rowControls {
+  composes: rowControls from '../admin.module.css';
+}
+
+.action {
+  composes: action from '../admin.module.css';
+  /* Also worn by a link (View), which is not a flex box or undecorated on its own. */
+  display: inline-flex;
+  align-items: center;
+  text-decoration: none;
+}
+
+.actionStrong {
+  composes: actionStrong from '../admin.module.css';
+}
+
+.confirm {
+  composes: confirm from '../admin.module.css';
+}
+
+.confirmText {
+  composes: confirmText from '../admin.module.css';
+}
+
+.confirmActions {
+  composes: confirmActions from '../admin.module.css';
+}
+
+/* The first of a post's words under its title. Two lines, then cut. */
+.rowBody {
+  margin: 0;
+  font-size: var(--fs-body);
+  color: var(--color-text-muted);
+  display: -webkit-box;
+  -webkit-box-orient: vertical;
+  -webkit-line-clamp: 2;
+  overflow: hidden;
+  overflow-wrap: anywhere;
+}
+
+.form {
+  display: flex;
+  flex-direction: column;
+  align-items: stretch;
+  gap: var(--space-4);
+}
+
+.formActions {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: var(--space-3);
+}
+
+.hint {
+  margin: 0;
+  font-size: var(--fs-meta);
+  color: var(--color-text-dim);
+}
+
+/* ------------------------------------------------------------------------------ the rich text */
+
+.editor {
+  display: flex;
+  flex-direction: column;
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-md);
+  background: var(--color-bg-deep);
+  min-width: 0;
+}
+
+/* Stays in reach while a long post scrolls under it. */
+.toolbar {
+  position: sticky;
+  top: 0;
+  z-index: 1;
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--space-1);
+  padding: var(--space-2);
+  border-bottom: 1px solid var(--color-border);
+  border-radius: var(--radius-md) var(--radius-md) 0 0;
+  background: var(--color-surface-raised);
+}
+
+.tool {
+  min-height: var(--space-8);
+  min-width: var(--space-8);
+  background: transparent;
+  border: 1px solid transparent;
+  border-radius: var(--radius-sm);
+  padding: var(--space-1) var(--space-3);
+  color: var(--color-text-muted);
+  font-family: inherit;
+  font-size: var(--fs-meta);
+  font-weight: 600;
+  cursor: pointer;
+  white-space: nowrap;
+}
+
+.tool:hover:not(:disabled) {
+  color: var(--color-text);
+  border-color: var(--color-border-strong);
+}
+
+.tool[aria-pressed='true'] {
+  border-color: var(--color-primary-strong);
+  background: var(--color-primary-soft);
+  color: var(--color-text);
+}
+
+.tool:disabled {
+  cursor: progress;
+  color: var(--color-text-dim);
+}
+
+/* The file input is driven by its button; it is never seen or tabbed to. */
+.file {
+  display: none;
+}
+
+.editorContent :global(.ProseMirror) {
+  min-height: 20rem;
+  padding: var(--space-4);
+  font-size: var(--fs-body);
+  line-height: 1.6;
+  color: var(--color-text);
+  overflow-wrap: anywhere;
+  /* The field's edge is the frame around the toolbar and the surface together. */
+  outline: none !important;
+}
+
+.editorContent :global(.ProseMirror) > * + * {
+  margin-top: var(--space-4);
+}
+
+.editorContent :global(.ProseMirror) p {
+  margin-bottom: 0;
+}
+
+.editorContent :global(.ProseMirror) > :first-child {
+  margin-top: 0;
+}
+
+.editorContent :global(.ProseMirror) h2 {
+  margin-bottom: 0;
+  font-size: var(--fs-card-title);
+  font-weight: 700;
+  line-height: 1.3;
+}
+
+.editorContent :global(.ProseMirror) h3 {
+  margin-bottom: 0;
+  font-size: var(--fs-body);
+  font-weight: 700;
+  line-height: 1.3;
+}
+
+.editorContent :global(.ProseMirror) ul,
+.editorContent :global(.ProseMirror) ol {
+  margin-bottom: 0;
+  padding-left: var(--space-5);
+}
+
+.editorContent :global(.ProseMirror) li p {
+  margin: 0;
+}
+
+.editorContent :global(.ProseMirror) blockquote {
+  margin-left: 0;
+  margin-right: 0;
+  margin-bottom: 0;
+  padding-left: var(--space-4);
+  border-left: 2px solid var(--color-primary);
+}
+
+.editorContent :global(.ProseMirror) code {
+  padding: 0 var(--space-1);
+  border-radius: var(--radius-sm);
+  background: var(--color-surface);
+  font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
+  font-size: var(--fs-meta);
+}
+
+.editorContent :global(.ProseMirror) pre {
+  margin-bottom: 0;
+  padding: var(--space-4);
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-sm);
+  background: var(--color-surface);
+  overflow-x: auto;
+}
+
+.editorContent :global(.ProseMirror) pre code {
+  padding: 0;
+  background: transparent;
+}
+
+.editorContent :global(.ProseMirror) hr {
+  margin-bottom: 0;
+  border: none;
+  border-top: 1px solid var(--color-border);
+}
+
+.editorContent :global(.ProseMirror) a {
+  color: var(--color-primary-icon);
+  text-decoration: underline;
+}
+
+.editorContent :global(.ProseMirror) img {
+  display: block;
+  max-width: 100%;
+  height: auto;
+  border-radius: var(--radius-sm);
+}
+
+/* The selected picture or video — what Delete will take. */
+.editorContent :global(.ProseMirror) :global(.ProseMirror-selectednode) {
+  box-shadow: 0 0 0 2px var(--color-primary-strong);
+  border-radius: var(--radius-sm);
+}
+
+.editorContent :global(.ProseMirror) :global([data-youtube-video]) {
+  position: relative;
+  width: 100%;
+  aspect-ratio: 16 / 9;
+}
+
+.editorContent :global(.ProseMirror) :global([data-youtube-video]) iframe {
+  position: absolute;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+  border: 0;
+  border-radius: var(--radius-sm);
+}

@@ -79,7 +79,7 @@ export type GuardedDeletion = Guarded<AccountDeletion>;
  *    public notes that moved in step 2 stay hidden from every reader who had chosen not to see
  *    them. The person's own blocks go with the row: nobody is left for them to protect.
  * 7. **The account row is deleted**, and every foreign key to `user` does what the schema says:
- *    sessions, password resets, deletion requests, playback positions, onboarding completions,
+ *    sessions, password resets, deletion requests, playback positions,
  *    reactions, the person's own notifications and the vectors of their private notes cascade;
  *    `invited_by`, `deleted_by`, `pinned_by`, `reviewed_by`, `corrected_by_user_id`, `sent_by`,
  *    `actor_id`, `raised_by` and `created_by` set null. Nothing in this function names those

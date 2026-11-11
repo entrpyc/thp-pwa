@@ -337,6 +337,20 @@
       "when": 1794005782120,
       "tag": "0047_note_folders",
       "breakpoints": true
+    },
+    {
+      "idx": 48,
+      "version": "7",
+      "when": 1794400115260,
+      "tag": "0048_release_notes",
+      "breakpoints": true
+    },
+    {
+      "idx": 49,
+      "version": "7",
+      "when": 1794400126524,
+      "tag": "0049_drop_onboarding",
+      "breakpoints": true
     }
   ]
 }

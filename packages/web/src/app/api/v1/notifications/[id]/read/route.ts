@@ -11,7 +11,7 @@ export const dynamic = 'force-dynamic';
  *
  * Always the caller's own: the store's `where` carries the session's account beside the id, so
  * another member's notification answers `not_found` exactly as an id nobody has does. `PUT`, for
- * the reason the onboarding completion is: a read is a fact that is either recorded or not, and
+ * the reason a playback position is: a read is a fact that is either recorded or not, and
  * marking it twice is the same fact.
  */
 export const PUT = apiRoute(SESSION, async (_request, context) =>

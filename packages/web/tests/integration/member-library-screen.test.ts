@@ -342,9 +342,9 @@ describe('the top navigation', () => {
         'My highlights',
         'All series',
         // Below the destinations and above the way out: neither is a place in the product, and
-        // both are offered to every role on the same terms. The tour replays the new-user
-        // onboarding; the report is the one entry that is not a destination at all.
-        'App tour',
+        // both are offered to every role on the same terms. Release notes say what is new in
+        // the app; the report is the one entry that is not a destination at all.
+        'Release notes',
         'Report a bug',
         // The member's own account, last before the way out.
         'My profile',
@@ -365,7 +365,7 @@ describe('the top navigation', () => {
         'My highlights',
         'All series',
         'Admin console',
-        'App tour',
+        'Release notes',
         'Report a bug',
         'My profile',
         'Sign out',

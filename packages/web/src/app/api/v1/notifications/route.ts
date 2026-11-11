@@ -11,7 +11,7 @@ export const dynamic = 'force-dynamic';
  * ([3.17.2](docs/project/prd.md), [3.17.3](docs/project/prd.md)).
  *
  * Behind a session and nothing more: the rows are keyed on the caller's own id, so there is no
- * resource to authorise against — the shape playback progress and onboarding completion take. The
+ * resource to authorise against — the shape playback progress takes. The
  * one parameter names the last row the centre already holds, and the answer is the page after it.
  */
 export const GET = apiRoute(SESSION, async (request, context) =>

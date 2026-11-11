@@ -293,11 +293,22 @@ export const POLICY_ACTIONS = [
    * something is the day the split stops being decoration.
    *
    * There is deliberately **no `notification.read`**. A member's notifications are keyed on the
-   * caller's own id, the shape playback progress and onboarding completion already take: there is
+   * caller's own id, the shape playback progress already takes: there is
    * no resource to authorise against, so those routes are behind a session and nothing more.
    */
   'announcement.send',
   'announcement.list',
+  /**
+   * **The five release-note actions.** Reading the list and reading one post are every member's;
+   * writing one, changing one and removing one are the admin's. Five rather than a read and a
+   * `release-note.manage`, for the reason every group above is split: the day a Contributor may
+   * write a post without being able to delete somebody else's is one word here.
+   */
+  'release-note.list',
+  'release-note.read',
+  'release-note.create',
+  'release-note.edit',
+  'release-note.delete',
   /**
    * **The three block actions** — blocking a member, unblocking one, and reading your own blocked
    * list. Three rather than one `block.manage`, the split every group above takes.
@@ -610,6 +621,12 @@ const RULES: PolicyRules = {
   // puts *broadcast announcements* under Admin alone). A member is told; a member does not tell.
   'announcement.send': { roles: { admin: true, member: false } },
   'announcement.list': { roles: { admin: true, member: false } },
+  // Everybody reads what is new; saying what is new is operator work, as an announcement is.
+  'release-note.list': { roles: { admin: true, member: true } },
+  'release-note.read': { roles: { admin: true, member: true } },
+  'release-note.create': { roles: { admin: true, member: false } },
+  'release-note.edit': { roles: { admin: true, member: false } },
+  'release-note.delete': { roles: { admin: true, member: false } },
   // Both roles, on the same terms, and over anybody. A block is a member's own control over what
   // they see — the one thing this table never makes an operator's business.
   'block.create': { roles: { admin: true, member: true } },

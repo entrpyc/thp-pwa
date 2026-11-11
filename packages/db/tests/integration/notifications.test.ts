@@ -9,6 +9,7 @@ import {
   insertNotification,
   insertNotificationForAllMembers,
   insertRecording,
+  insertReleaseNote,
   insertUser,
   listAnnouncements,
   listNotificationsForUser,
@@ -232,8 +233,16 @@ describe('one reactor, one notice', () => {
 describe('an announcement is kept once', () => {
   it('records the send with its sender, takes the recipient count, and lists newest first', async () => {
     const admin = await newUser('sender');
+    const post = await insertReleaseNote(
+      {
+        title: `Post ${RUN}`,
+        body: { type: 'doc', content: [{ type: 'paragraph', content: [{ type: 'text', text: 'new' }] }] },
+        createdBy: admin,
+      },
+      handle,
+    );
     const sent = await insertAnnouncement(
-      { kind: 'new_feature', title: `Feature ${RUN}`, body: 'try it', onboardingId: 'new-user', sentBy: admin },
+      { kind: 'new_feature', title: `Feature ${RUN}`, body: 'try it', releaseNoteId: post.id, sentBy: admin },
       handle,
     );
     expect(sent.sentByDisplayName).toBe('Notif sender');
@@ -244,20 +253,19 @@ describe('an announcement is kept once', () => {
 
     const listed = await listAnnouncements(handle);
     expect(listed[0]?.id).toBe(sent.id);
-    expect(listed[0]?.onboardingId).toBe('new-user');
+    expect(listed[0]?.releaseNoteId).toBe(post.id);
+    expect(listed[0]?.releaseNoteTitle).toBe(`Post ${RUN}`);
   });
 
-  it('refuses a new feature with no onboarding and an announcement with one', async () => {
+  it('refuses an announcement that points at a release note', async () => {
     const admin = await newUser('sender2');
+    const post = await insertReleaseNote(
+      { title: `Post two ${RUN}`, body: { type: 'doc', content: [{ type: 'horizontalRule' }] }, createdBy: admin },
+      handle,
+    );
     await expect(
       insertAnnouncement(
-        { kind: 'new_feature', title: 'x', body: 'y', onboardingId: null, sentBy: admin },
-        handle,
-      ),
-    ).rejects.toThrow();
-    await expect(
-      insertAnnouncement(
-        { kind: 'announcement', title: 'x', body: 'y', onboardingId: 'new-user', sentBy: admin },
+        { kind: 'announcement', title: 'x', body: 'y', releaseNoteId: post.id, sentBy: admin },
         handle,
       ),
     ).rejects.toThrow();

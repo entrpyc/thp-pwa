@@ -1,4 +1,5 @@
 import { NextResponse, type NextRequest } from 'next/server';
+import { YOUTUBE_EMBED_ORIGIN } from '@thp/shared/release-notes';
 import { readAppOrigin } from '@/server/mail/env';
 
 /**
@@ -24,6 +25,8 @@ import { readAppOrigin } from '@/server/mail/env';
  *   where presigned uploads go, where audio and artwork are fetched from, and where the downloads
  *   screen pulls a file for offline keeping. `blob:` is the object URLs the player and the
  *   composer build; `data:` is the inline icons.
+ * - `frame-src`: YouTube's no-cookie player and nothing else — a release note may carry a video,
+ *   and that frame is the only one the product draws.
  * - `worker-src 'self'`: the service worker. `frame-ancestors 'none'` is the clickjacking lock;
  *   `object-src 'none'` and `base-uri 'self'` close the two classic escapes from a nonce policy;
  *   `form-action 'self'` means no form on this site can be re-targeted at another origin.
@@ -81,6 +84,8 @@ export function contentSecurityPolicy(nonce: string, options: PolicyOptions): st
     `media-src 'self' blob:${media}`,
     `connect-src 'self'${api}${media}${options.development ? ' ws: wss:' : ''}`,
     `font-src 'self' data:`,
+    // The one frame the product draws: a YouTube video in a release note, from the no-cookie host.
+    `frame-src ${YOUTUBE_EMBED_ORIGIN}`,
     `worker-src 'self'`,
     `manifest-src 'self'`,
     `frame-ancestors 'none'`,

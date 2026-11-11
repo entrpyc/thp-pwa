@@ -13,6 +13,7 @@ export {
   mintOriginalKey,
   mintPlaybackKey,
   mintPreviewKey,
+  mintReleaseNoteImageKey,
   type MediaStore,
   type PresignedPut,
   type PreviewSide,

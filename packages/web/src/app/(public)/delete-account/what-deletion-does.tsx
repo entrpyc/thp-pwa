@@ -22,7 +22,7 @@ export function WhatDeletionDoes() {
       <li>
         <strong>Gone for good:</strong> your account — the email address, display name and
         password — every session on every device, your private notes and their search index, your
-        listening positions and history, your reactions, your notifications, your onboarding and
+        listening positions and history, your reactions, your notifications, your
         settings, and your current profile picture. The address is freed for a new account.
       </li>
       <li>

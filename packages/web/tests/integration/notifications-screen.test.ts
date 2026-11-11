@@ -6,7 +6,7 @@ import {
   NOTIFICATIONS_PAGE_PATH,
   NOTIFICATIONS_PAGE_SIZE,
   ROLE,
-  onboardingPagePath,
+  ADMIN_RELEASE_NOTES_PAGE_PATH,
   recordingPagePath,
 } from '@thp/shared';
 import {
@@ -25,7 +25,7 @@ import { closeTestDatabase, createAccount, type TestAccount } from '../support/a
  * The API's half is `notifications.test.ts`; what a fetch cannot answer is what this file asks.
  * Whether the bell shows the count. Whether pressing a row goes where the row says and takes one
  * off the bell. Whether an admin can compose a new feature from the console and a member is then
- * taken into the onboarding by pressing it. Whether the centre opens on one page and fills the next
+ * taken to the release note by pressing it. Whether the centre opens on one page and fills the next
  * as the member scrolls to the foot.
  */
 
@@ -172,20 +172,39 @@ describe('the centre fills as the member scrolls', () => {
 });
 
 describe('a new feature, end to end', () => {
-  it('is composed on the console and takes a member into the onboarding it names', async () => {
+  it('is composed on the console and takes a member to the release note it names', async () => {
     const admin = await createAccount(databaseUrl, ROLE.admin, `feature-admin-${RUN}`);
     const member = await createAccount(databaseUrl, ROLE.member, `feature-member-${RUN}`);
     const title = `Tour again ${RUN}`;
+    const postTitle = `What is new ${RUN}`;
 
     const panel = await signInAs(admin);
     try {
+      // The post first, written in the console's own editor.
+      await panel.goto(`${baseUrl}${ADMIN_RELEASE_NOTES_PAGE_PATH}`, {
+        waitUntil: 'domcontentloaded',
+      });
+      await panel.getByRole('button', { name: 'New post' }).click();
+      await panel.getByLabel('Title').fill(postTitle);
+      const editor = panel.getByRole('textbox', { name: 'Post' });
+      await editor.click();
+      await panel.keyboard.type('The player has a new control.');
+      await panel.getByRole('button', { name: 'Publish post' }).click();
+      await expect.poll(() => panel.getByRole('status').count(), { timeout: 30_000 }).toBe(1);
+      expect(await panel.getByRole('status').textContent()).toContain('is published');
+
       await panel.goto(`${baseUrl}${ADMIN_ANNOUNCEMENTS_PAGE_PATH}`, {
         waitUntil: 'domcontentloaded',
       });
       await panel.getByRole('button', { name: 'New feature', exact: true }).click();
       await panel.getByLabel('Title').fill(title);
       await panel.getByLabel('Message').fill('The tour has new slides.');
-      await panel.getByLabel('Onboarding id').fill('new-user');
+      await expect
+        .poll(() => panel.getByLabel('Release note').locator('option', { hasText: postTitle }).count(), {
+          timeout: 30_000,
+        })
+        .toBe(1);
+      await panel.getByLabel('Release note').selectOption({ label: postTitle });
       await panel.getByRole('button', { name: 'Send to all members' }).click();
       await panel.getByRole('button', { name: 'Yes, send it' }).click();
       await expect.poll(() => panel.getByRole('status').count(), { timeout: 30_000 }).toBe(1);
@@ -207,7 +226,12 @@ describe('a new feature, end to end', () => {
       await expect.poll(() => row.count(), { timeout: 30_000 }).toBe(1);
       expect(await row.textContent()).toContain('New feature');
       await row.click();
-      await page.waitForURL(`${baseUrl}${onboardingPagePath('new-user')}`, { timeout: 30_000 });
+      await page.waitForURL(/\/release-notes\/[0-9a-f-]{36}$/, { timeout: 30_000 });
+      // The post itself: its title as the heading, and the words typed into the editor.
+      await expect
+        .poll(() => page.getByRole('heading', { name: postTitle }).count(), { timeout: 30_000 })
+        .toBe(1);
+      expect(await page.getByText('The player has a new control.').count()).toBe(1);
     } finally {
       await page.context().close();
     }

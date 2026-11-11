@@ -333,7 +333,7 @@ describe('deleting your own account from a session', () => {
     expect(JSON.stringify(after)).not.toContain(leaver.displayName);
   }, 120_000);
 
-  it('deletes the avatar object, playback state, onboarding, sessions and invitations, and frees the address', async () => {
+  it('deletes the avatar object, playback state, sessions and invitations, and frees the address', async () => {
     const leaver = await signedIn('member', 'leaver-3');
     const admin = await signedIn('admin', 'admin-3');
     const key = await giveAvatar(leaver);
@@ -352,7 +352,6 @@ describe('deleting your own account from a session', () => {
 
     expect(await mediaStore().head(key)).toBeNull();
     expect(await count('session', 'user_id', leaver.id)).toBe(0);
-    expect(await count('user_onboarding', 'user_id', leaver.id)).toBe(0);
     expect(await count('playback_progress', 'user_id', leaver.id)).toBe(0);
     expect((await call(AUTH_SESSION_PATH, { cookie: second.cookie ?? '' })).status).toBe(401);
     const invitations = await sql<{ n: string }[]>`select count(*)::text as n from invitation where lower(email) = ${leaver.email}`;

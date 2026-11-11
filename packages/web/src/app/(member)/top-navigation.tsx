@@ -9,11 +9,10 @@ import {
   HIGHLIGHTS_PAGE_PATH,
   MEMBER_SERIES_PAGE_PATH,
   MY_NOTES_PAGE_PATH,
-  NEW_USER_ONBOARDING_ID,
   NOTIFICATIONS_PAGE_PATH,
+  RELEASE_NOTES_PAGE_PATH,
   PROFILE_PAGE_PATH,
   SEARCH_PAGE_PATH,
-  onboardingPagePath,
 } from '@thp/shared';
 import { SignOutButton } from '../sign-out-button';
 import { useNotifications } from './notifications-context';
@@ -312,17 +311,16 @@ export function TopNavigation({ canSeeConsole }: { canSeeConsole: boolean }) {
               </li>
             ) : null}
             {/*
-              The tour's own promise, kept: its last slide says "you can always come back to it
-              later", and this is the way back. Replaying it changes nothing — the completion is
-              already recorded, so finishing or skipping simply returns to the dashboard.
+              What is new in the app: the posts an admin writes when something ships. Where the
+              tour's entry used to be — release notes replaced the onboarding system.
             */}
             <li>
               <Link
                 className={styles.menuLink}
-                href={onboardingPagePath(NEW_USER_ONBOARDING_ID)}
+                href={RELEASE_NOTES_PAGE_PATH}
                 onClick={() => setOpen(false)}
               >
-                App tour
+                Release notes
               </Link>
             </li>
             {/*

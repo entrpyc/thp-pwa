@@ -4,6 +4,7 @@ import {
   ADMIN_PAGE_PATH,
   ADMIN_PIPELINE_PAGE_PATH,
   ADMIN_RECORDINGS_PAGE_PATH,
+  ADMIN_RELEASE_NOTES_PAGE_PATH,
   ADMIN_REPORTS_PAGE_PATH,
   ADMIN_REVIEWS_PAGE_PATH,
   ADMIN_SERIES_PAGE_PATH,
@@ -39,6 +40,7 @@ const PANELS = [
   { id: 'series', href: ADMIN_SERIES_PAGE_PATH, label: 'Series' },
   { id: 'tags', href: ADMIN_TAGS_PAGE_PATH, label: 'Tags' },
   { id: 'announcements', href: ADMIN_ANNOUNCEMENTS_PAGE_PATH, label: 'Announcements' },
+  { id: 'release-notes', href: ADMIN_RELEASE_NOTES_PAGE_PATH, label: 'Release notes' },
   { id: 'reports', href: ADMIN_REPORTS_PAGE_PATH, label: 'Reports' },
 ] as const;
 

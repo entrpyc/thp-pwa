@@ -2,17 +2,14 @@ import { afterAll, beforeAll, describe, expect, it, inject } from 'vitest';
 import { chromium, type Browser, type Page } from 'playwright';
 import {
   DASHBOARD_PAGE_PATH,
-  NEW_USER_ONBOARDING_ID,
   PROFILE_PAGE_PATH,
   ROLE,
   type Role,
 } from '@thp/shared';
-import { completeOnboarding } from '@thp/db';
 import { PROFILE_SECTIONS } from '@/app/(member)/profile/sections';
 import {
   closeTestDatabase,
   createAccount,
-  testDatabase,
   type TestAccount,
 } from '../support/accounts';
 
@@ -47,16 +44,9 @@ afterAll(async () => {
   await closeTestDatabase();
 });
 
-/**
- * A fresh account that has already been through the new-user tour. The member layout routes an
- * account that has not into the onboarding before anything else renders, and that is the tour's
- * business, not this screen's — so the completion is recorded up front, the way a member who has
- * used the product for a week already has it.
- */
+/** A fresh account for one test. The name is from when a new account met a tour first. */
 async function memberPastTheTour(label: string, role: Role = ROLE.member): Promise<TestAccount> {
-  const account = await createAccount(databaseUrl, role, label);
-  await completeOnboarding(account.id, NEW_USER_ONBOARDING_ID, testDatabase(databaseUrl));
-  return account;
+  return createAccount(databaseUrl, role, label);
 }
 
 async function signInAs(

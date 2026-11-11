@@ -33,7 +33,7 @@ matching `onDelete`. Nothing else is needed.
 
 | The row is… | `onDelete` | Why |
 | --- | --- | --- |
-| **a fact about the person and nothing else** — a session, a reset or deletion token, a playback position, an onboarding completion, a reaction, a notification *for* them, the vector of a private note | `cascade` | Meaningless without the person. Goes with them. |
+| **a fact about the person and nothing else** — a session, a reset or deletion token, a playback position, a reaction, a notification *for* them, the vector of a private note | `cascade` | Meaningless without the person. Goes with them. |
 | **a record of something that happened to somebody else, that this person caused** — `invited_by`, `deleted_by`, `pinned_by`, `reviewed_by`, `corrected_by_user_id`, `sent_by`, `raised_by`, `created_by`, `actor_id` | `set null` | The record survives; who did it becomes "an account since removed", which every reader of these columns already handles. |
 | **public content the person authored for the group** — a public note or reply, including a tombstone | `restrict`, and the erasure re-points it at the placeholder first | 3.1.10. The restrict is deliberate and stays: a hand at the database cannot take a group's study notes with one person's row. The erasure satisfies it by moving the rows, never by weakening the key. |
 | **private content the person authored** — a private note | `restrict`, and the erasure deletes it first | 3.1.9. Deleted outright rather than tombstoned: a tombstone holds a thread's shape, and a private note has no thread. |
@@ -53,7 +53,7 @@ against the schema, not a second copy of it.
 
 - `session`, `password_reset`, `account_deletion_request` — cascade. Every device is signed out
   by the row going; the cookie the browser still holds resolves to nothing.
-- `playback_progress`, `user_onboarding`, `note_reaction` — cascade. Reaction counts other
+- `playback_progress`, `note_reaction` — cascade. Reaction counts other
   members see drop by one.
 - `notification_preference`, `push_subscription` — cascade. The person's push switches and
   every device address they registered go; no push can reach a device after the row is gone,
@@ -67,7 +67,7 @@ against the schema, not a second copy of it.
 - `note.author_id` — restrict; see the table above. `note.deleted_by` — set null.
 - `note_pin.pinned_by`, `invitation.invited_by`, `review_item.reviewed_by`,
   `segment.corrected_by_user_id`, `announcement.sent_by`, `spend_ceiling_raise.raised_by`,
-  `sound_profile.created_by` — set null.
+  `sound_profile.created_by`, `release_note.created_by` — set null.
 - `note_report.reporter_id`, `note_report.resolved_by` — set null: a report made and a decision
   taken are records of something that happened to somebody else's note. The admins' notice that
   this person reported a note has its title rewritten to the placeholder's name, as a reply's is.
@@ -152,7 +152,7 @@ What the product can promise, and what it cannot:
 
 - Deleting an account removes the account, the password hash, the display name, the address,
   every session, every private note and its search vector, the Highlights playlist, listening
-  positions and history, onboarding state, reactions, the in-app inbox, push preferences and
+  positions and history, reactions, the in-app inbox, push preferences and
   every registered device address, and the current profile picture. It frees the address for a
   new account.
 - Public notes and replies the person wrote stay on the recordings they were written on, with

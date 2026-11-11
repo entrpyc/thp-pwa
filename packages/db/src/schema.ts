@@ -45,6 +45,7 @@ import {
   MAX_SOS_REPLY_LENGTH,
   MAX_SOUND_PROFILE_NOTE_LENGTH,
   MAX_PUSH_ENDPOINT_LENGTH,
+  MAX_RELEASE_NOTE_TITLE_LENGTH,
   MAX_TAG_LENGTH,
   NOTE_VISIBILITIES,
   NOTIFICATION_CATEGORIES,
@@ -62,6 +63,7 @@ import {
   SYNC_ENTRY_KINDS,
   SYNC_RESULT_STATUSES,
   UNFINISHED_JOB_STATUSES,
+  type StoredReleaseNoteDoc,
 } from '@thp/shared';
 
 /**
@@ -909,31 +911,6 @@ export const playbackProgress = pgTable(
 );
 
 /**
- * **Which onboardings this account has been through.**
- *
- * A row means "seen, never show it on sign-in again"; its absence means the next sign-in routes
- * into the onboarding. One table for every onboarding the product will ever have rather than a
- * column per onboarding on `user`, so the next onboarding is a shared id plus its slides and no
- * migration.
- *
- * `onboarding_id` is plain text rather than an enum: the set of onboardings is a fact about the
- * client (`ONBOARDING_IDS` in `@thp/shared`, which the API checks against before writing), and an
- * enum here would make retiring an old onboarding a migration on rows nobody reads any more.
- * The composite key is the idempotence: completing twice updates nothing and grows nothing.
- */
-export const userOnboarding = pgTable(
-  'user_onboarding',
-  {
-    userId: uuid('user_id')
-      .notNull()
-      .references(() => user.id, { onDelete: 'cascade' }),
-    onboardingId: text('onboarding_id').notNull(),
-    completedAt: timestamp('completed_at', { withTimezone: true }).notNull().defaultNow(),
-  },
-  (table) => [primaryKey({ columns: [table.userId, table.onboardingId] })],
-);
-
-/**
  * **A note written at a moment in a teaching** (active-scope architecture § 6.1) — the first
  * member-authored content in the product, and the first table whose rules are worth stating at the
  * database rather than in the code that writes it.
@@ -1460,6 +1437,41 @@ export const seriesTag = pgTable(
 );
 
 /**
+ * **A release note** — a post an admin writes to say what is new. Members read the list and open
+ * one; a new-feature notice lands on one (`announcement.release_note_id` below).
+ *
+ * `body` is the document the editor produced, already read by `parseReleaseNoteDoc` in
+ * `@thp/shared` — a tree of a fixed set of node types, never markup. `jsonb` rather than text
+ * because it is a tree and is only ever read whole; the type is the shared one, so a reader of the
+ * column gets the document rather than `unknown`.
+ *
+ * A post's pictures are upload keys inside that document, under `release-notes/` in the media
+ * store. There is no row per picture: nothing asks "whose picture is this key" the way a note's
+ * moderation does, and the store has no delete to drive from one.
+ *
+ * `created_by` sets null on delete, the house shape — the post survives the account.
+ */
+export const releaseNote = pgTable(
+  'release_note',
+  {
+    id: uuid('id').primaryKey().defaultRandom(),
+    title: text('title').notNull(),
+    body: jsonb('body').$type<StoredReleaseNoteDoc>().notNull(),
+    createdBy: uuid('created_by').references(() => user.id, { onDelete: 'set null' }),
+    createdAt: timestamp('created_at', { withTimezone: true }).notNull().defaultNow(),
+    updatedAt: timestamp('updated_at', { withTimezone: true }).notNull().defaultNow(),
+  },
+  (table) => [
+    check(
+      'release_note_title_length',
+      sql`char_length(${table.title}) between 1 and ${sql.raw(String(MAX_RELEASE_NOTE_TITLE_LENGTH))}`,
+    ),
+    /** The list: every post, newest first. */
+    index('release_note_created_idx').on(table.createdAt),
+  ],
+);
+
+/**
  * **Something an admin sent to everybody** ([3.17.9](docs/project/prd.md),
  * [3.17.17](docs/project/prd.md), [3.19.8](docs/project/prd.md)) — the message itself, kept once,
  * with one `notification` row per recipient hanging off it.
@@ -1470,9 +1482,7 @@ export const seriesTag = pgTable(
  * moment, which a thousand copies of it are not.
  *
  * `kind` is the shared enum restricted to the two an admin composes — a check rather than a
- * second enum, so the vocabulary stays declared once. `onboarding_id` is plain text, exactly as
- * `user_onboarding.onboarding_id` is: which ids are real is a fact about the client, checked by
- * the API before the write. `sent_by` sets null on delete, the house shape for `invited_by` and
+ * second enum, so the vocabulary stays declared once. `sent_by` sets null on delete, the house shape for `invited_by` and
  * `pinned_by` — the send survives the account.
  */
 export const announcement = pgTable(
@@ -1482,8 +1492,12 @@ export const announcement = pgTable(
     kind: notificationKind('kind').notNull(),
     title: text('title').notNull(),
     body: text('body').notNull(),
-    /** Where a new-feature notice lands. Present exactly on a new feature. */
-    onboardingId: text('onboarding_id'),
+    /**
+     * The release note a new-feature notice lands on. Never set on an announcement (the check
+     * below). Null on a new feature whose post was deleted afterwards — the send is a record of
+     * what was said and outlives the post — and on one sent before release notes existed.
+     */
+    releaseNoteId: uuid('release_note_id').references(() => releaseNote.id, { onDelete: 'set null' }),
     sentBy: uuid('sent_by').references(() => user.id, { onDelete: 'set null' }),
     sentAt: timestamp('sent_at', { withTimezone: true }).notNull().defaultNow(),
     /** Every active account at the moment of sending — what the fan-out wrote, counted once. */
@@ -1495,10 +1509,10 @@ export const announcement = pgTable(
       'announcement_kind_composed',
       sql`${table.kind} in (${sql.raw(ANNOUNCEMENT_KINDS.map((one) => `'${one}'`).join(', '))})`,
     ),
-    /** A new feature points at an onboarding; an announcement points at nothing. */
+    /** Only a new feature points at a release note; an announcement points at nothing. */
     check(
-      'announcement_onboarding_on_new_feature',
-      sql`(${table.kind} = 'new_feature') = (${table.onboardingId} is not null)`,
+      'announcement_release_note_on_new_feature',
+      sql`${table.kind} = 'new_feature' or ${table.releaseNoteId} is null`,
     ),
     check(
       'announcement_title_length',
@@ -2212,8 +2226,8 @@ export const noteFolderNote = pgTable(
  * collide with themselves — one outbox per account per device, and a uuid per entry.
  *
  * `kind`, `status` and `code` are text with a check rather than enums, because they are the wire
- * vocabulary of `@thp/shared`'s offline contract and a retired status is a row nobody reads again —
- * the argument `user_onboarding` makes for its id. The checks still derive from the shared lists,
+ * vocabulary of `@thp/shared`'s offline contract and a retired status is a row nobody reads again.
+ * The checks still derive from the shared lists,
  * so the column cannot hold a word the contract does not.
  *
  * **Deletion follows the README**: `user_id` cascades — a receipt is a fact about the person's own

@@ -1,7 +1,7 @@
 import { and, desc, eq, isNull, sql } from 'drizzle-orm';
 import { getDatabase, queryable, type Executor } from './client';
 import { blockPlacedByViewer, noBlockBetween } from './member-blocks';
-import { announcement, notification, sosSignal, user } from './schema';
+import { announcement, notification, releaseNote, sosSignal, user } from './schema';
 import {
   ROLE,
   SOS_URGENCIES,
@@ -71,7 +71,9 @@ export interface AnnouncementRow {
   readonly kind: AnnouncementKind;
   readonly title: string;
   readonly body: string;
-  readonly onboardingId: string | null;
+  readonly releaseNoteId: string | null;
+  /** The post's title as it reads now, joined for the console's line. */
+  readonly releaseNoteTitle: string | null;
   readonly sentBy: string | null;
   readonly sentByDisplayName: string | null;
   readonly sentAt: Date;
@@ -82,7 +84,7 @@ export interface NewAnnouncement {
   readonly kind: AnnouncementKind;
   readonly title: string;
   readonly body: string;
-  readonly onboardingId: string | null;
+  readonly releaseNoteId: string | null;
   readonly sentBy: string;
 }
 
@@ -469,7 +471,7 @@ export async function insertAnnouncement(
       kind: input.kind,
       title: input.title,
       body: input.body,
-      onboardingId: input.onboardingId,
+      releaseNoteId: input.releaseNoteId,
       sentBy: input.sentBy,
     })
     .returning({ id: announcement.id });
@@ -499,6 +501,7 @@ export async function findAnnouncementById(
     .select(ANNOUNCEMENT_COLUMNS)
     .from(announcement)
     .leftJoin(user, eq(announcement.sentBy, user.id))
+    .leftJoin(releaseNote, eq(announcement.releaseNoteId, releaseNote.id))
     .where(eq(announcement.id, id))
     .limit(1);
   return (rows[0] as AnnouncementRow | undefined) ?? null;
@@ -512,6 +515,7 @@ export async function listAnnouncements(
     .select(ANNOUNCEMENT_COLUMNS)
     .from(announcement)
     .leftJoin(user, eq(announcement.sentBy, user.id))
+    .leftJoin(releaseNote, eq(announcement.releaseNoteId, releaseNote.id))
     .orderBy(desc(announcement.sentAt), desc(announcement.id));
   return rows as AnnouncementRow[];
 }
@@ -521,7 +525,8 @@ const ANNOUNCEMENT_COLUMNS = {
   kind: announcement.kind,
   title: announcement.title,
   body: announcement.body,
-  onboardingId: announcement.onboardingId,
+  releaseNoteId: announcement.releaseNoteId,
+  releaseNoteTitle: releaseNote.title,
   sentBy: announcement.sentBy,
   sentByDisplayName: user.displayName,
   sentAt: announcement.sentAt,

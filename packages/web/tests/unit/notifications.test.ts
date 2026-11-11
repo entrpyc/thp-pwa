@@ -111,19 +111,20 @@ describe('what a send refuses, before anything is written', () => {
     ).toContain('1,000');
   });
 
-  it('a new feature with no onboarding, or with one the product does not have', async () => {
+  it('a new feature with no release note, or with one that is not a post', async () => {
     expect((await refusal({ kind: 'new_feature', title: 'x', body: 'y' })).message).toContain(
-      'needs the id',
+      'Choose the release note',
     );
+    // Not a uuid, so it is refused without the database being asked.
     expect(
-      (await refusal({ kind: 'new_feature', title: 'x', body: 'y', onboardingId: 'no-such' }))
+      (await refusal({ kind: 'new_feature', title: 'x', body: 'y', releaseNoteId: 'no-such' }))
         .message,
-    ).toContain('no-such');
+    ).toContain('no longer exists');
   });
 
   it('an announcement that carries a link it is not allowed to have', async () => {
     expect(
-      (await refusal({ kind: 'announcement', title: 'x', body: 'y', onboardingId: 'new-user' }))
+      (await refusal({ kind: 'announcement', title: 'x', body: 'y', releaseNoteId: 'any' }))
         .message,
     ).toContain('no link');
   });

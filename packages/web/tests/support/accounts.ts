@@ -1,8 +1,7 @@
-import { completeOnboarding, createDatabase, insertUser, type DatabaseHandle } from '@thp/db';
+import { createDatabase, insertUser, type DatabaseHandle } from '@thp/db';
 import {
   API_PREFIX,
   AUTH_SESSION_PATH,
-  NEW_USER_ONBOARDING_ID,
   SESSION_COOKIE_NAME,
   TERMS_VERSION,
   type Role,
@@ -43,11 +42,6 @@ export interface TestAccount {
 
 export interface CreateAccountOptions {
   /**
-   * Whether the account has already been through the new-user tour. `true` unless a test says
-   * otherwise — see {@link createAccount}.
-   */
-  readonly onboarded?: boolean;
-  /**
    * Whether the account has accepted the current terms. `true` unless a test says otherwise —
    * see {@link createAccount}.
    */
@@ -57,16 +51,7 @@ export interface CreateAccountOptions {
 /**
  * A fresh account, with an address unique to this call so tests never collide.
  *
- * **Past the tour by default.** The member layout routes an account that has never finished the
- * new-user onboarding into it before anything else renders — on every visit, not only the first —
- * so an account written straight into the database here would meet the tour instead of the screen
- * a test came to drive. That is the tour's business, not every other suite's: the completion is
- * recorded up front, the way a member who has used the product for a week already has it. A test
- * that is *about* the tour asks for `{ onboarded: false }` and gets the account as registration
- * would have left it; the flow that creates an account for real — accepting an
- * invitation — never comes through here, so it still lands in the tour and its tests say so.
- *
- * **Past the terms by default, for the same reason.** A note write from an account with no
+ * **Past the terms by default.** A note write from an account with no
  * acceptance on record is refused with `terms_required`, so every suite that writes a note would
  * otherwise meet the prompt instead of the thing it came to drive. A test that is *about* the
  * prompt asks for `{ termsAccepted: false }` and gets the account as an invitation would have
@@ -91,9 +76,6 @@ export async function createAccount(
     },
     testDatabase(databaseUrl),
   );
-  if (options.onboarded !== false) {
-    await completeOnboarding(row.id, NEW_USER_ONBOARDING_ID, testDatabase(databaseUrl));
-  }
   return { id: row.id, email: row.email, displayName: row.displayName, password };
 }
 

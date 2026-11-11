@@ -1,5 +1,3 @@
-import type { OnboardingId } from './onboarding';
-
 /**
  * **In-app notifications — the event vocabulary, the wire contract, and the two things an admin
  * composes** ([3.17](docs/project/prd.md), [4.16](docs/project/prd.md)).
@@ -15,7 +13,7 @@ import type { OnboardingId } from './onboarding';
  *
  * **Two of the five are composed by a person.** An admin announcement is a message from the group's
  * admin; a new-feature notice is the product saying what is new, which is why it carries a link
- * into an onboarding rather than a link an admin types. Both come through one route with a kind
+ * to a release note the admin picks rather than a link an admin types. Both come through one route with a kind
  * picker, because they are the same act — a title, a body, and everybody — differing in who is
  * speaking and where a press lands.
  */
@@ -144,7 +142,7 @@ export const NOTIFICATIONS_BEFORE_PARAM = 'before';
  * One notification, as the member is answered.
  *
  * `href` is **where a press lands** ([3.17.3](docs/project/prd.md)) — a teaching's page for a
- * publish, a reply or a reaction; an onboarding for a new feature — and `null` for an admin
+ * publish, a reply or a reaction; a release note for a new feature — and `null` for an admin
  * announcement, whose content is the notification itself. It is a path on the web origin, never a
  * URL: the client is on the origin already, and a stored absolute URL would be a stored hostname.
  *
@@ -212,18 +210,18 @@ export const MAX_ANNOUNCEMENT_BODY_LENGTH = 1_000;
 /**
  * Body of `POST /api/v1/announcements`.
  *
- * `onboardingId` is **required on a new feature and refused on an announcement**: a new-feature
- * notice exists to take a member into the onboarding that shows the feature, so one without a
+ * `releaseNoteId` is **required on a new feature and refused on an announcement**: a new-feature
+ * notice exists to take a member to the release note that shows the feature, so one without a
  * destination is not one; and an admin announcement carries no link at all, so a destination on
- * one would be a link nobody decided on. The id is typed by the admin and checked by the server
- * against `ONBOARDING_IDS` — a notice pointing at an onboarding that does not exist would be a
- * press that lands on a 404 for every member at once.
+ * one would be a link nobody decided on. The id is picked from the posts that exist and checked by
+ * the server against them — a notice pointing at a post that does not exist would be a press that
+ * lands on a 404 for every member at once.
  */
 export interface SendAnnouncementRequest {
   readonly kind: AnnouncementKind;
   readonly title: string;
   readonly body: string;
-  readonly onboardingId?: OnboardingId | null;
+  readonly releaseNoteId?: string | null;
 }
 
 /** One past send, as the console lists it. */
@@ -232,7 +230,13 @@ export interface AnnouncementView {
   readonly kind: AnnouncementKind;
   readonly title: string;
   readonly body: string;
-  readonly onboardingId: OnboardingId | null;
+  /**
+   * The release note a new feature opens. `null` on an announcement, on a new feature whose post
+   * has since been deleted, and on one sent before release notes existed.
+   */
+  readonly releaseNoteId: string | null;
+  /** That post's title as it reads now, for the console's line; `null` whenever the id is. */
+  readonly releaseNoteTitle: string | null;
   /** The admin who sent it, by display name. */
   readonly sentByDisplayName: string;
   /** How many accounts a row was written for — every active account at the moment of sending. */

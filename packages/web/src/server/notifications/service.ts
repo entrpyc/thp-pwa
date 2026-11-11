@@ -28,12 +28,10 @@ import {
   SOS_PAGE_PATH,
   excerptForNotification,
   isAnnouncementKind,
-  isOnboardingId,
   isSilentNotifier,
   noteReactionNotificationTitle,
   noteReplyNotificationTitle,
   noteReportedNotificationTitle,
-  onboardingPagePath,
   recordingPagePath,
   sosPagePath,
   SOMEONE,
@@ -48,14 +46,15 @@ import {
   type NotificationReadPayload,
   type NotificationView,
   type NotificationsReadAllPayload,
-  type OnboardingId,
   type ReportOutcome,
   type ReportReason,
+  releaseNotePagePath,
   type SendAnnouncementPayload,
   type SosUrgency,
 } from '@thp/shared';
 import { deliverPush } from '@thp/push';
 import { ApiError } from '@/server/api/errors';
+import { releaseNoteExists } from '@/server/release-notes/service';
 import type { Actor } from '@/server/auth/policy';
 import { audit } from '@/server/observability/audit';
 import { logger } from '@/server/observability/logger';
@@ -594,9 +593,9 @@ function describeNotification(row: NotificationRow): NotificationView {
  * notices with no send behind them are both states the console would report wrongly, and a
  * failure halfway is the only way to reach either.
  *
- * A new feature carries the onboarding it opens, checked against the shared list before anything
- * is written — the id is typed by hand, and a typo would be a press that lands on a 404 for every
- * member at once. An announcement carries no destination at all; a body that sends one is refused
+ * A new feature carries the release note it opens, checked to exist before anything is written —
+ * a post deleted while the form was open would be a press that lands on a 404 for every member at
+ * once. An announcement carries no destination at all; a body that sends one is refused
  * rather than silently dropped, so the admin learns the form was read differently from how they
  * meant it.
  */
@@ -605,6 +604,9 @@ export async function sendAnnouncementFor(
   body: unknown,
 ): Promise<SendAnnouncementPayload> {
   const request = parseSendRequest(body);
+  if (request.releaseNoteId !== null && !(await releaseNoteExists(request.releaseNoteId))) {
+    throw ApiError.invalidInput('That release note no longer exists. Choose another one.');
+  }
 
   const row = await withTransaction(async (tx) => {
     const sent = await insertAnnouncement(
@@ -612,7 +614,7 @@ export async function sendAnnouncementFor(
         kind: request.kind,
         title: request.title,
         body: request.body,
-        onboardingId: request.onboardingId,
+        releaseNoteId: request.releaseNoteId,
         sentBy: actor.id,
       },
       tx,
@@ -622,7 +624,7 @@ export async function sendAnnouncementFor(
         kind: request.kind,
         title: request.title,
         body: request.body,
-        href: request.onboardingId === null ? null : onboardingPagePath(request.onboardingId),
+        href: request.releaseNoteId === null ? null : releaseNotePagePath(request.releaseNoteId),
         actorId: actor.id,
         announcementId: sent.id,
       },
@@ -658,9 +660,8 @@ function describeAnnouncement(row: AnnouncementRow): AnnouncementView {
     kind: row.kind,
     title: row.title,
     body: row.body,
-    // Stored as text and answered as the id it was checked to be on the way in; a retired
-    // onboarding's id still travels, and the page it once opened is the client's business.
-    onboardingId: (row.onboardingId as OnboardingId | null) ?? null,
+    releaseNoteId: row.releaseNoteId,
+    releaseNoteTitle: row.releaseNoteTitle,
     // A sender whose account is gone is answered as nobody rather than as a blank the console
     // would print as a name.
     sentByDisplayName: row.sentByDisplayName ?? 'A former admin',
@@ -673,7 +674,7 @@ function parseSendRequest(body: unknown): {
   readonly kind: 'announcement' | 'new_feature';
   readonly title: string;
   readonly body: string;
-  readonly onboardingId: OnboardingId | null;
+  readonly releaseNoteId: string | null;
 } {
   if (typeof body !== 'object' || body === null) {
     throw ApiError.invalidInput('Send a JSON object with the kind, a title and a body.');
@@ -688,26 +689,22 @@ function parseSendRequest(body: unknown): {
   const title = parseLine(fields['title'], 'title', MAX_ANNOUNCEMENT_TITLE_LENGTH);
   const text = parseLine(fields['body'], 'body', MAX_ANNOUNCEMENT_BODY_LENGTH);
 
-  const rawOnboarding = fields['onboardingId'];
+  const rawReleaseNote = fields['releaseNoteId'];
   if (kind === 'announcement') {
-    if (rawOnboarding !== undefined && rawOnboarding !== null && rawOnboarding !== '') {
+    if (rawReleaseNote !== undefined && rawReleaseNote !== null && rawReleaseNote !== '') {
       throw ApiError.invalidInput(
-        'An announcement carries no link. Choose “New feature” to point members at an onboarding.',
+        'An announcement carries no link. Choose “New feature” to point members at a release note.',
       );
     }
-    return { kind, title, body: text, onboardingId: null };
+    return { kind, title, body: text, releaseNoteId: null };
   }
 
-  const onboardingId = typeof rawOnboarding === 'string' ? rawOnboarding.trim() : '';
-  if (onboardingId === '') {
-    throw ApiError.invalidInput('A new feature needs the id of the onboarding that shows it.');
+  const releaseNoteId = typeof rawReleaseNote === 'string' ? rawReleaseNote.trim() : '';
+  if (releaseNoteId === '') {
+    throw ApiError.invalidInput('Choose the release note this new feature opens.');
   }
-  if (!isOnboardingId(onboardingId)) {
-    throw ApiError.invalidInput(
-      `There is no onboarding called “${onboardingId}”. Add it to the onboarding list first.`,
-    );
-  }
-  return { kind, title, body: text, onboardingId };
+  // Whether the post exists is asked of the database by the caller; this only reads the field.
+  return { kind, title, body: text, releaseNoteId };
 }
 
 /** Trimmed, non-empty, and under the ceiling — refused rather than cut. */

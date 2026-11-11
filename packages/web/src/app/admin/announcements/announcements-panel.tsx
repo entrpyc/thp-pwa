@@ -7,11 +7,12 @@ import {
   MAX_ANNOUNCEMENT_BODY_LENGTH,
   MAX_ANNOUNCEMENT_TITLE_LENGTH,
   NOTIFICATION_KIND_LABEL,
-  ONBOARDING_IDS,
+  RELEASE_NOTES_PATH,
   type AnnouncementKind,
   type AnnouncementListPayload,
   type AnnouncementView,
-  type OnboardingId,
+  type ReleaseNoteListPayload,
+  type ReleaseNoteSummary,
   type SendAnnouncementPayload,
   type SendAnnouncementRequest,
 } from '@thp/shared';
@@ -30,10 +31,10 @@ import styles from './announcements.module.css';
  * 1. **The kind is a pill pair, not a dropdown.** Two mutually exclusive choices, one of them
  *    current, is the role picker's shape, and it reads at a glance which voice the message goes
  *    out in — the admin's, or the product's.
- * 2. **A new feature asks for its onboarding, and only then.** The field appears with the kind,
- *    and the id is typed rather than picked — the list of onboardings is a fact about the code,
- *    and an admin adding a feature has just added its id there. The server refuses an id it does
- *    not know, and the refusal is printed here beside text that is still in the form.
+ * 2. **A new feature asks for its release note, and only then.** The dropdown appears with the
+ *    kind and lists the posts that exist, newest first; the one picked is where a press on the
+ *    notification lands. The server checks the post still exists, and its refusal is printed here
+ *    beside text that is still in the form.
  * 3. **Sending takes a confirming press.** It reaches every member at once and cannot be unsent,
  *    so the press that does it is the second one, and the confirmation says so.
  */
@@ -62,18 +63,19 @@ const KIND_HINT: Record<AnnouncementKind, string> = {
   announcement:
     'A message from you to everybody. It has no link — the notification is the message.',
   new_feature:
-    'A notice from the product that something is new. Pressing it opens the onboarding you name below.',
+    'A notice from the product that something is new. Pressing it opens the release note you choose below.',
 };
 
 export function AnnouncementsPanel() {
   const titleId = useId();
   const bodyId = useId();
-  const onboardingId = useId();
+  const releaseNoteFieldId = useId();
 
   const [kind, setKind] = useState<AnnouncementKind>('announcement');
   const [title, setTitle] = useState('');
   const [body, setBody] = useState('');
-  const [onboarding, setOnboarding] = useState('');
+  const [releaseNoteId, setReleaseNoteId] = useState('');
+  const [releaseNotes, setReleaseNotes] = useState<readonly ReleaseNoteSummary[] | null>(null);
   const [confirming, setConfirming] = useState(false);
   const [busy, setBusy] = useState(false);
   const [failure, setFailure] = useState<string | null>(null);
@@ -100,6 +102,14 @@ export function AnnouncementsPanel() {
     void loadSends();
   }, [loadSends]);
 
+  // The posts a new feature can open. Read once: a post written in another tab appears after a
+  // reload, and the server refuses a post deleted in the meantime.
+  useEffect(() => {
+    void apiFetch<ReleaseNoteListPayload>(RELEASE_NOTES_PATH, { credentials: 'include' })
+      .then((payload) => setReleaseNotes(payload.releaseNotes))
+      .catch(() => setReleaseNotes([]));
+  }, []);
+
   function onSubmit(event: FormEvent<HTMLFormElement>): void {
     event.preventDefault();
     if (busy) return;
@@ -113,13 +123,10 @@ export function AnnouncementsPanel() {
     setBusy(true);
     setFailure(null);
     setDone(null);
-    // The id is sent as typed and checked by the server against the list it holds — this screen
-    // does not decide what an onboarding is, it only asks. The cast is the wire type's, not a
-    // claim: a wrong id comes back as the refusal printed below.
+    // The id is the one picked and is checked by the server against the posts that exist; a post
+    // deleted since the list was read comes back as the refusal printed below.
     const request: SendAnnouncementRequest =
-      kind === 'new_feature'
-        ? { kind, title, body, onboardingId: onboarding.trim() as OnboardingId }
-        : { kind, title, body };
+      kind === 'new_feature' ? { kind, title, body, releaseNoteId } : { kind, title, body };
     try {
       const payload = await apiFetch<SendAnnouncementPayload>(ANNOUNCEMENTS_PATH, {
         method: 'POST',
@@ -131,7 +138,7 @@ export function AnnouncementsPanel() {
       setDone(`“${sent.title}” is sent to ${members(sent.recipientCount)}.`);
       setTitle('');
       setBody('');
-      setOnboarding('');
+      setReleaseNoteId('');
       setConfirming(false);
       await loadSends();
     } catch (caught) {
@@ -219,23 +226,33 @@ export function AnnouncementsPanel() {
 
           {kind === 'new_feature' ? (
             <div className={styles.field}>
-              <label className={styles.label} htmlFor={onboardingId}>
-                Onboarding id
+              <label className={styles.label} htmlFor={releaseNoteFieldId}>
+                Release note
               </label>
-              <input
+              <select
                 className={styles.input}
-                id={onboardingId}
-                name="onboardingId"
-                type="text"
-                autoComplete="off"
-                spellCheck={false}
-                disabled={busy}
-                value={onboarding}
-                onChange={(event) => setOnboarding(event.target.value)}
-              />
+                id={releaseNoteFieldId}
+                name="releaseNoteId"
+                disabled={busy || releaseNotes === null}
+                value={releaseNoteId}
+                onChange={(event) => {
+                  setReleaseNoteId(event.target.value);
+                  setConfirming(false);
+                }}
+              >
+                <option value="">
+                  {releaseNotes === null ? 'Loading…' : 'Choose a release note'}
+                </option>
+                {(releaseNotes ?? []).map((post) => (
+                  <option key={post.id} value={post.id}>
+                    {post.title}
+                  </option>
+                ))}
+              </select>
               <p className={styles.hint}>
-                The onboarding a press opens, as it is named in the code. Known today:{' '}
-                {ONBOARDING_IDS.join(', ')}.
+                {releaseNotes !== null && releaseNotes.length === 0
+                  ? 'There are no release notes yet. Write one on the Release notes panel first.'
+                  : 'The post a press on the notification opens.'}
               </p>
             </div>
           ) : null}
@@ -314,7 +331,7 @@ export function AnnouncementsPanel() {
                   <p className={styles.rowBody}>{entry.body}</p>
                   <p className={styles.rowMeta}>
                     {describeSend(entry)}
-                    {entry.onboardingId === null ? null : ` · opens ${entry.onboardingId}`}
+                    {entry.releaseNoteTitle === null ? null : ` · opens “${entry.releaseNoteTitle}”`}
                   </p>
                 </div>
               </li>

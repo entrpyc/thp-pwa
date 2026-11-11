@@ -18,8 +18,9 @@ import type { PolicyRules } from '@/server/auth/policy';
  * taxonomy's list, create, rename and delete, and applying tags to a recording or a series. The
  * notifications scope adds two — sending an announcement to everybody, and listing past sends.
  * Member blocks add three — blocking, unblocking, and reading your own blocked list. Reports add
- * three more — reporting a note, reading the queue, and resolving one. The same edit was required
- * every time.
+ * three more — reporting a note, reading the queue, and resolving one. Release notes add five —
+ * the list and one post for everybody, and create, edit and delete for the admin. The same edit was
+ * required every time.
  */
 export const rules: PolicyRules = {
   'session.read': { roles: { admin: true, member: true } },
@@ -76,6 +77,11 @@ export const rules: PolicyRules = {
   'tag.assign': { roles: { admin: true, member: false } },
   'announcement.send': { roles: { admin: true, member: false } },
   'announcement.list': { roles: { admin: true, member: false } },
+  'release-note.list': { roles: { admin: true, member: true } },
+  'release-note.read': { roles: { admin: true, member: true } },
+  'release-note.create': { roles: { admin: true, member: false } },
+  'release-note.edit': { roles: { admin: true, member: false } },
+  'release-note.delete': { roles: { admin: true, member: false } },
   'block.create': { roles: { admin: true, member: true } },
   'block.remove': { roles: { admin: true, member: true } },
   'block.list': { roles: { admin: true, member: true } },

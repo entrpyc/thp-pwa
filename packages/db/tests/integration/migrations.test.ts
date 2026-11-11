@@ -220,6 +220,7 @@ describe('migrations apply to an empty database by one command', () => {
         'push_subscription',
         'recording',
         'recording_tag',
+        'release_note',
         'review_item',
         'scripture_reference',
         'segment',
@@ -237,7 +238,6 @@ describe('migrations apply to an empty database by one command', () => {
         'tag',
         'transcript',
         'user',
-        'user_onboarding',
         'verse_text',
       ]);
     } finally {

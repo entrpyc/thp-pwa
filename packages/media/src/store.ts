@@ -1,5 +1,10 @@
 import { randomUUID } from 'node:crypto';
-import { extensionForArtworkType, extensionForContentType } from '@thp/shared';
+import {
+  RELEASE_NOTE_IMAGE_KEY_PREFIX,
+  extensionForArtworkType,
+  extensionForContentType,
+  extensionForReleaseNoteImageType,
+} from '@thp/shared';
 import { buildMediaStore } from './s3-store';
 
 /**
@@ -294,6 +299,22 @@ export function mintNoteImageKey(contentType: string, ownerId: string): string {
     throw new Error(`no accepted note image extension for content type "${contentType}"`);
   }
   return `${noteImageKeyPrefixFor(ownerId)}${randomUUID()}.${extension}`;
+}
+
+/**
+ * `release-notes/<uuid>.<ext>` — **`mintArtworkKey`'s rule, one prefix over**, for a picture in a
+ * release note. Its own format table rather than the cover's, because a post may carry a GIF and a
+ * cover may not.
+ *
+ * **It brings no delete with it.** A picture taken out of a post, and every picture of a deleted
+ * post, stays where it is, unreferenced and invisible — the price replaced artwork already pays.
+ */
+export function mintReleaseNoteImageKey(contentType: string): string {
+  const extension = extensionForReleaseNoteImageType(contentType);
+  if (extension === null) {
+    throw new Error(`no accepted release note image extension for content type "${contentType}"`);
+  }
+  return `${RELEASE_NOTE_IMAGE_KEY_PREFIX}${randomUUID()}.${extension}`;
 }
 
 /** Where one member's note-image grants are minted: `note-images/<member id>/`. */
