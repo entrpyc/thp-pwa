@@ -101,7 +101,7 @@ export const NOTIFICATION_KIND_LABEL: Record<NotificationKind, string> = {
   sos_reply: 'Prayer request reply',
   sos_reported: 'Report',
   announcement: 'Announcement',
-  new_feature: 'New feature',
+  new_feature: 'New release',
 };
 
 // =================================================================================================

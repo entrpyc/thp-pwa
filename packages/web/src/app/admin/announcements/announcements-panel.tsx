@@ -63,7 +63,7 @@ const KIND_HINT: Record<AnnouncementKind, string> = {
   announcement:
     'A message from you to everybody. It has no link — the notification is the message.',
   new_feature:
-    'A notice from the product that something is new. Pressing it opens the release note you choose below.',
+    'A notice that a new release is out. Pressing it opens the release note you choose below.',
 };
 
 export function AnnouncementsPanel() {

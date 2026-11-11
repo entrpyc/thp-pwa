@@ -683,7 +683,7 @@ function parseSendRequest(body: unknown): {
 
   const { kind } = fields;
   if (!isAnnouncementKind(kind)) {
-    throw ApiError.invalidInput('Say whether this is an announcement or a new feature.');
+    throw ApiError.invalidInput('Say whether this is an announcement or a new release.');
   }
 
   const title = parseLine(fields['title'], 'title', MAX_ANNOUNCEMENT_TITLE_LENGTH);
@@ -693,7 +693,7 @@ function parseSendRequest(body: unknown): {
   if (kind === 'announcement') {
     if (rawReleaseNote !== undefined && rawReleaseNote !== null && rawReleaseNote !== '') {
       throw ApiError.invalidInput(
-        'An announcement carries no link. Choose “New feature” to point members at a release note.',
+        'An announcement carries no link. Choose “New release” to point members at a release note.',
       );
     }
     return { kind, title, body: text, releaseNoteId: null };
@@ -701,7 +701,7 @@ function parseSendRequest(body: unknown): {
 
   const releaseNoteId = typeof rawReleaseNote === 'string' ? rawReleaseNote.trim() : '';
   if (releaseNoteId === '') {
-    throw ApiError.invalidInput('Choose the release note this new feature opens.');
+    throw ApiError.invalidInput('Choose the release note this new release opens.');
   }
   // Whether the post exists is asked of the database by the caller; this only reads the field.
   return { kind, title, body: text, releaseNoteId };

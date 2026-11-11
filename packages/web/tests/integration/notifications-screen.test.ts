@@ -196,7 +196,7 @@ describe('a new feature, end to end', () => {
       await panel.goto(`${baseUrl}${ADMIN_ANNOUNCEMENTS_PAGE_PATH}`, {
         waitUntil: 'domcontentloaded',
       });
-      await panel.getByRole('button', { name: 'New feature', exact: true }).click();
+      await panel.getByRole('button', { name: 'New release', exact: true }).click();
       await panel.getByLabel('Title').fill(title);
       await panel.getByLabel('Message').fill('The tour has new slides.');
       await expect
@@ -224,7 +224,7 @@ describe('a new feature, end to end', () => {
         .getByRole('list', { name: 'Notifications' })
         .getByRole('link', { name: new RegExp(title) });
       await expect.poll(() => row.count(), { timeout: 30_000 }).toBe(1);
-      expect(await row.textContent()).toContain('New feature');
+      expect(await row.textContent()).toContain('New release');
       await row.click();
       await page.waitForURL(/\/release-notes\/[0-9a-f-]{36}$/, { timeout: 30_000 });
       // The post itself: its title as the heading, and the words typed into the editor.
