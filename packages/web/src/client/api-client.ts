@@ -45,6 +45,12 @@ export interface ApiFetchOptions extends RequestInit {
 export interface OfflineHooks {
   fallback(input: { readonly path: string; readonly init: RequestInit }): Promise<Response | null>;
   observe(input: { readonly path: string; readonly method: string; readonly body: unknown }): void;
+  /**
+   * Re-address a path or a JSON body before it is sent: a thing made offline carries an id the
+   * device minted until the server gives it a real one, and a screen left open still holds the
+   * device's. Text that names none is returned as it is.
+   */
+  rewrite?(text: string): string;
 }
 
 let offlineHooks: OfflineHooks | null = null;
@@ -57,7 +63,11 @@ export async function apiFetch<TPayload>(
   path: string,
   options: ApiFetchOptions = {},
 ): Promise<TPayload> {
-  const { origin, correlationId, headers, ...init } = options;
+  const { origin, correlationId, headers, ...given } = options;
+  const rewrite = offlineHooks?.rewrite;
+  if (rewrite !== undefined) path = rewrite(path);
+  const init: RequestInit =
+    rewrite !== undefined && typeof given.body === 'string' ? { ...given, body: rewrite(given.body) } : given;
   const url = origin === undefined ? buildApiUrl(path) : buildApiUrl(path, origin);
   const request: RequestInit = {
     ...init,

@@ -358,6 +358,13 @@
       "when": 1794409667249,
       "tag": "0050_release_updates_category",
       "breakpoints": true
+    },
+    {
+      "idx": 51,
+      "version": "7",
+      "when": 1794413547612,
+      "tag": "0051_request_receipt",
+      "breakpoints": true
     }
   ]
 }

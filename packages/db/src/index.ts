@@ -279,6 +279,11 @@ export {
   type NotificationRow,
 } from './notifications';
 export {
+  findRequestReceipt,
+  insertRequestReceipt,
+  type RequestReceiptRow,
+} from './request-receipts';
+export {
   deleteReleaseNote,
   findReleaseNoteById,
   insertReleaseNote,

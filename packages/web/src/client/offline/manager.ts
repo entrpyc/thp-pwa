@@ -1,6 +1,31 @@
 import {
   DASHBOARD_PAGE_PATH,
+  FLOW_QUESTION_BANK_PATH,
+  FLOW_SESSIONS_PATH,
+  FLOW_TEACHINGS_PATH,
+  FLOW_TRACKER_PAGE_PATH,
+  FLOW_TRACKER_START_PAGE_PATH,
+  HIGHLIGHTS_PAGE_PATH,
+  HIGHLIGHTS_PATH,
   MAX_SYNC_ENTRIES,
+  MY_NOTES_PAGE_PATH,
+  MY_NOTES_PATH,
+  NOTE_FOLDERS_PATH,
+  NOTIFICATIONS_PAGE_PATH,
+  NOTIFICATIONS_PATH,
+  NOTIFICATION_SETTINGS_PAGE_PATH,
+  PUSH_PREFERENCES_PATH,
+  SOS_NEW_PAGE_PATH,
+  SOS_PAGE_PATH,
+  SOS_PATH,
+  SOS_STATUSES,
+  SOS_STATUS_PARAM,
+  flowSessionPagePath,
+  flowSessionPath,
+  sosPagePath,
+  sosPath,
+  type FlowSessionsPayload,
+  type SosListPayload,
   MEMBER_SERIES_PAGE_PATH,
   PROFILE_DOWNLOADS_PAGE_PATH,
   SYNC_PATH,
@@ -12,6 +37,7 @@ import {
   recordingPagePath,
   recordingProgressPath,
   recordingScripturePath,
+  recordingTranscriptPath,
   seriesDownloadPath,
   seriesPagePath,
   type ChaptersPayload,
@@ -37,6 +63,8 @@ import { sessionMetaKey } from './schema';
 /** What every per-account session entry in `meta` starts with — `sessionMetaKey('')`. */
 const SESSION_META_PREFIX = sessionMetaKey('');
 import { idbDelete, idbKeys, idbPut } from './idb';
+import { countRequests, idbReplayStore, replayRequests, setAliases, type ReplayOutcome } from './replay';
+import { OFFLINE_PAGE_TEMPLATE_ID } from './templates';
 import { createOfflineHooks } from './offline-api';
 import { forgetPendingImages, prepareOutboxImages } from './pending-images';
 import {
@@ -93,6 +121,18 @@ import { DownloadCancelled, type DownloadDraft, type DownloadStore } from './sto
 /** The window event dispatched after a flush, carrying the ids of teachings whose notes changed. */
 export const SYNCED_EVENT = 'thp:synced';
 
+/**
+ * The window event dispatched after queued requests were sent (3.18.18): what a screen showing
+ * something done offline listens for to read the server's version of it.
+ */
+export const REPLAYED_EVENT = 'thp:replayed';
+
+/** How long the copies primed at one launch are trusted before a launch primes them again. */
+const PRIME_EVERY_MS = 15 * 60 * 1000;
+const PRIMED_AT_KEY = 'thp.offline.primed-at';
+/** The most single prayer requests and sessions one priming reads, newest first. */
+const PRIME_DETAIL_LIMIT = 25;
+
 export interface Notice {
   readonly id: number;
   readonly text: string;
@@ -142,6 +182,17 @@ export interface OfflineManagerOptions {
     remove(clientIds: readonly string[]): Promise<void>;
     appendProgress(userId: string, recordingId: string, body: PlaybackProgressRequest): Promise<unknown>;
   };
+  /**
+   * The queue of requests made offline (3.18.18). The real one is IndexedDB and the live API; a
+   * test hands in a list, and the default for a manager built without one is an empty queue.
+   */
+  readonly requests?: {
+    count(userId: string): Promise<number>;
+    replay(userId: string): Promise<ReplayOutcome>;
+    loadAliases(userId: string): Promise<Record<string, string>>;
+  };
+  /** Read ahead what the member screens need offline, and warm their pages. A test leaves it out. */
+  readonly prime?: boolean;
   readonly rememberActiveUser?: (userId: string) => Promise<void>;
   /** The inverse, for sign-out; the real one is {@link forgetActiveAccount}. */
   readonly forgetActiveUser?: () => Promise<void>;
@@ -195,6 +246,11 @@ export function createOfflineManager(options: OfflineManagerOptions): OfflineMan
       await idbPut(OFFLINE_STORES.meta, { userId }, ACTIVE_USER_KEY);
     });
   const forgetActiveUser = options.forgetActiveUser ?? forgetActiveAccount;
+  const requests = options.requests ?? {
+    count: async () => 0,
+    replay: async (): Promise<ReplayOutcome> => ({ sent: 0, refusals: [], touchedRecordings: [], drained: true }),
+    loadAliases: async () => ({}),
+  };
   const track = options.track ?? trackAnalytics;
   /** Drop every `session:<id>` entry in `meta` that is not this account's. */
   async function forgetForeignSessions(userId: string): Promise<void> {
@@ -209,8 +265,13 @@ export function createOfflineManager(options: OfflineManagerOptions): OfflineMan
   const warm =
     options.warm ??
     ((urls: readonly string[]) => {
-      if (typeof navigator === 'undefined') return;
-      navigator.serviceWorker?.controller?.postMessage({ type: 'thp:warm', urls });
+      if (typeof navigator === 'undefined' || navigator.serviceWorker === undefined) return;
+      const message = { type: 'thp:warm', urls };
+      const worker = navigator.serviceWorker;
+      // On the first load after a sign-in the worker is active but not yet in control of this
+      // page; it can still be asked, and what it keeps is there for the next load.
+      if (worker.controller !== null) worker.controller.postMessage(message);
+      else void worker.ready.then((registration) => registration.active?.postMessage(message)).catch(() => undefined);
     });
   const isOnline = options.isOnline ?? (() => (typeof navigator === 'undefined' ? true : navigator.onLine));
 
@@ -241,12 +302,13 @@ export function createOfflineManager(options: OfflineManagerOptions): OfflineMan
   async function reload(): Promise<void> {
     const userId = snapshot.userId;
     if (userId === null) return;
-    const [downloads, pending, freeBytes] = await Promise.all([
+    const [downloads, waiting, queued, freeBytes] = await Promise.all([
       store.list(userId).catch(() => []),
       outbox.count(userId).catch(() => 0),
+      requests.count(userId).catch(() => 0),
       store.freeBytes(),
     ]);
-    set({ downloads, pending, freeBytes, ready: true });
+    set({ downloads, pending: waiting + queued, freeBytes, ready: true });
   }
 
   /** Everything 3.18.3 and 3.18.4 say travels with a download, read before the bytes. */
@@ -257,6 +319,11 @@ export function createOfflineManager(options: OfflineManagerOptions): OfflineMan
       fetchJson<NotesPayload>(recordingNotesPath(recordingId)),
       fetchJson<PlaybackProgressPayload>(recordingProgressPath(recordingId)),
     ]);
+    // The transcript travels too, as one of the device's kept reads rather than a field of the
+    // download: asking for it here is what puts the copy there (3.18.18 — a line of a downloaded
+    // teaching can be highlighted offline). A teaching with none yet answers `null`, and a
+    // failure costs the transcript tab offline and nothing else.
+    await fetchJson(recordingTranscriptPath(recordingId)).catch(() => undefined);
     const scripture = recording.recording.hasScripture
       ? (await fetchJson<RecordingScripturePayload>(recordingScripturePath(recordingId))).references
       : [];
@@ -349,7 +416,7 @@ export function createOfflineManager(options: OfflineManagerOptions): OfflineMan
     if (flushing !== null) return flushing;
     const userId = snapshot.userId;
     if (userId === null || !isOnline()) return;
-    flushing = (async () => {
+    const syncOutbox = async (): Promise<void> => {
       const listed = (await outbox.list(userId)).slice(0, MAX_SYNC_ENTRIES);
       const downloaded = snapshot.downloads.map((one) => one.recordingId);
       if (listed.length === 0 && downloaded.length === 0) return;
@@ -412,10 +479,113 @@ export function createOfflineManager(options: OfflineManagerOptions): OfflineMan
         set({ syncing: false });
         await reload();
       }
+    };
+
+    /** Everything else done offline, sent as it was made and in the order it was made (3.18.18). */
+    const replayQueued = async (): Promise<void> => {
+      if ((await requests.count(userId).catch(() => 0)) === 0) return;
+      set({ syncing: true });
+      try {
+        const outcome = await requests.replay(userId);
+        for (const refusal of outcome.refusals) notice(refusal);
+        if (!outcome.drained) set({ online: false });
+        if (outcome.sent > 0 || outcome.refusals.length > 0) {
+          track('sync_completed', { entries: outcome.sent + outcome.refusals.length, settled: outcome.sent, downloads: 0 });
+          // The copies the screens read were the device's best guess; the server's are read again
+          // now, and a screen that is open is told so it can do the same.
+          await prime(userId, true);
+          if (typeof window !== 'undefined') {
+            if (outcome.touchedRecordings.length > 0) {
+              window.dispatchEvent(new CustomEvent(SYNCED_EVENT, { detail: outcome.touchedRecordings }));
+            }
+            window.dispatchEvent(new CustomEvent(REPLAYED_EVENT));
+          }
+        }
+      } catch {
+        // The next reconnect tries again; what was not sent is still queued.
+      } finally {
+        set({ syncing: false });
+        await reload();
+      }
+    };
+
+    flushing = (async () => {
+      // Notes first: a reply queued below may be to a note the outbox is about to create.
+      await syncOutbox();
+      await replayQueued();
     })().finally(() => {
       flushing = null;
     });
     return flushing;
+  }
+
+  /**
+   * Read ahead what the member screens show, so each has a copy on the device before the signal
+   * goes, and have the worker keep their pages. Every read here passes through the API client,
+   * whose `observe` hook is what keeps the copy; this only decides what is asked for.
+   *
+   * At most once per {@link PRIME_EVERY_MS} unless `force`: a member who opens the app ten times
+   * in a morning has not changed what is worth holding.
+   */
+  async function prime(userId: string, force = false): Promise<void> {
+    if (options.prime !== true || !isOnline() || snapshot.userId !== userId) return;
+    try {
+      const last = Number(window.localStorage.getItem(PRIMED_AT_KEY) ?? '0');
+      if (!force && Date.now() - last < PRIME_EVERY_MS) return;
+    } catch {
+      // No storage to remember in: prime every time rather than never.
+    }
+    const read = async <T,>(path: string): Promise<T | null> => {
+      try {
+        return await fetchJson<T>(path);
+      } catch {
+        return null;
+      }
+    };
+    for (const path of [MY_NOTES_PATH, NOTE_FOLDERS_PATH, HIGHLIGHTS_PATH, NOTIFICATIONS_PATH, PUSH_PREFERENCES_PATH, FLOW_TEACHINGS_PATH, FLOW_QUESTION_BANK_PATH, SOS_PATH]) {
+      await read(path);
+    }
+    const pages: string[] = [
+      MY_NOTES_PAGE_PATH,
+      HIGHLIGHTS_PAGE_PATH,
+      NOTIFICATIONS_PAGE_PATH,
+      NOTIFICATION_SETTINGS_PAGE_PATH,
+      SOS_PAGE_PATH,
+      SOS_NEW_PAGE_PATH,
+      FLOW_TRACKER_PAGE_PATH,
+      FLOW_TRACKER_START_PAGE_PATH,
+      // The two pages that exist once per thing. The worker keeps one copy of each, under an id
+      // that names nothing, and serves it offline for whichever id is asked for — including a
+      // prayer request or a session made offline, whose page the server has never rendered.
+      sosPagePath(OFFLINE_PAGE_TEMPLATE_ID),
+      flowSessionPagePath(OFFLINE_PAGE_TEMPLATE_ID),
+    ];
+    for (const status of SOS_STATUSES) {
+      const board = await read<SosListPayload>(`${SOS_PATH}?${SOS_STATUS_PARAM}=${status}`);
+      for (const signal of (board?.signals ?? []).slice(0, PRIME_DETAIL_LIMIT)) await read(sosPath(signal.id));
+    }
+    const sessions = await read<FlowSessionsPayload>(FLOW_SESSIONS_PATH);
+    const held = [...(sessions?.active === null || sessions?.active === undefined ? [] : [sessions.active]), ...(sessions?.completed ?? [])];
+    for (const session of held.slice(0, PRIME_DETAIL_LIMIT)) await read(flowSessionPath(session.id));
+    // Kept reads go with the session, downloads do not: a member signing back in still holds the
+    // teachings, and their transcripts are read again here.
+    for (const download of snapshot.downloads.slice(0, PRIME_DETAIL_LIMIT)) await read(recordingTranscriptPath(download.recordingId));
+    warm(pages);
+    // Stamped at the end, not the start: a page load that cut this short has primed nothing, and
+    // the next one must not be told it has.
+    try {
+      window.localStorage.setItem(PRIMED_AT_KEY, String(Date.now()));
+    } catch {
+      // As above.
+    }
+  }
+
+  /** The copies kept for whoever used this device before go when somebody else is admitted. */
+  async function forgetForeignReads(userId: string): Promise<void> {
+    if (typeof indexedDB === 'undefined') return;
+    for (const key of await idbKeys(OFFLINE_STORES.reads)) {
+      if (typeof key === 'string' && !key.startsWith(`${userId}|`)) await idbDelete(OFFLINE_STORES.reads, key);
+    }
   }
 
   if (typeof window !== 'undefined') {
@@ -443,8 +613,12 @@ export function createOfflineManager(options: OfflineManagerOptions): OfflineMan
       // used this device before, and the member just admitted has no business reading it
       // (docs/security-audit-2026-10-29.md, finding 22).
       await forgetForeignSessions(userId).catch(() => undefined);
+      await forgetForeignReads(userId).catch(() => undefined);
+      setAliases(await requests.loadAliases(userId).catch(() => ({})));
       await reload();
-      void flush();
+      // The queue first, then the read-ahead: what is primed should be the server's state after
+      // the member's offline work has reached it.
+      void flush().then(() => prime(userId));
     },
 
     async deactivate() {
@@ -547,7 +721,16 @@ let manager: OfflineManager | null = null;
  */
 export function offlineManager(): OfflineManager {
   if (manager === null) {
-    const created = createOfflineManager({ store: deviceStore(), fetchJson: withCredentials });
+    const created = createOfflineManager({
+      store: deviceStore(),
+      fetchJson: withCredentials,
+      prime: true,
+      requests: {
+        count: countRequests,
+        replay: (userId) => replayRequests(userId, withCredentials),
+        loadAliases: idbReplayStore.loadAliases,
+      },
+    });
     installOfflineHooks(
       createOfflineHooks({
         onOutboxWrite: () => void created.reload(),

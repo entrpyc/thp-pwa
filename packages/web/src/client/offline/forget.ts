@@ -1,4 +1,4 @@
-import { idbDelete, idbGet } from './idb';
+import { idbClear, idbDelete, idbGet } from './idb';
 import { ACTIVE_USER_KEY, OFFLINE_STORES, sessionMetaKey } from './schema';
 
 /**
@@ -22,6 +22,10 @@ export async function forgetActiveAccount(): Promise<void> {
     const userId = active?.userId ?? null;
     if (userId !== null) await idbDelete(OFFLINE_STORES.meta, sessionMetaKey(userId));
     await idbDelete(OFFLINE_STORES.meta, ACTIVE_USER_KEY);
+    // The copies of what the screens read — the prayer board, the inbox, the member's notes — go
+    // with the session. The queue of writes made offline stays, as the outbox does: it is the
+    // member's own unsent work, and it is sent when they sign in again.
+    await idbClear(OFFLINE_STORES.reads);
   } catch {
     // No database, or one that will not open: nothing was kept, so nothing is left behind.
   }

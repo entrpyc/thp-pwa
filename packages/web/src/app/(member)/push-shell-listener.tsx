@@ -3,10 +3,20 @@
 import { useRouter } from 'next/navigation';
 import { useEffect } from 'react';
 import { PushNotifications } from '@capacitor/push-notifications';
-import { NOTIFICATIONS_PAGE_PATH, isNotificationKind } from '@thp/shared';
+import {
+  NOTIFICATIONS_PAGE_PATH,
+  PUSH_PREFERENCES_PATH,
+  isNotificationKind,
+  type PushPreferencesPayload,
+} from '@thp/shared';
+import { apiFetch } from '@/client/api-client';
 import { track } from '@/client/observability/analytics';
 import { shellPlatform } from '@/client/platform';
-import { adoptShellToken, enableShellPushAtLaunch } from '@/client/push/push-device';
+import {
+  adoptShellToken,
+  completePendingPushEnable,
+  enableShellPushAtLaunch,
+} from '@/client/push/push-device';
 import { useNotifications } from './notifications-context';
 
 /**
@@ -60,6 +70,21 @@ export function landingPath(href: unknown): string {
 export function PushShellListener() {
   const router = useRouter();
   const { refresh } = useNotifications();
+
+  // Push asked for while offline (3.18.18) is turned on here, on every platform, as soon as there
+  // is a connection: at launch if there already is one, and when one returns.
+  useEffect(() => {
+    const complete = (): void => {
+      if (!navigator.onLine) return;
+      void completePendingPushEnable(async () => {
+        const held = await apiFetch<PushPreferencesPayload>(PUSH_PREFERENCES_PATH, { credentials: 'include' });
+        return held.webPush?.publicKey ?? null;
+      }).catch(() => undefined);
+    };
+    complete();
+    window.addEventListener('online', complete);
+    return () => window.removeEventListener('online', complete);
+  }, []);
 
   useEffect(() => {
     if (shellPlatform() === null) return;

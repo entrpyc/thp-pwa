@@ -246,6 +246,32 @@ export interface FlowTeachingsPayload {
  * ([3.14.2](docs/project/prd.md)) — one or several, in any order. The session asks about exactly
  * these and nothing else.
  */
+/**
+ * One question a session would ask, before there is a session: everything an item carries except
+ * what a session gives it (an id, a position) and what a member gives it (a rating, a mark).
+ */
+export type FlowQuestionSeed = Omit<
+  FlowSessionItemView,
+  'id' | 'position' | 'rating' | 'answeredAt' | 'done'
+>;
+
+/**
+ * Payload of `GET /api/v1/flow-tracker/questions` — **what a session over any pick would ask**,
+ * so a device can start one with no connection ([3.18.18](docs/project/prd.md)).
+ *
+ * `byTeaching` holds each published teaching's own questions in the order a session asks them
+ * (last chapter first); `byTag` holds each tag's bank questions. A session over a pick is the
+ * picked teachings' lists in library order, then the bank questions of every tag those teachings
+ * carry, each tag once — exactly what the start route assembles, from the same function.
+ */
+export interface FlowQuestionBankPayload {
+  readonly byTeaching: Readonly<Record<string, readonly FlowQuestionSeed[]>>;
+  readonly byTag: Readonly<Record<string, readonly FlowQuestionSeed[]>>;
+}
+
+/** What the start screen reads to know which teachings exist. Relative to the `/api/v1` prefix. */
+export const FLOW_QUESTION_BANK_PATH = '/flow-tracker/questions';
+
 export interface StartFlowSessionRequest {
   readonly recordingIds: readonly string[];
 }

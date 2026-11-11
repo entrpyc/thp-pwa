@@ -221,6 +221,7 @@ describe('migrations apply to an empty database by one command', () => {
         'recording',
         'recording_tag',
         'release_note',
+        'request_receipt',
         'review_item',
         'scripture_reference',
         'segment',

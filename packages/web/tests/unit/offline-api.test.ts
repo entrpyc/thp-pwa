@@ -94,11 +94,12 @@ const snapshot: Snapshot = {
 describe('the names the worker shares', () => {
   it('are stable, because the page and the worker open the same database', () => {
     expect(OFFLINE_DB_NAME).toBe('thp-offline');
-    // 2 since pictures on notes (3.12.22) added the `noteImages` store.
-    expect(OFFLINE_DB_VERSION).toBe(2);
+    // 2 since pictures on notes (3.12.22) added the `noteImages` store; 3 since the wider offline
+    // queue (3.18.18) added the device's copies of what screens read, and the queued requests.
+    expect(OFFLINE_DB_VERSION).toBe(3);
     expect(BY_USER_INDEX).toBe('byUser');
     expect(ACTIVE_USER_KEY).toBe('activeUser');
-    expect(Object.values(OFFLINE_STORES)).toEqual(['downloads', 'media', 'outbox', 'meta', 'noteImages']);
+    expect(Object.values(OFFLINE_STORES)).toEqual(['downloads', 'media', 'outbox', 'meta', 'noteImages', 'reads', 'requests']);
   });
 });
 

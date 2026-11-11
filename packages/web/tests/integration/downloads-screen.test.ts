@@ -201,9 +201,9 @@ describe('offline', () => {
       expect(held).toContain(`Held teaching ${RUN}`);
       expect(held).not.toContain(`Streamed teaching ${RUN}`);
 
-      // A page the worker never keeps — highlights need the server — is the app's own screen, not
+      // A page the worker never keeps — search needs the server — is the app's own screen, not
       // the browser's: the worker answers the failed navigation itself.
-      await page.goto(`${baseUrl}/highlights`, { waitUntil: 'domcontentloaded' });
+      await page.goto(`${baseUrl}/search`, { waitUntil: 'domcontentloaded' });
       await expect.poll(() => page.getByRole('heading').first().textContent()).toBe('This page is not accessible offline.');
 
       await context.setOffline(false);

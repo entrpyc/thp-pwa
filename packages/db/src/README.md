@@ -53,7 +53,7 @@ against the schema, not a second copy of it.
 
 - `session`, `password_reset`, `account_deletion_request` — cascade. Every device is signed out
   by the row going; the cookie the browser still holds resolves to nothing.
-- `playback_progress`, `note_reaction` — cascade. Reaction counts other
+- `playback_progress`, `note_reaction`, `request_receipt` — cascade. Reaction counts other
   members see drop by one.
 - `notification_preference`, `push_subscription` — cascade. The person's push switches and
   every device address they registered go; no push can reach a device after the row is gone,

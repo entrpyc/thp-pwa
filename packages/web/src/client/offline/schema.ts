@@ -41,8 +41,12 @@ import type {
  */
 
 export const OFFLINE_DB_NAME = 'thp-offline';
-/** 2 added `noteImages`: the bytes of pictures attached to notes written offline (3.12.22). */
-export const OFFLINE_DB_VERSION = 2;
+/**
+ * 2 added `noteImages`: the bytes of pictures attached to notes written offline (3.12.22).
+ * 3 added `reads` and `requests`: the device's copies of what the member screens read, and the
+ * writes made offline that are waiting to be sent as they were made (3.18.18).
+ */
+export const OFFLINE_DB_VERSION = 3;
 
 export const OFFLINE_STORES = {
   /** One {@link DownloadRecord} per download. */
@@ -55,6 +59,10 @@ export const OFFLINE_STORES = {
   meta: 'meta',
   /** One {@link PendingImageRecord} per picture waiting on a connection. */
   noteImages: 'noteImages',
+  /** One {@link ReadRecord} per `GET` the device keeps a copy of. Cleared on sign-out. */
+  reads: 'reads',
+  /** One {@link QueuedRequest} per write made offline that is replayed as it was made. */
+  requests: 'requests',
 } as const;
 
 /** The index on `downloads` and `outbox` that answers "everything this member holds". */
@@ -122,6 +130,56 @@ export interface OutboxRecord {
   /** ISO 8601, the device's clock. */
   readonly at: string;
   readonly body: PlaybackProgressRequest | CreateNoteRequest;
+}
+
+/**
+ * The device's copy of one `GET`: the body as the server last answered it, since changed by
+ * whatever the member did offline (`offline-actions.ts`). Keyed under the account and the path the
+ * screen asks for, query included.
+ *
+ * **Cleared on sign-out**, unlike downloads: a copy of the prayer board or of an inbox is other
+ * people's words and the member's own notices, and neither should be readable by the next person
+ * on a shared device (security audit of 28 October 2026, finding 11).
+ */
+export interface ReadRecord {
+  readonly key: string;
+  readonly userId: string;
+  readonly path: string;
+  readonly body: unknown;
+  /** ISO 8601, when the copy was last written. */
+  readonly at: string;
+}
+
+export function readKey(userId: string, path: string): string {
+  return `${userId}|${path}`;
+}
+
+/**
+ * One write made offline, kept exactly as it was made — method, path and body — and sent in the
+ * order it was made when the connection returns (`replay.ts`). `clientId` is also the
+ * idempotency key the replay carries, so a send whose answer was lost does not apply twice.
+ */
+export interface QueuedRequest {
+  readonly clientId: string;
+  readonly userId: string;
+  /** Monotonic on this device; the order of replay. */
+  readonly seq: number;
+  readonly method: string;
+  readonly path: string;
+  readonly body: unknown;
+  /** What the member did, for the notice if the server refuses it. */
+  readonly label: string;
+  /** Ids the device minted for what this request creates, and where the real ones will be. */
+  readonly creates: readonly { readonly temp: string; readonly at: string }[];
+  readonly coalesce: string | null;
+  readonly recordingId: string | null;
+  /** ISO 8601, the device's clock. */
+  readonly at: string;
+}
+
+/** The `meta` key holding the device-minted ids the server has since given real ones to. */
+export function aliasesMetaKey(userId: string): string {
+  return `aliases:${userId}`;
 }
 
 /**

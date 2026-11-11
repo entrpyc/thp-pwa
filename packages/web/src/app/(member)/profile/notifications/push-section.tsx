@@ -12,6 +12,8 @@ import { ApiClientError, apiFetch } from '@/client/api-client';
 import {
   disablePushOnThisDevice,
   enablePushOnThisDevice,
+  pushEnablePending,
+  queuePushEnable,
   pushPermission,
   pushSupport,
   rememberedEndpoint,
@@ -54,6 +56,7 @@ import styles from './notifications.module.css';
 
 const LOAD_FAILED = 'Could not load your notification settings. Reload the page to try again.';
 const WRITE_FAILED = 'Could not save that. Nothing has changed — try again in a moment.';
+const PENDING_ENABLE = 'You are offline. Push will be turned on for this device as soon as you are back online.';
 
 type DeviceState =
   | { readonly kind: 'checking' }
@@ -92,6 +95,8 @@ export function PushSection() {
         const permission = await pushPermission();
         if (cancelled) return;
         setPayload(loaded);
+        // Asked for offline and not done yet: say so again on every visit until it is.
+        if (pushEnablePending()) setDone(PENDING_ENABLE);
         setDevice(
           deviceStateFor(
             pushSupport(),
@@ -114,6 +119,18 @@ export function PushSection() {
     setDevice({ kind: 'enabling' });
     setFailure(null);
     setDone(null);
+    // No connection: a device cannot be given a push address now, but the permission prompt can
+    // be answered now — it has to come from this press — and the rest is done on reconnecting.
+    if (typeof navigator !== 'undefined' && !navigator.onLine) {
+      const queued = await queuePushEnable();
+      if (queued === 'denied') {
+        setDevice({ kind: 'denied' });
+        return;
+      }
+      setDevice(queued === 'unsupported' ? { kind: 'unsupported' } : { kind: 'off' });
+      if (queued === 'queued') setDone(PENDING_ENABLE);
+      return;
+    }
     const result = await enablePushOnThisDevice(payload.webPush?.publicKey ?? null);
     if (result.ok) {
       setDevice({ kind: 'on' });

@@ -40,13 +40,66 @@ const SIGN_IN_PATHS = [`${API_PREFIX}/auth/session`, `${API_PREFIX}/auth/sign-up
 const PAGE_CACHE = 'thp-pages-v2';
 const STATIC_CACHE = 'thp-static-v1';
 /**
- * The member surface. Anything else — sign-in, admin, the public pages — is never cached. Nor are
- * `/profile` (it prints the member's email) and `/notifications` (the member's inbox): a page kept
- * for a session that has since expired is readable by whoever holds the device, and those two are
- * the ones that say who the device belonged to (docs/security-audit-2026-10-29.md, finding 11).
- * The downloads section under `/profile` is kept — it is the one page a member offline most needs.
+ * The member surface. Anything else — sign-in, admin, the public pages — is never cached. Nor is
+ * `/profile` itself (it prints the member's email): a page kept for a session that has since
+ * expired is readable by whoever holds the device, and that one says who the device belonged to
+ * (docs/security-audit-2026-10-29.md, finding 11). Two sections under it are kept — downloads, the
+ * one page a member offline most needs, and the notification switches, which can be set offline.
+ *
+ * The screens a member can act on offline (PRD 3.18.18) are kept too: their notes, their
+ * highlights, the prayer requests, the Flow Tracker and the notification centre. None of these
+ * pages carries what it shows — each is drawn by the page from the API, and offline from the
+ * device's own copies, which go with the session (`src/client/offline/forget.ts`).
  */
-const MEMBER_PAGE_PREFIXES = ['/', '/recordings', '/series', '/now-playing', '/profile/downloads', '/feedback'];
+const MEMBER_PAGE_PREFIXES = [
+  '/',
+  '/recordings',
+  '/series',
+  '/now-playing',
+  '/profile/downloads',
+  '/profile/notifications',
+  '/feedback',
+  '/notes',
+  '/highlights',
+  '/prayer-requests',
+  '/flow-tracker',
+  '/notifications',
+];
+
+/**
+ * Pages that exist once per thing and read nothing on the server: the page for one id is the page
+ * for any other with the id swapped. One copy of each is kept under an id that names nothing
+ * (`src/client/offline/templates.ts` — the same value, held to this one by the unit test), and an
+ * id with no copy of its own is answered offline from that one. It is what lets a prayer request
+ * raised offline, or a session started offline, open on a page the server has never rendered.
+ */
+const TEMPLATE_ID = '00000000-0000-4000-8000-00000000000f';
+const TEMPLATED_PAGES = [/^\/prayer-requests\/([0-9a-f-]{36})$/i, /^\/flow-tracker\/sessions\/([0-9a-f-]{36})$/i];
+
+/** The key of the template copy that can stand in for this page key, and the id to put in it. */
+function templateFor(key) {
+  const url = new URL(key);
+  for (const pattern of TEMPLATED_PAGES) {
+    const match = pattern.exec(url.pathname);
+    if (match === null || match[1].toLowerCase() === TEMPLATE_ID) continue;
+    return { key: `${url.origin}${url.pathname.replace(match[1], TEMPLATE_ID)}${url.search}`, id: match[1] };
+  }
+  return null;
+}
+
+async function fromTemplate(cache, key) {
+  const template = templateFor(key);
+  if (template === null) return undefined;
+  const held = await cache.match(template.key);
+  if (!held) return undefined;
+  const text = await held.text();
+  const headers = new Headers(held.headers);
+  // The body is being rewritten; a uuid for a uuid keeps every length in it, but the two headers
+  // that describe the stored bytes are not carried over.
+  headers.delete('content-length');
+  headers.delete('content-encoding');
+  return new Response(text.split(TEMPLATE_ID).join(template.id), { status: 200, headers });
+}
 /** The IndexedDB the page writes; the worker reads one key of it, to know whether anybody is signed in. */
 const OFFLINE_DB_NAME = 'thp-offline';
 const OFFLINE_META_STORE = 'meta';
@@ -107,7 +160,7 @@ function pageKey(url, isRsc) {
   return `${copy.origin}${copy.pathname}${copy.search}`;
 }
 
-self.THP_OFFLINE = { decide, pageKey, isMemberPage };
+self.THP_OFFLINE = { decide, pageKey, isMemberPage, templateFor, TEMPLATE_ID };
 
 // --------------------------------------------------------------------------------------- handlers
 
@@ -156,7 +209,7 @@ async function handlePage(request, key) {
     // A copy is served only while the page still says somebody is signed in on this device. The
     // page clears that marker on sign-out, and the sign-in and sign-out requests above drop the
     // whole cache; this is the third line, for a device whose session ended some other way.
-    const held = (await someoneIsSignedIn()) ? await cache.match(key) : undefined;
+    const held = (await someoneIsSignedIn()) ? ((await cache.match(key)) ?? (await fromTemplate(cache, key))) : undefined;
     if (held) return held;
     if (request.mode === 'navigate') return offlineResponse();
     throw caught;
@@ -273,13 +326,51 @@ async function warm(urls) {
           credentials: 'same-origin',
           headers: rsc ? { RSC: '1' } : {},
         });
-        if (response.ok && !response.redirected) await cache.put(pageKey(url, rsc), response);
+        if (response.ok && !response.redirected) {
+          // The document names the scripts and styles it needs to come alive. A page kept without
+          // them opens offline as markup that never hydrates — a list stuck on "Loading…" — so
+          // they are kept with it. Only for the document: the RSC form names the same files.
+          if (!rsc) await keepAssetsOf(response.clone());
+          await cache.put(pageKey(url, rsc), response);
+        }
       } catch {
         // Offline already; the next download tries again.
       }
     }
   }
 }
+
+/** Every `/_next/static/` file a document names, each once. Pure, for the unit test. */
+function assetsNamedIn(html) {
+  const found = new Set();
+  for (const match of html.matchAll(/\/_next\/static\/[A-Za-z0-9_\-./%~@()[\]]+/g)) {
+    // A path quoted inside a script ends at the quote; one that ran into an escape is cut there.
+    found.add(match[0].replace(/\\.*$/, ''));
+  }
+  return [...found];
+}
+
+async function keepAssetsOf(response) {
+  let html;
+  try {
+    html = await response.text();
+  } catch {
+    return;
+  }
+  const cache = await caches.open(STATIC_CACHE);
+  for (const path of assetsNamedIn(html)) {
+    try {
+      const url = new URL(path, self.location.origin).href;
+      if (await cache.match(url)) continue;
+      const asset = await fetch(url, { credentials: 'same-origin' });
+      if (asset.ok) await cache.put(url, asset);
+    } catch {
+      // One file that could not be fetched leaves that page to the network; the rest are kept.
+    }
+  }
+}
+
+self.THP_OFFLINE.assetsNamedIn = assetsNamedIn;
 
 self.addEventListener('message', (event) => {
   const data = event.data;

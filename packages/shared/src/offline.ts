@@ -88,6 +88,14 @@ export type SyncEntryKind = (typeof SYNC_ENTRY_KINDS)[number];
  */
 export const CLIENT_ID_PATTERN = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
 
+/**
+ * The header a queued write carries when the device replays it: the key the device minted for
+ * that one write. The server keeps the first successful answer under it and gives the same answer
+ * to any later request with the same key, so a replay whose first answer was lost in transit does
+ * not apply twice. Any state-changing route honours it; a request without it is unaffected.
+ */
+export const IDEMPOTENCY_KEY_HEADER = 'x-thp-idempotency-key';
+
 export function isClientId(value: unknown): value is string {
   return typeof value === 'string' && CLIENT_ID_PATTERN.test(value);
 }

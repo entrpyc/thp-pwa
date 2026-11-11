@@ -52,6 +52,14 @@ function upgrade(db: IDBDatabase): void {
     const images = db.createObjectStore(OFFLINE_STORES.noteImages, { keyPath: 'id' });
     images.createIndex(BY_USER_INDEX, 'userId', { unique: false });
   }
+  if (!db.objectStoreNames.contains(OFFLINE_STORES.reads)) {
+    const reads = db.createObjectStore(OFFLINE_STORES.reads, { keyPath: 'key' });
+    reads.createIndex(BY_USER_INDEX, 'userId', { unique: false });
+  }
+  if (!db.objectStoreNames.contains(OFFLINE_STORES.requests)) {
+    const requests = db.createObjectStore(OFFLINE_STORES.requests, { keyPath: 'clientId' });
+    requests.createIndex(BY_USER_INDEX, 'userId', { unique: false });
+  }
 }
 
 export function openOfflineDatabase(): Promise<IDBDatabase> {
@@ -125,6 +133,13 @@ export async function idbUpdate<T>(
   if (current === undefined) return false;
   await request(objectStore.put(change(current)));
   return true;
+}
+
+/** Empty a store. For the copies a sign-out must not leave behind. */
+export async function idbClear(store: StoreName): Promise<void> {
+  const db = await openOfflineDatabase();
+  const tx = db.transaction(store, 'readwrite');
+  await request(tx.objectStore(store).clear());
 }
 
 /** Every value whose indexed field equals `value`. */

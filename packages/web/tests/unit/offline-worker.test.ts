@@ -2,6 +2,7 @@ import { readFileSync } from 'node:fs';
 import { resolve } from 'node:path';
 import { runInNewContext } from 'node:vm';
 import { describe, expect, it } from 'vitest';
+import { OFFLINE_PAGE_TEMPLATE_ID } from '@/client/offline/templates';
 
 /**
  * **The offline module's decisions, without a browser** (docs/project/prd.md 3.18.13;
@@ -51,8 +52,8 @@ describe('what the worker decides', () => {
   it('answers a navigation to a page it does not keep from the network, with the offline screen when there is none', () => {
     expect(offline.decide({ url: 'https://hub.test/sign-in', mode: 'navigate' })).toEqual({ kind: 'fallback' });
     expect(offline.decide({ url: 'https://hub.test/admin/recordings', mode: 'navigate' })).toEqual({ kind: 'fallback' });
-    expect(offline.decide({ url: 'https://hub.test/highlights', mode: 'navigate' })).toEqual({ kind: 'fallback' });
-    expect(offline.decide({ url: 'https://hub.test/highlights', mode: 'navigate', prefetch: true }).kind).toBe('pass');
+    expect(offline.decide({ url: 'https://hub.test/search', mode: 'navigate' })).toEqual({ kind: 'fallback' });
+    expect(offline.decide({ url: 'https://hub.test/search', mode: 'navigate', prefetch: true }).kind).toBe('pass');
   });
 
   it('never claims an API request, except to notice a session beginning or ending', () => {
@@ -84,12 +85,66 @@ describe('what the worker decides', () => {
     expect(offline.isMemberPage('/reset-password')).toBe(false);
   });
 
-  it('never keeps the pages that say who the device belonged to: the profile and the inbox (finding 11)', () => {
+  it('never keeps the page that says who the device belonged to: the profile (finding 11)', () => {
     expect(offline.isMemberPage('/profile')).toBe(false);
-    expect(offline.isMemberPage('/notifications')).toBe(false);
     expect(offline.isMemberPage('/profile/settings')).toBe(false);
     expect(offline.decide({ url: 'https://hub.test/profile', mode: 'navigate' }).kind).toBe('fallback');
-    expect(offline.decide({ url: 'https://hub.test/notifications', mode: 'navigate' }).kind).toBe('fallback');
+  });
+
+  it('keeps the screens a member can act on offline (3.18.18)', () => {
+    // None of these pages carries what it shows: each is drawn from the API, and offline from the
+    // device's own copies, which go with the session.
+    for (const path of [
+      '/notes',
+      '/highlights',
+      '/prayer-requests',
+      '/prayer-requests/new',
+      '/flow-tracker',
+      '/flow-tracker/start',
+      '/notifications',
+      '/profile/notifications',
+    ]) {
+      expect(offline.isMemberPage(path), path).toBe(true);
+    }
+  });
+
+  it('finds the scripts and styles a document names, each once, so a kept page can come alive offline', () => {
+    const extra = offline as unknown as { assetsNamedIn(html: string): string[] };
+    const html = [
+      '<link rel="stylesheet" href="/_next/static/css/app.abc123.css">',
+      '<script src="/_next/static/chunks/main-9f8e.js" async></script>',
+      '<script src="/_next/static/chunks/main-9f8e.js" async></script>',
+      '<script>self.__next_f.push([1,"static/chunks/x.js \\"/_next/static/chunks/app/(member)/page-1a2b.js\\""])</script>',
+      '<a href="/notes">Notes</a>',
+    ].join('');
+    expect(extra.assetsNamedIn(html)).toEqual([
+      '/_next/static/css/app.abc123.css',
+      '/_next/static/chunks/main-9f8e.js',
+      '/_next/static/chunks/app/(member)/page-1a2b.js',
+    ]);
+  });
+
+  it('answers a page that exists once per thing from one kept copy, with the id swapped', () => {
+    const extra = offline as unknown as {
+      TEMPLATE_ID: string;
+      templateFor(key: string): { key: string; id: string } | null;
+    };
+    // The page and the worker name the same id; the worker cannot import the page's constant.
+    expect(extra.TEMPLATE_ID).toBe(OFFLINE_PAGE_TEMPLATE_ID);
+    const id = '3f2b8c1e-5a4d-4e6f-9a7b-1c2d3e4f5a6b';
+    expect(extra.templateFor(`https://hub.test/prayer-requests/${id}`)).toEqual({
+      key: `https://hub.test/prayer-requests/${OFFLINE_PAGE_TEMPLATE_ID}`,
+      id,
+    });
+    // The RSC form keeps its marker, so the two forms of the template stay two entries.
+    expect(extra.templateFor(`https://hub.test/flow-tracker/sessions/${id}?__thp_rsc=1`)).toEqual({
+      key: `https://hub.test/flow-tracker/sessions/${OFFLINE_PAGE_TEMPLATE_ID}?__thp_rsc=1`,
+      id,
+    });
+    // Not a page of that kind, and the template is not its own stand-in.
+    expect(extra.templateFor('https://hub.test/prayer-requests/new')).toBeNull();
+    expect(extra.templateFor(`https://hub.test/recordings/${id}`)).toBeNull();
+    expect(extra.templateFor(`https://hub.test/prayer-requests/${OFFLINE_PAGE_TEMPLATE_ID}`)).toBeNull();
   });
 
   it('keys a page without the per-request token Next appends, so a cold start finds the copy', () => {

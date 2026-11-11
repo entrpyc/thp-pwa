@@ -1,4 +1,5 @@
-import { CORRELATION_ID_HEADER } from '@thp/shared';
+import { findRequestReceipt, insertRequestReceipt } from '@thp/db';
+import { CORRELATION_ID_HEADER, IDEMPOTENCY_KEY_HEADER, isClientId } from '@thp/shared';
 import { apiRoutePattern } from '@thp/shared/observability/exceptions';
 import { isAllowlisted } from '@/server/auth/allowlist';
 import { can, type Actor } from '@/server/auth/policy';
@@ -65,6 +66,19 @@ export function apiRoute<TAccess extends RouteAccess>(
       try {
         requireOwnOrigin(request, url);
         const actor = await admit(access, request, url);
+
+        // A write the device queued offline and is now replaying names itself with a key. If this
+        // member's key has been answered before, that answer is given again and the handler does
+        // not run — the first arrival applied, and its response was lost on the way back.
+        const replayKey = idempotencyKey(request, actor);
+        if (replayKey !== null && actor !== null) {
+          const held = await findRequestReceipt(actor.id, replayKey);
+          if (held !== null) {
+            logger.info('request.replayed', { method: request.method, path: url.pathname, status: held.status });
+            return successResponse(held.body, correlationId, held.status);
+          }
+        }
+
         const result = await handler(request, {
           correlationId,
           // `admit` returns `null` exactly when `access.kind === 'public'`, which is the same
@@ -76,6 +90,22 @@ export function apiRoute<TAccess extends RouteAccess>(
           result instanceof ApiSuccess
             ? successResponse(result.payload, correlationId, result.status, result.headers)
             : successResponse(result, correlationId);
+        if (replayKey !== null && actor !== null) {
+          const payload = result instanceof ApiSuccess ? result.payload : result;
+          // Best effort: the write has happened either way, and a receipt that could not be kept
+          // costs at worst the duplicate this exists to prevent.
+          await insertRequestReceipt({
+            userId: actor.id,
+            key: replayKey,
+            status: response.status,
+            body: payload === undefined ? {} : payload,
+          }).catch((cause: unknown) => {
+            logger.warn('request.receipt-failed', {
+              path: url.pathname,
+              reason: cause instanceof Error ? cause.message : String(cause),
+            });
+          });
+        }
         logger.info('request.end', {
           method: request.method,
           path: url.pathname,
@@ -145,6 +175,16 @@ export function apiRoute<TAccess extends RouteAccess>(
 
 /** Methods that change nothing. Everything else is held to the origin rule below. */
 const SAFE_METHODS = new Set(['GET', 'HEAD', 'OPTIONS']);
+
+/**
+ * The key a replayed write carries, or `null`: only on a state-changing request, only from a
+ * signed-in caller, and only when it is the uuid shape a device mints.
+ */
+function idempotencyKey(request: Request, actor: Actor | null): string | null {
+  if (actor === null || SAFE_METHODS.has(request.method.toUpperCase())) return null;
+  const key = request.headers.get(IDEMPOTENCY_KEY_HEADER);
+  return isClientId(key) ? key.toLowerCase() : null;
+}
 
 /**
  * **A state-changing request must come from this site** (docs/security-audit-2026-10-29.md,

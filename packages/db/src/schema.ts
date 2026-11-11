@@ -2235,6 +2235,27 @@ export const noteFolderNote = pgTable(
  * receipt outlives a deleted note the way a log line does, and a replay after the deletion answers
  * `applied` with no note, which the client reads as "already handled, nothing to show".
  */
+/**
+ * **The first answer to a write the device may send twice** ([3.18.19](docs/project/prd.md);
+ * `request-receipts.ts`). Keyed on the member and the key their device minted for the write;
+ * `body` is the success payload as it was answered, returned as-is to a replay. Cascades with the
+ * account: a receipt is a fact about the person's own device and means nothing without them.
+ */
+export const requestReceipt = pgTable(
+  'request_receipt',
+  {
+    userId: uuid('user_id')
+      .notNull()
+      .references(() => user.id, { onDelete: 'cascade' }),
+    /** The key the device minted; uuid-shaped, checked by the route wrapper, stored as text. */
+    key: text('key').notNull(),
+    status: integer('status').notNull(),
+    body: jsonb('body').notNull(),
+    createdAt: timestamp('created_at', { withTimezone: true }).notNull().defaultNow(),
+  },
+  (table) => [primaryKey({ columns: [table.userId, table.key] })],
+);
+
 export const syncReceipt = pgTable(
   'sync_receipt',
   {

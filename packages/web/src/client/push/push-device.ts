@@ -109,6 +109,80 @@ function rememberTurnedOff(off: boolean): void {
   }
 }
 
+// ---------------------------------------------------------------- turning it on with no connection
+
+const ENABLE_PENDING_KEY = 'thp.push.enable-pending';
+
+/** Whether the member asked for push on this device while offline, and it has not been done yet. */
+export function pushEnablePending(): boolean {
+  try {
+    return window.localStorage.getItem(ENABLE_PENDING_KEY) === '1';
+  } catch {
+    return false;
+  }
+}
+
+function rememberEnablePending(pending: boolean): void {
+  try {
+    if (pending) window.localStorage.setItem(ENABLE_PENDING_KEY, '1');
+    else window.localStorage.removeItem(ENABLE_PENDING_KEY);
+  } catch {
+    // Private mode: the press is simply not remembered, and the member presses again online.
+  }
+}
+
+/**
+ * **Turning push on with no connection** ([3.18.18](docs/project/prd.md)).
+ *
+ * A device cannot be given a push address offline — the browser's push service and the platform's
+ * are both across the network. What *can* happen at the press is the part only a press can do:
+ * the permission prompt, which every browser and both stores require to come from the member's own
+ * gesture. So the prompt is answered now, the wish is remembered, and
+ * {@link completePendingPushEnable} does the rest, silently, when the connection is back.
+ */
+export async function queuePushEnable(): Promise<'queued' | 'denied' | 'unsupported'> {
+  const support = pushSupport();
+  if (support === 'unsupported') return 'unsupported';
+  try {
+    if (support === 'web') {
+      const answer = Notification.permission === 'default' ? await Notification.requestPermission() : Notification.permission;
+      if (answer === 'denied') return 'denied';
+    } else {
+      const permission = await PushNotifications.requestPermissions();
+      if (permission.receive === 'denied') return 'denied';
+    }
+  } catch {
+    // The prompt could not be shown here; it is asked again when the registration is made.
+  }
+  rememberTurnedOff(false);
+  rememberEnablePending(true);
+  return 'queued';
+}
+
+/**
+ * Finish what {@link queuePushEnable} began. `readPublicKey` reads the web-push key from the API,
+ * which is why this is the caller's to supply: this module issues one request, the registration.
+ * Answers whether push is now on. A failure that is not final leaves the wish pending.
+ */
+export async function completePendingPushEnable(readPublicKey: () => Promise<string | null>): Promise<boolean> {
+  if (!pushEnablePending()) return false;
+  if (pushTurnedOffHere()) {
+    rememberEnablePending(false);
+    return false;
+  }
+  let key: string | null;
+  try {
+    key = await readPublicKey();
+  } catch {
+    return false;
+  }
+  const result = await enablePushOnThisDevice(key);
+  if (result.ok || result.reason === 'denied' || result.reason === 'unsupported' || result.reason === 'no-key') {
+    rememberEnablePending(false);
+  }
+  return result.ok;
+}
+
 /** A registration in flight, so the shell's `registration` event does not send a second one. */
 let enabling = false;
 

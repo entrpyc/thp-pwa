@@ -1,6 +1,7 @@
 import {
   API_PREFIX,
   AUTH_SESSION_PATH,
+  IDEMPOTENCY_KEY_HEADER,
   LIBRARY_SURFACE,
   RECORDING_SURFACE_PARAM,
   type CreateNoteRequest,
@@ -14,8 +15,10 @@ import {
   type SessionUser,
 } from '@thp/shared';
 import type { OfflineHooks } from '@/client/api-client';
-import { idbAllBy, idbGet, idbPut, idbUpdate } from './idb';
+import { idbAllBy, idbDelete, idbGet, idbPut, idbUpdate } from './idb';
+import { isKeptRead, offlineAction, type World } from './offline-actions';
 import { mintClientId } from './outbox';
+import { rewriteAliases } from './replay';
 import {
   ACTIVE_USER_KEY,
   BY_USER_INDEX,
@@ -23,8 +26,11 @@ import {
   downloadKey,
   sessionMetaKey,
   type DownloadRecord,
+  readKey,
   type OutboxRecord,
   type PendingImageRecord,
+  type QueuedRequest,
+  type ReadRecord,
 } from './schema';
 
 /**
@@ -381,23 +387,32 @@ export function createOfflineHooks(events: {
       } catch {
         return null;
       }
+      // A queued write being replayed is the one request that must reach the server or fail:
+      // answered from here it would be queued a second time.
+      if (hasIdempotencyKey(init.headers)) return null;
       if (method === 'GET') {
         const route = apiRoute(path);
-        if (route === null) return null;
+        if (route === null) {
+          // What the other member screens read, as the device last saw it and has changed it since.
+          if (snapshot.userId === null || !isKeptRead(path)) return null;
+          const held = await idbGet<ReadRecord>(OFFLINE_STORES.reads, readKey(snapshot.userId, path)).catch(() => undefined);
+          return held === undefined ? null : jsonResponse({ status: 200, body: held.body });
+        }
         const answer = offlineAnswer(route, snapshot);
         if (answer !== null) return jsonResponse(answer);
         if (route.name === 'session' || route.name === 'resume') return null;
         return jsonResponse(offlineError('You are offline, and this teaching is not downloaded.'));
       }
-      if (method === 'POST') {
-        const match = /^\/recordings\/([^/?]+)\/notes$/.exec(path);
-        if (match?.[1] === undefined) return null;
-        let body: unknown = null;
-        try {
-          body = typeof init.body === 'string' ? JSON.parse(init.body) : null;
-        } catch {
-          body = null;
-        }
+      let body: unknown = null;
+      try {
+        body = typeof init.body === 'string' ? JSON.parse(init.body) : null;
+      } catch {
+        body = null;
+      }
+      const match = method === 'POST' ? /^\/recordings\/([^/?]+)\/notes$/.exec(path) : null;
+      const isReply = typeof body === 'object' && body !== null && typeof (body as { parentId?: unknown }).parentId === 'string';
+      // A new top-level note is the one write that predates the queue: it travels through `/sync`.
+      if (match?.[1] !== undefined && !isReply) {
         const result = offlineNoteWrite(match[1], body, snapshot);
         if ('entry' in result) {
           try {
@@ -409,13 +424,19 @@ export function createOfflineHooks(events: {
         }
         return jsonResponse(result.answer);
       }
-      return null;
+      if (snapshot.userId === null) return null;
+      return queueAction(snapshot, method, path, body, events);
     },
+
+    rewrite: rewriteAliases,
 
     observe({ path, method, body }) {
       if (method !== 'GET' || typeof body !== 'object' || body === null) return;
       const route = apiRoute(path);
-      if (route === null) return;
+      if (route === null) {
+        if (isKeptRead(path)) void keepRead(path, body).catch(() => undefined);
+        return;
+      }
       void (async () => {
         const active = await idbGet<{ userId: string | null }>(OFFLINE_STORES.meta, ACTIVE_USER_KEY);
         const userId = active?.userId ?? null;
@@ -445,6 +466,142 @@ export function createOfflineHooks(events: {
       })().catch(() => undefined);
     },
   };
+}
+
+function hasIdempotencyKey(headers: RequestInit['headers']): boolean {
+  if (headers === undefined || headers === null) return false;
+  if (headers instanceof Headers) return headers.has(IDEMPOTENCY_KEY_HEADER);
+  if (Array.isArray(headers)) return headers.some(([name]) => name.toLowerCase() === IDEMPOTENCY_KEY_HEADER);
+  return Object.keys(headers).some((name) => name.toLowerCase() === IDEMPOTENCY_KEY_HEADER);
+}
+
+/** Keep the server's answer to a read the device answers offline. */
+async function keepRead(path: string, body: unknown): Promise<void> {
+  const active = await idbGet<{ userId: string | null }>(OFFLINE_STORES.meta, ACTIVE_USER_KEY);
+  const userId = active?.userId ?? null;
+  if (userId === null) return;
+  const record: ReadRecord = { key: readKey(userId, path), userId, path, body, at: new Date().toISOString() };
+  await idbPut(OFFLINE_STORES.reads, record);
+}
+
+let lastSeq = 0;
+
+/** Later than every earlier one on this device, including two made in the same millisecond. */
+function nextSeq(): number {
+  lastSeq = Math.max(lastSeq + 1, Date.now() * 1000);
+  return lastSeq;
+}
+
+/**
+ * A write the server could not be reached for, handed to the table in `offline-actions.ts`: the
+ * device's copies are changed, the request is queued, and the answer the server would have given
+ * is returned. `null` when it is not a write the device keeps.
+ */
+async function queueAction(
+  snapshot: Snapshot,
+  method: string,
+  path: string,
+  body: unknown,
+  events: { onOutboxWrite(): void; onDownloadRefreshed(): void },
+): Promise<Response | null> {
+  const userId = snapshot.userId;
+  if (userId === null) return null;
+  let reads: ReadRecord[];
+  let queued: QueuedRequest[];
+  try {
+    [reads, queued] = await Promise.all([
+      idbAllBy<ReadRecord>(OFFLINE_STORES.reads, BY_USER_INDEX, userId),
+      idbAllBy<QueuedRequest>(OFFLINE_STORES.requests, BY_USER_INDEX, userId),
+    ]);
+  } catch {
+    return null;
+  }
+  const copies = new Map(reads.map((one) => [one.path, one.body]));
+  const changedReads = new Set<string>();
+  const changedDownloads = new Map<string, DownloadRecord>();
+  const downloads = new Map(snapshot.downloads.filter((one) => one.userId === userId).map((one) => [one.recordingId, one]));
+  const temps = new Set(queued.flatMap((one) => one.creates.map((made) => made.temp)));
+  const now = new Date().toISOString();
+  let speed: number | null = null;
+
+  const world: World = {
+    userId,
+    now,
+    user: snapshot.session?.user ?? null,
+    mintId: mintClientId,
+    read: <T,>(key: string) => copies.get(key) as T | undefined,
+    paths: () => [...copies.keys()],
+    write: (key, value) => {
+      copies.set(key, value);
+      changedReads.add(key);
+    },
+    downloads: () => [...downloads.values()],
+    putDownload: (record) => {
+      downloads.set(record.recordingId, record);
+      changedDownloads.set(record.recordingId, record);
+    },
+    setSpeed: (value) => {
+      speed = value;
+    },
+    isQueuedTemp: (id) => temps.has(id),
+  };
+
+  const outcome = offlineAction(method, path, body, world);
+  if (outcome === null) return null;
+  if ('refused' in outcome) {
+    return jsonResponse({
+      status: outcome.status,
+      body: { error: { code: outcome.code, message: outcome.message, correlationId: 'offline' } },
+    });
+  }
+
+  try {
+    for (const key of changedReads) {
+      const record: ReadRecord = { key: readKey(userId, key), userId, path: key, body: copies.get(key), at: now };
+      await idbPut(OFFLINE_STORES.reads, record);
+    }
+    for (const record of changedDownloads.values()) await idbPut(OFFLINE_STORES.downloads, record);
+    if (speed !== null && snapshot.session !== null) {
+      const kept: StoredSession = { user: { ...snapshot.session.user, preferredPlaybackSpeed: speed } };
+      await idbPut(OFFLINE_STORES.meta, kept, sessionMetaKey(userId));
+    }
+    if (outcome.cancel !== undefined) {
+      // The thing was made and unmade offline: its creation, and everything queued about it, goes.
+      const gone = outcome.cancel;
+      for (const one of queued) {
+        const mentions =
+          one.creates.some((made) => made.temp === gone) || one.path.includes(gone) || JSON.stringify(one.body ?? '').includes(gone);
+        if (mentions) await idbDelete(OFFLINE_STORES.requests, one.clientId);
+      }
+    }
+    if (outcome.queue !== undefined) {
+      const { label, creates = [], coalesce = null, recordingId = null } = outcome.queue;
+      if (coalesce !== null) {
+        for (const one of queued) {
+          if (one.coalesce === coalesce) await idbDelete(OFFLINE_STORES.requests, one.clientId);
+        }
+      }
+      const entry: QueuedRequest = {
+        clientId: mintClientId(),
+        userId,
+        seq: nextSeq(),
+        method,
+        path,
+        body: body ?? null,
+        label,
+        creates,
+        coalesce,
+        recordingId,
+        at: now,
+      };
+      await idbPut(OFFLINE_STORES.requests, entry);
+    }
+  } catch {
+    return jsonResponse(offlineError('You are offline, and that could not be kept on this device.'));
+  }
+  if (changedDownloads.size > 0) events.onDownloadRefreshed();
+  events.onOutboxWrite();
+  return jsonResponse({ status: outcome.status, body: outcome.body });
 }
 
 /** Exported for the tests: the prefix the hooks' paths are relative to. */

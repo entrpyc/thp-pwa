@@ -29,6 +29,8 @@ import {
   FLOW_SESSION_IN_PROGRESS_MESSAGE,
   MAX_RELATED_CHAPTERS,
   answerToRating,
+  type FlowQuestionBankPayload,
+  type FlowQuestionSeed,
   isFlowRating,
   isGapRating,
   ratingToAnswer,
@@ -103,6 +105,71 @@ export async function listFlowTeachingsFor(actor: Actor): Promise<FlowTeachingsP
   });
 
   return { teachings, tagQuestionCounts: Object.fromEntries(tagQuestions) };
+}
+
+/**
+ * **What a session over any pick would ask** ([3.18.18](docs/project/prd.md)) — every published
+ * teaching's own questions, in the order a session asks them, and every tag's bank questions.
+ *
+ * It exists so a device can start a session with no connection: it holds this answer, assembles
+ * the pick the way {@link startFlowSessionFor} does, and sends the start when the connection
+ * returns. The two orders are the same rule written twice — last chapter first within a teaching,
+ * tags by name — so what the member answered offline lines up, position for position, with the
+ * session the server then creates.
+ */
+export async function readFlowQuestionBankFor(actor: Actor): Promise<FlowQuestionBankPayload> {
+  const rows = await listVisibleRecordings({ includeUnpublished: false });
+  const ids = rows.map((row) => row.id);
+  const [sources, tagsByRecording] = await Promise.all([
+    listQuestionsForRecordings(ids),
+    listTagsForRecordings(ids),
+  ]);
+  const tagIds = [...new Set([...tagsByRecording.values()].flat().map((one) => one.id))];
+  const tagQuestions = await listTagQuestionsForTags(tagIds);
+
+  const byTeaching: Record<string, FlowQuestionSeed[]> = {};
+  for (const row of rows) {
+    const own = sources
+      .filter((one) => one.recordingId === row.id)
+      .sort((a, b) => (b.chapterStartMs ?? 0) - (a.chapterStartMs ?? 0));
+    if (own.length === 0) continue;
+    const recording = await teachingRef(row);
+    byTeaching[row.id] = own.map((one) => ({
+      kind: one.scope,
+      question: one.text,
+      recording,
+      chapter:
+        one.scope === 'chapter'
+          ? {
+              id: one.chapterId,
+              title: one.chapterTitle ?? row.title,
+              summary: one.chapterSummary,
+              startMs: one.chapterStartMs ?? 0,
+            }
+          : null,
+      tag: null,
+    }));
+  }
+
+  const byTag: Record<string, FlowQuestionSeed[]> = {};
+  for (const one of tagQuestions) {
+    (byTag[one.tagId] ??= []).push({
+      kind: 'tag',
+      question: one.text,
+      recording: null,
+      chapter: null,
+      tag: { id: one.tagId, name: one.tagName },
+    });
+  }
+
+  logger.info('flow.questions.read', {
+    actorId: actor.id,
+    action: 'flow.read',
+    target: 'recording:*',
+    teachings: Object.keys(byTeaching).length,
+    tags: Object.keys(byTag).length,
+  });
+  return { byTeaching, byTag };
 }
 
 // =================================================================================================
