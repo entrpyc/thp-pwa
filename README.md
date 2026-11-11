@@ -511,8 +511,8 @@ whatever the switches say (3.17.13), and an admin announcement can be muted like
 (3.17.14).
 
 - **Categories, switches, devices.** [packages/shared/src/push.ts](packages/shared/src/push.ts)
-  declares the four categories (recordings, notes, announcements, admin alerts — the last listed
-  to admins only), maps every notification kind onto one, and states the rule: push is allowed
+  declares the categories (recordings, notes, admin announcements, release updates, prayer
+  requests, and admin alerts — the last listed to admins only), maps every notification kind onto one, and states the rule: push is allowed
   unless the kind's category is switched off. Switches are **on by default** and live on the
   account (`notification_preference`); devices live in `push_subscription`, one row per endpoint
   or token, re-pointed to whoever signs in on the device last and deleted on sign-out and when a

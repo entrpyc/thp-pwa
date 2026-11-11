@@ -13,7 +13,7 @@ import type { NotificationKind } from './notifications';
  *
  * **Categories, not kinds.** A member switches "notes", not "reply" and "reaction" separately: a
  * list of eight switches for a product with eight events would be a settings page that grows with
- * every ticket and asks a member to understand the event model. Four categories cover the
+ * every ticket and asks a member to understand the event model. A handful of categories cover the
  * vocabulary, and a later kind — an SOS signal, a video — joins one of them by adding one line to
  * {@link NOTIFICATION_CATEGORY_OF_KIND}, which the type forces: a kind without a category does not
  * compile.
@@ -26,13 +26,15 @@ import type { NotificationKind } from './notifications';
  * and every browser require to come from the member, never from a page load.
  *
  * **Admin announcements can be muted like anything else** (3.17.14): "announcements" is an
- * ordinary category with an ordinary switch. The admin-only category is the one a member never
+ * ordinary category with an ordinary switch. **Release updates have a switch of their own**: a
+ * message from the admins and the product saying what is new are different things to want to
+ * hear, so a member can keep one and mute the other. The admin-only category is the one a member never
  * sees — a member is never a recipient of a draft-ready or reported-note notice, so a switch for
  * it would be a switch over nothing.
  */
 
 /**
- * The four categories a member can switch, in the order the settings section lists them. Declared
+ * The five categories a member can switch, in the order the settings section lists them. Declared
  * once here and derived into the database enum, like every vocabulary beside it.
  */
 export const NOTIFICATION_CATEGORIES = [
@@ -40,8 +42,10 @@ export const NOTIFICATION_CATEGORIES = [
   'recordings',
   /** Replies and reactions to your notes, and the outcome of a report you made. */
   'notes',
-  /** What an admin or the product sent to everybody ([3.17.9](docs/project/prd.md), 3.17.17). */
+  /** What an admin sent to everybody ([3.17.9](docs/project/prd.md)). */
   'announcements',
+  /** What is new in the app — a new-feature notice that opens a release note (3.17.17). */
+  'release_updates',
   /** What waits on an admin — a draft, a reported note. Listed for admins only. */
   'admin_alerts',
   /** SOS signals raised, and replies to your own ([3.16](docs/project/prd.md), [3.17.14](docs/project/prd.md)). */
@@ -67,7 +71,7 @@ export const NOTIFICATION_CATEGORY_OF_KIND: Record<NotificationKind, Notificatio
   note_reaction: 'notes',
   report_resolved: 'notes',
   announcement: 'announcements',
-  new_feature: 'announcements',
+  new_feature: 'release_updates',
   note_reported: 'admin_alerts',
   sos_reported: 'admin_alerts',
   summary_ready: 'admin_alerts',
@@ -79,7 +83,8 @@ export const NOTIFICATION_CATEGORY_OF_KIND: Record<NotificationKind, Notificatio
 export const NOTIFICATION_CATEGORY_LABEL: Record<NotificationCategory, string> = {
   recordings: 'New recordings',
   notes: 'Your notes',
-  announcements: 'Announcements',
+  announcements: 'Admin announcements',
+  release_updates: 'Release updates',
   admin_alerts: 'Admin alerts',
   sos: 'Prayer requests',
 };
@@ -87,7 +92,8 @@ export const NOTIFICATION_CATEGORY_LABEL: Record<NotificationCategory, string> =
 export const NOTIFICATION_CATEGORY_DESCRIPTION: Record<NotificationCategory, string> = {
   recordings: 'When a new teaching is published.',
   notes: 'When somebody replies or reacts to one of your notes, and when a report you made is reviewed.',
-  announcements: 'Messages from the admins, and what is new in the app.',
+  announcements: 'Messages from the admins to everybody.',
+  release_updates: 'When there is something new in the app, with the release note that shows it.',
   admin_alerts: 'When a summary is ready for review, and when a member reports a note.',
   sos: 'When a member raises a prayer request, and when somebody replies to yours.',
 };

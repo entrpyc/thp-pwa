@@ -109,7 +109,7 @@ export const scriptureOrigin = pgEnum('scripture_origin', SCRIPTURE_ORIGINS);
 
 export const notificationKind = pgEnum('notification_kind', NOTIFICATION_KINDS);
 
-/** The four categories a member switches push for, and the three places a push can reach. Both derived. */
+/** The categories a member switches push for, and the three places a push can reach. Both derived. */
 export const notificationCategory = pgEnum('notification_category', NOTIFICATION_CATEGORIES);
 
 export const pushPlatform = pgEnum('push_platform', PUSH_PLATFORMS);

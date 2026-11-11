@@ -35,7 +35,11 @@ describe('the preference rule', () => {
 
   it('lets a member mute the admins and the product alike (3.17.14)', () => {
     expect(isPushAllowed('announcement', { announcements: false })).toBe(false);
-    expect(isPushAllowed('new_feature', { announcements: false })).toBe(false);
+    // A release update has its own switch: muting the admins' messages leaves it on, and the
+    // other way round.
+    expect(isPushAllowed('new_feature', { announcements: false })).toBe(true);
+    expect(isPushAllowed('new_feature', { release_updates: false })).toBe(false);
+    expect(isPushAllowed('announcement', { release_updates: false })).toBe(true);
   });
 
   it('reads a category set back to true as on', () => {
@@ -62,7 +66,7 @@ describe('the categories', () => {
   });
 
   it('are offered without the admin-only one unless the policy says so, in the declared order', () => {
-    expect(categoriesVisibleTo(false)).toEqual(['recordings', 'notes', 'announcements', 'sos']);
+    expect(categoriesVisibleTo(false)).toEqual(['recordings', 'notes', 'announcements', 'release_updates', 'sos']);
     expect(categoriesVisibleTo(true)).toEqual([...NOTIFICATION_CATEGORIES]);
     expect(ADMIN_ONLY_CATEGORIES).toEqual(['admin_alerts']);
   });

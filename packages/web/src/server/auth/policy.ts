@@ -352,7 +352,7 @@ export const POLICY_ACTIONS = [
   'report.resolve',
   /**
    * **Which push categories an account is offered.** There is still no `notification.read` —
-   * the switches are keyed on the caller's own id — but one of the four categories is the
+   * the switches are keyed on the caller's own id — but one of the categories is the
    * admin-only alerts ([3.17.10](docs/project/prd.md), the reported-note notice), and whether an
    * account is offered that switch is a role question, which only this module answers.
    */

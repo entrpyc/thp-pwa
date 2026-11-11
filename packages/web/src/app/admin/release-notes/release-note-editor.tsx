@@ -38,7 +38,9 @@ import styles from './release-notes.module.css';
  *
  * 1. **A picture is uploaded before it is in the post.** Choosing a file asks for a grant, sends
  *    the bytes to the store, and only then inserts the picture, carrying the upload key the save
- *    will name. A GIF is sent as it is — re-encoding one would keep its first frame only.
+ *    will name. A GIF is sent as it is — re-encoding one would keep its first frame only. A
+ *    screenshot pasted from the clipboard, and a picture dropped onto the post, take the same
+ *    path: the editor never holds a picture the store does not.
  * 2. **A video is a YouTube link, read here before it is inserted**, so a link that names no video
  *    is refused beside the button rather than at the save.
  * 3. **A refused save keeps everything.** The message is printed and the form stays as it was.
@@ -85,6 +87,11 @@ function toEditorContent(node: unknown): JSONContent {
  */
 function keepSelection(event: MouseEvent<HTMLButtonElement>): void {
   event.preventDefault();
+}
+
+/** The pictures a paste or a drop carried, or none — text and everything else is the editor's. */
+function picturesIn(transfer: DataTransfer | null | undefined): File[] {
+  return Array.from(transfer?.files ?? []).filter((file) => file.type.startsWith('image/'));
 }
 
 function describeFailure(caught: unknown): string {
@@ -187,6 +194,9 @@ export function ReleaseNoteEditor({
   const [busy, setBusy] = useState(false);
   const [uploading, setUploading] = useState(false);
   const [failure, setFailure] = useState<string | null>(null);
+  const addPicturesRef = useRef<(files: readonly File[], describe: boolean) => Promise<void>>(
+    async () => undefined,
+  );
 
   const editor = useEditor({
     extensions: EXTENSIONS,
@@ -195,7 +205,27 @@ export function ReleaseNoteEditor({
     immediatelyRender: false,
     // The toolbar reads the selection's marks, so it repaints with every transaction.
     shouldRerenderOnTransaction: true,
-    editorProps: { attributes: { 'aria-label': 'Post', role: 'textbox', 'aria-multiline': 'true' } },
+    editorProps: {
+      attributes: { 'aria-label': 'Post', role: 'textbox', 'aria-multiline': 'true' },
+      // A screenshot on the clipboard arrives as a file. Taken here rather than left to the
+      // editor, which would insert it by a URL the store has never seen and the save would refuse.
+      handlePaste: (_view, event) => {
+        const pictures = picturesIn(event.clipboardData);
+        if (pictures.length === 0) return false;
+        event.preventDefault();
+        void addPicturesRef.current(pictures, false);
+        return true;
+      },
+      handleDrop: (_view, event, _slice, moved) => {
+        // `moved` is a picture already in the post being dragged to another place in it.
+        if (moved) return false;
+        const pictures = picturesIn(event.dataTransfer);
+        if (pictures.length === 0) return false;
+        event.preventDefault();
+        void addPicturesRef.current(pictures, false);
+        return true;
+      },
+    },
   });
 
   function addLink(): void {
@@ -229,29 +259,33 @@ export function ReleaseNoteEditor({
     editor.chain().focus().setYoutubeVideo({ src: youtubeWatchUrl(videoId) }).run();
   }
 
-  async function onFile(event: ChangeEvent<HTMLInputElement>): Promise<void> {
-    const file = event.target.files?.[0];
-    // Cleared at once, so choosing the same file again is still a change.
-    event.target.value = '';
-    if (file === undefined || editor === null) return;
-    if (!isAcceptedReleaseNoteImageType(file.type)) {
-      setFailure(`That is not an image this accepts. Upload ${ACCEPTED_RELEASE_NOTE_IMAGE_LABEL}.`);
-      return;
-    }
-    if (file.size > MAX_RELEASE_NOTE_IMAGE_BYTES) {
-      setFailure(`That picture is too large; the limit is ${MAX_RELEASE_NOTE_IMAGE_LABEL}.`);
-      return;
+  /**
+   * Upload each picture and insert it where the caret is, in the order given. `describe` asks
+   * for the words that describe it — on a chosen file; a paste or a drop is not interrupted.
+   */
+  async function addPictures(files: readonly File[], describe: boolean): Promise<void> {
+    if (editor === null || uploading) return;
+    for (const file of files) {
+      if (!isAcceptedReleaseNoteImageType(file.type)) {
+        setFailure(`That is not an image this accepts. Upload ${ACCEPTED_RELEASE_NOTE_IMAGE_LABEL}.`);
+        return;
+      }
+      if (file.size > MAX_RELEASE_NOTE_IMAGE_BYTES) {
+        setFailure(`That picture is too large; the limit is ${MAX_RELEASE_NOTE_IMAGE_LABEL}.`);
+        return;
+      }
     }
     setFailure(null);
     setUploading(true);
     try {
-      const { key, src } = await uploadPicture(file);
-      const alt = window.prompt('Describe the picture for people who cannot see it (optional)') ?? '';
-      editor
-        .chain()
-        .focus()
-        .insertContent({ type: 'image', attrs: { src, key, alt: alt.trim() === '' ? null : alt.trim() } })
-        .run();
+      for (const file of files) {
+        const { key, src } = await uploadPicture(file);
+        const typed = describe
+          ? (window.prompt('Describe the picture for people who cannot see it (optional)') ?? '')
+          : '';
+        const alt = typed.trim() === '' ? null : typed.trim();
+        editor.chain().focus().insertContent({ type: 'image', attrs: { src, key, alt } }).run();
+      }
     } catch (caught) {
       setFailure(
         caught instanceof ApiClientError ? caught.message : 'The picture did not upload. Try it again.',
@@ -259,6 +293,16 @@ export function ReleaseNoteEditor({
     } finally {
       setUploading(false);
     }
+  }
+  // The editor's paste and drop handlers are bound once, at mount; this is how they reach the
+  // function as it is on the latest render.
+  addPicturesRef.current = addPictures;
+
+  function onFile(event: ChangeEvent<HTMLInputElement>): void {
+    const file = event.target.files?.[0];
+    // Cleared at once, so choosing the same file again is still a change.
+    event.target.value = '';
+    if (file !== undefined) void addPictures([file], true);
   }
 
   async function onSubmit(event: FormEvent<HTMLFormElement>): Promise<void> {
@@ -364,14 +408,15 @@ export function ReleaseNoteEditor({
               tabIndex={-1}
               aria-hidden="true"
               accept={ACCEPTED_RELEASE_NOTE_IMAGE_TYPES.join(',')}
-              onChange={(event) => void onFile(event)}
+              onChange={onFile}
             />
           </div>
           <EditorContent className={styles.editorContent} editor={editor} />
         </div>
         <p className={styles.hint}>
-          Pictures: {ACCEPTED_RELEASE_NOTE_IMAGE_LABEL}, up to {MAX_RELEASE_NOTE_IMAGE_LABEL} each. Videos
-          are added by their YouTube link.
+          Pictures: {ACCEPTED_RELEASE_NOTE_IMAGE_LABEL}, up to {MAX_RELEASE_NOTE_IMAGE_LABEL} each — choose
+          a file, paste a screenshot or drop one onto the post. Videos are added by their YouTube
+          link.
         </p>
       </div>
 
