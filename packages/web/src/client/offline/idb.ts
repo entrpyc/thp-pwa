@@ -76,6 +76,10 @@ export function openOfflineDatabase(): Promise<IDBDatabase> {
         db.close();
         opening = null;
       };
+      // The browser closed it under us (storage eviction, a killed storage process).
+      db.onclose = () => {
+        opening = null;
+      };
       resolve(db);
     };
     req.onerror = () => {
@@ -90,29 +94,51 @@ export function openOfflineDatabase(): Promise<IDBDatabase> {
   return opening;
 }
 
-export async function idbGet<T>(store: StoreName, key: IDBValidKey): Promise<T | undefined> {
-  const db = await openOfflineDatabase();
-  const tx = db.transaction(store, 'readonly');
-  return request(tx.objectStore(store).get(key) as IDBRequest<T | undefined>);
+/**
+ * Open a transaction and hand its store to `use`, **reopening once if the kept connection is
+ * dead**. iOS closes IndexedDB connections of a suspended page without always firing `close`, so
+ * the kept connection can throw `InvalidStateError` ("the database connection is closing") on the
+ * first transaction after the app returns from the background. `use` is called in the same tick
+ * the transaction is created in, so the transaction cannot go inactive before its first request.
+ */
+async function withStore<T>(
+  store: StoreName,
+  mode: IDBTransactionMode,
+  use: (objectStore: IDBObjectStore) => Promise<T>,
+): Promise<T> {
+  const attempt = openOfflineDatabase();
+  let db = await attempt;
+  let tx: IDBTransaction;
+  try {
+    tx = db.transaction(store, mode);
+  } catch (error) {
+    if (!(error instanceof DOMException) || error.name !== 'InvalidStateError') throw error;
+    // Only drop the connection that failed: a concurrent caller may already have reopened.
+    if (opening === attempt) opening = null;
+    db.close();
+    db = await openOfflineDatabase();
+    tx = db.transaction(store, mode);
+  }
+  return use(tx.objectStore(store));
+}
+
+export function idbGet<T>(store: StoreName, key: IDBValidKey): Promise<T | undefined> {
+  return withStore(store, 'readonly', (os) => request(os.get(key) as IDBRequest<T | undefined>));
 }
 
 export async function idbPut(store: StoreName, value: unknown, key?: IDBValidKey): Promise<void> {
-  const db = await openOfflineDatabase();
-  const tx = db.transaction(store, 'readwrite');
-  await request(key === undefined ? tx.objectStore(store).put(value) : tx.objectStore(store).put(value, key));
+  await withStore(store, 'readwrite', (os) =>
+    request(key === undefined ? os.put(value) : os.put(value, key)),
+  );
 }
 
 export async function idbDelete(store: StoreName, key: IDBValidKey): Promise<void> {
-  const db = await openOfflineDatabase();
-  const tx = db.transaction(store, 'readwrite');
-  await request(tx.objectStore(store).delete(key));
+  await withStore(store, 'readwrite', (os) => request(os.delete(key)));
 }
 
 /** Every key in a store. For the small `meta` store; the big ones are read through their index. */
-export async function idbKeys(store: StoreName): Promise<IDBValidKey[]> {
-  const db = await openOfflineDatabase();
-  const tx = db.transaction(store, 'readonly');
-  return request(tx.objectStore(store).getAllKeys());
+export function idbKeys(store: StoreName): Promise<IDBValidKey[]> {
+  return withStore(store, 'readonly', (os) => request(os.getAllKeys()));
 }
 
 /**
@@ -126,25 +152,20 @@ export async function idbUpdate<T>(
   key: IDBValidKey,
   change: (value: T) => T,
 ): Promise<boolean> {
-  const db = await openOfflineDatabase();
-  const tx = db.transaction(store, 'readwrite');
-  const objectStore = tx.objectStore(store);
-  const current = await request(objectStore.get(key) as IDBRequest<T | undefined>);
-  if (current === undefined) return false;
-  await request(objectStore.put(change(current)));
-  return true;
+  return withStore(store, 'readwrite', async (objectStore) => {
+    const current = await request(objectStore.get(key) as IDBRequest<T | undefined>);
+    if (current === undefined) return false;
+    await request(objectStore.put(change(current)));
+    return true;
+  });
 }
 
 /** Empty a store. For the copies a sign-out must not leave behind. */
 export async function idbClear(store: StoreName): Promise<void> {
-  const db = await openOfflineDatabase();
-  const tx = db.transaction(store, 'readwrite');
-  await request(tx.objectStore(store).clear());
+  await withStore(store, 'readwrite', (os) => request(os.clear()));
 }
 
 /** Every value whose indexed field equals `value`. */
-export async function idbAllBy<T>(store: StoreName, index: string, value: IDBValidKey): Promise<T[]> {
-  const db = await openOfflineDatabase();
-  const tx = db.transaction(store, 'readonly');
-  return request(tx.objectStore(store).index(index).getAll(value) as IDBRequest<T[]>);
+export function idbAllBy<T>(store: StoreName, index: string, value: IDBValidKey): Promise<T[]> {
+  return withStore(store, 'readonly', (os) => request(os.index(index).getAll(value) as IDBRequest<T[]>));
 }
