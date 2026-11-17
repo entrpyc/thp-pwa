@@ -595,7 +595,7 @@ The workflow needs, in the repository's **Settings**:
 | Secrets → Actions          | `DEPLOY_SSH_KEY`       | The private half of the deploy key, generated in **First setup — 8**.        |
 | Variables → Actions        | `DEPLOY_HOST`          | `<production-ip>`                                                               |
 | Variables → Actions        | `DEPLOY_USER`          | `thp`                                                                        |
-| Variables → Actions        | `DEPLOY_KNOWN_HOSTS`   | The output of `ssh-keyscan -t ed25519 <production-ip>`, so the runner pins the host. |
+| Variables → Actions        | `DEPLOY_KNOWN_HOSTS`   | The output of `ssh-keyscan -p 7856 -t ed25519 <production-ip>`, so the runner pins the host. The workflow connects on 7856, so the entry must read `[<production-ip>]:7856`. |
 | Rules → Rulesets           | Tag protection on `v*`  | Only the workflow (and admins) may create or delete release tags. The box deploys whatever `vX.Y.Z` it is handed, so a tag anyone with push access could cut is a deploy anyone with push access could make. |
 
 The actions the workflows use are pinned to commit SHAs rather than moving tags
@@ -741,7 +741,7 @@ one script it may run:
 
 ```bash
 ssh-keygen -t ed25519 -N '' -C 'thp deploy' -f /tmp/thp-deploy      # on your machine
-ssh-keyscan -t ed25519 <production-ip>                                   # → DEPLOY_KNOWN_HOSTS
+ssh-keyscan -p 7856 -t ed25519 <production-ip>                           # → DEPLOY_KNOWN_HOSTS
 ```
 
 Then, as `thp` on the box, one line in `~/.ssh/authorized_keys` — the public key prefixed with the

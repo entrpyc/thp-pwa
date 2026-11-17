@@ -240,7 +240,10 @@ jobs:
         env:
           TAG: ${{ needs.gate.outputs.tag }}
         run: |
+          # 7856, not 22: the box moved sshd off the default port. DEPLOY_KNOWN_HOSTS must be keyed
+          # to match (`ssh-keyscan -p 7856`, which writes `[host]:7856`), or the pin refuses the host.
           ssh -i ~/.ssh/deploy_key \
+              -p 7856 \
               -o IdentitiesOnly=yes \
               -o StrictHostKeyChecking=yes \
               -o ServerAliveInterval=30 \
